@@ -26,6 +26,28 @@ test('EasyPanel refuses HTTP, embedded credentials, query and arbitrary paths', 
  assert.throws(() => createEasypanelAdapter({ ...config, token: '' }), /credencial/);
 });
 
+test('real response shape groups services by project and drops all configuration', () => {
+ const data = normalizeInventory({
+  projects: [{ name: 'one', createdAt: 'date' }, { name: 'two' }, { name: 'empty' }],
+  services: [
+   { projectName: 'two', name: 'db', type: 'postgres', token: 'secret', env: 'private', source: { password: 'secret' } },
+   { projectName: 'one', name: 'web', type: 'app', enabled: true },
+  ],
+ });
+ assert.deepEqual(data.projects, [
+  { name: 'one', services: [{ name: 'web', type: 'app' }] },
+  { name: 'two', services: [{ name: 'db', type: 'postgres' }] },
+  { name: 'empty', services: [] },
+ ]);
+ assert.ok(!JSON.stringify(data).includes('secret'));
+ assert.ok(!JSON.stringify(data).includes('enabled'));
+});
+
+test('flat response rejects orphan services and duplicate projects', () => {
+ assert.throws(() => normalizeInventory({ projects: [{ name: 'x' }, { name: 'x' }], services: [] }), /incompatível/);
+ assert.throws(() => normalizeInventory({ projects: [], services: [{ name: 'x', projectName: 'missing', type: 'app' }] }), /incompatível/);
+});
+
 test('EasyPanel errors never echo the provider body or fetch errors', async () => {
  for (const status of [401, 403, 404, 429, 500, 302]) {
   const adapter = createEasypanelAdapter({ ...config, fetchImpl: async () => new Response(config.token, { status }) });

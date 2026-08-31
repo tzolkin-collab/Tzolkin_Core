@@ -39,6 +39,8 @@ Após a entrega do inventário EasyPanel: **25/25 unitários aprovados**, inclui
 
 As suítes abaixo são integrações separadas; `npm test` não inclui `test/unit/`. Execute ambos para uma verificação completa, usando base dedicada para integração.
 
+Após configurar a chave do EasyPanel: **27/27 unitários aprovados**. Dois testes novos cobrem o formato real de listas separadas, descarte de segredos, serviços órfãos e projetos duplicados. Consulta real de leitura pelo adaptador confirmada com 3 projetos e 9 serviços; nenhuma alteração remota executada.
+
 ```bash
 npm test
 ```

@@ -5,6 +5,20 @@ const name = value => typeof value === 'string' && /^[a-zA-Z0-9_. -]{1,120}$/.te
 const TYPES = new Set(['app', 'compose', 'postgres', 'mysql', 'mariadb', 'mongo', 'mongodb', 'redis', 'box', 'wordpress']);
 
 export function normalizeInventory(body) {
+ // Formato confirmado no painel real: listas de projetos e serviços separadas.
+ // Agrupar só os três campos permitidos, nunca propagar env/token/source.
+ if (body && !Array.isArray(body) && Array.isArray(body.projects) && Array.isArray(body.services)) {
+  const groups = new Map();
+  for (const project of body.projects) {
+   if (!project || !name(project.name) || groups.has(project.name)) throw invalid();
+   groups.set(project.name, { name: project.name, services: [] });
+  }
+  for (const service of body.services) {
+   if (!service || !name(service.projectName) || !groups.has(service.projectName)) throw invalid();
+   groups.get(service.projectName).services.push({ name: service.name, type: service.type });
+  }
+  body = [...groups.values()];
+ }
  if (!Array.isArray(body)) throw invalid();
  let omittedServices = 0;
  const projects = body.slice(0, 100).map(project => {

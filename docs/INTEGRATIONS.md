@@ -13,7 +13,7 @@ Revisão: **2026-08-30**.
 | **Core → Vercel, leitura de deploys** | `[EXISTENTE E VERIFICADO]` — fase 1 entregue em 2026-08-30 |
 | Apps → Core, via `GET /v1/context` | `[EXISTENTE E VERIFICADO]`, mas **nenhum app real provisionado** (`app_clients` = 0 linhas) |
 | Notion → Core, catálogo do ecossistema | `[EXISTENTE E VERIFICADO]`, importação manual |
-| Core → EasyPanel | Inventário implementado e testado com respostas simuladas; conexão real pendente — ver §10 |
+| Core → EasyPanel | Consulta real autenticada validada: 3 projetos e 9 serviços — ver §10 |
 | Stripe, Asaas, Open Finance, Contabilizei, e-mail, webhooks | **Nada implementado** |
 
 ---
@@ -168,7 +168,9 @@ Quando existir, será por **Deploy Hook**: URL secreta por branch, sem token, re
 
 ---
 
-## 10. EasyPanel — inventário local `[IMPLEMENTADO; VALIDAÇÃO REAL PENDENTE]`
+## 10. EasyPanel — inventário local `[CONSULTA REAL VALIDADA]`
+
+Validação em 2026-08-30: consulta HTTPS autenticada bem-sucedida em `https://easypanel.landcriativa.com`, retornando 3 projetos e 9 serviços. Apenas leitura, sem alteração de infraestrutura. O processo do painel Core precisa ser reiniciado para carregar mudanças de código/ambiente; a validação foi feita diretamente pelo adaptador.
 
 Revisão Codex de 2026-08-30: `src/integrations/easypanel.mjs` consulta somente `GET /api/listProjectsAndServices`; `GET /api/infrastructure/easypanel` exige sessão administrativa, recusa parâmetros inesperados e não aceita escrita. O painel apresenta o inventário na área Deploys, explicitamente separado de disponibilidade e histórico de deploy.
 
@@ -177,7 +179,7 @@ Revisão Codex de 2026-08-30: `src/integrations/easypanel.mjs` consulta somente 
 - Retorna somente nomes de projetos/serviços e tipos conhecidos. Não consulta ambiente, senha de banco, configuração completa, logs ou métricas. Não dispara deploy nem reinicia/exclui serviços.
 - Limites de 100 projetos e 200 serviços por projeto, com contagem explícita do corte. Tipo desconhecido vira `unknown`, nunca indicação inventada de saúde.
 - Sem configuração: estado desconectado. Configuração incompleta ou falha: erro neutro, sem derrubar o painel.
-- **Limitação importante:** a referência oficial documenta o endpoint, mas não publica esquema de resposta (exemplo `null`). O normalizador espera um array de `{name, services: [{name, type}]}`; esse formato foi testado com fixture, **não confirmado no painel do usuário**. Respostas diferentes são recusadas, não convertidas em lista vazia. Confirmar versão e formato antes de declarar integração conectada.
+- **Formato real confirmado:** `{projects: [{name, ...}], services: [{projectName, name, type, ...}]}`. O normalizador agrupa por projeto e descarta todos os demais campos, inclusive `token`, `env` e configurações de banco/app retornadas pela API. Mantém suporte ao formato agrupado dos testes; serviços órfãos e projetos duplicados são rejeitados. A versão exata do EasyPanel não foi identificada.
 - 7 testes novos (25 unitários ao todo), incluindo sessão expirada, escrita negada e nenhuma consulta ao banco. UI adicionada, sem conferência visual nesta entrega.
 
 Fontes oficiais consultadas: [introdução da API](https://easypanel.io/docs/api-reference), [listagem](https://easypanel.io/docs/api-reference/projects/listProjectsAndServices), [CLI e escopo da chave](https://easypanel.io/docs/cli). A chave atua com os acessos do usuário; não presumir privilégio somente-leitura. Preferir usuário restrito aos projetos necessários, após verificar suporte na versão instalada.
