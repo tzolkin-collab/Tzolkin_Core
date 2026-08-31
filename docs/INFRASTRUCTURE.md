@@ -94,7 +94,7 @@ Depois: `node --env-file=.env scripts/import-notion.mjs`.
 - **Uma transação por migração:** falhou, nada daquele arquivo fica aplicado.
 - O que já rodou é registrado em `schema_migrations`; reexecutar não reaplica nada — conferido rodando duas vezes.
 - `db:setup` aplica a linha de base e em seguida as migrações pendentes.
-- `npm run db:rotate-password` rotaciona a senha da role e reescreve o `.env` — e **recusa** rodar sobre conexão em texto claro.
+- `npm run db:rotate-password` rotaciona a senha da role e reescreve o `.env` — e **recusa** texto claro e TLS sem certificado/hostname verificados, inclusive em loopback.
 
 Aplicada até agora: `001_membership_por_produto.sql` ([ADR 0002](decisions/0002-vinculo-de-pessoa-por-produto.md)).
 
@@ -155,7 +155,15 @@ Erros são traduzidos para o cliente e **não são registrados em lugar nenhum**
 
 ## 7. Preservar o que está no workspace `[DECIDIDO]`
 
-- `tzolkin-core` **não é repositório git**. Não inicializar sem pedido explícito.
-- `tzolkin-site` tem **muitas alterações locais não commitadas**, conferidas em 2026-08-30. **Preservar. Não commitar, não reverter, não limpar o checkout.**
+- `tzolkin-core` agora tem Git local, inicializado com autorização do usuário em 2026-08-30. Base anterior em `main` (`c617bf0`), revisão em `codex/revisao-seguranca-core`. **Não há remoto configurado: commit local não é backup externo.**
+- `tzolkin-site` está em repositório separado, branch `feat/captacao-de-leads-e-produtos`, commit `ba1d87c`. Preservar essa branch; nenhuma alteração nela faz parte da revisão do Core.
 - `chatbot-api` não tem repositório git.
 - `.env` de cada projeto fica fora do git e não é lido nem reproduzido em documentação.
+
+### Conectividade do institucional em produção `[PENDENTE DE DECISÃO]`
+
+Fechar a porta pública do banco não cria conectividade entre Vercel e a rede privada do EasyPanel. O túnel desta máquina serve ao desenvolvimento, não às funções hospedadas na Vercel.
+
+Antes de fechar a exposição, inventariar os consumidores e aprovar um caminho de produção: endpoint PostgreSQL com TLS verificado e controle de rede adequado; conectividade privada efetivamente suportada pelo ambiente contratado; ou backend de captação hospedado junto ao banco, acessível por API HTTPS autenticada. São alternativas de arquitetura, não recursos contratados ou implementados.
+
+Validar o caminho escolhido a partir de preview autorizado, com credencial de privilégio mínimo e dados sintéticos, antes da publicação. Não apontar a Vercel para `localhost` nem para hostname interno inacessível. PostgreSQL e Redis exigem verificação separada; não assumir que alterar um serviço corrige o outro.

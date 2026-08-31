@@ -25,7 +25,7 @@ export function accessRoutes(router) {
    [tenant, subject, productId]);
   if (!result.rowCount) throw fail(403, 'Acesso não autorizado.');
   return reply(200, {
-   tenant_id: tenant, subject, product_id: productId,
+   tenant_id: tenant, subject, product_id: productId, membership_scope: 'product',
    ...result.rows[0], checked_at: new Date().toISOString(),
   });
  }, { auth: 'service', body: false });

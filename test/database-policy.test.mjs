@@ -30,12 +30,19 @@ test('Database transport policy suite', async t => {
   await assert.rejects(() => openDatabase({ connectionString: '' }), /DATABASE_URL é obrigatória/);
  });
 
- // O servidor atual não aceita TLS. Este teste vira "passa a conectar" no dia em que aceitar,
- // e é justamente esse o sinal de que o transporte foi corrigido.
- await t.test('mode=require refuses to connect over plaintext', async () => {
-  await assert.rejects(
-   () => openDatabase({ connectionString: CONN, mode: 'require', max: 1 }),
-   /não aceitou conexão criptografada/);
+ // Independe de o servidor real já ter sido corrigido. Negações determinísticas
+ // e ausência de downgrade são exercitadas em test/unit/database.test.mjs.
+ await t.test('mode=require either rejects transport or returns verified TLS', async () => {
+  let opened;
+  try { opened = await openDatabase({ connectionString: CONN, mode: 'require', max: 1 }); }
+  catch (error) {
+   assert.match(error.message, /Políticas TLS conflitantes|Conexão recusada/);
+   return;
+  }
+  try {
+   assert.equal(opened.security.tls, true);
+   assert.equal(opened.security.verified, true);
+  } finally { await opened.pool.end(); }
  });
 
  await t.test('mode=allow connects and reports the transport honestly', async () => {

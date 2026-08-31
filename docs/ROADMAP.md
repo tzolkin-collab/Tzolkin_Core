@@ -74,11 +74,11 @@ Módulo `deploys` com adaptador por provedor, mesmo padrão do [ADR 0003](decisi
 
 **Depende de:** ação sua no EasyPanel. **É o item mais urgente do roadmap**, e agora bloqueia também a publicação do `tzolkin-site`.
 
-Os três serviços de dados estão no mesmo host exposto ([SECURITY.md](SECURITY.md#o-banco-do-core-trafega-sem-tls-pela-internet-pública)): fechar resolve os três.
+Os três serviços de dados foram identificados no mesmo host exposto ([SECURITY.md](SECURITY.md#o-banco-do-core-trafega-sem-tls-pela-internet-pública)). A correção exige verificar cada serviço e a conectividade dos consumidores, inclusive Vercel, antes de fechar portas.
 
 Enquanto aberto: não cadastrar cliente real, tratar a senha atual como comprometida, e **não publicar a rota de captação de leads** — ela passaria a gravar dado pessoal de terceiros em texto claro.
 
-**Aceite:** `GET /health` reporta `tls-verified` (ou loopback via túnel) · `DATABASE_SSL=require` fixado · senha rotacionada · `DATABASE_URL_TEST` separado · nenhuma outra porta de banco publicada.
+**Aceite:** transporte autenticado demonstrado para cada consumidor · `DATABASE_SSL=require` e `tls-verified` quando há TLS PostgreSQL · alternativa de túnel validada separadamente (loopback não é prova) · senha rotacionada por canal seguro · `DATABASE_URL_TEST` separado · exposição de cada serviço revisada. O script de rotação não aceita PostgreSQL sem TLS, mesmo via túnel.
 
 ### E1.6b — Publicar o `tzolkin-site`
 

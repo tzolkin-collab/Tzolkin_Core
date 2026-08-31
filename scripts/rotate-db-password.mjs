@@ -1,15 +1,14 @@
 // Rotaciona a senha da role da aplicação e reescreve a DATABASE_URL do .env.
 //
-// RECUSA rodar sobre conexão em texto claro — de propósito. Trocar a senha por um
+// RECUSA texto claro e TLS sem certificado/hostname verificados. Trocar a senha por um
 // canal que a expõe entrega a senha nova a quem já lia a antiga: piora a situação
 // dando falsa sensação de resolvido.
 //
-// Ordem correta: corrigir o transporte (docs/SECURITY.md), confirmar `npm start`
-// sem o aviso de texto claro, e só então rodar isto.
-import pg from 'pg';
+// Ordem correta: corrigir o transporte (docs/SECURITY.md), confirmar tls-verified
+// com DATABASE_SSL=require, e só então rodar isto. Loopback não é exceção.
 import { readFileSync, writeFileSync, copyFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { openDatabase } from '../src/platform/database.mjs';
+import { openDatabase, assertVerifiedTransport } from '../src/platform/database.mjs';
 
 const ENV = '.env';
 
@@ -21,15 +20,10 @@ function replaceUrl(contents, url) {
 let pool;
 try {
  const current = process.env.DATABASE_URL;
- const opened = await openDatabase({ connectionString: current, mode: 'allow', max: 1 });
+ const opened = await openDatabase({ connectionString: current, mode: 'require', max: 1 });
  pool = opened.pool;
 
- if (!opened.security.tls) {
-  const onde = opened.security.remote ? 'host remoto' : 'loopback';
-  throw new Error(
-   `Conexão sem TLS (${onde}). Rotação cancelada: a senha nova trafegaria em texto claro. ` +
-   'Corrija o transporte antes — docs/SECURITY.md.');
- }
+ assertVerifiedTransport(opened.security);
 
  const url = new URL(current);
  const role = url.username;

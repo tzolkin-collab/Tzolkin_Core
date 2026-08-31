@@ -27,6 +27,16 @@ Por quê: o que precisa ser garantido — isolamento, negação de acesso, atomi
 
 ## 2. Comandos
 
+Verificação segura desta revisão, sem `.env`, banco ou provedor externo:
+
+```bash
+npm run test:unit
+```
+
+**18/18 aprovados em 2026-08-30 (Codex).** Cobrem política TLS com driver simulado, configuração efetiva do driver `pg` sem conectar, negação de downgrade/conflitos, guarda de rotação e formato de `/v1/context`. Não provam certificado do servidor real, isolamento no PostgreSQL ou infraestrutura corrigida.
+
+As suítes abaixo são integrações separadas; `npm test` não inclui `test/unit/`. Execute ambos para uma verificação completa, usando base dedicada para integração.
+
 ```bash
 npm test
 ```
@@ -43,7 +53,7 @@ node --env-file=.env --test test/product-console.test.mjs
 
 ## 3. Cobertura atual `[EXISTENTE E VERIFICADO]`
 
-**69 cenários, 69 aprovados**, execução de 2026-08-30 (~22s).
+**69 cenários, 69 aprovados na execução relatada pelo Claude em 2026-08-30 (~22s).** Não reexecutados na revisão Codex: a configuração descrita pode escrever no banco de cadastro. O teste de `require` foi ajustado para aceitar tanto rejeição segura quanto TLS realmente verificado, sem depender de o servidor continuar inseguro.
 
 ### `test/core.test.mjs` — segurança e contrato (21)
 
@@ -97,7 +107,7 @@ Roda contra um **stub HTTP local** que imita a Vercel: nenhuma chamada sai da m�
 | Loopback distinguido de host remoto | A base do veredito `insecure` |
 | `sslmode` da URL é reportado, não ignorado | Intenção explícita é respeitada |
 | `DATABASE_SSL` inválido e `DATABASE_URL` ausente ⇒ erro | Configuração não silencia |
-| **`require` recusa conectar em texto claro** | Vira "passa a conectar" quando o transporte for corrigido — é o sinal de sucesso |
+| **`require` rejeita transporte inadequado ou retorna TLS verificado** | Não depende de o servidor real continuar sem TLS; falhas determinísticas cobertas em `test/unit/` |
 | `allow` conecta e reporta o transporte com honestidade | `insecure = texto claro E host remoto` |
 | Aviso só aparece quando inseguro, **e não contém hostname nem credencial** | Aviso não vira vazamento |
 | `DATABASE_URL_TEST` tem precedência | Base de teste separável |
@@ -158,7 +168,7 @@ Segunda passagem, após o vínculo por produto: formulário de acesso com seleto
 
 ## 6. Ao acrescentar teste
 
-1. Regra nova de segurança ou isolamento **nasce com teste**.
+1. Regra nova de segurança ou isolamento **nasce com teste**. Testes isolados vão em `test/unit/`; isolamento real continua exigindo PostgreSQL dedicado.
 2. Provar **negação**, não só o caminho feliz.
 3. Registro sintético identificável e removido no `finally`.
 4. Nunca remover por critério amplo — sempre pelos ids da execução.

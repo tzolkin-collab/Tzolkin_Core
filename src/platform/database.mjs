@@ -14,8 +14,8 @@ export function describeTarget(connectionString) {
  const url = new URL(connectionString);
  // sslmode=disable na própria URL é intenção explícita, e é respeitada.
  return {
-  host: url.hostname,
-  loopback: LOOPBACK.has(url.hostname),
+  host: url.searchParams.get('host') || url.hostname,
+  loopback: LOOPBACK.has(url.searchParams.get('host') || url.hostname),
   urlSslMode: url.searchParams.get('sslmode'),
  };
 }
@@ -23,11 +23,11 @@ export function describeTarget(connectionString) {
 // Uma conexão só é considerada criptografada se o socket for TLS de fato.
 const encrypted = client => Boolean(client.connection?.stream?.encrypted);
 
-async function probe(connectionString, ssl) {
- const client = new pg.Client({ connectionString, ssl, connectionTimeoutMillis: 8000 });
+async function probe(connectionString, ssl, Client) {
+ const client = new Client({ connectionString, ssl, connectionTimeoutMillis: 8000 });
  try {
   await client.connect();
-  return encrypted(client);
+  return encrypted(client) && (ssl.rejectUnauthorized === false || client.connection.stream.authorized === true);
  } catch { return false; } finally { await client.end().catch(() => {}); }
 }
 
@@ -37,32 +37,56 @@ async function probe(connectionString, ssl) {
  * e auditável.
  *
  * mode:
- *  'require' — exige transporte criptografado; recusa iniciar sem ele. Estado-alvo.
+ *  'require' — exige TLS com certificado e hostname verificados, sem fallback.
  *  'allow'   — tenta criptografar e cai para texto claro avisando. Padrão de hoje,
  *              porque o servidor atual não oferece TLS e o Core precisa seguir rodando.
  *  'disable' — nem tenta.
  */
-export async function openDatabase({ connectionString, mode = 'allow', ...poolOptions }) {
+export async function openDatabase({ connectionString, mode = 'allow', ...poolOptions }, { Client = pg.Client, Pool = pg.Pool } = {}) {
  if (!connectionString) throw new Error('DATABASE_URL é obrigatória.');
  if (!SSL_MODES.includes(mode)) throw new Error(`DATABASE_SSL inválido: use ${SSL_MODES.join(', ')}.`);
 
  const target = describeTarget(connectionString);
+ const url = new URL(connectionString);
+ const urlMode = url.searchParams.get('sslmode');
+ const urlSsl = url.searchParams.get('ssl');
+ if (urlMode && !['disable', 'prefer', 'require', 'verify-ca', 'verify-full', 'no-verify'].includes(urlMode))
+  throw new Error('sslmode inválido na DATABASE_URL.');
+ if (urlSsl && !['0', '1', 'true', 'false', 'no-verify'].includes(urlSsl))
+  throw new Error('ssl inválido na DATABASE_URL.');
+ const disabled = urlMode === 'disable' || ['0', 'false'].includes(urlSsl);
+ const unverified = urlMode === 'no-verify' || urlSsl === 'no-verify';
+ const urlRequiresTls = ['require', 'verify-ca', 'verify-full', 'no-verify'].includes(urlMode) || ['1', 'true', 'no-verify'].includes(urlSsl);
+ if ((mode === 'require' && (disabled || unverified)) || (mode === 'disable' && urlRequiresTls) || (disabled && urlRequiresTls))
+  throw new Error('Políticas TLS conflitantes entre DATABASE_SSL e DATABASE_URL.');
+ for (const key of Object.keys(poolOptions)) {
+  if (!['max', 'idleTimeoutMillis', 'connectionTimeoutMillis', 'application_name'].includes(key))
+   throw new Error('Opção de pool não permitida pela política de transporte.');
+ }
+ // pg dá precedência aos parâmetros da URL sobre ssl. Ler apenas os certificados
+ // e remover opções TLS da URL impede que ela desligue a validação silenciosamente.
+ const parsedSsl = new pg.Client({ connectionString }).connectionParameters.ssl;
+ const certificates = {};
+ for (const key of ['ca', 'cert', 'key']) if (parsedSsl?.[key]) certificates[key] = parsedSsl[key];
+ for (const key of ['ssl', 'sslmode', 'sslcert', 'sslkey', 'sslrootcert', 'uselibpqcompat']) url.searchParams.delete(key);
+ const normalized = url.href;
+ const requireVerified = mode === 'require' || ['require', 'verify-ca', 'verify-full'].includes(urlMode) || ['1', 'true'].includes(urlSsl);
  let ssl = false;
  let verified = false;
 
- if (mode !== 'disable') {
-  if (await probe(connectionString, { rejectUnauthorized: true })) {
-   ssl = { rejectUnauthorized: true }; verified = true;
-  } else if (await probe(connectionString, { rejectUnauthorized: false })) {
+ if (mode !== 'disable' && !disabled) {
+  if (await probe(normalized, { ...certificates, rejectUnauthorized: true }, Client)) {
+   ssl = { ...certificates, rejectUnauthorized: true }; verified = true;
+  } else if (!requireVerified && await probe(normalized, { ...certificates, rejectUnauthorized: false }, Client)) {
    // Criptografa, mas não prova com quem se está falando: melhor que texto claro,
    // longe de suficiente. Continua sinalizado como não verificado.
-   ssl = { rejectUnauthorized: false }; verified = false;
+   ssl = { ...certificates, rejectUnauthorized: false }; verified = false;
   }
  }
 
  const tls = ssl !== false;
- if (!tls && mode === 'require') {
-  throw new Error('DATABASE_SSL=require, mas o servidor não aceitou conexão criptografada. Conexão recusada.');
+ if ((!verified && requireVerified) || (!tls && unverified)) {
+  throw new Error('O servidor não aceitou conexão criptografada com a validação exigida. Conexão recusada.');
  }
 
  const security = {
@@ -73,11 +97,18 @@ export async function openDatabase({ connectionString, mode = 'allow', ...poolOp
   insecure: !tls && !target.loopback,
   mode,
  };
- return { pool: new pg.Pool({ connectionString, ssl, ...poolOptions }), security };
+ return { pool: new Pool({ ...poolOptions, connectionString: normalized, ssl }), security };
+}
+
+export function assertVerifiedTransport(security) {
+ if (!security?.tls || !security?.verified)
+  throw new Error('Rotação cancelada: exige TLS com certificado e hostname verificados, inclusive em loopback.');
 }
 
 // Bloco de aviso na inicialização. Sem hostname, sem credencial — só o estado.
 export function transportWarning(security) {
+ if (security.tls && !security.verified)
+  return 'ATENÇÃO: TLS sem certificado verificado. Não cadastre cliente real; corrija a confiança no servidor.';
  if (!security.insecure) return null;
  return [
   '',

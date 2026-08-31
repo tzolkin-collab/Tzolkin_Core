@@ -19,7 +19,7 @@ Conferido em 2026-08-30 lendo os arquivos, executando `npm test` e consultando o
 | Banco | PostgreSQL 17.11 **remoto em EasyPanel**, base `tzolkin_core`, role `tzolkin_core_app` (dona da base) |
 | Frontend | HTML/CSS/JS sem build, servido pelo próprio processo (`public/`) |
 | Execução | `npm start` → `http://127.0.0.1:3100`, **só loopback**, recusa `NODE_ENV=production`. O processo é local; **o banco não** |
-| Testes | 37 cenários, banco real — ver [TESTING.md](TESTING.md) |
+| Testes | 69 cenários de integração relatados na entrega anterior; 18 testes unitários aprovados nesta revisão, sem banco remoto — ver [TESTING.md](TESTING.md) |
 
 ### Dados hoje no banco
 
@@ -58,7 +58,7 @@ Levantadas na inspeção de 2026-08-30.
 
 | # | Briefing dizia | Realidade conferida | Tratamento |
 |---|---|---|---|
-| 1 | "19 testes aprovados" | Verdadeiro antes desta entrega. Depois dela: **37** | Atualizado em [TESTING.md](TESTING.md) |
+| 1 | "19 testes aprovados" | Contagem histórica. Resultados e limites da última verificação ficam em TESTING.md | [TESTING.md](TESTING.md) |
 | 2 | "seis produtos e sete atalhos operacionais" | Confirmado: 13 linhas em `ecosystem_entries` | — |
 | 3 | "Auditoria básica" | Confirmado, e é mínima: `audit_events` tem só `id, type, tenant_id, created_at`. **Não registra quem agiu, nem o quê mudou, nem o produto** | Lacuna aberta em [SECURITY.md](SECURITY.md#4-auditoria) |
 | 4 | "Vínculos de usuários por identificador externo" | Era **por organização**: quem tinha vínculo alcançava todos os produtos contratados | **Corrigido** em 2026-08-30 — vínculo agora é por organização **e** produto ([D1](#d1--vínculo-de-pessoa-por-produto-resolvida)) |
@@ -167,3 +167,12 @@ O trabalho não commitado foi verificado e **commitado na branch `feat/captacao-
 - 🟡 **HIPÓTESE** Os produtos Barber, Commerce e Educare têm backend próprio em algum estágio. Nada neste workspace comprova; só `tzolkin-site` e `chatbot-api` existem aqui.
 - 🟡 **HIPÓTESE** A conta Asaas da TZOLKIN tem os recursos citados em [BILLING.md](BILLING.md). Capacidade varia por conta e por aprovação; confirmar no painel antes de desenhar em cima.
 - 🟡 **HIPÓTESE** A Contabilizei aceita integração programática. Não foi encontrada API pública oficial — ver [INTEGRATIONS.md](INTEGRATIONS.md#7-contabilizei).
+
+## 8. Revisão Codex — branch própria
+
+Em 2026-08-30, a pedido do usuário, o Core ganhou repositório Git local. O estado anterior foi preservado em `main`, commit `c617bf0`; correções na branch `codex/revisao-seguranca-core`. **Sem remoto configurado, push, deploy ou backup externo.** O repositório do institucional permanece separado e intocado nesta revisão.
+
+- `DATABASE_SSL=require` exige TLS verificado; parâmetros conflitantes da URL são rejeitados antes da conexão.
+- Rotação exige certificado/hostname verificados. Loopback sozinho não prova a existência de túnel seguro.
+- `/v1/context` agora inclui `membership_scope: "product"`, conforme o contrato documentado.
+- O transporte real da infraestrutura **não foi corrigido nem revalidado** nesta revisão. Testes novos usam driver simulado; não substituem a integração real.

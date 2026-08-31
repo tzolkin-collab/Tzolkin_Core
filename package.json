@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node --env-file=.env src/server.mjs",
     "test": "node --env-file=.env --test \"test/*.test.mjs\"",
+    "test:unit": "node --test test/unit/*.test.mjs",
     "db:setup": "node scripts/setup.mjs",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
     "db:rotate-password": "node --env-file=.env scripts/rotate-db-password.mjs"

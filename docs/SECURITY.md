@@ -33,7 +33,7 @@ Revisão: **2026-08-30**.
 | PostgreSQL `tzolkin_institucional` | 9000 | `tzolkin-site` (leads) |
 | Redis | 1000 | `chatbot-api` |
 
-Usuários de banco distintos, mesmo servidor exposto. Fechar a exposição resolve os três de uma vez; deixar aberto mantém os três em risco.
+Usuários de banco distintos, mesmo servidor exposto. Cada serviço precisa de transporte e conectividade verificados separadamente. Fechar portas sem preparar os consumidores pode interromper os apps; ver [conectividade de produção](INFRASTRUCTURE.md#conectividade-do-institucional-em-produção-pendente-de-decisão).
 
 ### Consequência direta para o `tzolkin-site` `[PENDENTE DE DECISÃO]`
 
@@ -52,11 +52,11 @@ Não conserta a exposição — impede que ela seja esquecida.
 | Salvaguarda | Comportamento |
 |---|---|
 | Medição real do transporte | Na inicialização, `src/platform/database.mjs` tenta TLS e verifica se o socket resultante é de fato criptografado. Nada é presumido |
-| `DATABASE_SSL` | `require` recusa iniciar sem criptografia (**estado-alvo**) · `allow` tenta e cai para texto claro avisando (**padrão hoje**, porque o servidor não oferece TLS) · `disable` nem tenta |
+| `DATABASE_SSL` | `require` exige TLS com certificado e hostname verificados, sem fallback; rejeita URL conflitante · `allow` mantém diagnóstico legado, respeitando exigências TLS da URL · `disable` não tenta TLS e rejeita URL que o exija |
 | Aviso na inicialização | Bloco destacado no console quando o transporte fica em texto claro para host remoto. **Sem hostname, sem credencial** |
 | Visível no painel | Faixa vermelha permanente no topo do espaço de trabalho, em todos os contextos |
 | Visível por máquina | `GET /health` devolve `database_transport`: `tls-verified`, `tls-unverified`, `plaintext` ou `unknown`. **Nunca afirma segurança sem prova** |
-| Rotação bloqueada | `npm run db:rotate-password` **recusa** rodar sobre texto claro: trocar a senha por um canal que a expõe entrega a senha nova a quem já lia a antiga |
+| Rotação bloqueada | `npm run db:rotate-password` exige `require` e recusa texto claro, TLS não verificado e estado desconhecido, inclusive em loopback |
 | Base de teste separável | `DATABASE_URL_TEST` faz `npm test` usar outra base. Sem ela, os testes escrevem na mesma base do cadastro |
 
 ### O que já protege `[EXISTENTE E VERIFICADO]`
@@ -89,7 +89,7 @@ Conferido no código e coberto por teste ([TESTING.md](TESTING.md)) — tudo aba
 | Sem papéis nem escopo | Todo operador é administrador global |
 | Sem expiração de acesso | Colaborador temporário fica para sempre |
 | Auditoria mínima | Ver [§4](#4-auditoria) |
-| Sem migração versionada | [INFRASTRUCTURE.md](INFRASTRUCTURE.md#3-migrações) |
+| Migrações sem reversão documentada e sem role separada | Migrações numeradas já existem — [INFRASTRUCTURE.md](INFRASTRUCTURE.md#3-migrações) |
 | Role da aplicação é dona das tabelas | Impede RLS eficaz sem revisão — [D5](CONTEXT.md#d5--isolamento-no-banco-só-query-ou-rlsseparação-física) |
 | **Banco sem TLS na internet pública** | Credencial e dados em texto claro — [acima](#o-banco-do-core-trafega-sem-tls-pela-internet-pública) |
 | Testes rodam contra a mesma base do cadastro | Não há base de desenvolvimento separada |
@@ -170,7 +170,7 @@ Ao evoluir: ator, ação, alvo, antes/depois, origem, correlação da requisiç�
 
 ### Variáveis `[EXISTENTE E VERIFICADO]`
 
-Nomes e finalidade em [`.env.example`](../.env.example). São três: `DATABASE_URL`, `CORE_ADMIN_PASSWORD`, `PORT`. Nenhum valor foi lido ou reproduzido nesta documentação.
+Nomes e finalidade em [`.env.example`](../.env.example), incluindo conexão, política TLS, banco de testes e integração Vercel. Esse arquivo é a fonte da lista de variáveis; nenhum segredo é reproduzido aqui.
 
 ---
 
@@ -219,11 +219,11 @@ Conforme a documentação do EasyPanel, **serviços PostgreSQL são privados por
 
 Elimina a exposição, não apenas a interceptação. É também o que a documentação do EasyPanel recomenda.
 
-1. Nos serviços **PostgreSQL** e **Redis**, desligar a exposição pública na aba **Expose**.
+1. Inventariar os consumidores e preparar o caminho privado de cada um **antes** de desligar a exposição pública de PostgreSQL ou Redis. Para o institucional na Vercel, resolver [a conectividade de produção](INFRASTRUCTURE.md#conectividade-do-institucional-em-produção-pendente-de-decisão); um túnel de desenvolvimento não a resolve.
 2. Apps que rodam no mesmo EasyPanel passam a usar a **URL interna** da aba *Credentials* — rede privada, sem passar pela internet.
 3. Para desenvolvimento nesta máquina, alcançar o banco por **túnel autenticado** (SSH ou WireGuard) até o servidor, e apontar a `DATABASE_URL` para o `127.0.0.1` local do túnel.
-4. Com o túnel, `describeTarget` passa a ver loopback e o aviso some — **corretamente**, porque o tráfego passa a ir cifrado pelo túnel.
-5. Rodar `npm run db:rotate-password` (agora vai deixar) e conferir que `npm start` sobe sem o bloco de aviso.
+4. Loopback é apenas endereço local, **não evidência de túnel seguro**. O Core não verifica SSH/WireGuard; ausência do aviso não certifica essa arquitetura.
+5. Desligar exposição somente após validar os consumidores. O script de rotação continua exigindo TLS PostgreSQL verificado, mesmo via túnel. Se o túnel não oferecer isso, definir procedimento administrativo seguro separado; não contornar a proteção do script.
 
 ### Opção 2 — Manter exposto, com TLS
 
@@ -237,9 +237,9 @@ Protege o tráfego, mas a porta segue aberta ao mundo: varredura e força bruta 
 
 ### Depois de qualquer das opções
 
-- [ ] `GET /health` reporta `tls-verified` (ou o host é loopback via túnel)
+- [ ] `GET /health` reporta `tls-verified`; alternativa por túnel exige validação operacional separada, não inferida do endereço
 - [ ] `npm start` sobe sem o bloco de aviso, e a faixa some do painel
 - [ ] Senha rotacionada por canal seguro; `.env.bak` apagado depois de conferir
-- [ ] `DATABASE_SSL=require` fixado no `.env`, para não regredir em silêncio
+- [ ] `DATABASE_SSL=require` fixado para TLS PostgreSQL verificado; não funciona sobre PostgreSQL sem TLS só porque há túnel
 - [ ] `DATABASE_URL_TEST` apontando para base separada, para os testes pararem de escrever na base do cadastro
 - [ ] Verificar se mais alguma porta de banco está publicada no EasyPanel além dessas duas
