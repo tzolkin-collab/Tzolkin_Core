@@ -15,6 +15,7 @@ import { contractsRoutes } from './modules/contracts.mjs';
 import { accessRoutes, authenticateApp } from './modules/access.mjs';
 import { productConsoleRoutes } from './modules/product-console.mjs';
 import { deploysRoutes, buildRegistry } from './modules/deploys.mjs';
+import { infrastructureRoutes } from './modules/infrastructure.mjs';
 
 const MODULES = [
  identityRoutes, workspaceRoutes, catalogRoutes,
@@ -23,13 +24,14 @@ const MODULES = [
 
 // `security` é o estado do transporte do banco medido por platform/database.mjs.
 // Ausente = não medido; os endpoints reportam 'unknown' em vez de fingir segurança.
-export function createCore({ pool, adminPassword, clock = Date.now, security = null, deployRegistry } = {}) {
+export function createCore({ pool, adminPassword, clock = Date.now, security = null, deployRegistry, infrastructureOptions } = {}) {
  const sessions = createSessionStore({ adminPassword, clock });
  const router = createRouter();
  for (const register of MODULES) register(router);
  // Integrações externas são opcionais e injetáveis: os testes passam um registro
  // apontado para um stub local, e nunca tocam num provedor de verdade.
  deploysRoutes(router, { registry: deployRegistry ?? buildRegistry(), clock });
+ infrastructureRoutes(router, { ...infrastructureOptions, clock });
 
  const server = http.createServer(async (req, res) => {
   securityHeaders(res);

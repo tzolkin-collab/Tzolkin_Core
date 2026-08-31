@@ -35,6 +35,8 @@ npm run test:unit
 
 **18/18 aprovados em 2026-08-30 (Codex).** Cobrem política TLS com driver simulado, configuração efetiva do driver `pg` sem conectar, negação de downgrade/conflitos, guarda de rotação e formato de `/v1/context`. Não provam certificado do servidor real, isolamento no PostgreSQL ou infraestrutura corrigida.
 
+Após a entrega do inventário EasyPanel: **25/25 unitários aprovados**, incluindo 7 novos testes em `test/unit/easypanel.test.mjs`. A API HTTP do Core é exercitada em loopback com sessão real e pool que recusa consultas; o provedor é simulado. Sem banco remoto, sem credencial real e sem prova de compatibilidade com a versão do painel do usuário.
+
 As suítes abaixo são integrações separadas; `npm test` não inclui `test/unit/`. Execute ambos para uma verificação completa, usando base dedicada para integração.
 
 ```bash

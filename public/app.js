@@ -296,6 +296,25 @@ function linhaDeploy(deploy, principal) {
  return linha;
 }
 
+function renderEasypanel(data) {
+ const target = $('easypanel-inventory');
+ target.replaceChildren();
+ if (!data.configured || data.status !== 'ok') {
+  target.append(node('p', data.configured ? data.message : 'EasyPanel ainda não conectado. Configure a URL HTTPS e a credencial no servidor.', 'empty-list'));
+  return;
+ }
+ if (data.omitted_projects || data.omitted_services)
+  target.append(node('p', `Lista parcial: ${data.omitted_projects} projetos e ${data.omitted_services} serviços omitidos.`, 'notice-inline'));
+ if (!data.projects.length) target.append(node('p', 'Nenhum projeto acessível a esta credencial.', 'empty-list'));
+ for (const project of data.projects) {
+  const card = node('article', undefined, 'deploy-card');
+  card.append(node('h3', project.name));
+  for (const service of project.services) card.append(node('p', `${service.name} · ${service.type}`, 'detail'));
+  if (!project.services.length) card.append(node('p', 'Nenhum serviço cadastrado.', 'empty-list'));
+  target.append(card);
+ }
+}
+
 function renderDeploys(data) {
  $('deploys-status').replaceChildren();
  $('deploys-list').replaceChildren();
@@ -470,6 +489,10 @@ async function load() {
   // Provedor externo pode estar fora do ar: o painel não pode cair junto.
   await api('/api/deploys').then(renderDeploys).catch(error => {
    $('deploys-status').replaceChildren(node('p', error.message, 'security-banner'));
+  });
+  $('easypanel-inventory').replaceChildren(node('p', 'Consultando EasyPanel…', 'empty-list'));
+  await api('/api/infrastructure/easypanel').then(renderEasypanel).catch(() => {
+   $('easypanel-inventory').replaceChildren(node('p', 'Não foi possível consultar o EasyPanel.', 'empty-list'));
   });
  } else {
   state.product = await api(`/api/products/${encodeURIComponent(state.context)}/console`);

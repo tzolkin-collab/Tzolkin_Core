@@ -176,3 +176,7 @@ Em 2026-08-30, a pedido do usuário, o Core ganhou repositório Git local. O est
 - Rotação exige certificado/hostname verificados. Loopback sozinho não prova a existência de túnel seguro.
 - `/v1/context` agora inclui `membership_scope: "product"`, conforme o contrato documentado.
 - O transporte real da infraestrutura **não foi corrigido nem revalidado** nesta revisão. Testes novos usam driver simulado; não substituem a integração real.
+
+### Continuação — EasyPanel
+
+Inventário somente-leitura implementado no backend e na área Deploys. **25/25 testes unitários passaram**, sem acesso à infraestrutura real. URL HTTPS, credencial restrita, versão do painel e formato da resposta precisam ser validados para conectar. Nenhum disparo de deploy, reinício ou exclusão foi implementado. Detalhes e limitações em [INTEGRATIONS.md §10](INTEGRATIONS.md#10-easypanel--inventário-local-implementado-validação-real-pendente).

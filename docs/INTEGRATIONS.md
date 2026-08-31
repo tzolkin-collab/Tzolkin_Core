@@ -13,7 +13,7 @@ Revisão: **2026-08-30**.
 | **Core → Vercel, leitura de deploys** | `[EXISTENTE E VERIFICADO]` — fase 1 entregue em 2026-08-30 |
 | Apps → Core, via `GET /v1/context` | `[EXISTENTE E VERIFICADO]`, mas **nenhum app real provisionado** (`app_clients` = 0 linhas) |
 | Notion → Core, catálogo do ecossistema | `[EXISTENTE E VERIFICADO]`, importação manual |
-| Core → EasyPanel | **Nada implementado** — ver [§10](#10-easypanel--por-que-ainda-não-pendente-de-decisão) |
+| Core → EasyPanel | Inventário implementado e testado com respostas simuladas; conexão real pendente — ver §10 |
 | Stripe, Asaas, Open Finance, Contabilizei, e-mail, webhooks | **Nada implementado** |
 
 ---
@@ -168,7 +168,21 @@ Quando existir, será por **Deploy Hook**: URL secreta por branch, sem token, re
 
 ---
 
-## 10. EasyPanel — por que ainda não `[PENDENTE DE DECISÃO]`
+## 10. EasyPanel — inventário local `[IMPLEMENTADO; VALIDAÇÃO REAL PENDENTE]`
+
+Revisão Codex de 2026-08-30: `src/integrations/easypanel.mjs` consulta somente `GET /api/listProjectsAndServices`; `GET /api/infrastructure/easypanel` exige sessão administrativa, recusa parâmetros inesperados e não aceita escrita. O painel apresenta o inventário na área Deploys, explicitamente separado de disponibilidade e histórico de deploy.
+
+- Configuração: `EASYPANEL_URL` e `EASYPANEL_TOKEN`, somente no ambiente do servidor. Nenhum segredo configurado nesta entrega.
+- HTTPS obrigatório, sem credencial na URL, sem redirecionamento, timeout de 8s, resposta limitada a 1 MiB, cache de 30s e consulta concorrente compartilhada.
+- Retorna somente nomes de projetos/serviços e tipos conhecidos. Não consulta ambiente, senha de banco, configuração completa, logs ou métricas. Não dispara deploy nem reinicia/exclui serviços.
+- Limites de 100 projetos e 200 serviços por projeto, com contagem explícita do corte. Tipo desconhecido vira `unknown`, nunca indicação inventada de saúde.
+- Sem configuração: estado desconectado. Configuração incompleta ou falha: erro neutro, sem derrubar o painel.
+- **Limitação importante:** a referência oficial documenta o endpoint, mas não publica esquema de resposta (exemplo `null`). O normalizador espera um array de `{name, services: [{name, type}]}`; esse formato foi testado com fixture, **não confirmado no painel do usuário**. Respostas diferentes são recusadas, não convertidas em lista vazia. Confirmar versão e formato antes de declarar integração conectada.
+- 7 testes novos (25 unitários ao todo), incluindo sessão expirada, escrita negada e nenhuma consulta ao banco. UI adicionada, sem conferência visual nesta entrega.
+
+Fontes oficiais consultadas: [introdução da API](https://easypanel.io/docs/api-reference), [listagem](https://easypanel.io/docs/api-reference/projects/listProjectsAndServices), [CLI e escopo da chave](https://easypanel.io/docs/cli). A chave atua com os acessos do usuário; não presumir privilégio somente-leitura. Preferir usuário restrito aos projetos necessários, após verificar suporte na versão instalada.
+
+### Conexão real e ações futuras
 
 A API oficial existe e é adequada: base `https://<painel>/api`, `Authorization: Bearer <token>`, com `listProjectsAndServices`, `inspectAppService`, `inspectPostgresService`, `getDockerContainers` para leitura e `POST /api/deployAppService` com `{projectName, serviceName, forceRebuild?}` para disparo.
 
@@ -176,7 +190,7 @@ O impedimento não é técnico: **na mesma superfície do mesmo token estão `de
 
 Existe `refreshAppDeployToken`, sugerindo token de deploy por serviço — mais estreito, a confirmar.
 
-**Ordem decidida:** fechar a exposição do banco ([SECURITY.md §8](SECURITY.md#8-runbook-corrigir-o-transporte-do-banco)) antes de guardar token de infraestrutura.
+Antes de conectar: obter a URL HTTPS do usuário, revisar exposição/armazenamento de segredos e permissões, configurar a credencial fora da conversa, reiniciar o Core e validar a consulta. Isso é separado da implementação local, que não necessita token real. Ações de deploy continuam pendentes de autorização e auditoria.
 
 ---
 

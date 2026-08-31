@@ -98,6 +98,8 @@ Só por **Deploy Hook** da Vercel: URL secreta por branch, sem token, revogável
 
 ### E1.8 — Integração EasyPanel
 
+**Atualização:** inventário somente-leitura implementado e testado localmente. A conexão real continua pendente de URL, credencial, versão e validação do formato de resposta; ver [INTEGRATIONS.md §10](INTEGRATIONS.md#10-easypanel--inventário-local-implementado-validação-real-pendente). Não há ações operacionais nesta entrega.
+
 **Depende de:** E1.6. Não faz sentido guardar token de infraestrutura antes de fechar a exposição do banco.
 
 Contratos e o impedimento de escopo: [INTEGRATIONS.md §10](INTEGRATIONS.md#10-easypanel--por-que-ainda-não-pendente-de-decisão).
