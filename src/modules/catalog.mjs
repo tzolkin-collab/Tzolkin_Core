@@ -1,0 +1,18 @@
+// Catálogo do ecossistema: produtos e atalhos operacionais importados do Notion.
+// Cadastro, não monitoramento: "status" aqui é o que foi registrado, não disponibilidade medida.
+
+export const listProducts = client => client.query('SELECT id,name FROM products ORDER BY name');
+
+export const findProduct = (client, productId) =>
+ client.query('SELECT id,name FROM products WHERE id=$1', [productId]).then(r => r.rows[0] || null);
+
+export const findCatalogEntry = (client, productId) =>
+ client.query("SELECT payload,imported_at FROM ecosystem_entries WHERE id=$1 AND kind='product'", [productId])
+  .then(r => r.rows[0] || null);
+
+export function catalogRoutes(router) {
+ router.get('/api/ecosystem', async ({ pool, reply }) => {
+  const result = await pool.query('SELECT kind,payload,imported_at FROM ecosystem_entries ORDER BY id');
+  return reply(200, { entries: result.rows });
+ });
+}

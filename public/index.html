@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Core · TZOLKIN</title><link rel="icon" href="/logo.svg"><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<main id="login" class="login-screen">
+<div class="login-box">
+<div class="brand login-brand"><img src="/logo.svg" width="46" height="46" alt=""><span>TZOLKIN<span class="brand-product">CORE</span></span></div>
+<h1>Entrar</h1>
+<form id="login-form"><label for="password">Senha</label><div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required aria-describedby="login-notice"><button id="show-password" class="reveal" type="button" aria-pressed="false">Mostrar</button></div><p id="login-notice" class="form-error" role="alert"></p><button class="primary login-submit" type="submit">Entrar <span aria-hidden="true">↗</span></button></form>
+</div><span class="login-signature">TZOLKIN</span>
+</main>
+<div id="workspace" class="app-shell" hidden>
+<aside class="sidebar">
+<div class="brand"><img src="/logo.svg" width="36" height="36" alt=""><span>TZOLKIN<span class="brand-product">CORE</span></span></div>
+<div class="context-switch"><label for="context-select">Contexto</label><select id="context-select"><option value="">TZOLKIN · Gestão geral</option></select></div>
+<p class="nav-label" id="nav-label">ESPAÇO DE TRABALHO</p>
+<nav id="nav" aria-label="Principal"></nav>
+<div class="sidebar-bottom"><div class="workspace-label"><span class="avatar">T</span><div>TZOLKIN<small>Gestão interna</small></div></div><button id="logout" class="sign-out">Sair da conta <span aria-hidden="true">↗</span></button></div>
+</aside>
+<div class="app-main">
+<header class="topbar"><span id="context-crumb"><strong id="crumb-context">TZOLKIN</strong> <span class="crumb-divider">/</span> <strong id="breadcrumb">Clientes</strong></span><button id="refresh" class="quiet">Atualizar <span aria-hidden="true">↻</span></button></header>
+<main class="content">
+<div class="page-heading"><div><p class="eyebrow" id="eyebrow">TZOLKIN CORE</p><h1 id="page-title">Clientes</h1></div><button id="new-record" class="primary"><span aria-hidden="true">+</span> <span id="new-record-label">Novo cliente</span></button></div>
+<p id="security-banner" class="security-banner" role="alert" hidden></p>
+<p id="notice" class="notice" role="status" aria-live="polite"></p>
+<div id="metrics" class="metrics"></div>
+
+<section id="view-ecosystem" class="view" hidden><div class="section-toolbar"><h2>Portfólio TZOLKIN</h2><span class="catalog-caption">Cadastro do Notion · 30/08/2026</span></div><div id="ecosystem-catalog" class="ecosystem-grid"></div><h2 class="section-title contracts-title">Atalhos da operação</h2><div id="ecosystem-resources" class="resource-grid"></div><p class="catalog-caption catalog-footnote">Status cadastrais, sem monitoramento em tempo real.</p></section>
+
+<section id="view-clients" class="view">
+<div class="section-toolbar"><h2>Carteira de clientes</h2><label class="search-label"><span class="sr-only">Buscar cliente</span><input id="client-search" type="search" placeholder="Buscar cliente…"></label></div>
+<div class="table-container"><table><thead><tr><th>Cliente</th><th>Status</th><th>Produtos</th><th>Acessos</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody id="tenants"></tbody></table><div id="clients-empty" class="empty-state" hidden><span class="empty-symbol" aria-hidden="true">＋</span><h3>Sua carteira começa aqui.</h3><p>Cadastre o primeiro cliente para organizar produtos e acessos.</p><button class="secondary" data-open="tenant-dialog">Adicionar cliente</button></div><p id="search-empty" class="empty-list" hidden>Nenhum cliente encontrado.</p></div>
+</section>
+
+<section id="view-products" class="view" hidden><h2 class="section-title">Produtos do ecossistema</h2><div id="product-catalog" class="product-grid"></div><h2 class="section-title contracts-title">Contratos</h2><div id="contracts" class="list-panel"></div></section>
+
+<section id="view-access" class="view" hidden><h2 class="section-title">Acessos por cliente</h2><div id="members" class="list-panel"></div></section>
+
+<section id="view-deploys" class="view" hidden>
+<div class="section-toolbar"><h2>Deploys recentes</h2><span class="catalog-caption" id="deploys-caption"></span></div>
+<div id="deploys-status"></div>
+<div id="deploys-list" class="deploy-grid"></div>
+<p class="catalog-caption catalog-footnote">Somente leitura. O Core não dispara, cancela nem promove deploy.</p>
+</section>
+
+<section id="view-product" class="view" hidden>
+<div id="product-record" class="context-panel"></div>
+<h2 class="section-title contracts-title">Direitos contratados</h2>
+<div id="product-rights" class="list-panel"></div>
+</section>
+
+<section id="view-product-orgs" class="view" hidden>
+<div class="section-toolbar"><h2>Organizações com contrato</h2><label class="search-label"><span class="sr-only">Buscar organização</span><input id="org-search" type="search" placeholder="Buscar organização…"></label></div>
+<div class="table-container"><table><thead><tr><th>Organização</th><th>Contrato</th><th>Plano</th><th>Pessoas neste produto</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody id="product-orgs"></tbody></table>
+<div id="product-orgs-empty" class="empty-state" hidden><span class="empty-symbol" aria-hidden="true">◈</span><h3 id="product-orgs-empty-title">Nenhuma organização contratou este produto.</h3><p>O Core não infere vínculos: uma organização só aparece aqui depois que um contrato deste produto é registrado.</p><button class="secondary" data-open="entitlement-dialog">Registrar contrato</button></div>
+<p id="product-orgs-search-empty" class="empty-list" hidden>Nenhuma organização encontrada.</p></div>
+<p class="catalog-caption catalog-footnote" id="scope-note">Pessoas vinculadas contam apenas este produto. Um vínculo em outro produto da mesma organização não dá acesso aqui.</p>
+</section>
+
+</main></div></div>
+<dialog id="tenant-dialog"><form id="tenant-form"><div class="dialog-heading"><h2>Novo cliente</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div><label>Nome do cliente<input name="name" required maxlength="160" autocomplete="organization"></label><label>Identificador<input name="slug" required maxlength="64" placeholder="nome-do-cliente" aria-describedby="slug-help"></label><small id="slug-help">Letras minúsculas, números e hífen.</small><p class="dialog-error form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button class="primary">Criar cliente</button></div></form></dialog>
+<dialog id="member-dialog"><form id="member-form"><div class="dialog-heading"><h2>Vincular acesso</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div><label>Cliente<select name="tenant_id" class="tenant-select" required></select></label><label>Produto<select name="product_id" class="product-select" required></select></label><label>ID do usuário<input name="subject" required maxlength="200" aria-describedby="subject-help"></label><small id="subject-help">Identificador da conta no app. Não envia convite. O vínculo vale só para o produto escolhido.</small><label>Status<select name="active"><option value="true">Ativo</option><option value="false">Revogado</option></select></label><p class="dialog-error form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button class="primary">Salvar acesso</button></div></form></dialog>
+<dialog id="entitlement-dialog"><form id="entitlement-form"><div class="dialog-heading"><h2>Contrato de produto</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div><label>Cliente<select name="tenant_id" class="tenant-select" required></select></label><label>Produto<select name="product_id" class="product-select" required></select></label><label>Plano<input name="plan" required maxlength="80" aria-describedby="plan-help"></label><small id="plan-help">Rótulo cadastral do contrato. Não define preço nem cobrança.</small><label>Status<select name="active"><option value="true">Ativo</option><option value="false">Revogado</option></select></label><details><summary>Permissões</summary><label>Direitos de acesso<input name="rights" placeholder="dashboard.read, appointments.write"></label></details><p class="dialog-error form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button class="primary">Salvar contrato</button></div></form></dialog>
+</body></html>

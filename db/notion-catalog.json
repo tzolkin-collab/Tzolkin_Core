@@ -1,0 +1,102 @@
+{
+  "imported_at": "2026-08-30",
+  "products": [
+    {
+      "id": "sites",
+      "name": "TZOLKIN Sites",
+      "category": "Serviço produtizado",
+      "description": "Sites institucionais, landing pages e portais.",
+      "status": "Publicado no Notion",
+      "url": "https://sites.tzolkin.cloud/",
+      "source": "https://app.notion.com/p/3cc2551ec67e811287d5d4fb90164868",
+      "note": "Site público respondeu HTTP 200 em 30/08/2026; área logada não validada."
+    },
+    {
+      "id": "educare",
+      "name": "Educare by TZOLKIN",
+      "category": "Educação",
+      "description": "Frente educacional da TZOLKIN.",
+      "status": "Domínio a validar",
+      "url": "https://educare.tzolkin.cloud/",
+      "source": "https://app.notion.com/p/3cc2551ec67e816aaaf1d7c72709eab3",
+      "note": "Produção registrada no Notion: https://tzolkin-educare.vercel.app/. Subdomínio próprio ainda a validar."
+    },
+    {
+      "id": "commerce",
+      "name": "TZOLKIN Commerce",
+      "category": "E-commerce",
+      "description": "Frente de comércio eletrônico.",
+      "status": "Disponibilidade a validar",
+      "url": "https://ecom.tzolkin.cloud/",
+      "source": "https://app.notion.com/p/3cc2551ec67e81cbb6d8c5b90e14e1f3",
+      "note": "Endereço cadastrado; disponibilidade não confirmada."
+    },
+    {
+      "id": "barber",
+      "name": "TZOLKIN Barber",
+      "category": "SaaS vertical",
+      "description": "Produto para barbearias.",
+      "status": "Disponibilidade a validar",
+      "url": "https://barber.tzolkin.cloud/",
+      "source": "https://app.notion.com/p/3cc2551ec67e81019b7bd6be9e3c65a0",
+      "note": "Domínio informado pelo proprietário; disponibilidade não confirmada."
+    },
+    {
+      "id": "data",
+      "name": "TZOLKIN Data",
+      "category": "Tracking e inteligência",
+      "description": "Mensuração de aquisição, WhatsApp, CRM, propostas e vendas.",
+      "status": "Planejamento",
+      "url": null,
+      "source": "https://app.notion.com/p/3cc2551ec67e81c6bd30e34518f67242",
+      "note": "data.tzolkin.cloud é um endereço proposto, não publicado."
+    },
+    {
+      "id": "core",
+      "name": "TZOLKIN Core",
+      "category": "Gestão transversal",
+      "description": "Clientes, produtos contratados e permissões do ecossistema.",
+      "status": "Local",
+      "url": null,
+      "source": "https://app.notion.com/p/3cc2551ec67e81968f4dfba07752c04d",
+      "note": "Versão local em uso. core.tzolkin.cloud ainda não publicado."
+    }
+  ],
+  "resources": [
+    {
+      "name": "Institucional",
+      "category": "Site",
+      "url": "https://tzolkin.cloud/"
+    },
+    {
+      "name": "Acessos internos",
+      "category": "Notion",
+      "url": "https://app.notion.com/p/3542551ec67e804c9a0bd99d450e01e5"
+    },
+    {
+      "name": "Documentos",
+      "category": "Notion",
+      "url": "https://app.notion.com/p/3642551ec67e809fa583f91c64cba4cb"
+    },
+    {
+      "name": "Calendários",
+      "category": "Notion",
+      "url": "https://app.notion.com/p/3722551ec67e81009d44f504e6d899c8"
+    },
+    {
+      "name": "Clientes e Ganhos",
+      "category": "Notion",
+      "url": "https://app.notion.com/p/36d2551ec67e806db030e999c0a94443"
+    },
+    {
+      "name": "Wiki",
+      "category": "Notion",
+      "url": "https://app.notion.com/p/d73c5de400704487bdf7fa7f27754de0"
+    },
+    {
+      "name": "Objetivos",
+      "category": "Notion",
+      "url": "https://app.notion.com/p/72b7e90549f8439d8dbc4d1badb11fc9"
+    }
+  ]
+}
