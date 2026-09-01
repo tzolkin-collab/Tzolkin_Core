@@ -1,0 +1,7 @@
+{
+  "name": "@tzolkin/core-api",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "cd ../.. && node --env-file=.env apps/api/src/server.mjs" },
+  "dependencies": { "pg": "^8.23.0" }
+}

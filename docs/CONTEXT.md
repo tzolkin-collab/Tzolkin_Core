@@ -1,5 +1,7 @@
 # Contexto
 
+Atualização `[EXISTENTE E VERIFICADO]` de 2026-08-31: frontend e backend separados em `apps/web` (3100) e `apps/api` (3102), com `npm start` iniciando dois processos. Login via proxy, lista GitHub e TLS verificado conferidos no runtime local; 42 testes unitários/HTTP passaram. Detalhes: [SPLIT-RUNTIME.md](SPLIT-RUNTIME.md). A separação não libera o bootstrap para produção.
+
 Fatos conferidos, restrições, hipóteses e decisões pendentes. Ponto de partida para qualquer trabalho no Core.
 
 Revisão: **2026-08-30**. Convenção de marcas em [README.md](README.md#como-ler-classificação-de-maturidade).
@@ -179,4 +181,4 @@ Em 2026-08-30, a pedido do usuário, o Core ganhou repositório Git local. O est
 
 ### Continuação — EasyPanel
 
-Inventário somente-leitura implementado no backend e na área Deploys. **25/25 testes unitários passaram**, sem acesso à infraestrutura real. URL HTTPS, credencial restrita, versão do painel e formato da resposta precisam ser validados para conectar. Nenhum disparo de deploy, reinício ou exclusão foi implementado. Detalhes e limitações em [INTEGRATIONS.md §10](INTEGRATIONS.md#10-easypanel--inventário-local-implementado-validação-real-pendente).
+Inventário somente-leitura implementado no backend e na área Deploys. **25/25 testes unitários passaram**, sem acesso à infraestrutura real. URL HTTPS, credencial restrita, versão do painel e formato da resposta precisam ser validados para conectar. Nenhum disparo de deploy, reinício ou exclusão foi implementado. Detalhes e limitações em [INTEGRATIONS.md §10](INTEGRATIONS.md#10-easypanel--inventário-local-consulta-real-validada).

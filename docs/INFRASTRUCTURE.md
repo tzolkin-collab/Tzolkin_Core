@@ -10,7 +10,7 @@ Revisão: **2026-08-30**.
 
 > ### ⚠️ Correção de 2026-08-30, posterior à primeira redação
 >
-> A primeira versão deste documento dizia que o Core era inteiramente local. **Está errado.** Só o **processo** é local; o **banco é remoto**, hospedado em EasyPanel. Ver [§2](#2-bancos) e o risco aberto em [SECURITY.md](SECURITY.md#o-banco-do-core-trafega-sem-tls-pela-internet-pública).
+> Só o **processo** é local; o **banco é remoto**, hospedado em EasyPanel. O transporte do Core foi corrigido com TLS verificado e rotação da senha; ver [POSTGRES-TLS.md](POSTGRES-TLS.md). Outras lacunas de produção continuam abertas.
 
 | Ambiente | Estado |
 |---|---|
@@ -55,10 +55,10 @@ Bancos separados por app, por decisão — [ADR 0001](decisions/0001-core-modula
 |---|---|
 | O PostgreSQL do Core **não é local** | `DATABASE_URL` aponta para um host EasyPanel; hostname público, IPv4 público, porta 9000 |
 | O Redis do `chatbot-api` também está em EasyPanel | `REDIS_URL` referencia o mesmo provedor |
-| **O servidor não aceita TLS** | Conexão com `ssl` exigido falha com *"The server does not support SSL connections"*, com e sem verificação de certificado. A string traz `sslmode=disable` — não é desleixo de configuração: o servidor não oferece a opção |
+| **O servidor oferece TLS; Core exige validação** | TLS 1.3 verificado em conexão real; `DATABASE_SSL=require`, `sslmode=verify-full`, certificado público confiado explicitamente. A role do Core rejeita conexões sem TLS; senha antiga rejeitada após rotação |
 | Um só banco para tudo | Não há base separada de desenvolvimento; os testes rodam contra a **mesma** base que guarda o cadastro |
 
-Correção passo a passo: [SECURITY.md §8](SECURITY.md#8-runbook-corrigir-o-transporte-do-banco). Consequência prática: várias frases deste documento e do [SECURITY.md](SECURITY.md) que falavam em *"antes de qualquer ambiente compartilhado"* estão atrasadas — **o ambiente compartilhado já existe.**
+Correção passo a passo: [SECURITY.md §8](SECURITY.md#8-runbook-tls-no-postgresql-do-easypanel). Consequência prática: várias frases deste documento e do [SECURITY.md](SECURITY.md) que falavam em *"antes de qualquer ambiente compartilhado"* estão atrasadas — **o ambiente compartilhado já existe.**
 
 ### Preparação do Core `[EXISTENTE E VERIFICADO]`
 

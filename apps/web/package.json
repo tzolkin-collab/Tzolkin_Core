@@ -1,0 +1,6 @@
+{
+  "name": "@tzolkin/core-web",
+  "private": true,
+  "type": "module",
+  "scripts": { "start": "node server.mjs", "check": "node --check public/app.js && node --check public/delivery.js" }
+}

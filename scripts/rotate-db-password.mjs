@@ -6,9 +6,9 @@
 //
 // Ordem correta: corrigir o transporte (docs/SECURITY.md), confirmar tls-verified
 // com DATABASE_SSL=require, e só então rodar isto. Loopback não é exceção.
-import { readFileSync, writeFileSync, copyFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, copyFileSync, renameSync, constants } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { openDatabase, assertVerifiedTransport } from '../src/platform/database.mjs';
+import { openDatabase, assertVerifiedTransport } from '../apps/api/src/platform/database.mjs';
 
 const ENV = '.env';
 
@@ -30,19 +30,24 @@ try {
  if (!/^[a-z_][a-z0-9_]*$/.test(role)) throw new Error('Nome de role inesperado; rotação cancelada.');
 
  const senha = randomBytes(36).toString('hex');
+ url.password = senha;
+ const pending = ENV + '.rotation-pending';
+ // Preservar a nova credencial antes do ALTER permite recuperação de falha de disco.
+ // Não sobrescrever uma rotação pendente nem um backup anterior.
+ const next = replaceUrl(readFileSync(ENV, 'utf8'), url.href);
+ copyFileSync(ENV, `${ENV}.before-rotation-${Date.now()}`, constants.COPYFILE_EXCL);
+ writeFileSync(pending, next, { flag: 'wx', mode: 0o600 });
  // ALTER ROLE é comando utilitário: não aceita parâmetro. Em vez de concatenar à mão,
  // o próprio servidor produz o identificador e o literal já escapados.
  const quoted = await pool.query('SELECT quote_ident($1) AS ident, quote_literal($2) AS lit', [role, senha]);
  const { ident, lit } = quoted.rows[0];
  await pool.query(`ALTER ROLE ${ident} PASSWORD ${lit}`);
 
- url.password = senha;
- copyFileSync(ENV, ENV + '.bak');
- writeFileSync(ENV, replaceUrl(readFileSync(ENV, 'utf8'), url.href));
+ renameSync(pending, ENV);
 
- console.log('Senha rotacionada e .env atualizado. Cópia anterior em .env.bak — apague depois de confirmar.');
- console.log('Nenhum segredo foi impresso. Reinicie o Core e rode `npm test`.');
-} catch (error) {
- console.error('Rotação não concluída:', error.message);
+ console.log('Senha rotacionada e .env atualizado. Backup anterior preservado em .env.before-rotation-*.');
+ console.log('Nenhum segredo foi impresso. Reinicie o Core e valide a conexão; não rode testes na base real.');
+} catch {
+ console.error('Rotação não concluída. Se existir .env.rotation-pending, preserve-o para recuperação antes de tentar novamente.');
  process.exitCode = 1;
 } finally { await pool?.end().catch(() => {}); }

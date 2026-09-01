@@ -49,7 +49,7 @@ Descoberto durante a inspeção para a integração com Vercel/EasyPanel: o Post
 
 **Aceite, todos cumpridos:** `require` recusa conectar sem criptografia · `unknown` quando não medido, nunca "seguro" por omissão · aviso e resposta da API não contêm host nem credencial · rotação bloqueada em texto claro · Core segue rodando.
 
-**Não entregue de propósito:** a correção em si. Runbook em [SECURITY.md §8](SECURITY.md#8-runbook-corrigir-o-transporte-do-banco).
+**Não entregue de propósito:** a correção em si. Runbook em [SECURITY.md §8](SECURITY.md#8-runbook-tls-no-postgresql-do-easypanel).
 
 ---
 
@@ -98,11 +98,11 @@ Só por **Deploy Hook** da Vercel: URL secreta por branch, sem token, revogável
 
 ### E1.8 — Integração EasyPanel
 
-**Atualização:** inventário somente-leitura implementado e testado localmente. A conexão real continua pendente de URL, credencial, versão e validação do formato de resposta; ver [INTEGRATIONS.md §10](INTEGRATIONS.md#10-easypanel--inventário-local-implementado-validação-real-pendente). Não há ações operacionais nesta entrega.
+**Atualização:** inventário somente-leitura implementado e testado localmente. A conexão real continua pendente de URL, credencial, versão e validação do formato de resposta; ver [INTEGRATIONS.md §10](INTEGRATIONS.md#10-easypanel--inventário-local-consulta-real-validada). Não há ações operacionais nesta entrega.
 
 **Depende de:** E1.6. Não faz sentido guardar token de infraestrutura antes de fechar a exposição do banco.
 
-Contratos e o impedimento de escopo: [INTEGRATIONS.md §10](INTEGRATIONS.md#10-easypanel--por-que-ainda-não-pendente-de-decisão).
+Contratos e o impedimento de escopo: [INTEGRATIONS.md §10](INTEGRATIONS.md#10-easypanel--inventário-local-consulta-real-validada).
 
 **Aceite:** decidido se o token amplo é aceitável ou se há token por serviço · leitura antes de disparo · nenhuma operação destrutiva alcançável pelo Core.
 

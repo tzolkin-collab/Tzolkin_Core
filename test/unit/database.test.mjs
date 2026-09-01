@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import pg from 'pg';
-import { openDatabase, describeTarget, transportWarning, assertVerifiedTransport } from '../../src/platform/database.mjs';
+import { openDatabase, describeTarget, transportWarning, assertVerifiedTransport } from '../../apps/api/src/platform/database.mjs';
 
 const connectionString = 'postgres://test:synthetic@db.example.invalid/test';
 function driver({ valid = true, encrypted = true, available = true } = {}) {
@@ -56,14 +56,14 @@ test('verify-full URL cannot override probe/pool policy or fall back to plaintex
 
 test('allow preserves explicitly disabled TLS without attempting another policy', async () => {
  const stub = driver();
- const { pool, security } = await openDatabase({ connectionString: `${connectionString}?sslmode=disable` }, stub);
+ const { pool, security } = await openDatabase({ connectionString: `${connectionString}?sslmode=disable`, mode: 'allow' }, stub);
  assert.equal(pool.options.ssl, false);
  assert.equal(security.insecure, true);
  assert.equal(stub.calls.length, 0);
 });
 
 test('allow diagnoses unverified TLS and emits a warning without secrets', async () => {
- const { security } = await openDatabase({ connectionString }, driver({ valid: false }));
+ const { security } = await openDatabase({ connectionString, mode: 'allow' }, driver({ valid: false }));
  assert.equal(security.tls, true);
  assert.equal(security.verified, false);
  const warning = transportWarning(security);
@@ -73,7 +73,7 @@ test('allow diagnoses unverified TLS and emits a warning without secrets', async
 });
 
 test('allow reports plaintext fallback honestly', async () => {
- const { security } = await openDatabase({ connectionString }, driver({ available: false }));
+ const { security } = await openDatabase({ connectionString, mode: 'allow' }, driver({ available: false }));
  assert.equal(security.tls, false);
  assert.equal(security.insecure, true);
  assert.match(transportWarning(security), /NÃO é criptografada/);
@@ -81,6 +81,12 @@ test('allow reports plaintext fallback honestly', async () => {
 
 test('a query host override is not mistaken for local loopback', () => {
  assert.equal(describeTarget('postgres://test:synthetic@localhost/test?host=remote.example.invalid').loopback, false);
+});
+
+test('default policy refuses plaintext and unauthenticated TLS', async () => {
+ await assert.rejects(openDatabase({ connectionString }, driver({ valid: false })), /Conexão recusada/);
+ await assert.rejects(openDatabase({ connectionString }, driver({ available: false })), /Conexão recusada/);
+ await assert.rejects(openDatabase({ connectionString: `${connectionString}?sslmode=disable` }, driver()), /conflitantes/);
 });
 
 test('pool overrides cannot replace TLS or the destination', async () => {

@@ -45,7 +45,7 @@ Após configurar a chave do EasyPanel: **27/27 unitários aprovados**. Dois test
 npm test
 ```
 
-Roda `node --env-file=.env --test "test/*.test.mjs"`. Exige o banco preparado e **migrado** ([INFRASTRUCTURE.md](INFRASTRUCTURE.md#preparação-do-core-existente-e-verificado)) e o catálogo importado — a suíte principal confere as 13 entradas.
+Roda `node --env-file=.env --test "test/**/*.test.mjs"`. Exige o banco preparado e **migrado** ([INFRASTRUCTURE.md](INFRASTRUCTURE.md#preparação-do-core-existente-e-verificado)) e o catálogo importado — a suíte principal confere as 13 entradas.
 
 Uma suíte isolada:
 
@@ -57,7 +57,9 @@ node --env-file=.env --test test/product-console.test.mjs
 
 ## 3. Cobertura atual `[EXISTENTE E VERIFICADO]`
 
-**69 cenários, 69 aprovados na execução relatada pelo Claude em 2026-08-30 (~22s).** Não reexecutados na revisão Codex: a configuração descrita pode escrever no banco de cadastro. O teste de `require` foi ajustado para aceitar tanto rejeição segura quanto TLS realmente verificado, sem depender de o servidor continuar inseguro.
+**108 cenários, 108 aprovados** — execução de 2026-08-31, já com TLS verificado no banco. O teste de `require` aceita tanto rejeição segura quanto TLS realmente verificado, sem depender de o servidor continuar inseguro.
+
+> **Correção de 2026-08-31.** O script rodava `test/*.test.mjs`, que **não casa subpastas**: os 5 arquivos em `test/unit/` nunca eram executados, e a contagem de 69 omitia 39 cenários. O glob passou a ser `test/**/*.test.mjs`. Suíte que não roda não é rede de proteção — é a ilusão de uma.
 
 ### `test/core.test.mjs` — segurança e contrato (21)
 
@@ -177,4 +179,4 @@ Segunda passagem, após o vínculo por produto: formulário de acesso com seleto
 3. Registro sintético identificável e removido no `finally`.
 4. Nunca remover por critério amplo — sempre pelos ids da execução.
 5. Nada de efeito externo. Provedor financeiro: só sandbox, e só com autorização específica.
-6. Arquivo em `test/*.test.mjs` já entra em `npm test`, sem editar `package.json`.
+6. Arquivo em `test/**/*.test.mjs` — inclusive em subpasta — já entra em `npm test`, sem editar `package.json`.

@@ -12,6 +12,8 @@ npm start
 
 → `http://127.0.0.1:3100`. Use exatamente esse endereço: mutações exigem essa origem, e `localhost` não é aceito no lugar de `127.0.0.1`.
 
+`npm start` inicia **dois processos**: frontend em 3100 e API em 3102. Também podem rodar separadamente com `npm run start:web` e `npm run start:api`. Só a API carrega o `.env`. Veja [Separação frontend/API](docs/SPLIT-RUNTIME.md).
+
 Primeira vez, na ordem:
 
 ```bash
@@ -28,9 +30,9 @@ npm run db:migrate
 
 > ### ⚠️ O banco não é local
 >
-> O PostgreSQL do Core está em EasyPanel, em host público, **e o servidor não aceita TLS**: senha e dados trafegam em texto claro pela internet. O Core avisa na inicialização, mostra uma faixa no painel e reporta em `GET /health`, mas **não conserta** — a correção é de infraestrutura.
+> O PostgreSQL do Core é remoto. Transporte corrigido em 2026-08-30 (2026-08-31 UTC): **TLS 1.3 com certificado e hostname verificados**, senha rotacionada e conexões sem TLS bloqueadas para a role do Core. `GET /health` reporta `tls-verified`.
 >
-> Runbook: [docs/SECURITY.md §8](docs/SECURITY.md#8-runbook-corrigir-o-transporte-do-banco). Até lá, **não cadastre cliente real.**
+> Certificado, renovação e limites: [docs/POSTGRES-TLS.md](docs/POSTGRES-TLS.md). Isso não libera o bootstrap para produção nem resolve o transporte dos outros aplicativos.
 
 A senha do operador é `CORE_ADMIN_PASSWORD` no `.env`, gerada no setup e nunca enviada aos logs. Não compartilhar o arquivo — ele também tem a conexão do banco. Variáveis documentadas em [`.env.example`](.env.example).
 
@@ -49,13 +51,12 @@ Lista completa do que falta para produção: [docs/SECURITY.md](docs/SECURITY.md
 ## Estrutura
 
 ```
-src/server.mjs        entrada; reexporta createCore
-src/app.mjs           pipeline de requisição + composição dos módulos
-src/platform/         http, router, session, assets
-src/modules/          identity, workspace, catalog, directory, contracts, access, product-console
-public/               painel (HTML/CSS/JS, sem build)
+apps/api/src/         API, autenticação, banco, módulos e integrações
+apps/web/public/      painel (HTML/CSS/JS, sem build)
+apps/web/server.mjs   servidor web local e proxy de origem única
+apps/web/assets.mjs   allowlist dos arquivos públicos
 db/                   schema.sql (linha de base), migrations/ e catálogo do Notion
-scripts/              setup.mjs, migrate.mjs, import-notion.mjs
+scripts/              dev.mjs, setup.mjs, migrate.mjs, import-notion.mjs
 test/                 suítes de integração contra PostgreSQL real
 ```
 
@@ -67,6 +68,12 @@ Detalhes e regra de dependência entre módulos: [docs/ARCHITECTURE.md](docs/ARC
 - **Gestão de um produto** — só as organizações com contrato daquele produto. O recorte é feito no servidor; trocar de contexto descarta o que estava na tela e revalida a sessão.
 
 Uma organização só aparece no contexto de um produto depois que um contrato daquele produto é registrado. **Nada é inferido.**
+
+## Projetos e serviços
+
+Cadastro modular com seleção de repositório GitHub, componentes de monorepo, stacks, dependências e vínculos por ambiente com destinos existentes na Vercel e no EasyPanel. Salvar grava somente configuração e auditoria no Core: não cria recursos nem dispara deploy. Cadastro completo não significa publicação verificada.
+
+Configuração, limites e próximos passos: [docs/DELIVERY-CATALOG.md](docs/DELIVERY-CATALOG.md).
 
 ## Deploys (leitura)
 
@@ -91,3 +98,7 @@ npm test
 Estratégia, cobertura e lacunas: [docs/TESTING.md](docs/TESTING.md).
 
 A logo é o SVG original preto/branco aprovado, idêntico ao do institucional.
+
+Páginas internas de Vercel e EasyPanel, contratos de API e limites: [docs/INTERNAL-PLATFORMS.md](docs/INTERNAL-PLATFORMS.md).
+
+Cobertura atual de consultas, configurações e operações EasyPanel: [docs/EASYPANEL-OPERATIONS.md](docs/EASYPANEL-OPERATIONS.md).

@@ -2,11 +2,15 @@
 
 Tokens, componentes, navegação e estados. Interface interna de trabalho — **não é landing page**.
 
+Direção mais recente do usuário: minimalismo com alta legibilidade, referências Vercel/ElevenLabs/Antigravity, logos SVGL e ícones funcionais Lucide, nunca emojis. Ver [DESIGN-360.md](DESIGN-360.md), que distingue proposta de redesign da implementação atual e prevalece sobre orientações anteriores de preservar integralmente a apresentação.
+
 Revisão: **2026-08-30**.
 
 ---
 
 ## 1. Princípios `[DECIDIDO]`
+
+Atualização aprovada em 2026-08-31: manter identidade, cores e tipografia existentes; modernizar inputs e simplificar a configuração com divulgação progressiva. **Nunca usar emojis como ícones.** Catálogo e navegação usam SVG de traço com `aria-hidden`, acompanhado de rótulo textual. Fluxo do catálogo: repositório primeiro, cards por serviço e revisão antes de salvar; detalhes técnicos recolhidos. Ver [DELIVERY-CATALOG.md](DELIVERY-CATALOG.md).
 
 1. **Ferramenta, não peça de marketing.** Sem herói, sem prova social, sem persuasão.
 2. **Nenhuma métrica fictícia.** Todo número sai do banco. Não havendo dado, a tela diz que não há.
@@ -15,6 +19,10 @@ Revisão: **2026-08-30**.
 5. **Contexto inequívoco.** A qualquer momento dá para responder *de qual produto e de qual organização são estes dados?*
 6. **Trocar de contexto invalida o que está na tela** e revalida no servidor.
 7. **Login objetivo.** Sem explicação sobre `.env`, bootstrap ou arquitetura.
+8. **Proibido contorno duplo em inputs.** Hover altera apenas a cor da borda; foco usa um único contorno sobre a borda existente, sem anel externo ou sombra de foco. O indicador de teclado deve continuar visível. Aplica-se também ao login administrativo.
+9. **Responsividade sem esconder conteúdo.** Até 900 px a navegação vira uma faixa horizontal rolável, com contexto e logout acessíveis. Cards refluem, textos longos quebram, tabelas rolam dentro do próprio contêiner e modais respeitam a altura dinâmica da tela. Não usar `overflow-x:hidden` na página para mascarar falhas. No celular, campos usam 16 px e ações principais têm alvo de pelo menos 44 px.
+
+Validação de responsividade em 2026-08-31: seis seções gerais no preview isolado em 320, 390, 768, 1024 e 1440 px, sem overflow horizontal da página; formulário de recursos EasyPanel e modal de cliente conferidos em 390 px. Dados sintéticos: não substitui validação com todos os conteúdos reais ou teclado virtual de um dispositivo físico.
 
 ---
 

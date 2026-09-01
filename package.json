@@ -2,15 +2,22 @@
   "name": "tzolkin-core",
   "private": true,
   "type": "module",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
   "scripts": {
-    "start": "node --env-file=.env src/server.mjs",
-    "test": "node --env-file=.env --test \"test/*.test.mjs\"",
+    "start": "node scripts/dev.mjs",
+    "start:api": "node --env-file=.env apps/api/src/server.mjs",
+    "start:web": "node apps/web/server.mjs",
+    "test": "node --env-file=.env --test \"test/**/*.test.mjs\"",
     "test:unit": "node --test test/unit/*.test.mjs",
     "db:setup": "node scripts/setup.mjs",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
     "db:rotate-password": "node --env-file=.env scripts/rotate-db-password.mjs"
   },
-  "dependencies": {
+  "devDependencies": {
+    "lucide-static": "^1.38.0",
     "pg": "^8.23.0"
   }
 }

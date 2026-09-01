@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { accessRoutes } from '../../src/modules/access.mjs';
+import { accessRoutes } from '../../apps/api/src/modules/access.mjs';
 
 test('access response declares the product membership scope', async () => {
  let handler;

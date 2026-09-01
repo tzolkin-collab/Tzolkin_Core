@@ -3,10 +3,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import { createCore } from '../src/server.mjs';
+import { createCore } from '../apps/api/src/server.mjs';
 import {
  openDatabase, describeTarget, transportWarning, testConnectionString,
-} from '../src/platform/database.mjs';
+} from '../apps/api/src/platform/database.mjs';
 
 const CONN = testConnectionString().connectionString;
 

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createEasypanelAdapter, normalizeInventory } from '../../src/integrations/easypanel.mjs';
-import { createCore } from '../../src/app.mjs';
+import { createEasypanelAdapter, normalizeInventory } from '../../apps/api/src/integrations/easypanel.mjs';
+import { createCore } from '../../apps/api/src/app.mjs';
 const fixture = [{ name: 'tzolkin', env: 'secret', services: [{ name: 'core', type: 'app', password: 'secret', env: 'private' }] }];
 const config = { baseUrl: 'https://panel.example.invalid', token: 'synthetic-test-token' };
 
@@ -105,7 +105,7 @@ test('Core inventory enforces session, denies writes, caches and never touches D
 });
 
 test('unconfigured, partial configuration and provider outage degrade safely', async () => {
- const { infrastructureRoutes } = await import('../../src/modules/infrastructure.mjs');
+ const { infrastructureRoutes } = await import('../../apps/api/src/modules/infrastructure.mjs');
  for (const env of [{}, { EASYPANEL_URL: config.baseUrl }, { EASYPANEL_URL: config.baseUrl, EASYPANEL_TOKEN: config.token }]) {
   let handler;
   infrastructureRoutes({ get(path, fn) { handler = fn; } }, { env, fetchImpl: async () => { throw Error('secret'); } });

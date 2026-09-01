@@ -1,5 +1,7 @@
 # Arquitetura
 
+Atualização `[EXISTENTE E VERIFICADO]` de 2026-08-31: web e API agora são workspaces/processos separados (`apps/web` e `apps/api`). O web possui proxy local, sem acesso ao banco; a API não serve assets. Mapeamento, portas e garantias em [SPLIT-RUNTIME.md](SPLIT-RUNTIME.md). As referências históricas a `src/` correspondem agora a `apps/api/src/`; `public/` corresponde a `apps/web/public/`, e o módulo de assets pertence ao web.
+
 Módulos, fronteiras e contratos. Conceitos em [DOMAIN-MODEL.md](DOMAIN-MODEL.md).
 
 Revisão: **2026-08-30**.
@@ -162,6 +164,12 @@ Contrato que o app precisa respeitar:
 6. **`version` é monotônico.** Ao adotar eventos, descarte versão menor que a já aplicada.
 
 ---
+
+## Catálogo técnico e configurações `[EXISTENTE E VERIFICADO]`
+
+Verificado em 2026-08-31 por `npm run test:unit` e consultas GET aos provedores. `modules/delivery.mjs` registra `GET /api/delivery/options`, `GET/POST /api/delivery/projects`, `PUT /api/delivery/projects/:id` e `GET /api/delivery/settings`. Todos exigem sessão administrativa. Cadastro e auditoria técnica usam uma transação própria nas tabelas `delivery_projects` e `delivery_audit`, sem misturar dados de clientes.
+
+`integrations/delivery-settings.mjs` consulta somente configurações existentes de projetos Vercel e serviços App EasyPanel, validando o destino no inventário e projetando campos permitidos. `public/delivery.js` compara com o formulário atual e permite importação seletiva antes do salvamento normal. Nenhuma alteração remota, comando ou deploy é executado. Contrato, campos, limites e lacunas: [DELIVERY-CATALOG.md](DELIVERY-CATALOG.md).
 
 ## 5. Direção proposta `[PROPOSTO]`
 

@@ -10,11 +10,19 @@ Revisão: **2026-08-30**.
 
 > A **aplicação** é um bootstrap local: escuta só em `127.0.0.1`, recusa `NODE_ENV=production` e não deve ser publicada nem exposta por túnel.
 >
-> O **banco não é local.** Ver o risco aberto logo abaixo.
+> O **banco não é local.** Seu transporte foi corrigido; os demais requisitos de produção continuam pendentes.
+
+### Estado atual do transporte — corrigido em 2026-08-30 (2026-08-31 UTC)
+
+Core conectado com **TLS 1.3, certificado e hostname verificados**. Senha da role exclusiva rotacionada; a senha antiga e novas conexões sem TLS foram testadas e rejeitadas. `/health` responde `tls-verified`. O padrão do código é `require`, sem fallback.
+
+Detalhes, backup, renovação do certificado próprio e reversão: [POSTGRES-TLS.md](POSTGRES-TLS.md).
+
+O servidor ainda aceita conexões legadas de outras roles. Institucional e Redis não foram migrados nesta manutenção; formulários do institucional continuam desabilitados. Não interpretar esta correção como liberação do Core para produção.
 
 ### O banco do Core trafega sem TLS pela internet pública
 
-`[EXISTENTE E VERIFICADO]` — 2026-08-30. **Risco aberto, não corrigido.**
+`[HISTÓRICO — diagnóstico anterior à correção acima]` — o relato até a próxima seção de salvaguardas descreve o estado anterior; não representa a conexão atual do Core.
 
 | Fato | Como foi verificado |
 |---|---|
@@ -41,13 +49,13 @@ Usuários de banco distintos, mesmo servidor exposto. Cada serviço precisa de t
 >
 > Enquanto o Core não tem nenhum cliente real cadastrado, o institucional passaria a receber dado pessoal de terceiros no minuto seguinte à publicação. **Por isso a publicação está parada**, e não por problema no código: `tsc` limpo, 18 testes passando, build completo — verificado em 2026-08-30.
 
-**Isto não é corrigível dentro deste repositório.** Depende de mudança na infraestrutura. O que este repositório faz é **medir, mostrar e bloquear** — [§8](#8-runbook-corrigir-o-transporte-do-banco) tem o procedimento.
+**Isto não é corrigível dentro deste repositório.** Depende de mudança na infraestrutura. O que este repositório faz é **medir, mostrar e bloquear** — [§8](#8-runbook-tls-no-postgresql-do-easypanel) tem o procedimento.
 
 Enquanto não resolvido: **tratar a senha atual do banco como comprometida** e rotacioná-la assim que houver canal seguro; e **não cadastrar cliente real** no Core, porque hoje o dado sairia em claro pela rede.
 
 ### O que o Core já faz a respeito `[EXISTENTE E VERIFICADO]`
 
-Não conserta a exposição — impede que ela seja esquecida.
+Além da correção de infraestrutura documentada acima, mantém as seguintes verificações.
 
 | Salvaguarda | Comportamento |
 |---|---|
@@ -91,7 +99,7 @@ Conferido no código e coberto por teste ([TESTING.md](TESTING.md)) — tudo aba
 | Auditoria mínima | Ver [§4](#4-auditoria) |
 | Migrações sem reversão documentada e sem role separada | Migrações numeradas já existem — [INFRASTRUCTURE.md](INFRASTRUCTURE.md#3-migrações) |
 | Role da aplicação é dona das tabelas | Impede RLS eficaz sem revisão — [D5](CONTEXT.md#d5--isolamento-no-banco-só-query-ou-rlsseparação-física) |
-| **Banco sem TLS na internet pública** | Credencial e dados em texto claro — [acima](#o-banco-do-core-trafega-sem-tls-pela-internet-pública) |
+| Porta pública e outros consumidores legados | Core está com TLS verificado; firewall, migração dos demais apps e Redis continuam pendentes |
 | Testes rodam contra a mesma base do cadastro | Não há base de desenvolvimento separada |
 | `VERCEL_TOKEN` no `.env` é de **time** | Alcança e pode apagar os 8 projetos. O Core só lê, mas a credencial é ampla — trocar por escopo de projeto ([INTEGRATIONS.md](INTEGRATIONS.md#escopo-do-token--atenção)) |
 
@@ -192,7 +200,7 @@ Cobertura atual em [TESTING.md](TESTING.md). Os itens 3 e 5 só ficam plenamente
 
 Lista de bloqueio. Enquanto qualquer item estiver aberto, **não publicar**:
 
-- [ ] **Transporte do banco resolvido** ([acima](#o-banco-do-core-trafega-sem-tls-pela-internet-pública)) e senha rotacionada — precede todo o resto
+- [x] **Transporte do Core resolvido** com TLS verificado e senha rotacionada — [registro](POSTGRES-TLS.md)
 - [ ] Base de desenvolvimento separada da que guarda o cadastro
 - [ ] IdP definido e implementado ([D4](#d4--qual-idp-pendente-de-decisão)); fim da senha administrativa única
 - [ ] MFA para operador interno
@@ -209,37 +217,122 @@ Lista de bloqueio. Enquanto qualquer item estiver aberto, **não publicar**:
 
 ---
 
-## 8. Runbook: corrigir o transporte do banco
+## 8. Runbook: TLS no PostgreSQL do EasyPanel
 
-`[PROPOSTO]` — passos no EasyPanel, que **só o usuário executa**. Nenhuma alteração de infraestrutura foi feita por esta sessão.
+Procedimento completo. Os passos 1–5 são no servidor, pelo painel do EasyPanel; o 6 é em cada cliente.
 
-Conforme a documentação do EasyPanel, **serviços PostgreSQL são privados por padrão**: ficam só na rede interna do projeto, alcançáveis pelo hostname interno na porta 5432. A exposição pública é opcional, feita na aba **Expose**, e foi ativada em algum momento — é ela que publica a porta 9000 no servidor.
+**Estado em 2026-08-31:** feito para o banco `tzolkin_core`. Falta o `tzolkin_institucional` — [§8.9](#89-o-que-ainda-falta).
 
-### Opção 1 — Tirar da internet (recomendada)
+### Antes de começar
 
-Elimina a exposição, não apenas a interceptação. É também o que a documentação do EasyPanel recomenda.
+- **Backup.** Aba *Backups* do serviço, ou `pg_dump`. Os passos 3 e 5 reiniciam ou recarregam o PostgreSQL.
+- **Saiba o hostname exato que os clientes usam.** O certificado tem de casar com ele: `verify-full` valida o nome contra o SAN. Errar aqui faz todo cliente recusar a conexão depois.
+- O serviço Postgres do EasyPanel roda a **imagem oficial** do PostgreSQL, com os dados em `/var/lib/postgresql/data` dentro do contêiner (e em `/etc/easypanel/projects/<projeto>/<serviço>/data` no host).
 
-1. Inventariar os consumidores e preparar o caminho privado de cada um **antes** de desligar a exposição pública de PostgreSQL ou Redis. Para o institucional na Vercel, resolver [a conectividade de produção](INFRASTRUCTURE.md#conectividade-do-institucional-em-produção-pendente-de-decisão); um túnel de desenvolvimento não a resolve.
-2. Apps que rodam no mesmo EasyPanel passam a usar a **URL interna** da aba *Credentials* — rede privada, sem passar pela internet.
-3. Para desenvolvimento nesta máquina, alcançar o banco por **túnel autenticado** (SSH ou WireGuard) até o servidor, e apontar a `DATABASE_URL` para o `127.0.0.1` local do túnel.
-4. Loopback é apenas endereço local, **não evidência de túnel seguro**. O Core não verifica SSH/WireGuard; ausência do aviso não certifica essa arquitetura.
-5. Desligar exposição somente após validar os consumidores. O script de rotação continua exigindo TLS PostgreSQL verificado, mesmo via túnel. Se o túnel não oferecer isso, definir procedimento administrativo seguro separado; não contornar a proteção do script.
+### 1. Gerar certificado e chave
 
-### Opção 2 — Manter exposto, com TLS
+Abra **Overview → Shell → Bash** no serviço Postgres e gere o par **dentro do diretório de dados**:
 
-Protege o tráfego, mas a porta segue aberta ao mundo: varredura e força bruta continuam possíveis.
+```bash
+cd /var/lib/postgresql/data
+openssl req -new -x509 -nodes -days 3650 \
+  -subj "/CN=SEU-HOSTNAME/O=Tzolkin" \
+  -addext "subjectAltName=DNS:SEU-HOSTNAME" \
+  -keyout server.key -out server.crt
+```
 
-1. Habilitar TLS no serviço PostgreSQL (certificado e `ssl = on` na configuração do contêiner).
-2. Restringir a porta no firewall do servidor/provedor aos IPs que precisam — a própria documentação do EasyPanel recomenda isso somado a uma porta publicada única.
-3. Trocar a `DATABASE_URL` para `sslmode=verify-full` e definir `DATABASE_SSL=require` no `.env`.
-4. `npm start` deve subir sem aviso; `GET /health` deve responder `tls-verified`. Se responder `tls-unverified`, o certificado não está sendo validado — **não parar aí**.
-5. Rotacionar a senha.
+- `CN` **e** `subjectAltName` precisam ser o hostname que o cliente digita. Clientes modernos validam o SAN, não o CN.
+- **Os nomes `server.crt` e `server.key` importam:** são os valores padrão de `ssl_cert_file` e `ssl_key_file`, relativos ao diretório de dados. Usando esses nomes, não é preciso configurar caminho nenhum.
+- Autoassinado é adequado aqui: a confiança vem de você distribuir o `.crt` aos clientes, não de uma CA pública.
+- Validade: escolha longa e **anote o vencimento**. Com `verify-full`, certificado vencido não degrada — derruba a conexão.
 
-### Depois de qualquer das opções
+### 2. Ajustar as permissões
 
-- [ ] `GET /health` reporta `tls-verified`; alternativa por túnel exige validação operacional separada, não inferida do endereço
-- [ ] `npm start` sobe sem o bloco de aviso, e a faixa some do painel
-- [ ] Senha rotacionada por canal seguro; `.env.bak` apagado depois de conferir
-- [ ] `DATABASE_SSL=require` fixado para TLS PostgreSQL verificado; não funciona sobre PostgreSQL sem TLS só porque há túnel
-- [ ] `DATABASE_URL_TEST` apontando para base separada, para os testes pararem de escrever na base do cadastro
-- [ ] Verificar se mais alguma porta de banco está publicada no EasyPanel além dessas duas
+```bash
+chown postgres:postgres server.key server.crt
+chmod 0600 server.key
+```
+
+O PostgreSQL **recusa iniciar** se a chave for mais permissiva que `0600` (ou `0640` com dono `root`). É a causa mais comum de o serviço não voltar depois deste procedimento.
+
+### 3. Ligar o TLS
+
+Ainda no Shell, acrescente ao `postgresql.conf` do diretório de dados:
+
+```bash
+echo "ssl = on" >> /var/lib/postgresql/data/postgresql.conf
+```
+
+Existe a alternativa de sobrescrever o comando em **Advanced** (`postgres -c ssl=on`). A própria documentação do EasyPanel pede cautela com override de comando, e editar o `postgresql.conf` persiste no volume de dados e sobrevive a redeploys. Prefira o arquivo.
+
+### 4. Reiniciar e conferir
+
+**Overview → Stop**, depois **Start**. Acompanhe os logs na própria aba: se a chave estiver com permissão errada ou o certificado malformado, o PostgreSQL falha ao subir e diz o motivo.
+
+Confirme de um cliente que o TLS passou a ser oferecido, antes de exigir no passo seguinte.
+
+### 5. Exigir TLS — sem isto, nada muda de fato
+
+**`ssl = on` apenas oferece TLS. Não proíbe texto claro.** Um cliente com `sslmode=disable` continua entrando sem criptografia, e é assim que a maioria dos aplicativos está configurada por padrão.
+
+Para exigir, edite o `pg_hba.conf` do diretório de dados e troque `host` por **`hostssl`** nas linhas que atendem conexões externas:
+
+```
+hostssl   tzolkin_core   tzolkin_core_app   0.0.0.0/0   scram-sha-256
+```
+
+Recarregue sem reiniciar:
+
+```bash
+psql -U postgres -c "SELECT pg_reload_conf();"
+```
+
+> **Cuidado para não se trancar para fora.** As URLs internas que o EasyPanel gera usam `sslmode=disable`, porque atravessam só a rede privada. Se você aplicar `hostssl` a *tudo*, os aplicativos hospedados no próprio EasyPanel param de conectar. Por isso a regra é escrita por banco e por usuário — exija TLS nas conexões que vêm de fora e deixe a rede interna como está.
+
+### 6. Configurar cada cliente
+
+O `server.crt` é **público** — pode ser copiado e versionado à vontade. O `server.key` **nunca** sai do servidor.
+
+```
+postgres://usuario:senha@HOST:PORTA/base?sslmode=verify-full&sslrootcert=/caminho/absoluto/server.crt
+```
+
+- `verify-full` valida a cadeia **e** o hostname. É o único nível que protege contra um servidor se passando por outro.
+- Use **caminho absoluto**: caminho relativo depende do diretório de onde o processo subiu.
+- Onde o cliente não lê arquivo do disco de forma confiável — funções serverless, por exemplo —, passe o PEM por variável de ambiente e entregue ao driver (`ssl: { ca: process.env.DB_CA_CERT }`).
+
+No Core, fixe também `DATABASE_SSL=require` no `.env`: assim a aplicação recusa subir se o transporte regredir.
+
+### 7. Verificar de verdade
+
+Não confie na ausência de erro. Confirme os dois lados:
+
+```bash
+npm start          # deve subir sem o bloco de aviso
+curl -s http://127.0.0.1:3100/health    # database_transport: "tls-verified"
+```
+
+E confirme que texto claro **é recusado** — conectando com `sslmode=disable`, a resposta esperada é `pg_hba.conf rejects connection ... no encryption`. Se conectar, o passo 5 não pegou naquele usuário.
+
+### 8. Depois
+
+- **Rotacione a senha.** Ela trafegou em texto claro por tempo indeterminado: trate como comprometida. `npm run db:rotate-password` — o script exige TLS verificado e agora deixa rodar.
+- **Firewall.** TLS resolve interceptação e roubo de credencial; **não** resolve exposição. A porta segue aberta à internet, e varredura e força bruta continuam possíveis. A documentação do EasyPanel recomenda restringir a porta no firewall do servidor ou do provedor.
+- **Agende o vencimento do certificado.**
+
+### 8.9 O que ainda falta
+
+Conferido em 2026-08-31 medindo as conexões:
+
+| Item | Estado |
+|---|---|
+| `tzolkin_core` exige TLS | ✅ texto claro recusado pelo `pg_hba.conf`; `/health` responde `tls-verified` |
+| `tzolkin_institucional` **oferece** TLS | ✅ o mesmo certificado serve — é o mesmo servidor |
+| `tzolkin_institucional` **exige** TLS | ❌ falta o passo 5 para o usuário do institucional |
+| Cliente do `tzolkin-site` | ❌ `.env.local` ainda com `sslmode=disable`: conecta em texto claro |
+| `DATABASE_URL` de produção na Vercel | ❓ é `sensitive`, não legível. Provavelmente `disable`, e precisa do certificado por variável de ambiente |
+| `sslrootcert` do Core | ⚠ caminho relativo — quebra se o processo subir de outro diretório |
+| Senha do banco | ⚠ trafegou em claro; rotação destravada, ainda não feita |
+| Porta 9000 | ⚠ continua publicada na internet |
+
+Ordem sugerida: passo 5 para o institucional → cliente do site → variável na Vercel → rotação de senha → firewall.

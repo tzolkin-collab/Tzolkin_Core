@@ -5,10 +5,10 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import pg from 'pg';
 import { randomBytes } from 'node:crypto';
-import { createCore } from '../src/server.mjs';
-import { testConnectionString } from '../src/platform/database.mjs';
-import { createVercelAdapter } from '../src/integrations/vercel.mjs';
-import { buildRegistry } from '../src/modules/deploys.mjs';
+import { createCore } from '../apps/api/src/server.mjs';
+import { testConnectionString } from '../apps/api/src/platform/database.mjs';
+import { createVercelAdapter } from '../apps/api/src/integrations/vercel.mjs';
+import { buildRegistry } from '../apps/api/src/modules/deploys.mjs';
 
 const TOKEN = 'vcp_' + randomBytes(24).toString('hex');
 

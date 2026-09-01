@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID,randomBytes,createHash} from 'node:crypto';
 import pg from 'pg';
-import {createCore} from '../src/server.mjs';
-import {testConnectionString} from '../src/platform/database.mjs';
+import {createCore} from '../apps/api/src/server.mjs';
+import {testConnectionString} from '../apps/api/src/platform/database.mjs';
 
 test('Core real PostgreSQL security and contract suite',async t=>{
  const pool=new pg.Pool({connectionString:testConnectionString().connectionString,max:3});

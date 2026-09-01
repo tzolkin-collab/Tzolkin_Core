@@ -12,9 +12,11 @@ Documentação técnica versionada junto com o código, neste repositório. **N�
 | [PRODUCT.md](PRODUCT.md) | Quem usa, para quê, quais jornadas e o que está fora de escopo |
 | [DOMAIN-MODEL.md](DOMAIN-MODEL.md) | Entidades, identificadores, relações e ciclos de vida |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Módulos, fronteiras, contratos e o pipeline de requisição |
+| [SPLIT-RUNTIME.md](SPLIT-RUNTIME.md) | Frontend e API separados, processos, proxy e limites de publicação |
 | [DATA-OWNERSHIP.md](DATA-OWNERSHIP.md) | Quem é dono de cada dado, isolamento e fonte de verdade |
 | [BILLING.md](BILLING.md) | Fluxos financeiros, provedores, estados e conciliação |
 | [INTEGRATIONS.md](INTEGRATIONS.md) | APIs, eventos, autenticação, falhas e sincronização |
+| [DELIVERY-CATALOG.md](DELIVERY-CATALOG.md) | Cadastro modular, destinos por ambiente, consulta e importação de configurações |
 | [SECURITY.md](SECURITY.md) | Identidade, permissões, segredos e auditoria |
 | [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) | Tokens, componentes, navegação e estados de interface |
 | [INFRASTRUCTURE.md](INFRASTRUCTURE.md) | Ambientes, bancos, migrações, backup, deploy e observabilidade |
