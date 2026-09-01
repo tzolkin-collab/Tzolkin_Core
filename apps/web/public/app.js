@@ -103,6 +103,14 @@ function signedOut() {
  $('show-password').textContent = 'Mostrar'; $('show-password').setAttribute('aria-pressed', 'false');
 }
 
+function closeNavigation(){document.body.classList.remove('nav-open');$('nav-toggle').setAttribute('aria-expanded','false');$('nav-backdrop').hidden=true;}
+function openNavigation(){document.body.classList.add('nav-open');$('nav-toggle').setAttribute('aria-expanded','true');$('nav-backdrop').hidden=false;requestAnimationFrame(()=>$('sidebar').focus?.());}
+$('nav-toggle').onclick=()=>document.body.classList.contains('nav-open')?closeNavigation():openNavigation();
+$('nav-backdrop').onclick=closeNavigation;
+$('mobile-refresh').onclick=()=>$('refresh').click();
+addEventListener('keydown',event=>{if(event.key==='Escape')closeNavigation();});
+addEventListener('resize',()=>{if(innerWidth>900)closeNavigation();});
+
 async function api(path, method = 'GET', body) {
  const response = await fetch(path, {
   method,
@@ -122,15 +130,19 @@ async function api(path, method = 'GET', body) {
 function renderNav() {
  const context = CONTEXTS[contextKind()];
  $('nav-label').textContent = context.label;
- $('nav').replaceChildren(...Object.entries(context.views).filter(([,view])=>!view.hidden).map(([key, view]) => {
+ const groups=contextKind()==='general'?{overview:'Operação',clients:'Operação',tracking:'Operação',finance:'Operação',emails:'Operação',products:'Gestão',access:'Gestão',deploys:'Tecnologia',delivery:'Tecnologia'}:{product:'Produto','product-orgs':'Produto'};
+ const items=[];let previous;
+ for(const [key,view]of Object.entries(context.views).filter(([,view])=>!view.hidden)){
+  if(groups[key]!==previous){const label=node('span',groups[key],'nav-group');label.setAttribute('aria-hidden','true');items.push(label);previous=groups[key];}
   const button = node('button', undefined, 'nav-item' + (key === state.view ? ' active' : ''));
   button.type = 'button'; button.dataset.view = key;
   const icon = createIcon(({overview:'layers',clients:'people',tracking:'calendar',finance:'wallet',emails:'mail',products:'package',access:'shield',deploys:'cloud',delivery:'repo',product:'package','product-orgs':'people'})[key]);
   icon.classList.add('nav-icon'); button.append(icon, document.createTextNode(view.title));
   if (key === state.view) button.setAttribute('aria-current', 'page');
-  button.onclick = () => switchView(key);
-  return button;
- }));
+  button.onclick = () => {switchView(key);closeNavigation();};
+  items.push(button);
+ }
+ $('nav').replaceChildren(...items);
 }
 
 function switchView(view) {
@@ -139,6 +151,7 @@ function switchView(view) {
  const active = views()[view];
  SECTIONS.forEach(id => { $(id).hidden = $(id).id !== active.section; });
  $('breadcrumb').textContent = $('page-title').textContent = active.title;
+ $('mobile-page-title').textContent=active.title;
  $('new-record').hidden = !active.action;
  // Métrica de carteira não diz nada numa tela de ecossistema ou de deploy.
  $('metrics').hidden = active.metrics === false || !$('metrics').children.length;

@@ -14,13 +14,15 @@
 </div><span class="login-signature">TZOLKIN</span>
 </main>
 <div id="workspace" class="app-shell" hidden>
-<aside class="sidebar">
+<header class="mobile-shellbar"><button id="nav-toggle" class="mobile-menu" type="button" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span><span class="sr-only">Abrir menu</span></button><div class="mobile-identity"><img src="/logo.svg" width="30" height="30" alt=""><span id="mobile-page-title">Visão geral</span></div><button id="mobile-refresh" class="mobile-refresh" type="button" aria-label="Atualizar dados">↻</button></header>
+<aside id="sidebar" class="sidebar" aria-label="Navegação do Core">
 <div class="brand"><img src="/logo.svg" width="36" height="36" alt=""><span>TZOLKIN<span class="brand-product">CORE</span></span></div>
 <div class="context-switch"><label for="context-select">Contexto</label><select id="context-select"><option value="">TZOLKIN · Gestão geral</option></select></div>
 <p class="nav-label" id="nav-label">ESPAÇO DE TRABALHO</p>
 <nav id="nav" aria-label="Principal"></nav>
 <div class="sidebar-bottom"><div class="workspace-label"><span class="avatar">T</span><div>TZOLKIN<small>Gestão interna</small></div></div><button id="logout" class="sign-out">Sair da conta <span aria-hidden="true">↗</span></button></div>
 </aside>
+<button id="nav-backdrop" class="nav-backdrop" type="button" tabindex="-1" aria-label="Fechar menu" hidden></button>
 <div class="app-main">
 <header class="topbar"><span id="context-crumb"><strong id="crumb-context">TZOLKIN</strong> <span class="crumb-divider">/</span> <strong id="breadcrumb">Clientes</strong></span><button id="refresh" class="quiet">Atualizar <span aria-hidden="true">↻</span></button></header>
 <main class="content">
