@@ -15,14 +15,14 @@ const $ = id => document.getElementById(id);
 fetch('/api/auth/mode').then(r=>r.ok?r.json():null).then(auth=>{if(auth?.mode==='google-oidc'){$('login-form').hidden=true;$('google-login').hidden=false;if(new URLSearchParams(location.search).has('auth_error'))$('login-notice').textContent='Conta Google não autorizada ou login expirado.';}}).catch(()=>{});
 $('plan-help').textContent='Use o slug de uma oferta deste produto para salvar suas condições de cobrança em rascunho. Sem oferta correspondente, o plano continua apenas cadastral.';
 
-const state = { context: '', view: 'clients', overview: null, product: null };
+const state = { context: '', view: 'overview', overview: null, product: null };
 
 // Cada contexto declara a própria navegação. Menu só existe quando há dado real por trás.
 const CONTEXTS = {
  general: {
   label: 'ESPAÇO DE TRABALHO',
   views: {
-   ecosystem: { title: 'Ecossistema', section: 'view-ecosystem', metrics: false },
+   overview: { title: 'Visão geral', section: 'view-overview', metrics: false },
    clients: { title: 'Clientes', section: 'view-clients', action: ['Novo cliente', 'tenant-dialog'] },
    tracking: { title: 'Acompanhamento', section: 'view-tracking', metrics:false },
    finance: { title: 'Financeiro', section: 'view-finance', metrics:false },
@@ -43,8 +43,8 @@ const CONTEXTS = {
  },
 };
 
-const SECTIONS = ['view-tracking', 'view-resource', 'view-ecosystem', 'view-clients', 'view-products', 'view-access', 'view-deploys', 'view-delivery', 'view-product', 'view-product-orgs'];
-const DATA_NODES = ['tenants', 'members', 'contracts', 'product-catalog', 'ecosystem-catalog', 'ecosystem-resources', 'product-orgs', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
+const SECTIONS = ['view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-products', 'view-access', 'view-deploys', 'view-delivery', 'view-product', 'view-product-orgs'];
+const DATA_NODES = ['tenants', 'members', 'contracts', 'product-catalog', 'overview-kpis', 'overview-alerts', 'overview-integrations', 'overview-product-list', 'overview-actions', 'product-orgs', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
 SECTIONS.push('view-finance','view-emails');
 
 const contextKind = () => (state.context ? 'product' : 'general');
@@ -125,7 +125,7 @@ function renderNav() {
  $('nav').replaceChildren(...Object.entries(context.views).filter(([,view])=>!view.hidden).map(([key, view]) => {
   const button = node('button', undefined, 'nav-item' + (key === state.view ? ' active' : ''));
   button.type = 'button'; button.dataset.view = key;
-  const icon = createIcon(({ecosystem:'layers',clients:'people',tracking:'calendar',finance:'wallet',emails:'mail',products:'package',access:'shield',deploys:'cloud',delivery:'repo',product:'package','product-orgs':'people'})[key]);
+  const icon = createIcon(({overview:'layers',clients:'people',tracking:'calendar',finance:'wallet',emails:'mail',products:'package',access:'shield',deploys:'cloud',delivery:'repo',product:'package','product-orgs':'people'})[key]);
   icon.classList.add('nav-icon'); button.append(icon, document.createTextNode(view.title));
   if (key === state.view) button.setAttribute('aria-current', 'page');
   button.onclick = () => switchView(key);
@@ -163,7 +163,7 @@ async function switchContext(contextId) {
  state.context = contextId;
  state.overview = contextId ? state.overview : null;
  state.product = null;
- state.view = Object.keys(views())[contextId ? 0 : 1];
+ state.view = Object.keys(views())[0];
  clearRenderedData();          // dado antigo sai da tela antes de qualquer requisição
  renderContextChrome();
  renderNav();
@@ -196,20 +196,32 @@ function catalogLink(label, url, className) {
  return link;
 }
 
-function renderEcosystem(entries) {
- $('ecosystem-catalog').replaceChildren(); $('ecosystem-resources').replaceChildren();
- for (const entry of entries) {
-  const item = entry.payload;
-  if (entry.kind === 'resource') { $('ecosystem-resources').append(catalogLink(item.name + ' ↗', item.url, 'resource-link')); continue; }
-  const card = node('article', undefined, 'ecosystem-card');
-  const header = node('header');
-  header.append(node('span', item.category, 'ecosystem-category'), node('span', item.status, 'status'));
-  const links = node('div', undefined, 'catalog-links');
-  if (item.url) links.append(catalogLink('Abrir endereço ↗', item.url));
-  links.append(catalogLink('Ficha no Notion ↗', item.source));
-  card.append(header, node('h3', item.name), node('p', item.description), node('small', item.note), links);
-  $('ecosystem-catalog').append(card);
- }
+const currentMonth=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit'}).format(new Date());
+const brl=value=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number.isFinite(value)?value:0);
+function overviewButton(label,detail,view,icon='arrow'){
+ const button=node('button',undefined,'overview-action');button.type='button';button.append(createIcon(icon));const copy=node('span');copy.append(node('strong',label),node('small',detail));button.append(copy,createIcon('arrow'));button.onclick=()=>switchView(view);return button;
+}
+function renderOverviewDashboard(entries,{finance,sales,deploys,infrastructure}={}){
+ const overview=state.overview,month=currentMonth(),monthLabel=new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric',timeZone:'America/Sao_Paulo'}).format(new Date(month+'-15T12:00:00-03:00'));
+ $('overview-period').textContent=monthLabel[0].toUpperCase()+monthLabel.slice(1);
+ const activeContracts=overview.entitlements.filter(e=>e.active),activeClients=new Set(activeContracts.map(e=>e.tenant_id)).size,saleRows=Object.values(sales?.providers||{}).flatMap(p=>p.snapshot?.payload?.sales||[]),received=saleRows.filter(s=>s.status==='received'&&s.currency==='BRL'),gross=received.reduce((n,s)=>n+(Number.isFinite(s.gross)?s.gross:0),0),projects=deploys?.projects||[],ready=projects.filter(p=>deployGroup(p)==='ready').length;
+ $('overview-summary').textContent=`${activeClients} ${activeClients===1?'cliente ativo':'clientes ativos'}, ${activeContracts.length} ${activeContracts.length===1?'contrato':'contratos'} e ${saleRows.length} ${saleRows.length===1?'venda importada':'vendas importadas'} neste mês.`;
+ const kpis=[['Clientes ativos',activeClients,overview.tenants.length+' cadastrados','clients'],['Receita recebida',brl(gross),'Vendas confirmadas em BRL','finance'],['Produtos',overview.products.length,activeContracts.length+' contratos ativos','products'],['Projetos prontos',deploys?ready:'—',deploys?projects.length+' consultados':'Consultando provedores','deploys']];
+ $('overview-kpis').replaceChildren(...kpis.map(([label,value,detail,view])=>{const card=node('button',undefined,'overview-kpi');card.type='button';card.onclick=()=>switchView(view);card.append(node('span',label),node('strong',String(value)),node('small',detail));return card;}));
+ const alerts=[];
+ if(!sales?.configured?.asaas)alerts.push(['Asaas não configurado','Adicione a chave de produção para importar as vendas.','finance','alert']);
+ if(sales?.configured?.stripe&&!sales?.providers?.stripe?.snapshot)alerts.push(['Stripe sem sincronização','Abra o Financeiro para importar o mês atual.','finance','clock']);
+ const failed=projects.filter(p=>deployGroup(p)==='failed').length;if(failed)alerts.push([`${failed} ${failed===1?'projeto com falha':'projetos com falha'}`,'Revise o último deploy antes da próxima publicação.','deploys','alert']);
+ const bankErrors=(finance?.connections||[]).filter(c=>c.attempt?.payload?.state==='error').length;if(bankErrors)alerts.push(['Conexão bancária pendente',`${bankErrors} ${bankErrors===1?'conexão precisa':'conexões precisam'} de nova consulta.`,'finance','clock']);
+ if(!alerts.length)alerts.push(['Operação sem alerta crítico','Integrações consultadas e nenhum bloqueio encontrado.','overview','check']);
+ $('overview-alerts').replaceChildren(...alerts.map(([title,detail,view,icon])=>overviewButton(title,detail,view,icon)));
+ const integration=(name,configured,detail,logo)=>{const row=node('div',undefined,'overview-integration'),identity=node('div',undefined,'card-identity'),mark=node('span',undefined,'overview-integration-mark');mark.append(logo||createIcon('database'));identity.append(mark,node('div'));identity.lastChild.append(node('strong',name),node('small',detail));row.append(identity,node('span',configured===null?'Consultando':configured?'Conectado':'Pendente','status '+(configured===null?'building':configured?'active':'failed')));return row;};
+ const bankCount=finance?.connections?.length||0,easyCount=infrastructure?.projects?.reduce((n,p)=>n+p.services.length,0)||0;
+ $('overview-integrations').replaceChildren(integration('Stripe',sales?.configured?.stripe,`${saleRows.filter(s=>s.provider==='stripe').length} vendas no mês`,providerLogo('stripe')),integration('Asaas',sales?.configured?.asaas,sales?.configured?.asaas?'Leitura por API ativa':'Chave de produção ausente'),integration('Meu Pluggy',bankCount>0,`${bankCount} ${bankCount===1?'conexão bancária':'conexões bancárias'}`),integration('EasyPanel',infrastructure===null?null:infrastructure.status==='ok',infrastructure===null?'Consultando inventário':`${easyCount} serviços no inventário`,providerLogo('easypanel')));
+ const productEntries=new Map(entries.filter(e=>e.kind==='product').map(e=>[e.payload.name,e.payload]));
+ $('overview-product-list').replaceChildren(...overview.products.map(product=>{const contracts=activeContracts.filter(e=>e.product_id===product.id).length,item=productEntries.get(product.name),row=node('button',undefined,'overview-product');row.type='button';row.onclick=()=>{$('context-select').value=product.id;switchContext(product.id).catch(reportError);};row.append(node('span',product.name.slice(0,1),'product-mark'));const text=node('span');text.append(node('strong',product.name),node('small',item?.description||`${contracts} ${contracts===1?'contrato ativo':'contratos ativos'}`));row.append(text,node('span',String(contracts),'overview-product-count'),createIcon('arrow'));return row;}));
+ $('overview-actions').replaceChildren(overviewButton('Clientes','Carteira, contratos e situação','clients','people'),overviewButton('Financeiro','Bancos, Stripe e Asaas','finance','wallet'),overviewButton('Acompanhamento','Agenda e apontamentos','tracking','calendar'),overviewButton('Projetos e serviços','Repositórios e destinos','delivery','repo'),overviewButton('Deploys','Publicações e infraestrutura','deploys','cloud'),overviewButton('Pessoas e acessos','Vínculos e permissões','access','shield'));
+ document.querySelectorAll('[data-overview-view]').forEach(button=>button.onclick=()=>switchView(button.dataset.overviewView));
 }
 
 function renderTenants() {
@@ -542,16 +554,19 @@ async function load() {
   state.overview = overview;
   $('login').hidden = true; $('workspace').hidden = false;
   fillContextSelect(overview.products);
-  renderEcosystem(catalog.entries);
   renderGeneral();
   // Provedor externo pode estar fora do ar: o painel não pode cair junto.
-  await api('/api/deploys').then(renderDeploys).catch(error => {
+  const month=currentMonth(),[financeData,salesData]=await Promise.all([api('/api/finance/board?month='+month).catch(()=>null),api('/api/finance/sales?month='+month).catch(()=>null)]);
+  let deployments=null,infrastructure=null;
+  renderOverviewDashboard(catalog.entries,{finance:financeData,sales:salesData});
+  await api('/api/deploys').then(data=>{deployments=data;renderDeploys(data);renderOverviewDashboard(catalog.entries,{finance:financeData,sales:salesData,deploys:deployments});}).catch(error => {
    $('deploys-status').replaceChildren(node('p', error.message, 'security-banner'));
   });
   $('easypanel-inventory').replaceChildren(node('p', 'Consultando EasyPanel…', 'empty-list'));
-  await api('/api/infrastructure/easypanel').then(renderEasypanel).catch(() => {
+  await api('/api/infrastructure/easypanel').then(data=>{infrastructure=data;renderEasypanel(data);renderOverviewDashboard(catalog.entries,{finance:financeData,sales:salesData,deploys:deployments,infrastructure});}).catch(() => {
    $('easypanel-inventory').replaceChildren(node('p', 'Não foi possível consultar o EasyPanel.', 'empty-list'));
   });
+  renderOverviewDashboard(catalog.entries,{finance:financeData,sales:salesData,deploys:deployments,infrastructure});
  } else {
   state.product = await api(`/api/products/${encodeURIComponent(state.context)}/console`);
   $('login').hidden = true; $('workspace').hidden = false;
