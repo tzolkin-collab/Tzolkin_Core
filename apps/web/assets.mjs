@@ -8,6 +8,7 @@ const FILES = {
  '/tracking.css': ['tracking.css', 'text/css'],
  '/finance.js': ['finance.js', 'text/javascript'],
  '/billing.js': ['billing.js', 'text/javascript'],
+ '/product-payments.js': ['product-payments.js', 'text/javascript'],
  '/emails.js': ['emails.js', 'text/javascript'],
  '/emails.css': ['emails.css', 'text/css'],
  '/billing.css': ['billing.css', 'text/css'],

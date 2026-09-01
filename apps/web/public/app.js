@@ -7,7 +7,9 @@ import {setupEmails} from './emails.js';
 import {setupTracking} from './tracking.js';
 import {setupFinance} from './finance.js';
 import {setupBilling} from './billing.js';
+import {setupProductPayments} from './product-payments.js';
 const billing=setupBilling({api});
+const productPayments=setupProductPayments({api,configure:product=>billing.open(product)});
 const emails=setupEmails({api,configure:product=>billing.open(product)});
 const finance=setupFinance({api});
 const tracking=setupTracking({api});
@@ -23,13 +25,13 @@ const CONTEXTS = {
   label: 'ESPAÇO DE TRABALHO',
   views: {
    overview: { title: 'Visão geral', section: 'view-overview', metrics: false },
+   tracking: { title: 'Acompanhamento', section: 'view-tracking', metrics:false },
+   finance: { title: 'Financeiro', section: 'view-finance', metrics:false },
    clients: { title: 'Clientes', section: 'view-clients', action: ['Nova empresa', 'tenant-dialog'], metrics:false },
    client: { title: 'Cliente', section: 'view-client', hidden:true, metrics:false },
    people: { title: 'Pessoas', section: 'view-people', action: ['Nova pessoa', 'stakeholder-dialog'], metrics:false },
-   tracking: { title: 'Acompanhamento', section: 'view-tracking', metrics:false },
-   finance: { title: 'Financeiro', section: 'view-finance', metrics:false },
-   emails: { title: 'E-mails', section: 'view-emails', metrics:false },
-   products: { title: 'Produtos e planos', section: 'view-products', action: ['Vincular produto', 'entitlement-dialog'] },
+   emails: { title: 'E-mails', section: 'view-emails', metrics:false, hidden:true },
+   products: { title: 'Portfólio', section: 'view-products', action: ['Vincular cliente', 'entitlement-dialog'] },
    access: { title: 'Acessos', section: 'view-access', action: ['Vincular acesso', 'member-dialog'] },
    deploys: { title: 'Deploys', section: 'view-deploys', metrics: false },
    delivery: { title: 'Projetos e serviços', section: 'view-delivery', metrics: false },
@@ -40,12 +42,13 @@ const CONTEXTS = {
   label: 'GESTÃO DO PRODUTO',
   views: {
    product: { title: 'Visão geral', section: 'view-product' },
-   'product-orgs': { title: 'Organizações', section: 'view-product-orgs', action: ['Vincular organização', 'entitlement-dialog'] },
+   'product-orgs': { title: 'Clientes', section: 'view-product-orgs', action: ['Vincular cliente', 'entitlement-dialog'] },
+   'product-payments': { title: 'Pagamentos', section: 'view-product-payments', metrics:false },
   },
  },
 };
 
-const SECTIONS = ['view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-client', 'view-people', 'view-products', 'view-access', 'view-deploys', 'view-delivery', 'view-product', 'view-product-orgs'];
+const SECTIONS = ['view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-client', 'view-people', 'view-products', 'view-access', 'view-deploys', 'view-delivery', 'view-product', 'view-product-orgs', 'view-product-payments'];
 const DATA_NODES = ['tenants', 'client-summary', 'client-detail', 'stakeholder-directory', 'members', 'contracts', 'product-catalog', 'overview-kpis', 'overview-alerts', 'overview-integrations', 'overview-product-list', 'overview-actions', 'product-orgs', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
 SECTIONS.push('view-finance','view-emails');
 
@@ -84,6 +87,7 @@ function clearRenderedData() {
  finance.clear();
  emails.clear();
  billing.clear();
+ productPayments.clear();
  resource.clear();
  // Um formulário aberto carrega o contexto anterior pré-selecionado: fecha junto.
  document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
@@ -132,13 +136,13 @@ async function api(path, method = 'GET', body) {
 function renderNav() {
  const context = CONTEXTS[contextKind()];
  $('nav-label').textContent = context.label;
- const groups=contextKind()==='general'?{overview:'Operação',clients:'Relacionamentos',people:'Relacionamentos',tracking:'Operação',finance:'Operação',emails:'Operação',products:'Gestão',access:'Gestão',deploys:'Tecnologia',delivery:'Tecnologia'}:{product:'Produto','product-orgs':'Produto'};
+ const groups=contextKind()==='general'?{overview:'Operação',tracking:'Operação',finance:'Operação',clients:'Relacionamentos',people:'Relacionamentos',products:'Portfólio',access:'Gestão',deploys:'Tecnologia',delivery:'Tecnologia'}:{product:'Produto','product-orgs':'Produto','product-payments':'Produto'};
  const items=[];let previous;
  for(const [key,view]of Object.entries(context.views).filter(([,view])=>!view.hidden)){
   if(groups[key]!==previous){const label=node('span',groups[key],'nav-group');label.setAttribute('aria-hidden','true');items.push(label);previous=groups[key];}
   const button = node('button', undefined, 'nav-item' + (key === state.view ? ' active' : ''));
   button.type = 'button'; button.dataset.view = key;
-  const icon = createIcon(({overview:'layers',clients:'building',people:'people',tracking:'calendar',finance:'wallet',emails:'mail',products:'package',access:'shield',deploys:'cloud',delivery:'repo',product:'package','product-orgs':'people'})[key]);
+  const icon = createIcon(({overview:'layers',clients:'building',people:'people',tracking:'calendar',finance:'wallet',emails:'mail',products:'package',access:'shield',deploys:'cloud',delivery:'repo',product:'package','product-orgs':'people','product-payments':'wallet'})[key]);
   icon.classList.add('nav-icon'); button.append(icon, document.createTextNode(view.title));
   if (key === state.view) button.setAttribute('aria-current', 'page');
   button.onclick = () => {switchView(key);closeNavigation();};
@@ -166,6 +170,7 @@ function switchView(view) {
  if (view === 'emails') emails.load().catch(reportError);
  if (view === 'people') renderPeople();
  if (view === 'client') renderClientDetail();
+ if (view === 'product-payments'&&state.product) productPayments.load(state.product.product).catch(reportError);
 }
 
 function renderContextChrome() {
@@ -616,7 +621,8 @@ async function load() {
  } else {
   state.product = await api(`/api/products/${encodeURIComponent(state.context)}/console`);
   $('login').hidden = true; $('workspace').hidden = false;
-  renderProduct();
+ renderProduct();
+  if(state.view==='product-payments')await productPayments.load(state.product.product);
  }
  renderContextChrome();
  await renderSecurityBanner();

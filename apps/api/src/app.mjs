@@ -22,9 +22,10 @@ import { financeRoutes } from './modules/finance.mjs';
 import { paymentSalesRoutes } from './modules/payment-sales.mjs';
 import { billingRoutes } from './modules/billing.mjs';
 import {emailRoutes} from './modules/emails.mjs';
+import {productPaymentRoutes} from './modules/product-payments.mjs';
 
 const MODULES = [
- identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes,
+ identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes, productPaymentRoutes,
  directoryRoutes, contractsRoutes, accessRoutes, productConsoleRoutes,
 ];
 
