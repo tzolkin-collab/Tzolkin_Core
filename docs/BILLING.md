@@ -4,7 +4,7 @@
 
 A sidebar possui E-mails, com Automações (regras em rascunho), Templates (referências) e Atividade (estado não integrado). GET `/api/emails` exige admin e projeta apenas configurações de comunicação, sem valores financeiros nem credenciais. O botão Configurar abre a oferta; use Atualizar ao retornar para reler as alterações.
 
-As chaves ficam exclusivamente no `.env` ignorado pelo Git: `ASAAS_API_KEY`, `ASAAS_WEBHOOK_TOKEN`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`. `ASAAS_ENVIRONMENT` inicia como sandbox. E-mail reserva `EMAIL_PROVIDER`, `EMAIL_API_KEY`, `EMAIL_FROM`, sem escolher um fornecedor implicitamente. Esses campos não são consumidos por integração ativa nesta etapa.
+As chaves ficam exclusivamente no `.env` ignorado pelo Git: `ASAAS_API_KEY`, `ASAAS_WEBHOOK_TOKEN`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`. `ASAAS_ENVIRONMENT` inicia como sandbox. `STRIPE_SECRET_KEY`, `ASAAS_API_KEY` e `ASAAS_ENVIRONMENT` alimentam a leitura de vendas do Financeiro; segredos de webhook permanecem reservados. E-mail reserva `EMAIL_PROVIDER`, `EMAIL_API_KEY`, `EMAIL_FROM`, sem escolher um fornecedor implicitamente.
 
 ## Implementado — configuração em rascunho
 
@@ -16,7 +16,7 @@ Ao salvar contrato com Plano igual ao slug de uma oferta do mesmo produto, o Cor
 
 ## Ainda não implementado / não ativado
 
-- Integrações diretas Asaas/Stripe, importação de pagamentos, clientes externos e criação de cobranças.
+- Webhooks Asaas/Stripe, clientes externos e criação de cobranças. A importação mensal somente leitura de vendas já está ativa no Financeiro.
 - Webhooks autenticados, deduplicação por provedor/conta/ambiente/evento e reconciliação de eventos fora de ordem.
 - Fila transacional de envio, worker com retries e idempotência, templates reais, inbound e acompanhamento de entregas.
 - Snapshot de cobrança no painel do cliente e seleção visual de ofertas no formulário de contratos.

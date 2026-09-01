@@ -1,6 +1,8 @@
-# Financeiro interno — Meu Pluggy
+# Financeiro interno — Pluggy e vendas
 
 Escopo: contas próprias autorizadas em PLUGGY_ITEM_IDS, com credenciais da mesma aplicação. Não importa contas de clientes, não inicia pagamentos e não altera o banco de origem.
+
+Vendas são lidas diretamente das APIs da Stripe e do Asaas, por mês e somente sob demanda. O Core armazena uma projeção mínima de cobrança, taxa, valor líquido, estorno e situação; dados de clientes e payloads brutos não são persistidos. Repasses vistos pela Pluggy continuam separados e não são somados como uma segunda receita.
 
 ## Uso
 
@@ -29,7 +31,7 @@ O gráfico principal é **Movimento acumulado**, partindo de zero: não é hist�
 
 ## Limites explícitos
 
-Atualização automática ocorre ao abrir a tela, não como scheduler permanente. Sem webhooks ou varredura histórica completa. Meses antigos precisam de atualização explícita para refletir correções posteriores do provedor. A primeira leitura de snapshots legados força uma atualização para corrigir os limites mensais: consulta um envelope UTC e filtra exatamente o mês em America/Sao_Paulo, incluindo a última noite local. O histórico armazenado não é um livro contábil nem trilha imutável. Autorizações revogadas no banco podem deixar snapshots históricos no Core; remover o Item ID bloqueia a exposição por essas rotas, mas não apaga armazenamento. Não há garantia de snapshot consistente entre páginas caso o banco atualize dados durante a consulta. Coalescência de requisições vale para um processo; múltiplas réplicas exigirão trava distribuída.
+Atualização automática ocorre ao abrir a tela, não como scheduler permanente. Stripe usa a lista mensal de cobranças e Asaas usa a lista mensal de pagamentos; a falha de um processador não bloqueia o outro. Sem webhooks ou varredura histórica completa. Meses antigos precisam de atualização explícita para refletir correções posteriores do provedor. A primeira leitura de snapshots legados força uma atualização para corrigir os limites mensais: consulta um envelope UTC e filtra exatamente o mês em America/Sao_Paulo, incluindo a última noite local. O histórico armazenado não é um livro contábil nem trilha imutável. Autorizações revogadas no banco podem deixar snapshots históricos no Core; remover o Item ID bloqueia a exposição por essas rotas, mas não apaga armazenamento. Não há garantia de snapshot consistente entre páginas caso o banco atualize dados durante a consulta. Coalescência de requisições vale para um processo; múltiplas réplicas exigirão trava distribuída.
 
 ## Verificação
 
@@ -39,3 +41,5 @@ Referências oficiais:
 - https://docs.pluggy.ai/reference/accounts-list
 - https://docs.pluggy.ai/reference/transactions-list-by-cursor
 - https://docs.pluggy.ai/docs/transactions
+- https://docs.stripe.com/api/charges/list
+- https://docs.asaas.com/reference/listar-cobrancas

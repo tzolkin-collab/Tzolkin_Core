@@ -10,7 +10,7 @@ const svgNode=(tag,attrs)=>{const n=document.createElementNS('http://www.w3.org/
 const institutionBadge=bank=>{const identity=paymentInstitution(bank),badge=node('span',undefined,'fin-institution'),icon=node('span',undefined,'fin-institution-icon');badge.style.setProperty('--institution-color',identity.color);icon.append(paymentInstitutionIcon());badge.append(icon,node('span',identity.name));return badge;};
 
 export function setupFinance({api}){
- let generation=0,board=null,busy=false,loading=false,message='',error=false,page=0,search='';
+ let generation=0,board=null,sales=null,busy=false,loading=false,message='',error=false,page=0,search='';
  let month=brazilMonth(Date.now()),selected='all',currency='BRL',direction='all';
  try{const saved=JSON.parse(localStorage.getItem(storageKey)||'null');if(/^20\d{2}-(0[1-9]|1[0-2])$/.test(saved?.month))month=saved.month;if(typeof saved?.account==='string')selected=saved.account;}catch{}
  const host=()=>document.getElementById('view-finance');
@@ -19,6 +19,7 @@ export function setupFinance({api}){
  const picked=()=>accounts().filter(a=>selected==='all'||a.id===selected);
  const button=(text,action,icon,cls='fin-button')=>{const b=node('button',undefined,cls);b.type='button';if(icon)b.append(createIcon(icon));b.append(document.createTextNode(text));b.onclick=action;return b;};
  const readBoard=()=>api('/api/finance/board?'+new URLSearchParams({month}));
+ const readSales=()=>api('/api/finance/sales?'+new URLSearchParams({month}));
  function normalize(){if(!accounts().some(a=>a.id===selected))selected='all';const currencies=[...new Set(accounts().map(a=>a.currency).filter(Boolean))];if(!currencies.includes(currency))currency=currencies[0]||'BRL';}
 
  async function refresh(force=false){
@@ -41,6 +42,13 @@ export function setupFinance({api}){
     try{const result=await api('/api/finance/transactions/sync','POST',{account_id:account.id,month:period});if(ticket!==generation)return;account.snapshot=result.snapshot;account.attempt={payload:{state:'ok'},updated_at:new Date().toISOString()};}
     catch{if(ticket!==generation)return;failed++;account.attempt={payload:{state:'error'},updated_at:new Date().toISOString()};}
    }
+   const salesSaved=Object.values(sales?.providers||{}).map(p=>p.snapshot?.updated_at).filter(Boolean).sort().at(-1);
+   if(force||!salesSaved||period===brazilMonth(Date.now())&&Date.now()-Date.parse(salesSaved)>=43200000){
+    message='Atualizando vendas Stripe e Asaas…';render();
+    const result=await api('/api/finance/sales/sync','POST',{month:period});if(ticket!==generation)return;
+    sales={month:result.month,configured:result.configured,providers:result.providers};
+    failed+=result.results.filter(r=>r.configured&& !r.ok).length;
+   }
    failed=Math.max(failed,accounts().filter(a=>a.attempt?.payload.state==='error').length,board.connections.filter(c=>c.attempt?.payload.state==='error').length);
    if(accounts().some(a=>a.snapshot))board.saved_months=[...new Set([...(board.saved_months||[]),period])].sort().reverse();
    message=failed?'Parte dos dados não pôde ser atualizada. O que já estava salvo continua disponível.':'Dados salvos no Core.';error=failed>0;
@@ -49,10 +57,23 @@ export function setupFinance({api}){
  }
  async function load(){
   const ticket=++generation;loading=true;busy=false;error=false;message='';render();
-  try{const data=await readBoard();if(ticket!==generation)return;board=data;normalize();persist();}
+  try{const [data,paymentData]=await Promise.all([readBoard(),readSales()]);if(ticket!==generation)return;board=data;sales=paymentData;normalize();persist();}
   catch(e){if(ticket===generation){error=true;message='Não foi possível ler os dados salvos. '+e.message;}}
   finally{if(ticket===generation){loading=false;render();}}
   if(ticket===generation&&!error)await refresh(false);
+ }
+
+ function salesPanel(){
+  const section=node('section',undefined,'fin-ledger'),title=node('div',undefined,'fin-section-title');title.append(node('h2','Vendas por processador'),node('span','Stripe e Asaas · leitura direta das APIs','fin-muted'));section.append(title);
+  const providers=sales?.providers||{},rows=Object.values(providers).flatMap(p=>p.snapshot?.payload?.sales||[]).sort((a,b)=>Date.parse(b.date)-Date.parse(a.date));
+  const received=rows.filter(r=>r.status==='received'),gross=received.reduce((n,r)=>n+(r.currency==='BRL'&&Number.isFinite(r.gross)?r.gross:0),0),fees=received.reduce((n,r)=>n+(r.currency==='BRL'&&Number.isFinite(r.fee)?r.fee:0),0),net=received.reduce((n,r)=>n+(r.currency==='BRL'&&Number.isFinite(r.net)?r.net:0),0);
+  const metrics=node('div',undefined,'fin-metrics');for(const [label,value,help]of [['Vendas recebidas',gross,'Total bruto em BRL'],['Taxas',fees,'Taxas informadas pelos processadores'],['Líquido',net,'Sem somar repasses bancários']]){const card=node('article',undefined,'fin-metric');card.append(node('span',label),node('strong',money(value)),node('small',help));metrics.append(card);}section.append(metrics);
+  const status=node('div',undefined,'fin-scope');for(const name of ['stripe','asaas']){const configured=sales?.configured?.[name],snapshot=providers[name]?.snapshot,attempt=providers[name]?.attempt;status.append(node('span',`${name==='stripe'?'Stripe':'Asaas'} · ${!configured?'não configurado':attempt?.payload?.state==='error'?'falha na atualização':snapshot?`${snapshot.payload.sales.length} registros`:'aguardando sincronização'}`));}section.append(status);
+  const wrap=node('div',undefined,'fin-table-wrap'),table=node('table'),head=node('thead'),header=node('tr');for(const text of ['Data','Processador','Descrição','Situação','Bruto','Taxa','Líquido']){const th=node('th',text);th.scope='col';header.append(th);}head.append(header);table.append(head);const body=node('tbody');
+  const labels={received:'Recebida',pending:'Pendente',refunded:'Estornada',partial_refund:'Estorno parcial',failed:'Falhou'};
+  for(const sale of rows){const tr=node('tr'),provider=node('td');provider.append(institutionBadge(sale.provider==='stripe'?'Stripe':'Asaas'));const state=node('td');state.append(node('span',labels[sale.status]||'Indisponível','fin-badge'));tr.append(node('td',shortDate(sale.date),'fin-date'),provider,node('td',sale.description||'Venda','fin-description'),state,node('td',money(sale.gross,sale.currency),'fin-value fin-positive'),node('td',money(sale.fee,sale.currency),'fin-value'),node('td',money(sale.net,sale.currency),'fin-value fin-positive'));body.append(tr);}table.append(body);wrap.append(table);section.append(wrap);
+  if(!rows.length)section.append(node('div',sales?.configured?.stripe||sales?.configured?.asaas?'Nenhuma venda importada neste período.':'Configure uma chave Stripe ou Asaas no backend.','fin-empty'));
+  const latest=Object.values(providers).map(p=>p.snapshot?.updated_at).filter(Boolean).sort().at(-1);section.append(node('div',`${rows.length} vendas · última gravação ${timestamp(latest)}`,'fin-footer'));return section;
  }
 
  const chartObservers=[];
@@ -99,7 +120,7 @@ export function setupFinance({api}){
   const actions=node('div',undefined,'fin-actions'),periodLabel=node('label',undefined,'fin-period');periodLabel.append(node('span','Período','sr-only'));
   const period=node('input');period.type='month';period.min='2000-01';period.max='2099-12';period.value=month;period.disabled=busy||loading;
   period.onchange=()=>{if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(period.value))return;month=period.value;board=null;page=0;persist();load();};periodLabel.append(period);
-  const update=button(busy?'Atualizando…':'Atualizar dados',()=>refresh(true),'cloud','fin-button fin-primary');update.disabled=busy||loading||!board?.connections.length;
+  const update=button(busy?'Atualizando…':'Atualizar dados',()=>refresh(true),'cloud','fin-button fin-primary');update.disabled=busy||loading||!board;
   const accountLabel=node('label',undefined,'fin-account-filter');accountLabel.append(node('span','Conta','sr-only'));const accountSelect=node('select');accountSelect.append(new Option('Todas as contas','all'));for(const a of accounts())accountSelect.append(new Option((a.name||'Conta')+' · '+a.connection,a.id));accountSelect.value=selected;accountSelect.onchange=()=>{selected=accountSelect.value;page=0;persist();render();};accountLabel.append(accountSelect);
   actions.append(accountLabel,periodLabel,update);top.append(actions,hint);root.append(top);
   if(accounts().length){const institutions=node('div',undefined,'fin-institutions');institutions.setAttribute('aria-label','Instituições das contas selecionadas');for(const name of new Set(picked().map(a=>paymentInstitution(a.bank).name)))institutions.append(institutionBadge(name));root.append(institutions);}
@@ -118,6 +139,7 @@ export function setupFinance({api}){
   const usable=picked().some(a=>a.type==='BANK'&&a.currency===currency&&a.snapshot);
   const balance=bankBalance(picked(),currency);
   for(const [title,amount,help]of [['Saldo em contas',balance,'Último saldo consultado · cartões excluídos'],['Entradas',usable?summary.incoming:null,'Efetivadas no período'],['Saídas',usable?summary.outgoing:null,'Inclui transferências não conciliadas']]){const card=node('article',undefined,'fin-metric');card.append(node('span',title),node('strong',money(amount,currency)),node('small',help));metrics.append(card);}root.append(metrics);
+  root.append(salesPanel());
   const caption=node('div',undefined,'fin-scope'),complete=picked().filter(a=>a.snapshot).length;
   caption.append(node('span',`Movimentações efetivadas de contas bancárias · ${complete}/${picked().length} extratos salvos · não representa receita ou lucro.`));
   const currencyLabel=node('label');currencyLabel.append(node('span','Moeda dos indicadores','sr-only'));const currencySelect=node('select');for(const value of [...new Set(accounts().map(a=>a.currency).filter(Boolean))])currencySelect.append(new Option(value,value));currencySelect.value=currency;currencySelect.onchange=()=>{currency=currencySelect.value;render();};currencyLabel.append(currencySelect);caption.append(currencyLabel);root.append(caption);
@@ -147,5 +169,5 @@ export function setupFinance({api}){
   if(board.saved_months?.length)details.append(node('p','Períodos salvos: '+board.saved_months.join(', ')));root.append(details);
   if(focus){const input=root.querySelector(`[data-focus="${focus}"]`);input?.focus({preventScroll:true});if(caret!==null)input?.setSelectionRange(caret,caret);}
  }
- return{load,clear(){chartObservers.splice(0).forEach(observer=>observer.disconnect());generation++;board=null;busy=false;loading=false;message='';search='';page=0;host()?.replaceChildren();}};
+ return{load,clear(){chartObservers.splice(0).forEach(observer=>observer.disconnect());generation++;board=null;sales=null;busy=false;loading=false;message='';search='';page=0;host()?.replaceChildren();}};
 }

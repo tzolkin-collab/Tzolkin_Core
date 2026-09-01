@@ -14,7 +14,8 @@ Revisão: **2026-08-30**.
 | Apps → Core, via `GET /v1/context` | `[EXISTENTE E VERIFICADO]`, mas **nenhum app real provisionado** (`app_clients` = 0 linhas) |
 | Notion → Core, catálogo do ecossistema | `[EXISTENTE E VERIFICADO]`, importação manual |
 | Core → EasyPanel | Consulta real autenticada validada: 3 projetos e 9 serviços — ver §10 |
-| Stripe, Asaas, Open Finance, Contabilizei, e-mail, webhooks | **Nada implementado** |
+| Stripe e Asaas | `[IMPLEMENTADO PARCIALMENTE]` — leitura mensal de vendas por API, sob demanda; sem webhooks ou criação de cobranças |
+| Open Finance, Contabilizei, e-mail, webhooks | **Nada implementado** |
 
 ---
 
@@ -82,9 +83,9 @@ Regras do consumidor: autenticar o emissor; ignorar duplicado; ignorar versão a
 
 ---
 
-## 5. Provedores de pagamento `[PROPOSTO]`
+## 5. Provedores de pagamento `[PARCIAL]`
 
-Nada implementado. Capacidades pesquisadas na documentação oficial estão em [BILLING.md §4](BILLING.md#4-capacidades-dos-provedores) — incluindo autenticação de webhook, ordem de eventos, retentativas e idempotência de cada um. Não repetir aqui.
+O Financeiro consulta cobranças da Stripe e pagamentos do Asaas por mês, sob demanda, e persiste apenas a projeção necessária para exibir vendas, taxas, líquido, estornos e situação. A leitura é independente por provedor, não expõe chaves ao navegador e não mistura repasses bancários da Pluggy com receita. Webhooks e criação de cobranças continuam propostos. Capacidades pesquisadas na documentação oficial estão em [BILLING.md §4](BILLING.md#4-capacidades-dos-provedores) — incluindo autenticação de webhook, ordem de eventos, retentativas e idempotência de cada um. Não repetir aqui.
 
 Do lado operacional, ao implementar:
 

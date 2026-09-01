@@ -19,6 +19,7 @@ import { deliveryRoutes } from './modules/delivery.mjs';
 import { platformOperationsRoutes } from './modules/platform-operations.mjs';
 import { trackingRoutes } from './modules/tracking.mjs';
 import { financeRoutes } from './modules/finance.mjs';
+import { paymentSalesRoutes } from './modules/payment-sales.mjs';
 import { billingRoutes } from './modules/billing.mjs';
 import {emailRoutes} from './modules/emails.mjs';
 
@@ -29,7 +30,7 @@ const MODULES = [
 
 // `security` é o estado do transporte do banco medido por platform/database.mjs.
 // Ausente = não medido; os endpoints reportam 'unknown' em vez de fingir segurança.
-export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, webOrigin,serveAsset } = {}) {
+export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, webOrigin,serveAsset } = {}) {
  if (webOrigin && !(/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(webOrigin)||/^https:\/\/[a-z0-9.-]+(?::[1-9][0-9]{0,4})?$/.test(webOrigin))) throw new Error('Use an explicit HTTP loopback or HTTPS web origin.');
  const sessions = identity||createSessionStore({ adminPassword, clock });
  const router = createRouter();
@@ -41,6 +42,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  deliveryRoutes(router, deliveryOptions);
  platformOperationsRoutes(router,{...platformOptions,clock});
  financeRoutes(router,financeOptions);
+ paymentSalesRoutes(router,salesOptions);
 
  const server = http.createServer(async (req, res) => {
   securityHeaders(res);
