@@ -1,38 +1,40 @@
-# Core interno — produção protegida
+# Core interno — produção protegida com Google
 
-## Arquitetura escolhida
+## Arquitetura
 
-`Navegador → Cloudflare Access (identidade + MFA + política) → EasyPanel/Core → PostgreSQL TLS verificado`.
+`Navegador → Core/EasyPanel → Google OpenID Connect` e `Core → PostgreSQL com TLS verificado`.
 
-Painel e API compartilham uma origem. A API revalida o JWT do Access (RS256, `iss`, `aud`, expiração) e a allowlist. O hostname direto do EasyPanel não concede acesso: sem assertion válido, a API retorna 401. Assets são públicos e não contêm configuração ou dados.
+O Core usa Authorization Code Flow com PKCE, `state` e `nonce`. O backend troca o código diretamente com o Google e valida assinatura RS256, emissor, audiência, expiração, nonce e `email_verified`. O e-mail precisa constar em `CORE_ALLOWED_EMAILS`. Tokens do Google não são persistidos; a sessão própria guarda apenas SHA-256 do token aleatório.
 
-## Pré-deploy obrigatório
+## Google Cloud
 
-1. Criar aplicação Self-hosted no Cloudflare Zero Trust para o domínio do Core.
-2. Política Allow: somente grupo/e-mails internos; exigir MFA no provedor de identidade. Não usar Bypass.
-3. Copiar Team domain e Application Audience (`AUD`). Fixar `CORE_ALLOWED_EMAILS` ou `CORE_ALLOWED_DOMAIN` também no backend.
-4. EasyPanel: build do `Dockerfile`, porta 3000, uma réplica inicialmente, health `/health`.
-5. Variáveis obrigatórias: `NODE_ENV=production`, `PUBLIC_ORIGIN`, `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD`, allowlist, `DATABASE_URL`, `DATABASE_SSL=require`, credenciais Pluggy/EasyPanel/Vercel necessárias. `CORE_ADMIN_PASSWORD` não é usado em produção.
-6. O `PUBLIC_ORIGIN` precisa ser exatamente o domínio HTTPS coberto pelo Access. Mutações recusam outros Origins.
-7. Aplicar migrações antes da troca de tráfego. A 007 é aditiva e registra o ator.
+1. Google Cloud Console → Google Auth Platform. Configure a tela de consentimento.
+2. Crie OAuth Client do tipo Web application.
+3. Authorized JavaScript origin: o valor exato de `PUBLIC_ORIGIN`.
+4. Authorized redirect URI: `PUBLIC_ORIGIN/api/auth/google/callback`.
+5. Guarde Client ID e Client Secret exclusivamente nos segredos do EasyPanel.
+6. Se o app ficar em Testing, adicione cada operador como Test user. Em Internal, exige Google Workspace da organização.
 
-## Verificação
+## Variáveis obrigatórias
 
-- Container recusa iniciar sem HTTPS, Access audience, allowlist ou TLS verificado no banco.
-- Requisição direta à API sem assertion → 401.
-- Usuário fora da allowlist → 401 mesmo autenticado no Access.
-- Operador autorizado + MFA → painel; mutação grava `actor_subject`/`actor_email`.
-- Logout encerra sessão do Access.
-- `.env`, tokens e chave privada não entram na imagem (`.dockerignore`).
+`PUBLIC_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `CORE_ALLOWED_EMAILS`, `DATABASE_URL` da role `tzolkin_core_runtime` e `DATABASE_SSL=require`. A senha compartilhada não é lida em produção.
+
+## Deploy e verificação
+
+- Build pelo `Dockerfile`, porta 3000, inicialmente uma réplica, health `/health`.
+- Sem HTTPS, credenciais Google, allowlist ou TLS verificado, o processo recusa iniciar.
+- Conta fora da allowlist não cria sessão.
+- Mutação autorizada grava `actor_subject` e `actor_email`.
+- Logout revoga a sessão persistida no Core.
+- `.env`, tokens e chave privada não entram na imagem.
 
 ## Rollback
 
-Manter a imagem/commit anterior no EasyPanel. Reverter tráfego se login autorizado falhar, `/health` não ficar estável, taxa 5xx superar 1% em 5 minutos, ou uma mutação não registrar ator. A migração 007 é aditiva e pode permanecer no rollback; não apagar colunas durante incidente.
+Manter a imagem anterior. Reverter se login autorizado falhar, `/health` não estabilizar, 5xx superar 1% por cinco minutos ou mutação não registrar ator. Migrações 007/008 são aditivas e podem permanecer.
 
-## Pendências que impedem tráfego real
+## Pendências antes de tráfego real
 
-- Cloudflare Access criado e testado com MFA.
-- Domínio definitivo e DNS proxied.
-- Role de runtime sem propriedade das tabelas e sem `DELETE` em auditoria.
-- Backup e restauração do PostgreSQL ensaiados.
-- Build da imagem validado pelo EasyPanel (Docker não está instalado na estação local).
+- Criar as credenciais OAuth Google e informar origem/redirect exatos.
+- Criar a role PostgreSQL restrita com `scripts/configure-runtime-role.mjs`.
+- Backup e restauração do banco ensaiados.
+- Validar o build no EasyPanel; Docker não está instalado na estação local.

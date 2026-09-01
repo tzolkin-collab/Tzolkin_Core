@@ -8,13 +8,13 @@ Revisão: **2026-08-30**.
 
 ## 1. Postura atual
 
-### Perfil de produção preparado — Cloudflare Access
+### Perfil de produção preparado — Google OpenID Connect
 
-O entrypoint `apps/api/src/production.mjs` não aceita a senha compartilhada. Ele exige HTTPS, Cloudflare Access, audiência e allowlist explícita de operadores. Cada requisição administrativa valida a assinatura RS256, emissor, audiência e expiração do assertion contra o JWKS do próprio time. O e-mail ainda precisa constar na allowlist. Ausência ou falha resulta em 401; produção recusa iniciar se a configuração estiver incompleta.
+O entrypoint de produção não aceita senha compartilhada. Exige HTTPS, credenciais OAuth Google e allowlist explícita. Usa Authorization Code + PKCE, `state` e `nonce`; valida assinatura RS256, emissor, audiência, expiração e e-mail verificado.
 
-O mesmo processo serve assets e API na mesma origem no EasyPanel. Cloudflare Access aplica login individual e MFA antes do Core; o Core não confia apenas no proxy e valida o JWT, portanto acessar diretamente o domínio de origem ou forjar cabeçalhos não libera a API. Auditoria nova registra `actor_subject` e `actor_email`; registros históricos permanecem nulos.
+Tokens Google não são persistidos. A sessão do Core é persistente e revogável e guarda apenas o hash do token. Auditoria registra `actor_subject` e `actor_email`; registros históricos permanecem nulos.
 
-Variáveis: `PUBLIC_ORIGIN`, `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` e uma de `CORE_ALLOWED_EMAILS`/`CORE_ALLOWED_DOMAIN`. A aplicação precisa de saída HTTPS para buscar e atualizar chaves públicas do Access. O rollback é o commit anterior e a imagem anterior; a migração 007 é aditiva e pode permanecer.
+Variáveis: `PUBLIC_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` e `CORE_ALLOWED_EMAILS`. Migrações 007/008 são aditivas.
 
 > A **aplicação** é um bootstrap local: escuta só em `127.0.0.1`, recusa `NODE_ENV=production` e não deve ser publicada nem exposta por túnel.
 >
