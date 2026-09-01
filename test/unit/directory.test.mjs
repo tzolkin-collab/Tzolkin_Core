@@ -22,3 +22,11 @@ test('organization rejects mixed legacy categories',async()=>{
  const client={query:async()=>assert.fail('database must not be touched')};
  await assert.rejects(()=>routes().get('POST /api/tenants')({client,body:{name:'Empresa Exemplo',slug:'empresa-exemplo',relationship_kind:'barber'}}),error=>error.status===400);
 });
+
+test('stakeholder is created as a person and then linked to the organization',async()=>{
+ const calls=[];const client={query:async(sql,params)=>{calls.push({sql,params});return {rows:[{id:'20000000-0000-4000-8000-000000000002'}]};}};
+ const result=await routes().get('POST /api/stakeholders')({client,body:{tenant_id:'10000000-0000-4000-8000-000000000001',name:'Pessoa Exemplo',role:'decision_maker',title:'Diretora',is_primary:true,contact_allowed:true}});
+ assert.equal(result.type,'stakeholder.created');assert.equal(calls.length,2);
+ assert.deepEqual(calls[0].params,['Pessoa Exemplo']);
+ assert.deepEqual(calls[1].params,['10000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000002','decision_maker','Diretora',true,true]);
+});

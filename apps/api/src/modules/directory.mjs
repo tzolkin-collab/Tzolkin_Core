@@ -34,6 +34,16 @@ export function directoryRoutes(router) {
   return { tenant: body.tenant_id, type: 'engagement.saved' };
  }, { transactional: true });
 
+ router.post('/api/stakeholders', async ({ client, body }) => {
+  input(body, ['tenant_id', 'name', 'role', 'title', 'is_primary', 'contact_allowed']);
+  if (!isUuid(body.tenant_id) || !['owner','decision_maker','champion','finance','technical','operational','student','contact'].includes(body.role) ||
+      typeof body.is_primary !== 'boolean' || typeof body.contact_allowed !== 'boolean') throw fail(400, 'Stakeholder inválido.');
+  const person=await client.query('INSERT INTO stakeholders(name) VALUES($1) RETURNING id',[text(body.name,2,160)]);
+  await client.query(`INSERT INTO organization_stakeholders(tenant_id,stakeholder_id,role,title,is_primary,contact_allowed)
+   VALUES($1,$2,$3,$4,$5,$6)`,[body.tenant_id,person.rows[0].id,body.role,body.title?text(body.title,2,120):null,body.is_primary,body.contact_allowed]);
+  return { tenant: body.tenant_id, type: 'stakeholder.created' };
+ }, { transactional: true });
+
  router.put('/api/tenants', async ({ client, body }) => {
   input(body, ['tenant_id', 'status']);
   if (!isUuid(body.tenant_id) || !['active', 'suspended'].includes(body.status)) throw fail(400, 'Tenant/status inválido.');
