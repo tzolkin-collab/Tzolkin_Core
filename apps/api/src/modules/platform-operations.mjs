@@ -14,16 +14,16 @@ export function platformOperationsRoutes(router,{options=createDeliveryOptions()
   const actionId=url.searchParams.get('action_id');if(section==='action'&&!/^[\w-]{1,180}$/.test(actionId))throw fail(400,'Ação inválida.');
   reply(200,{...await operations.read({target:await target(url.searchParams.get('target_id')),section,actionId}),checked_at:new Date(clock()).toISOString()});
  });
- router.post('/api/platforms/easypanel/prepare',async({req,reply,sessionToken,url})=>{
+ router.post('/api/platforms/easypanel/prepare',async({req,reply,sessionToken,operator,url})=>{
   onlyParams(url.searchParams,[]);const b=await json(req);input(b,['target_id','action','values','revision']);prune();if(pending.size>=100)throw fail(429,'Há confirmações pendentes. Aguarde.');
   const t=await target(b.target_id);const prepared=await operations.prepare({target:t,action:b.action,values:b.values,revision:b.revision});
-  const id=randomUUID();pending.set(id,{target:t,action:b.action,values:b.values,revision:prepared.revision,session:digest(sessionToken),expires:clock()+120000});
+  const id=randomUUID();pending.set(id,{target:t,action:b.action,values:b.values,revision:prepared.revision,session:digest(sessionToken||operator.subject),expires:clock()+120000});
   setTimeout(()=>pending.delete(id),120000).unref();
   reply(200,{confirmation_id:id,target_id:t.id,summary:prepared.summary,expires_in:120});
  });
- router.post('/api/platforms/easypanel/execute',async({req,reply,sessionToken,pool,url})=>{
+ router.post('/api/platforms/easypanel/execute',async({req,reply,sessionToken,operator,pool,url})=>{
   onlyParams(url.searchParams,[]);const b=await json(req);input(b,['confirmation_id','confirm_target']);prune();
-  const p=pending.get(b.confirmation_id);if(!isUuid(b.confirmation_id)||!p||p.session!==digest(sessionToken))throw fail(409,'Confirmação expirada ou já utilizada.');
+  const p=pending.get(b.confirmation_id);if(!isUuid(b.confirmation_id)||!p||p.session!==digest(sessionToken||operator.subject))throw fail(409,'Confirmação expirada ou já utilizada.');
   if(b.confirm_target!==p.target.id)throw fail(400,'Digite o identificador completo do serviço para confirmar.');
   if(busy.has(p.target.id))throw fail(409,'Uma operação está em andamento neste serviço.');
   pending.delete(b.confirmation_id);busy.add(p.target.id);

@@ -40,6 +40,8 @@ export function securityHeaders(res) {
  res.setHeader('X-Content-Type-Options', 'nosniff');
  res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors 'none'; form-action 'self'");
  res.setHeader('Referrer-Policy', 'no-referrer');
+ res.setHeader('Permissions-Policy','camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+ res.setHeader('Strict-Transport-Security','max-age=31536000; includeSubDomains');
 }
 
 export const replier = res => (status, body) => {

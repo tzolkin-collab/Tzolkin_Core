@@ -649,7 +649,7 @@ $('refresh').onclick = async () => {
  catch (error) { reportError(error); } finally { $('refresh').disabled = false; }
 };
 $('logout').onclick = async () => {
- try { await api('/api/logout', 'POST', {}); signedOut(); $('login-notice').textContent = ''; }
+ try { const result=await api('/api/logout', 'POST', {});if(result.logout_url){location.assign(result.logout_url);return;}signedOut(); $('login-notice').textContent = ''; }
  catch (error) { $('notice').textContent = error.message; }
 };
 

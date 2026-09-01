@@ -17,6 +17,7 @@ export function createSessionStore({ adminPassword, clock }) {
  let attemptReset = 0;
 
  return {
+  mode:'local-password',secure:false,
   // Limite global de tentativas: adequado a um bootstrap de loopback,
   // NÃO substitui proteção por origem/IP em ambiente exposto.
   throttleLogin() {
@@ -32,6 +33,8 @@ export function createSessionStore({ adminPassword, clock }) {
   },
   isValid: token => Boolean(token) && (sessions.get(digest(token)) || 0) > clock(),
   revoke: token => sessions.delete(digest(token)),
+  resolve: async (_req,token)=>Boolean(token)&&(sessions.get(digest(token))||0)>clock()?{subject:'local-bootstrap',email:null}:null,
+  loginDisabled:()=>false,
  };
 }
 

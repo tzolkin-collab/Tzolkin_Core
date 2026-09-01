@@ -29,9 +29,9 @@ const MODULES = [
 
 // `security` é o estado do transporte do banco medido por platform/database.mjs.
 // Ausente = não medido; os endpoints reportam 'unknown' em vez de fingir segurança.
-export function createCore({ pool, adminPassword, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, webOrigin } = {}) {
- if (webOrigin && !/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(webOrigin)) throw new Error('Use uma origem local explícita para o frontend.');
- const sessions = createSessionStore({ adminPassword, clock });
+export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, webOrigin,serveAsset } = {}) {
+ if (webOrigin && !(/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(webOrigin)||/^https:\/\/[a-z0-9.-]+(?::[1-9][0-9]{0,4})?$/.test(webOrigin))) throw new Error('Use an explicit HTTP loopback or HTTPS web origin.');
+ const sessions = identity||createSessionStore({ adminPassword, clock });
  const router = createRouter();
  for (const register of MODULES) register(router);
  // Integrações externas são opcionais e injetáveis: os testes passam um registro
@@ -49,14 +49,16 @@ export function createCore({ pool, adminPassword, clock = Date.now, security = n
    const origin = webOrigin || `http://127.0.0.1:${server.address().port}`;
    const url = new URL(req.url, origin);
    if (!['GET', 'POST', 'PUT'].includes(req.method)) throw fail(405, 'Método não permitido.');
+   if(req.method==='GET'&&serveAsset?.(url.pathname,res))return;
    // CSRF: mutação só a partir da origem exata do bootstrap.
    if (req.method !== 'GET' && req.headers.origin !== origin) throw fail(403, 'Origem não permitida.');
 
    const sessionToken = readSessionCookie(req);
+   const operator=await sessions.resolve(req,sessionToken);
    const matched = router.match(req.method, url.pathname);
    if (!matched) {
     // Exige sessão antes de revelar se a rota existe.
-    if (!sessions.isValid(sessionToken)) throw fail(401, 'Entre para continuar.');
+    if (!operator) throw fail(401, 'Entre para continuar.');
     throw fail(router.allows(url.pathname) ? 405 : 404, router.allows(url.pathname) ? 'Método não permitido.' : 'Rota não encontrada.');
    }
 
@@ -68,11 +70,11 @@ export function createCore({ pool, adminPassword, clock = Date.now, security = n
     if (!bearer) throw fail(401, 'Credencial do app obrigatória.');
     productId = await authenticateApp(pool, bearer);
     if (!productId) throw fail(401, 'App não autorizado.');
-   } else if (auth === 'admin' && !sessions.isValid(sessionToken)) {
+   } else if (auth === 'admin' && !operator) {
     throw fail(401, 'Entre para continuar.');
    }
 
-   const context = { req, res, url, params, pool, reply, sessions, sessionToken, productId, security };
+   const context = { req, res, url, params, pool, reply, sessions, sessionToken, productId, security,operator };
    if (!route.transactional) return await route.handler(context);
 
    context.body = await json(req);
@@ -80,7 +82,7 @@ export function createCore({ pool, adminPassword, clock = Date.now, security = n
    try {
     await client.query('BEGIN');
     const { tenant, type } = await route.handler({ ...context, client });
-    if(route.audit!==false)await client.query('INSERT INTO audit_events(type,tenant_id) VALUES($1,$2)', [type, tenant]);
+    if(route.audit!==false)await client.query('INSERT INTO audit_events(type,tenant_id,actor_subject,actor_email) VALUES($1,$2,$3,$4)', [type, tenant,operator?.subject,operator?.email]);
     await client.query('COMMIT');
     return reply(200, { ok: true, tenant_id: tenant });
    } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
