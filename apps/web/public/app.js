@@ -12,7 +12,7 @@ const emails=setupEmails({api,configure:product=>billing.open(product)});
 const finance=setupFinance({api});
 const tracking=setupTracking({api});
 const $ = id => document.getElementById(id);
-fetch('/api/auth/mode').then(r=>r.ok?r.json():null).then(auth=>{if(auth?.mode==='google-oidc'){$('login-form').hidden=true;$('google-login').hidden=false;if(new URLSearchParams(location.search).has('auth_error'))$('login-notice').textContent='Conta Google não autorizada ou login expirado.';}}).catch(()=>{});
+fetch('/api/auth/mode').then(r=>r.ok?r.json():null).then(auth=>{const oidc=auth?.mode==='google-oidc';$('login-form').hidden=oidc;$('google-login').hidden=!oidc;if(oidc&&new URLSearchParams(location.search).has('auth_error'))$('login-notice').textContent='Conta Google não autorizada ou login expirado.';}).catch(()=>{$('login-notice').textContent='Não foi possível verificar o modo de acesso. Atualize a página.';});
 $('plan-help').textContent='Use o slug de uma oferta deste produto para salvar suas condições de cobrança em rascunho. Sem oferta correspondente, o plano continua apenas cadastral.';
 
 const state = { context: '', view: 'overview', overview: null, product: null };
