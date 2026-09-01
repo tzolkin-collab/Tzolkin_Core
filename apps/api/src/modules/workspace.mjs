@@ -29,11 +29,15 @@ export function workspaceRoutes(router) {
    'SELECT * FROM products ORDER BY name',
    'SELECT * FROM memberships',
    'SELECT * FROM entitlements',
+   'SELECT * FROM client_engagements ORDER BY created_at',
+   `SELECT os.tenant_id,os.role,os.title,os.is_primary,os.contact_allowed,s.id,s.name
+    FROM organization_stakeholders os JOIN stakeholders s ON s.id=os.stakeholder_id ORDER BY s.name`,
   ]) results.push(await pool.query(sql));
-  const [tenants, products, memberships, entitlements] = results;
+  const [tenants, products, memberships, entitlements, engagements, stakeholders] = results;
   return reply(200, {
    tenants: tenants.rows, products: products.rows,
    memberships: memberships.rows, entitlements: entitlements.rows,
+   engagements: engagements.rows, stakeholders: stakeholders.rows,
    // O operador precisa ver, sem procurar, que o banco está em texto claro.
    security: transport(security),
   });
