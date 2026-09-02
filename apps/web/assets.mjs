@@ -3,6 +3,13 @@ import { readFileSync } from 'node:fs';
 
 const FILES = {
  '/': ['index.html', 'text/html'],
+ // PWA. O manifest e o service worker precisam ser servidos na raiz do escopo:
+ // um service worker so controla o caminho de onde e servido.
+ '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json'],
+ '/sw.js': ['sw.js', 'text/javascript'],
+ '/icon-192.png': ['icon-192.png', 'image/png'],
+ '/icon-512.png': ['icon-512.png', 'image/png'],
+ '/apple-touch-icon.png': ['apple-touch-icon.png', 'image/png'],
  '/app.js': ['app.js', 'text/javascript'],
  '/tracking.js': ['tracking.js', 'text/javascript'],
  '/tracking.css': ['tracking.css', 'text/css'],

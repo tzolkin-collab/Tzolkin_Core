@@ -735,3 +735,10 @@ renderNav();
 switchView(state.view);
 renderContextChrome();
 load().catch(error => { if (error.message !== 'Entre para continuar.') $('login-notice').textContent = error.message; });
+
+// Registro do service worker. Só existe para notificação: o worker não faz
+// cache, então não há risco de servir código velho depois de um deploy.
+// Falha em silêncio de propósito — sem push o painel funciona igual.
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === '127.0.0.1')) {
+ navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+}
