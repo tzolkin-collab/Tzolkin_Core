@@ -174,6 +174,7 @@ function switchView(view) {
  if (view === 'emails') emails.load().catch(reportError);
  if (view === 'people') renderPeople();
  if (view === 'companies') renderTenants();
+ if (view === 'products') renderGeneral();
  if (view === 'client') renderClientDetail();
  if (view === 'product-payments'&&state.product) productPayments.load(state.product.product).catch(reportError);
  if (view === 'education') renderGeneral();
