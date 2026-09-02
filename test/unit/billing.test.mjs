@@ -17,10 +17,10 @@ test('contract inherits a snapshot; later catalog changes cannot replace it',asy
 });
 test('offer version conflict does not overwrite or record a false history entry',async()=>{
  const routes=new Map();billingRoutes({get(){},put:(p,f)=>routes.set(p,f)});let calls=0;
- await assert.rejects(routes.get('/api/billing/offers')({body:{...offer,version:3},client:{query:async()=>{calls++;return{rows:[]};}}}),/outra sessão/);assert.equal(calls,2);
+ await assert.rejects(routes.get('/api/billing/offers')({body:{...offer,version:3},client:{query:async(sql)=>{calls++;if(sql.startsWith('SELECT id,name FROM products'))return{rows:[{id:'sites',name:'Sites'}]};return{rows:[]};}}}),/outra sessão/);assert.equal(calls,3);
 });
 test('billing API requires admin and same-origin writes; successful writes are transactional',async()=>{
- const calls=[];const client={query:async(sql)=>{calls.push(sql);return{rows:sql.includes('RETURNING version')?[{version:1}]:[]};},release(){}};
+ const calls=[];const client={query:async(sql)=>{calls.push(sql);return{rows:sql.startsWith('SELECT id,name FROM products')?[{id:'sites',name:'Sites'}]:sql.includes('RETURNING version')?[{version:1}]:[]};},release(){}};
  const server=createCore({pool:{connect:async()=>client,query:async()=>({rows:[]})},adminPassword:'test-billing-password-123456789'});await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
  try{
  assert.equal((await fetch(origin+'/api/billing/offers?product_id=sites')).status,401);

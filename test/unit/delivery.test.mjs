@@ -57,9 +57,13 @@ function fakePool() {
    if(sql==='BEGIN'){snapshot=structuredClone(saved);return {rows:[]};}
    if(sql==='ROLLBACK'){saved=snapshot;return {rows:[]};}
    if(sql==='COMMIT')return {rows:[]};
-   if(sql.startsWith('SELECT id,specification,revision'))return {rows:saved?[structuredClone(saved)]:[]};
-   if(sql.startsWith('INSERT INTO delivery_projects')){saved={id:'11111111-1111-4111-8111-111111111111',specification:structuredClone(params[0]),revision:1};return {rows:[structuredClone(saved)]};}
+   if(sql.startsWith('SELECT id,product_id,specification,revision'))return {rows:saved?[structuredClone(saved)]:[]};
+   if(sql.startsWith('SELECT d.id,d.product_id'))return {rows:saved?[{...structuredClone(saved),lifecycle_status:'draft'}]:[]};
+   if(sql.startsWith('INSERT INTO products'))return {rows:[]};
+   if(sql.startsWith('INSERT INTO delivery_projects')){saved={id:params[0],product_id:params[1],specification:structuredClone(params[2]),revision:1};return {rows:[structuredClone(saved)]};}
    if(sql.startsWith('UPDATE delivery_projects')){saved.specification=structuredClone(params[0]);saved.revision++;return {rows:[structuredClone(saved)]};}
+   if(sql.startsWith('UPDATE products SET name'))return {rows:[]};
+   if(sql.startsWith('SELECT lifecycle_status FROM products'))return {rows:[{lifecycle_status:'draft'}]};
    if(sql.startsWith('INSERT INTO delivery_audit')){if(pool.failAudit)throw Error('private');audit.push(params);return {rows:[]};}
    throw Error('Unexpected SQL');
   },async connect(){return {...pool,query:pool.query.bind(pool),release(){}};},
@@ -83,7 +87,7 @@ test('HTTP enforces session, CSRF, revisions, audited transactions and real targ
   assert.equal((await request('/api/delivery/projects','POST',project({components:[component({bindings:[{...binding,target_id:'unknown'}]})]}),headers)).status,400);
   assert.equal((await request('/api/delivery/projects','POST',project({components:[component({kind:'database',bindings:[binding]})]}),headers)).status,400);
   const create=await request('/api/delivery/projects','POST',project({repository_id:'12',components:[component({bindings:[binding]})]}),headers);
-  assert.equal(create.status,201);const record=(await create.json()).project;assert.equal(record.repository_name,'org/repo');assert.equal(record.deployment_status,'not_observed');assert.equal(pool.audit.length,1);
+  assert.equal(create.status,201);const record=(await create.json()).project;assert.equal(record.repository_name,'org/repo');assert.match(record.product_id,/^project-/);assert.equal(record.product_lifecycle_status,'draft');assert.equal(record.deployment_status,'not_observed');assert.equal(pool.audit.length,1);
   const endpoint='/api/delivery/projects/'+record.id;
   assert.equal((await request(endpoint,'PUT',project({revision:1}),headers)).status,200);assert.equal(pool.audit.length,2);
   assert.equal((await request(endpoint,'PUT',project({revision:1}),headers)).status,409);

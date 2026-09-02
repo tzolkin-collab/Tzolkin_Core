@@ -12,10 +12,10 @@ test('organization creation keeps relationship, lifecycle and legal shape separa
 });
 
 test('engagement links an organization to an optional product and service model',async()=>{
- const calls=[];const client={query:async(sql,params)=>{calls.push({sql,params});return {rows:[]};}};
+ const calls=[];const client={query:async(sql,params)=>{calls.push({sql,params});return {rows:sql.startsWith('SELECT id,name FROM products')?[{id:'barber',name:'TZOLKIN Barber'}]:[]};}};
  const result=await routes().get('POST /api/engagements')({client,body:{tenant_id:'10000000-0000-4000-8000-000000000001',product_id:'barber',service_model:'product',status:'planned',label:'TZOLKIN Barber'}});
  assert.equal(result.type,'engagement.saved');
- assert.deepEqual(calls[0].params,['10000000-0000-4000-8000-000000000001','barber','product','planned','TZOLKIN Barber']);
+ assert.deepEqual(calls[1].params,['10000000-0000-4000-8000-000000000001','barber','product','planned','TZOLKIN Barber']);
 });
 
 test('engagement rejects legacy billing and mentorship categories',async()=>{

@@ -63,6 +63,7 @@ Conferido em `db/schema.sql` e no banco em 2026-09-02.
 | `id` | `text` PK | `^[a-z][a-z0-9-]{1,63}$`. Identificador estável — nunca muda |
 | `name` | `text` | Nome exibido. Sincronizado do catálogo do Notion na importação |
 | `portfolio_kind` | `text` | `product`, `platform` ou `service_line`; recorte do portfólio comercial |
+| `lifecycle_status` | `text` | `draft`, `active` ou `archived`; produto novo de projeto técnico começa em `draft` |
 | `brand_family` | `text` | Família de marca, hoje `tzolkin` |
 
 Hoje: `sites`, `educare`, `barber`, `commerce`, `data`, `core`. Ver [D2](CONTEXT.md#d2--o-próprio-core-e-o-data-são-produtos-contratáveis).
@@ -150,6 +151,7 @@ tenants 1 ──── N memberships N ──── 1 products   (pessoa vincula
 tenants 1 ──── N entitlements N ──── 1 products
 products 1 ──── N app_clients          (credencial por produto)
 products 1 ──── 0..1 ecosystem_entries (ficha do Notion)
+delivery_projects 1 ──── 0..1 products (produto draft criado pelo projeto)
 tenants 1 ──── N audit_events
 ```
 

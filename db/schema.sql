@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS memberships (
 );
 CREATE TABLE IF NOT EXISTS products (id text PRIMARY KEY CHECK(id ~ '^[a-z][a-z0-9-]{1,63}$'),name text NOT NULL,
  portfolio_kind text NOT NULL DEFAULT 'product' CHECK(portfolio_kind IN ('product','platform','service_line')),
+ lifecycle_status text NOT NULL DEFAULT 'active' CHECK(lifecycle_status IN ('draft','active','archived')),
  brand_family text NOT NULL DEFAULT 'tzolkin');
 CREATE TABLE IF NOT EXISTS entitlements (
  tenant_id uuid REFERENCES tenants(id), product_id text REFERENCES products(id), plan text NOT NULL CHECK(length(plan) BETWEEN 1 AND 80),

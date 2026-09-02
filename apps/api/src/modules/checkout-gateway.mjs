@@ -57,7 +57,7 @@ const templatePublico = row => ({ slug: row.slug, type: row.payload.type, brandi
 
 async function lerOfertaETemplate(pool, productId, offerSlug, templateSlug) {
  const [produto, oferta, template] = await Promise.all([
-  pool.query('SELECT id,name FROM products WHERE id=$1', [productId]),
+  pool.query("SELECT id,name FROM products WHERE id=$1 AND lifecycle_status='active'", [productId]),
   pool.query('SELECT slug,payload FROM billing_offers WHERE product_id=$1 AND slug=$2', [productId, offerSlug]),
   templateSlug
    ? pool.query('SELECT slug,payload FROM checkout_templates WHERE product_id=$1 AND slug=$2', [productId, templateSlug])

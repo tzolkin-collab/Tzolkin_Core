@@ -164,7 +164,7 @@ Programa aprovado pelo usuário: o painel deixa de ser só cadastro e passa a **
 
 Ordem por dependência. E9 é fundação: sem ele, E10–E14 não têm onde se apoiar.
 
-### E9 — Unir as ilhas: projeto, produto em draft e serviço
+### E9 — Unir as ilhas: projeto, produto em draft e serviço `[ENTREGUE]` — 2026-09-02
 
 **Depende de:** nada. É a fundação do programa.
 
@@ -175,6 +175,8 @@ Decisão do usuário: criar um projeto técnico cria um **produto em `draft`**, 
 Projeto tem dois tipos: **produto** (tem código, deploy, domínio) e **serviço** (consultoria, assessoria — já modelado em `client_engagements.service_model`).
 
 **Aceite:** vínculo entre projeto técnico, produto e contratação · `products` com ciclo de vida e estado inicial `draft` · **lista conferida de todo lugar que precisa filtrar draft**, para produto em rascunho nunca aparecer em contrato, cobrança, acesso ou `/v1/context` · migração segura em banco com dados reais, sem backfill destrutivo · modelo antecipa E13 e E14 sem implementá-los · os 222 testes seguem passando.
+
+Implementado: `products.lifecycle_status` (`draft` | `active` | `archived`), vínculo opcional e único em `delivery_projects.product_id`, criação atômica de produto `draft` para projetos técnicos novos e filtros de produto ativo em catálogo, contratos, cobrança, checkout, acesso e contexto.
 
 ### E10 — Empresas como aba de primeira classe
 

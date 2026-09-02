@@ -1,10 +1,10 @@
 // Catálogo do ecossistema: produtos e atalhos operacionais importados do Notion.
 // Cadastro, não monitoramento: "status" aqui é o que foi registrado, não disponibilidade medida.
 
-export const listProducts = client => client.query('SELECT id,name FROM products ORDER BY name');
+export const listProducts = client => client.query("SELECT id,name FROM products WHERE lifecycle_status='active' ORDER BY name");
 
 export const findProduct = (client, productId) =>
- client.query('SELECT id,name FROM products WHERE id=$1', [productId]).then(r => r.rows[0] || null);
+ client.query("SELECT id,name FROM products WHERE id=$1 AND lifecycle_status='active'", [productId]).then(r => r.rows[0] || null);
 
 export const findCatalogEntry = (client, productId) =>
  client.query("SELECT payload,imported_at FROM ecosystem_entries WHERE id=$1 AND kind='product'", [productId])

@@ -6,7 +6,7 @@ import { text, isUuid, onlyParams, fail } from '../platform/http.mjs';
 import { digest } from '../platform/session.mjs';
 
 export const authenticateApp = (pool, bearer) =>
- pool.query('SELECT product_id FROM app_clients WHERE token_hash=$1 AND active=true', [digest(bearer)])
+ pool.query("SELECT a.product_id FROM app_clients a JOIN products p ON p.id=a.product_id AND p.lifecycle_status='active' WHERE a.token_hash=$1 AND a.active=true", [digest(bearer)])
   .then(result => result.rows[0]?.product_id || null);
 
 export function accessRoutes(router) {
@@ -20,6 +20,7 @@ export function accessRoutes(router) {
    `SELECT e.plan,e.rights,e.version FROM entitlements e
       JOIN tenants t ON t.id=e.tenant_id
       JOIN memberships m ON m.tenant_id=t.id AND m.product_id=e.product_id
+      JOIN products p ON p.id=e.product_id AND p.lifecycle_status='active'
      WHERE t.id=$1 AND m.subject=$2 AND e.product_id=$3
        AND t.status='active' AND m.active AND e.active`,
    [tenant, subject, productId]);

@@ -2,12 +2,14 @@
 // Não é motor de cobrança: nenhum preço, ciclo ou pagamento é modelado aqui.
 import { input, text, isUuid, fail } from '../platform/http.mjs';
 import {inheritBillingOffer} from './billing.mjs';
+import {findProduct} from './catalog.mjs';
 
 export function contractsRoutes(router) {
  router.put('/api/entitlements', async ({ client, body }) => {
   input(body, ['tenant_id', 'product_id', 'plan', 'rights', 'active']);
   if (!isUuid(body.tenant_id) || typeof body.active !== 'boolean' || !Array.isArray(body.rights) || body.rights.length > 30)
    throw fail(400, 'Contrato inválido.');
+  if (!await findProduct(client, body.product_id)) throw fail(400, 'Produto não está disponível para contratação.');
   const rights = [...new Set(body.rights.map(right => text(right, 1, 80)))];
   if (rights.some(right => !/^[a-z][a-z0-9_.:-]*$/.test(right))) throw fail(400, 'Direito inválido.');
   await client.query(

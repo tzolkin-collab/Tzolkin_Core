@@ -22,14 +22,14 @@ test('validates type, cor, url do logo e arredondamento',()=>{
 
 test('só um template padrão por produto: desmarca os outros na mesma transação',async()=>{
  const routes=new Map();checkoutTemplateRoutes({get(){},put:(p,f)=>routes.set(p,f)});
- const queries=[];const client={query:async(sql,args)=>{queries.push([sql,args]);return{rows:sql.includes('RETURNING version')?[{version:1}]:[]};}};
+ const queries=[];const client={query:async(sql,args)=>{queries.push([sql,args]);return{rows:sql.startsWith('SELECT id,name FROM products')?[{id:'sites',name:'Sites'}]:sql.includes('RETURNING version')?[{version:1}]:[]};}};
  await routes.get('/api/checkout-templates')({client,body:template});
- assert.match(queries[0][0],/UPDATE checkout_templates SET payload=jsonb_set/);
- assert.deepEqual(queries[0][1],['sites','padrao']);
+ assert.match(queries[1][0],/UPDATE checkout_templates SET payload=jsonb_set/);
+ assert.deepEqual(queries[1][1],['sites','padrao']);
 });
 
 test('conflito de versão não sobrescreve',async()=>{
  const routes=new Map();checkoutTemplateRoutes({get(){},put:(p,f)=>routes.set(p,f)});let calls=0;
- await assert.rejects(routes.get('/api/checkout-templates')({body:{...template,is_default:false,version:3},client:{query:async()=>{calls++;return{rows:[]};}}}),/outra sessão/);
- assert.equal(calls,2);
+ await assert.rejects(routes.get('/api/checkout-templates')({body:{...template,is_default:false,version:3},client:{query:async(sql)=>{calls++;if(sql.startsWith('SELECT id,name FROM products'))return{rows:[{id:'sites',name:'Sites'}]};return{rows:[]};}}}),/outra sessão/);
+ assert.equal(calls,3);
 });

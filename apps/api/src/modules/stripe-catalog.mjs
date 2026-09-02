@@ -38,7 +38,7 @@ export function stripeCatalogRoutes(router, { env = process.env, clock = Date.no
    catch (error) { erro = error.name === 'TimeoutError' ? 'Tempo esgotado ao consultar a Stripe.' : error.message; }
 
    const [produtos, existentes] = await Promise.all([
-    pool.query('SELECT id,name FROM products ORDER BY name'),
+    pool.query("SELECT id,name FROM products WHERE lifecycle_status='active' ORDER BY name"),
     pool.query("SELECT product_id, slug, payload->>'provider' AS provider, payload->>'offer_ref' AS offer_ref FROM billing_offers"),
    ]);
    // Casamento por referência do preço — nunca por nome, que muda sem aviso.

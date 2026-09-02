@@ -9,6 +9,7 @@
 // Ver docs/BILLING.md e apps/api/src/modules/checkout-gateway.mjs, que lê
 // este template para decidir como criar a sessão de pagamento.
 import {input,text,isProductId,fail} from '../platform/http.mjs';
+import {findProduct} from './catalog.mjs';
 
 export const TEMPLATE_TYPES=['HOSTED','EMBEDDED','ELEMENTS'];
 
@@ -34,11 +35,13 @@ export function checkoutTemplateRoutes(router){
  router.get('/api/checkout-templates',async({pool,url,reply})=>{
   const product=url.searchParams.get('product_id');
   if(!isProductId(product)||[...url.searchParams.keys()].some(k=>k!=='product_id')||url.searchParams.getAll('product_id').length!==1)throw fail(400,'Produto inválido.');
+  if(!await findProduct(pool, product))throw fail(404,'Produto não encontrado.');
   const result=await pool.query('SELECT slug,payload,version,updated_at FROM checkout_templates WHERE product_id=$1 ORDER BY slug',[product]);
   return reply(200,{templates:result.rows,execution:'draft_only'});
  },{body:false});
  router.put('/api/checkout-templates',async({client,body})=>{
-  const tpl=validateTemplate(body);
+ const tpl=validateTemplate(body);
+  if (!await findProduct(client, tpl.product_id)) throw fail(400, 'Produto não está disponível para checkout.');
   // Só um padrão por produto: desmarca os outros na mesma transação antes de gravar este.
   if(tpl.is_default)await client.query(`UPDATE checkout_templates SET payload=jsonb_set(payload,'{is_default}','false') WHERE product_id=$1 AND slug<>$2`,[tpl.product_id,tpl.slug]);
   const result=await client.query(`INSERT INTO checkout_templates(product_id,slug,payload)

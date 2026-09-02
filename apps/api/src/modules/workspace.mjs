@@ -26,7 +26,7 @@ export function workspaceRoutes(router) {
   const results = [];
   for (const sql of [
    'SELECT * FROM tenants ORDER BY created_at DESC',
-   'SELECT * FROM products ORDER BY name',
+   "SELECT * FROM products WHERE lifecycle_status='active' ORDER BY name",
    'SELECT * FROM memberships',
    'SELECT * FROM entitlements',
    'SELECT * FROM client_engagements ORDER BY created_at',

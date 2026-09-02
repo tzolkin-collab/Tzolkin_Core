@@ -4,6 +4,7 @@
 // em que foi vinculada, mesmo que a organização contrate outros.
 // Decisão em docs/decisions/0002-vinculo-de-pessoa-por-produto.md.
 import { input, text, isUuid, isProductId, fail } from '../platform/http.mjs';
+import {findProduct} from './catalog.mjs';
 
 export function directoryRoutes(router) {
  router.post('/api/tenants', async ({ client, body }) => {
@@ -28,6 +29,7 @@ export function directoryRoutes(router) {
   if (!isUuid(body.tenant_id) || (body.product_id !== null && !isProductId(body.product_id))) throw fail(400, 'Empresa ou oferta inválida.');
   if (!['on_demand','education','consulting','advisory','product','unclassified'].includes(body.service_model) ||
       !['planned','active','paused','completed','discontinued','unclassified'].includes(body.status)) throw fail(400, 'Contratação inválida.');
+  if (body.product_id !== null && !await findProduct(client, body.product_id)) throw fail(400, 'Produto não está disponível para contratação.');
   await client.query(`INSERT INTO client_engagements(tenant_id,product_id,service_model,status,label) VALUES($1,$2,$3,$4,$5)
    ON CONFLICT(tenant_id,label) DO UPDATE SET product_id=EXCLUDED.product_id,service_model=EXCLUDED.service_model,status=EXCLUDED.status`,
   [body.tenant_id, body.product_id, body.service_model, body.status, text(body.label,2,120)]);
@@ -56,6 +58,7 @@ export function directoryRoutes(router) {
   input(body, ['tenant_id', 'product_id', 'subject', 'active']);
   if (!isUuid(body.tenant_id) || typeof body.active !== 'boolean') throw fail(400, 'Vínculo inválido.');
   if (!isProductId(body.product_id)) throw fail(400, 'Produto inválido.');
+  if (!await findProduct(client, body.product_id)) throw fail(400, 'Produto não está disponível para acesso.');
   // A FK de product_id recusa produto inexistente; o erro vira 409 em describeError.
   await client.query(
    `INSERT INTO memberships(tenant_id,subject,product_id,active) VALUES($1,$2,$3,$4)
