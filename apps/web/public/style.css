@@ -33,6 +33,14 @@ body[data-context="product"] .topbar #crumb-context{color:var(--brand)}
 @media(max-width:850px){.metrics{grid-auto-flow:row;grid-template-columns:repeat(2,minmax(0,1fr))}.metrics article+article{border-left:0}.metrics article:nth-child(even){border-left:1px solid var(--line)}.metrics article:nth-child(n+3){border-top:1px solid var(--line)}}
 @media(max-width:600px){.context-switch{margin:16px 0 0}}
 
+/* Sidebar navigation: hierarchy and active context inspired by modern product dashboards. */
+.sidebar{background:linear-gradient(180deg,#fff 0%,#fbfbfc 100%);box-shadow:8px 0 24px #18181b05;padding:22px 14px 14px}
+.sidebar>.brand{padding:0 10px}.context-switch{margin:22px 6px 0;padding:10px;border:1px solid var(--line);border-radius:9px;background:#fafafa}
+.context-switch select{min-height:38px;border-color:#dedee3;border-radius:6px;padding:8px 10px}
+.nav-label{margin:30px 10px 10px}.sidebar nav{gap:3px}.nav-group{padding:16px 10px 5px;font-size:10px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:#a1a1aa}.nav-group:first-child{padding-top:0}
+.nav-item{min-height:40px;padding:10px 11px;border:1px solid transparent}.nav-item:hover{background:#f4f4f5;color:#27272a}.nav-item.active{background:#18181b;color:#fff;box-shadow:0 1px 2px #0002}.nav-item.active .nav-icon{color:#fff}.nav-icon{color:#8a8a91}
+.workspace-label{padding:16px 8px 10px}
+
 /* Aviso persistente de transporte inseguro do banco. Some só quando o servidor parar de reportar texto claro. */
 .security-banner{background:#fdf2f4;border:1px solid #f0c6cf;border-left:3px solid #ad2541;border-radius:7px;padding:13px 16px;color:#8d1e35;margin-bottom:20px;font-size:13px;line-height:1.6}
 
