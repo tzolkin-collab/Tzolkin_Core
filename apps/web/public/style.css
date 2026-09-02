@@ -77,3 +77,7 @@ dialog{max-height:calc(100dvh - 32px);overflow-y:auto;overscroll-behavior:contai
  dialog{padding:20px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px)}.dialog-actions>button{flex:1 1 100px}
  th,td{padding:14px 16px}.login-signature{position:static;align-self:end;margin-top:24px}.login-screen{grid-template-rows:1fr auto}.login-box{margin-top:0}
 }
+/* Marca da TZOLKIN no card do usuário: a logo já é um quadrado escuro com raio,
+   então o avatar perde o próprio fundo e borda para não moldurar duas vezes. */
+.avatar-brand{background:transparent;border-color:transparent;padding:0;overflow:hidden}
+.avatar-brand img{display:block;width:26px;height:26px;border-radius:6px}

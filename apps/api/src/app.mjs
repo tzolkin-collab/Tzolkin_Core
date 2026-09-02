@@ -25,6 +25,7 @@ import {emailRoutes} from './modules/emails.mjs';
 import {productPaymentRoutes} from './modules/product-payments.mjs';
 import { paymentWebhookRoutes } from './modules/payment-webhooks.mjs';
 import { stripeCatalogRoutes } from './modules/stripe-catalog.mjs';
+import { accountRoutes } from './modules/accounts.mjs';
 import { checkoutTemplateRoutes } from './modules/checkout-templates.mjs';
 import { checkoutGatewayRoutes } from './modules/checkout-gateway.mjs';
 
@@ -50,6 +51,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  paymentSalesRoutes(router,salesOptions);
  paymentWebhookRoutes(router,{clock,...(webhookEnv?{env:webhookEnv}:{})});
  stripeCatalogRoutes(router,{clock,...(catalogAdapter?{adapter:catalogAdapter}:{}),...(webhookEnv?{env:webhookEnv}:{})});
+ accountRoutes(router,{...(webhookEnv?{env:webhookEnv}:{})});
  checkoutGatewayRoutes(router,{...(webhookEnv?{env:webhookEnv}:{}),...checkoutOptions});
 
  const server = http.createServer(async (req, res) => {
