@@ -13,8 +13,8 @@ export const brazilMonth=value=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Ameri
 // WIDE_LOGOS são as marcas cuja versão oficial é horizontal: Inter e Asaas não
 // publicam símbolo quadrado, a marca deles é a própria palavra. Ficam separadas
 // porque 20x20 as esmagaria — renderizam por altura, preservando a proporção.
-export const WIDE_LOGOS=['inter','asaas'];
-export const BANK_LOGOS=['nubank','inter','asaas','itau','bradesco','santander','bancodobrasil','caixa','c6bank','btgpactual','sicredi','sicoob','mercadopago','pagbank','picpay','stripe'];
+export const WIDE_LOGOS=['inter','asaas','mastercard'];
+export const BANK_LOGOS=['nubank','inter','asaas','mastercard','itau','bradesco','santander','bancodobrasil','caixa','c6bank','btgpactual','sicredi','sicoob','mercadopago','pagbank','picpay','stripe'];
 export function paymentInstitution(bank){
  const name=typeof bank==='string'&&bank.trim()?bank.trim():'Instituição não informada';
  const key=name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
@@ -23,7 +23,7 @@ export function paymentInstitution(bank){
   bradesco:'bradesco',santander:'santander',bancosantander:'santander',bancodobrasil:'bancodobrasil',
   caixa:'caixa',caixaeconomicafederal:'caixa',c6bank:'c6bank',c6:'c6bank',btgpactual:'btgpactual',btg:'btgpactual',
   sicredi:'sicredi',sicoob:'sicoob',mercadopago:'mercadopago',pagbank:'pagbank',pagseguro:'pagbank',picpay:'picpay',
-  stripe:'stripe'};
+  stripe:'stripe',mastercard:'mastercard'};
  const palette=['#526579','#79558c','#387574','#936131','#4a6595','#796342'];
  let hash=0;for(const char of key)hash=(Math.imul(hash,31)+char.charCodeAt(0))>>>0;
  return{name,color:colors[key]||palette[hash%palette.length],logo:logos[key]||null};

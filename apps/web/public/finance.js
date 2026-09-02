@@ -12,12 +12,12 @@ const processorBadge=name=>{const stripe=name==='stripe',badge=node('span',undef
 
 export function setupFinance({api}){
  let generation=0,board=null,sales=null,forecast=null,busy=false,loading=false,message='',error=false,page=0,search='';
- let month=brazilMonth(Date.now()),selected='all',currency='BRL',direction='all';
+ let month=brazilMonth(Date.now()),selected='all',currency='BRL',direction='all',accountType='all';
  try{const saved=JSON.parse(localStorage.getItem(storageKey)||'null');if(/^20\d{2}-(0[1-9]|1[0-2])$/.test(saved?.month))month=saved.month;if(typeof saved?.account==='string')selected=saved.account;}catch{}
  const host=()=>document.getElementById('view-finance');
  const persist=()=>{try{localStorage.setItem(storageKey,JSON.stringify({month,account:selected}));}catch{}};
  const accounts=()=>board?.accounts||[];
- const picked=()=>accounts().filter(a=>selected==='all'||a.id===selected);
+ const picked=()=>accounts().filter(a=>(selected==='all'||a.id===selected)&&(accountType==='all'||a.type===accountType));
  const button=(text,action,icon,cls='fin-button')=>{const b=node('button',undefined,cls);b.type='button';if(icon)b.append(createIcon(icon));b.append(document.createTextNode(text));b.onclick=action;return b;};
  const readBoard=()=>api('/api/finance/board?'+new URLSearchParams({month}));
  const readSales=()=>api('/api/finance/sales?'+new URLSearchParams({month}));
@@ -123,8 +123,9 @@ export function setupFinance({api}){
   const period=node('input');period.type='month';period.min='2000-01';period.max='2099-12';period.value=month;period.disabled=busy||loading;
   period.onchange=()=>{if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(period.value))return;month=period.value;board=null;page=0;persist();load();};periodLabel.append(period);
   const update=button(busy?'Atualizando…':'Atualizar dados',()=>refresh(true),'cloud','fin-button fin-primary');update.disabled=busy||loading||!board;
-  const accountLabel=node('label',undefined,'fin-account-filter');accountLabel.append(node('span','Conta','sr-only'));const accountSelect=node('select');accountSelect.append(new Option('Todas as contas','all'));for(const a of accounts())accountSelect.append(new Option((a.name||'Conta')+' · '+a.connection,a.id));accountSelect.value=selected;accountSelect.onchange=()=>{selected=accountSelect.value;page=0;persist();render();};accountLabel.append(accountSelect);
-  actions.append(accountLabel,periodLabel,update);top.append(actions,hint);root.append(top);
+ const accountLabel=node('label',undefined,'fin-account-filter');accountLabel.append(node('span','Conta','sr-only'));const accountSelect=node('select');accountSelect.append(new Option('Todas as contas','all'));for(const a of accounts())accountSelect.append(new Option((a.bank||a.name||'Conta')+' · '+(a.type==='CREDIT'?'Cartão':'Conta'),a.id));accountSelect.value=selected;accountSelect.onchange=()=>{selected=accountSelect.value;page=0;persist();render();};accountLabel.append(accountSelect);
+  const typeLabel=node('label',undefined,'fin-account-filter');typeLabel.append(node('span','Origem','sr-only'));const typeSelect=node('select');for(const [value,label] of [['all','Contas e cartões'],['BANK','Somente contas'],['CREDIT','Somente cartões']])typeSelect.append(new Option(label,value));typeSelect.value=accountType;typeSelect.onchange=()=>{accountType=typeSelect.value;selected='all';page=0;render();};typeLabel.append(typeSelect);
+  actions.append(accountLabel,typeLabel,periodLabel,update);top.append(actions,hint);root.append(top);
   if(accounts().length){const institutions=node('div',undefined,'fin-institutions');institutions.setAttribute('aria-label','Instituições das contas selecionadas');for(const name of new Set(picked().map(a=>paymentInstitution(a.bank).name)))institutions.append(institutionBadge(name));root.append(institutions);}
   if(error){const warning=node('div',undefined,'fin-warning');warning.setAttribute('role','alert');warning.append(createIcon('alert'),node('span',message),button('Tentar novamente',()=>board?refresh(true):load()));root.append(warning);}
   if(!board){root.append(node('div',loading?'Buscando seu financeiro salvo…':'Seus dados não foram apagados. Tente carregar novamente.','fin-empty'));return;}

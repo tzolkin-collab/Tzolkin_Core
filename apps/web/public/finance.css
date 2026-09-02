@@ -1,6 +1,7 @@
 /* Approved light finance composition. Scoped to the finance view. */
 .fin{--fin-muted:#707078;--fin-line:#e9e9ed;--fin-purple:#6550bb;--fin-teal:#347e73;color:#202124;background:#fff;color-scheme:only light;min-width:0}
 .fin-top,.fin-actions,.fin-save-state,.fin-section-title,.fin-scope,.fin-filters,.fin-footer,.fin-pager{display:flex;align-items:center;gap:12px}
+.fin-actions select,.fin-actions input{min-height:38px;border:1px solid var(--fin-line);border-radius:7px;background:#fff;padding:0 10px;color:#33333a}
 .fin-top,.fin-section-title,.fin-scope,.fin-footer{justify-content:space-between}
 .fin-top{margin-bottom:34px;flex-wrap:wrap}.fin-actions{flex-wrap:wrap}.fin-save-state{font-size:12px;color:var(--fin-muted);gap:6px}.fin-save-state svg{width:15px;height:15px}
 .fin :is(input,select){min-height:38px;padding:8px 11px;border:1px solid var(--fin-line);border-radius:7px;background:#fff;font-size:13px;color:#33333a;box-shadow:none}
