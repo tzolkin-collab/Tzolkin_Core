@@ -29,10 +29,13 @@ const CONTEXTS = {
    tracking: { title: 'Acompanhamento', section: 'view-tracking', metrics:false },
    finance: { title: 'Financeiro', section: 'view-finance', metrics:false },
    clients: { title: 'Clientes', section: 'view-clients', action: ['Nova empresa', 'tenant-dialog'], metrics:false },
+   companies: { title: 'Empresas', section: 'view-clients', metrics:false },
    client: { title: 'Cliente', section: 'view-client', hidden:true, metrics:false },
    people: { title: 'Pessoas', section: 'view-people', action: ['Nova pessoa', 'stakeholder-dialog'], metrics:false },
    emails: { title: 'E-mails', section: 'view-emails', metrics:false, hidden:true },
-   products: { title: 'Portfólio', section: 'view-products', action: ['Vincular cliente', 'entitlement-dialog'] },
+   products: { title: 'Produtos', section: 'view-products', action: ['Vincular cliente', 'entitlement-dialog'] },
+   services: { title: 'Serviços', section: 'view-delivery', metrics:false },
+   education: { title: 'Educacional', section: 'view-products', metrics:false },
    access: { title: 'Acessos', section: 'view-access', action: ['Vincular acesso', 'member-dialog'] },
    deploys: { title: 'Deploys', section: 'view-deploys', metrics: false },
    delivery: { title: 'Projetos e serviços', section: 'view-delivery', metrics: false },
@@ -137,13 +140,13 @@ async function api(path, method = 'GET', body) {
 function renderNav() {
  const context = CONTEXTS[contextKind()];
  $('nav-label').textContent = context.label;
- const groups=contextKind()==='general'?{overview:'Operação',tracking:'Operação',finance:'Operação',clients:'Relacionamentos',people:'Relacionamentos',products:'Portfólio',access:'Gestão',deploys:'Tecnologia',delivery:'Tecnologia'}:{product:'Produto','product-orgs':'Produto','product-payments':'Produto'};
+ const groups=contextKind()==='general'?{overview:'Operação',tracking:'Operação',finance:'Operação',clients:'Relacionamentos',companies:'Relacionamentos',people:'Relacionamentos',products:'Portfólio',education:'Portfólio',services:'Entrega',access:'Gestão',deploys:'Tecnologia',delivery:'Entrega'}:{product:'Produto','product-orgs':'Produto','product-payments':'Produto'};
  const items=[];let previous;
  for(const [key,view]of Object.entries(context.views).filter(([,view])=>!view.hidden)){
   if(groups[key]!==previous){const label=node('span',groups[key],'nav-group');label.setAttribute('aria-hidden','true');items.push(label);previous=groups[key];}
   const button = node('button', undefined, 'nav-item' + (key === state.view ? ' active' : ''));
   button.type = 'button'; button.dataset.view = key;
-  const icon = createIcon(({overview:'layers',clients:'building',people:'people',tracking:'calendar',finance:'wallet',emails:'mail',products:'package',access:'shield',deploys:'cloud',delivery:'repo',product:'package','product-orgs':'people','product-payments':'wallet'})[key]);
+  const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',emails:'mail',products:'package',education:'book-open',services:'repo',access:'shield',deploys:'cloud',delivery:'repo',product:'package','product-orgs':'people','product-payments':'wallet'})[key]);
   icon.classList.add('nav-icon'); button.append(icon, document.createTextNode(view.title));
   if (key === state.view) button.setAttribute('aria-current', 'page');
   button.onclick = () => {switchView(key);closeNavigation();};
@@ -170,8 +173,11 @@ function switchView(view) {
  if (view === 'finance') finance.load().catch(reportError);
  if (view === 'emails') emails.load().catch(reportError);
  if (view === 'people') renderPeople();
+ if (view === 'companies') renderTenants();
  if (view === 'client') renderClientDetail();
  if (view === 'product-payments'&&state.product) productPayments.load(state.product.product).catch(reportError);
+ if (view === 'services') delivery.load().catch(reportError);
+ if (view === 'education') renderGeneral();
 }
 
 function renderContextChrome() {
