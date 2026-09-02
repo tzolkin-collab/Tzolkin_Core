@@ -38,7 +38,7 @@ body[data-context="product"] .topbar #crumb-context{color:var(--brand)}
 .sidebar>.brand{padding:0 10px}.context-switch{margin:22px 6px 0;padding:10px;border:1px solid var(--line);border-radius:9px;background:#fafafa}
 .context-switch select{min-height:38px;border-color:#dedee3;border-radius:6px;padding:8px 10px}
 .nav-label{margin:30px 10px 10px}.sidebar nav{gap:3px}.nav-group{padding:16px 10px 5px;font-size:10px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:#a1a1aa}.nav-group:first-child{padding-top:0}
-.nav-item{min-height:40px;padding:10px 11px;border:1px solid transparent}.nav-item:hover{background:#f4f4f5;color:#27272a}.nav-item.active{background:#18181b;color:#fff;box-shadow:0 1px 2px #0002}.nav-item.active .nav-icon{color:#fff}.nav-icon{color:#8a8a91}
+.nav-item{min-height:40px;padding:10px 11px;border:1px solid transparent}.nav-item:hover{background:#f4f4f5;color:#27272a}.nav-item.active{background:var(--brand-soft);color:var(--brand);box-shadow:inset 3px 0 0 var(--brand)}.nav-item.active .nav-icon{color:var(--brand)}.nav-icon{color:#8a8a91}
 .workspace-label{padding:16px 8px 10px}
 
 /* Aviso persistente de transporte inseguro do banco. Some só quando o servidor parar de reportar texto claro. */
