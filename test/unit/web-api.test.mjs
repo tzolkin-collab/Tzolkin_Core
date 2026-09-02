@@ -17,7 +17,7 @@ test('separate web and API preserve cookies, CSRF, logout and static isolation',
  const request=(path,method='GET',body,headers={})=>fetch(origin+path,{method,headers:{origin,'Content-Type':'application/json',...headers},body:body===undefined?undefined:JSON.stringify(body)});
  try {
   const page=await request('/');assert.equal(page.status,200);assert.match(await page.text(),/delivery-repositories/);
-  for(const asset of ['/app.js','/product-payments.js','/delivery.js','/delivery.css','/style.css','/logo.svg'])assert.equal((await request(asset)).status,200);
+  for(const asset of ['/app.js','/product-payments.js','/checkout-gateway.js','/delivery.js','/delivery.css','/style.css','/logo.svg','/logos/asaas.svg','/logos/inter.svg','/logos/nubank.svg'])assert.equal((await request(asset)).status,200);
   for(const path of ['/.env','/src/server.mjs','/package.json','/certs/postgres-server.crt','/unknown'])assert.equal((await request(path)).status,404);
   assert.equal((await fetch(apiOrigin+'/')).status,401);
   assert.equal((await request('/api/delivery/options')).status,401);assert.equal(optionsCalls,0);

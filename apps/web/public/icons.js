@@ -16,7 +16,7 @@ Object.assign(icons,{
  package:[['path',{d:'M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z M12 22V12 m-4.5-7.73 9 5.15'}],['polyline',{points:'3.29 7 12 12 20.71 7'}]]
 });
 export function providerLogo(name){
- if(!['github','vercel','easypanel','stripe'].includes(name))return createIcon('server');
+ if(!['github','vercel','easypanel','stripe','asaas','nubank','inter'].includes(name))return createIcon('server');
  const img=document.createElement('img');img.src='/logos/'+name+'.svg';img.alt='';img.width=20;img.height=20;img.className='provider-logo';return img;
 }
 

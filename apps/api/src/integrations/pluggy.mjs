@@ -23,8 +23,19 @@ export function createPluggy({env=process.env,fetcher=fetch,clock=Date.now}={}) 
   async accounts(itemId,signal) {
    const [item,data]=await Promise.all([request('/items/'+encodeURIComponent(itemId),signal),request('/accounts?itemId='+encodeURIComponent(itemId),signal)]);
    if(!Array.isArray(data.results))throw fail(502,'Lista de contas inválida.');
-   return {status:item.status,bank:item.connector?.name||'Instituição',bank_updated_at:item.lastUpdatedAt||null,
-    accounts:data.results.map(a=>({id:a.id,name:a.name,type:a.type,subtype:a.subtype,currency:a.currencyCode,
+   const institution=a=>{
+    const value=String(a.name||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    if(/\b(nu pagamentos|nubank)\b/.test(value))return 'Nubank';
+    if(/\b(banco inter|intermedium)\b/.test(value))return 'Banco Inter';
+    if(/\bitau\b/.test(value))return 'Itaú';
+    if(/\bsantander\b/.test(value))return 'Santander';
+    if(/\bbradesco\b/.test(value))return 'Bradesco';
+    if(/\bmercado pago\b/.test(value))return 'Mercado Pago';
+    if(a.type==='CREDIT'&&a.creditData?.brand)return String(a.creditData.brand).trim();
+    return 'Instituição bancária';
+   };
+   return {status:item.status,bank_updated_at:item.lastUpdatedAt||null,
+    accounts:data.results.map(a=>({id:a.id,name:a.name,bank:institution(a),type:a.type,subtype:a.subtype,currency:a.currencyCode,
      balance:typeof a.balance==='number'&&Number.isFinite(a.balance)?a.balance:null}))};
   },
   async transactions(accountId,month,signal) {

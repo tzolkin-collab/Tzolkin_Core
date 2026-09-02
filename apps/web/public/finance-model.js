@@ -1,12 +1,12 @@
 export const brazilMonth=value=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit'}).format(new Date(value));
-// Match connector identity only; never infer a bank from an account or payee name.
 export function paymentInstitution(bank){
  const name=typeof bank==='string'&&bank.trim()?bank.trim():'Instituição não informada';
  const key=name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'');
- const colors={meupluggy:'#526579',pluggy:'#526579',nubank:'#820ad1',itau:'#ad4800',bancoitau:'#ad4800',inter:'#b64d00',bancointer:'#b64d00',santander:'#c52228',bradesco:'#bc183a',bancodobrasil:'#244ba0',caixa:'#1265a0',caixaeconomicafederal:'#1265a0',mercadopago:'#007dab',pagbank:'#247449',pagseguro:'#247449',picpay:'#217a43',c6bank:'#44464d',btgpactual:'#244b73',sicredi:'#32763b',sicoob:'#006957',stripe:'#635bba',paypal:'#175b91'};
+ const colors={nubank:'#820ad1',itau:'#ad4800',bancoitau:'#ad4800',inter:'#b64d00',bancointer:'#b64d00',santander:'#c52228',bradesco:'#bc183a',bancodobrasil:'#244ba0',caixa:'#1265a0',caixaeconomicafederal:'#1265a0',mercadopago:'#007dab',pagbank:'#247449',pagseguro:'#247449',picpay:'#217a43',c6bank:'#44464d',btgpactual:'#244b73',sicredi:'#32763b',sicoob:'#006957',stripe:'#635bba',asaas:'#0030b9',paypal:'#175b91'};
+ const logos={nubank:'nubank',inter:'inter',bancointer:'inter',stripe:'stripe',asaas:'asaas'};
  const palette=['#526579','#79558c','#387574','#936131','#4a6595','#796342'];
  let hash=0;for(const char of key)hash=(Math.imul(hash,31)+char.charCodeAt(0))>>>0;
- return{name,color:colors[key]||palette[hash%palette.length]};
+ return{name,color:colors[key]||palette[hash%palette.length],logo:logos[key]||null};
 }
 export function periodRows(accounts,month){
  const unique=new Map();

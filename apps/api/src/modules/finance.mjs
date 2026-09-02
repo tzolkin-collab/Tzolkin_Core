@@ -38,7 +38,7 @@ export function financeRoutes(router,{provider=createPluggy(),env=process.env}={
   const month=url.searchParams.get('month');
   if([...url.searchParams.keys()].length!==1||!/^20\d{2}-(0[1-9]|1[0-2])$/.test(month))throw fail(400,'Mês inválido.');
   const list=await connections(pool),ids=pluggyItemIds(env);
-  const accounts=list.flatMap(c=>(c.payload?.accounts||[]).map(a=>({...a,connection:c.connection,bank:c.payload.bank,balance_updated_at:c.updated_at,bank_updated_at:c.payload.bank_updated_at})));
+  const accounts=list.flatMap(c=>(c.payload?.accounts||[]).map(a=>({...a,connection:c.connection,bank:a.bank||'Instituição bancária',balance_updated_at:c.updated_at,bank_updated_at:c.payload.bank_updated_at})));
   const keys=[...ids.map(id=>'attempt:item:'+id),...accounts.flatMap(a=>['transactions:'+a.id+':'+month,'attempt:transactions:'+a.id+':'+month])];
   const rows=keys.length?(await pool.query('SELECT key,payload,updated_at FROM finance_snapshots WHERE key=ANY($1::text[])',[keys])).rows:[];
   const saved=new Map(rows.map(row=>[row.key,row]));

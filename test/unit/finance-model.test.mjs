@@ -3,16 +3,15 @@ import assert from 'node:assert/strict';
 import {needsRefresh,periodRows,cashSummary,bankBalance,movementSeries,paymentInstitution} from '../../apps/web/public/finance-model.js';
 test('institution colors normalize identity and unknown names stay honest and stable',()=>{
  assert.equal(paymentInstitution('Itaú').color,paymentInstitution('ITAU').color);
- assert.equal(paymentInstitution('MeuPluggy').color,paymentInstitution('Meu Pluggy').color);
  assert.notEqual(paymentInstitution('Nubank').color,paymentInstitution('Itaú').color);
  assert.deepEqual(paymentInstitution('Outro banco'),paymentInstitution('Outro banco'));
  assert.equal(paymentInstitution().name,'Instituição não informada');
- assert.equal(paymentInstitution('Meu Pluggy').name,'Meu Pluggy');
+ assert.equal(paymentInstitution('Nubank').logo,'nubank');
  assert.match(paymentInstitution('<script>test</script>').color,/^#[a-f0-9]{6}$/);
 });
 test('transaction institution comes from its account, not the counterparty',()=>{
- const rows=periodRows([{id:'a',bank:'Meu Pluggy',snapshot:{payload:{transactions:[{id:'x',date:'2026-08-02T12:00:00Z',description:'Pix Nubank',bank:'Nubank'}]}}}],'2026-08');
- assert.equal(rows[0].bank,'Meu Pluggy');
+ const rows=periodRows([{id:'a',bank:'Banco Inter',snapshot:{payload:{transactions:[{id:'x',date:'2026-08-02T12:00:00Z',description:'Pix Nubank',bank:'Nubank'}]}}}],'2026-08');
+ assert.equal(rows[0].bank,'Banco Inter');
 });
 const now=Date.parse('2026-08-31T12:00:00Z');
 test('balance excludes credit accounts, foreign currencies and refuses missing balances',()=>{

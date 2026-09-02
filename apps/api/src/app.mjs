@@ -23,15 +23,19 @@ import { paymentSalesRoutes } from './modules/payment-sales.mjs';
 import { billingRoutes } from './modules/billing.mjs';
 import {emailRoutes} from './modules/emails.mjs';
 import {productPaymentRoutes} from './modules/product-payments.mjs';
+import { paymentWebhookRoutes } from './modules/payment-webhooks.mjs';
+import { stripeCatalogRoutes } from './modules/stripe-catalog.mjs';
+import { checkoutTemplateRoutes } from './modules/checkout-templates.mjs';
+import { checkoutGatewayRoutes } from './modules/checkout-gateway.mjs';
 
 const MODULES = [
  identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes, productPaymentRoutes,
- directoryRoutes, contractsRoutes, accessRoutes, productConsoleRoutes,
+ checkoutTemplateRoutes, directoryRoutes, contractsRoutes, accessRoutes, productConsoleRoutes,
 ];
 
 // `security` é o estado do transporte do banco medido por platform/database.mjs.
 // Ausente = não medido; os endpoints reportam 'unknown' em vez de fingir segurança.
-export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, webOrigin,serveAsset } = {}) {
+export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, webOrigin,serveAsset, webhookEnv, catalogAdapter, checkoutOptions} = {}) {
  if (webOrigin && !(/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(webOrigin)||/^https:\/\/[a-z0-9.-]+(?::[1-9][0-9]{0,4})?$/.test(webOrigin))) throw new Error('Use an explicit HTTP loopback or HTTPS web origin.');
  const sessions = identity||createSessionStore({ adminPassword, clock });
  const router = createRouter();
@@ -44,6 +48,9 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  platformOperationsRoutes(router,{...platformOptions,clock});
  financeRoutes(router,financeOptions);
  paymentSalesRoutes(router,salesOptions);
+ paymentWebhookRoutes(router,{clock,...(webhookEnv?{env:webhookEnv}:{})});
+ stripeCatalogRoutes(router,{clock,...(catalogAdapter?{adapter:catalogAdapter}:{}),...(webhookEnv?{env:webhookEnv}:{})});
+ checkoutGatewayRoutes(router,{...(webhookEnv?{env:webhookEnv}:{}),...checkoutOptions});
 
  const server = http.createServer(async (req, res) => {
   securityHeaders(res);
@@ -53,12 +60,15 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
    const url = new URL(req.url, origin);
    if (!['GET', 'POST', 'PUT'].includes(req.method)) throw fail(405, 'Método não permitido.');
    if(req.method==='GET'&&serveAsset?.(url.pathname,res))return;
+
+   const matched = router.match(req.method, url.pathname);
    // CSRF: mutação só a partir da origem exata do bootstrap.
-   if (req.method !== 'GET' && req.headers.origin !== origin) throw fail(403, 'Origem não permitida.');
+   // Webhook é chamada servidor-a-servidor e não manda Origin: é isento aqui e,
+   // em troca, prova a origem pela assinatura/token do provedor no próprio handler.
+   if (req.method !== 'GET' && !matched?.route.webhook && req.headers.origin !== origin) throw fail(403, 'Origem não permitida.');
 
    const sessionToken = readSessionCookie(req);
    const operator=await sessions.resolve(req,sessionToken);
-   const matched = router.match(req.method, url.pathname);
    if (!matched) {
     // Exige sessão antes de revelar se a rota existe.
     if (!operator) throw fail(401, 'Entre para continuar.');

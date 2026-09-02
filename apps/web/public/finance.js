@@ -7,7 +7,7 @@ const shortDate=value=>new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Pa
 const timestamp=value=>value?new Date(value).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'Ainda não importado';
 const storageKey='core.finance.filters.v2';
 const svgNode=(tag,attrs)=>{const n=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [key,value]of Object.entries(attrs))n.setAttribute(key,String(value));return n;};
-const institutionBadge=bank=>{const identity=paymentInstitution(bank),badge=node('span',undefined,'fin-institution'),icon=node('span',undefined,'fin-institution-icon');badge.style.setProperty('--institution-color',identity.color);icon.append(paymentInstitutionIcon());badge.append(icon,node('span',identity.name));return badge;};
+const institutionBadge=bank=>{const identity=paymentInstitution(bank),badge=node('span',undefined,'fin-institution'),icon=node('span',undefined,'fin-institution-icon');badge.style.setProperty('--institution-color',identity.color);icon.append(identity.logo?providerLogo(identity.logo):paymentInstitutionIcon());badge.append(icon,node('span',identity.name));return badge;};
 const processorBadge=name=>{const stripe=name==='stripe',badge=node('span',undefined,'fin-processor'),mark=node('span',undefined,'fin-processor-mark '+(stripe?'is-stripe':'is-asaas'));if(stripe)mark.append(providerLogo('stripe'));else mark.textContent='A';badge.append(mark,node('span',stripe?'Stripe':'Asaas'));return badge;};
 
 export function setupFinance({api}){
@@ -127,7 +127,7 @@ export function setupFinance({api}){
   if(accounts().length){const institutions=node('div',undefined,'fin-institutions');institutions.setAttribute('aria-label','Instituições das contas selecionadas');for(const name of new Set(picked().map(a=>paymentInstitution(a.bank).name)))institutions.append(institutionBadge(name));root.append(institutions);}
   if(error){const warning=node('div',undefined,'fin-warning');warning.setAttribute('role','alert');warning.append(createIcon('alert'),node('span',message),button('Tentar novamente',()=>board?refresh(true):load()));root.append(warning);}
   if(!board){root.append(node('div',loading?'Buscando seu financeiro salvo…':'Seus dados não foram apagados. Tente carregar novamente.','fin-empty'));return;}
-  if(!board.connections.length){root.append(node('div','Conecte seus itens Meu Pluggy na configuração do backend para começar.','fin-empty'));return;}
+  if(!board.connections.length){root.append(node('div','Conecte suas contas bancárias na configuração do backend para começar.','fin-empty'));return;}
   const strip=node('div',undefined,'fin-accounts');strip.setAttribute('aria-label','Filtrar por conta');
   const all=button('Todas as contas',()=>{selected='all';page=0;persist();render();},'layers','fin-account-card');all.setAttribute('aria-pressed',String(selected==='all'));all.append(node('small',`${accounts().length} contas conectadas`));strip.append(all);
   for(const account of accounts()){

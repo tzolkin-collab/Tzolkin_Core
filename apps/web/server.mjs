@@ -17,7 +17,9 @@ export function createWeb({ apiOrigin = 'http://127.0.0.1:3102' } = {}) {
    const host = `127.0.0.1:${server.address().port}`;
    if (req.headers.host !== host || !req.url.startsWith('/') || req.url.startsWith('//')) return error(400,'Endereço inválido.');
    const url = new URL(req.url,`http://${host}`);
-   const isApi = url.pathname === '/health' || url.pathname.startsWith('/api/') || url.pathname.startsWith('/v1/');
+   // /c/ é a página pública de checkout: existe só no processo da API (rota
+   // com parâmetro, CSP própria por rota), não no mapa de estáticos daqui.
+   const isApi = url.pathname === '/health' || url.pathname.startsWith('/api/') || url.pathname.startsWith('/v1/') || url.pathname.startsWith('/c/');
    if (!isApi) {
     if(req.method !== 'GET') return error(405,'Método não permitido.');
     if(serveAsset(url.pathname,res)) return;
@@ -33,7 +35,7 @@ export function createWeb({ apiOrigin = 'http://127.0.0.1:3102' } = {}) {
    for(const name of ['origin','cookie','authorization','content-type','accept']) if(req.headers[name]) headers[name]=req.headers[name];
    const proxy=http.request(new URL(url.pathname+url.search,upstream),{method:req.method,headers},response => {
     const outgoing={};
-    for(const name of ['content-type','set-cookie','cache-control']) if(response.headers[name]) outgoing[name]=response.headers[name];
+    for(const name of ['content-type','set-cookie','cache-control','content-security-policy']) if(response.headers[name]) outgoing[name]=response.headers[name];
     res.writeHead(response.statusCode || 502,outgoing); response.pipe(res);
     response.on('error',()=>res.destroy());
    });

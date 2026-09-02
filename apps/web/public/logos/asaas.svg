@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 24" role="img" aria-label="Asaas">
+  <rect width="64" height="24" rx="6" fill="#0030b9"/>
+  <path fill="#fff" d="M9 17.5 13.7 6h3.6L22 17.5h-3.3l-.8-2.2h-5l-.8 2.2H9Zm4.8-4.8H17l-1.6-4.4-1.6 4.4Z"/>
+  <text x="24" y="16.5" fill="#fff" font-family="Arial,sans-serif" font-size="12" font-weight="700">asaas</text>
+</svg>

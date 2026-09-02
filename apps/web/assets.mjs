@@ -13,6 +13,9 @@ const FILES = {
  '/emails.css': ['emails.css', 'text/css'],
  '/billing.css': ['billing.css', 'text/css'],
  '/logos/stripe.svg': ['logos/stripe.svg', 'image/svg+xml'],
+ '/logos/asaas.svg': ['logos/asaas.svg', 'image/svg+xml'],
+ '/logos/nubank.svg': ['logos/nubank.svg', 'image/svg+xml'],
+ '/logos/inter.svg': ['logos/inter.svg', 'image/svg+xml'],
  '/finance-model.js': ['finance-model.js', 'text/javascript'],
  '/finance.css': ['finance.css', 'text/css'],
  '/delivery.js': ['delivery.js', 'text/javascript'],
@@ -27,6 +30,9 @@ const FILES = {
  '/logos/vercel.svg': ['logos/vercel.svg', 'image/svg+xml'],
  '/logos/easypanel.svg': ['logos/easypanel.svg', 'image/svg+xml'],
  '/logo.svg': ['logo.svg', 'image/svg+xml'],
+ '/checkout.css': ['checkout.css', 'text/css'],
+ '/checkout.js': ['checkout.js', 'text/javascript'],
+ '/checkout-gateway.js': ['checkout-gateway.js', 'text/javascript'],
 };
 
 export function serveAsset(pathname, res) {

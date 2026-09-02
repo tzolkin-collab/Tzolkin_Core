@@ -14,11 +14,24 @@ GET/PUT `/api/billing/offers` exigem sessão administrativa; PUT exige origem e 
 
 Ao salvar contrato com Plano igual ao slug de uma oferta do mesmo produto, o Core copia suas condições para `contract_billing`, sempre draft. Regravar o contrato não altera a cópia. Trocar plano de um contrato vinculado exige uma futura operação explícita de revisão e é bloqueado agora. Contratos anteriores não são migrados ou cobrados automaticamente.
 
+## Webhooks — registro, não emissão
+
+`POST /api/webhooks/stripe` e `POST /api/webhooks/asaas` são as únicas rotas do Core alcançáveis sem sessão e sem header Origin, autenticadas pela assinatura/token do próprio provedor. Deduplicam por `(provider,event_id)`, conciliam `payment_charges` sem retroceder estado (fila `NON_SEQUENTIALLY`) e preservam a primeira data de estorno/contestação/cancelamento. Só registram — não emitem cobrança, não alteram contrato, não mandam e-mail. Leitura em `GET /api/payments/webhooks`, admin.
+
+## Gateway de checkout — cria sessão, só fluxo 1
+
+`checkout_templates` guarda aparência e modo de exibição (HOSTED/EMBEDDED/ELEMENTS — ELEMENTS ainda não cria sessão) por produto, separado de `billing_offers` de propósito: a oferta é o que se cobra, o template é como a página aparece. CRUD em `GET`/`PUT /api/checkout-templates`, mesma disciplina de versão de `billing_offers`.
+
+`POST /api/checkout/sessions` é pública e é a única rota do Core que efetivamente cria uma sessão de pagamento — cruza de propósito a linha `configuration_only`/`read_only` do resto deste documento. Preço, moeda e nome nunca vêm do corpo da requisição: são lidos de `billing_offers` no servidor a partir de `product_id`+`offer_slug`. Limitada por IP (`createIpThrottle`, janela própria — o contador de bootstrap em `platform/session.mjs` não serve a uma rota exposta). Só ofertas com `provider:'stripe'`; Asaas não tem Checkout Session/Elements e fica para quando for desenhado, não fingido. A página pública fica em `/c/:productId/:offerSlug`, com CSP própria (permite `js.stripe.com`) que não vaza para o resto do Core, estrito por padrão.
+
+**Só fluxo 1** (Tzolkin vende, Tzolkin recebe): conta única via `STRIPE_SECRET_KEY`, sem Connect, sem split. Fluxo 2 (consumidor paga o cliente, ex.: TZOLKIN Barber) depende de D3 — ver `docs/decisions/0003`.
+
 ## Ainda não implementado / não ativado
 
-- Webhooks Asaas/Stripe, clientes externos e criação de cobranças. A importação mensal somente leitura de vendas já está ativa no Financeiro.
-- Webhooks autenticados, deduplicação por provedor/conta/ambiente/evento e reconciliação de eventos fora de ordem.
-- Fila transacional de envio, worker com retries e idempotência, templates reais, inbound e acompanhamento de entregas.
+- Criação de cobrança Asaas (Pix, boleto, cartão tokenizado) — API diferente da Stripe, ainda não desenhada aqui.
+- Split, repasse e conta conectada (fluxo 2) — bloqueado em D3.
+- Parcelamento Stripe e métodos além de cartão (Pix/boleto via Stripe) na sessão de checkout.
+- Fila transacional de envio de e-mail, worker com retries e idempotência, templates reais, inbound e acompanhamento de entregas.
 - Snapshot de cobrança no painel do cliente e seleção visual de ofertas no formulário de contratos.
 - Efeitos de pagamentos sobre acesso. Nenhum atraso/cancelamento suspende acesso nesta versão.
 

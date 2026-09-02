@@ -19,6 +19,20 @@ test('Pluggy rejects repeated cursor rather than saving partial results',async()
  const provider=createPluggy({env:{PLUGGY_CLIENT_ID:'test',PLUGGY_CLIENT_SECRET:'test'},fetcher:async url=>response(url.endsWith('/auth')?{apiKey:'secret'}:{results:[],next:'?after=repeated'})});
  await assert.rejects(provider.transactions('account','2026-08',AbortSignal.timeout(1000)),/incompleta/);
 });
+test('bank identity comes from each account instead of the Open Finance aggregator',async()=>{
+ const provider=createPluggy({env:{PLUGGY_CLIENT_ID:'test',PLUGGY_CLIENT_SECRET:'test'},fetcher:async url=>{
+  if(url.endsWith('/auth'))return response({apiKey:'secret'});
+  if(url.includes('/items/'))return response({status:'UPDATED',connector:{name:'MeuPluggy'}});
+  return response({results:[
+   {id:'inter',name:'BANCO INTER',type:'BANK',currencyCode:'BRL',balance:10},
+   {id:'nu',name:'Nu Pagamentos S.A.',type:'BANK',currencyCode:'BRL',balance:20},
+   {id:'card',name:'GOLD',type:'CREDIT',currencyCode:'BRL',creditData:{brand:'MASTERCARD'}},
+  ]});
+ }});
+ const result=await provider.accounts('item',AbortSignal.timeout(1000));
+ assert.deepEqual(result.accounts.map(a=>a.bank),['Banco Inter','Nubank','MASTERCARD']);
+ assert.ok(!JSON.stringify(result).includes('MeuPluggy'));
+});
 function fixture(provider){const routes=new Map(),store=new Map([['item:first',{payload:{accounts:[{id:'account'}]}}]]);const router={get:(p,f)=>routes.set('GET '+p,f),post:(p,f)=>routes.set('POST '+p,f)};
  financeRoutes(router,{provider,env:{PLUGGY_ITEM_IDS:'first,second'}});
  const pool={async query(sql,args){
