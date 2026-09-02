@@ -57,7 +57,7 @@ test('every bundled brand has a file on disk and is served by the asset map',asy
   assert.ok(existsSync(new URL(`../../apps/web/public/logos/${nome}.svg`,import.meta.url)),`sem arquivo: ${nome}.svg`);
  }
  // Todo logo que o modelo aponta precisa estar na lista empacotada.
- const apontados=new Set(['nubank','inter','asaas','itau','bradesco','santander','bancodobrasil','caixa','c6bank','btgpactual','sicredi','sicoob','mercadopago','pagbank','picpay','stripe']);
+ const apontados=new Set(['nubank','inter','asaas','mastercard','itau','bradesco','santander','bancodobrasil','caixa','c6bank','btgpactual','sicredi','sicoob','mercadopago','pagbank','picpay','stripe']);
  for(const alvo of apontados)assert.ok(BANK_LOGOS.includes(alvo),`marca apontada e não empacotada: ${alvo}`);
 });
 test('institution resolves a logo from the bank name, and unknown stays honest',()=>{
