@@ -11,7 +11,7 @@ const institutionBadge=bank=>{const identity=paymentInstitution(bank),badge=node
 const processorBadge=name=>{const stripe=name==='stripe',badge=node('span',undefined,'fin-processor'),mark=node('span',undefined,'fin-processor-mark '+(stripe?'is-stripe':'is-asaas'));mark.append(providerLogo(stripe?'stripe':'asaas'));badge.append(mark,node('span',stripe?'Stripe':'Asaas'));return badge;};
 
 export function setupFinance({api}){
- let generation=0,board=null,sales=null,busy=false,loading=false,message='',error=false,page=0,search='';
+ let generation=0,board=null,sales=null,forecast=null,busy=false,loading=false,message='',error=false,page=0,search='';
  let month=brazilMonth(Date.now()),selected='all',currency='BRL',direction='all';
  try{const saved=JSON.parse(localStorage.getItem(storageKey)||'null');if(/^20\d{2}-(0[1-9]|1[0-2])$/.test(saved?.month))month=saved.month;if(typeof saved?.account==='string')selected=saved.account;}catch{}
  const host=()=>document.getElementById('view-finance');
@@ -21,6 +21,7 @@ export function setupFinance({api}){
  const button=(text,action,icon,cls='fin-button')=>{const b=node('button',undefined,cls);b.type='button';if(icon)b.append(createIcon(icon));b.append(document.createTextNode(text));b.onclick=action;return b;};
  const readBoard=()=>api('/api/finance/board?'+new URLSearchParams({month}));
  const readSales=()=>api('/api/finance/sales?'+new URLSearchParams({month}));
+ const readForecast=()=>api('/api/finance/forecasts?'+new URLSearchParams({month}));
  function normalize(){if(!accounts().some(a=>a.id===selected))selected='all';const currencies=[...new Set(accounts().map(a=>a.currency).filter(Boolean))];if(!currencies.includes(currency))currency=currencies[0]||'BRL';}
 
  async function refresh(force=false){
@@ -58,7 +59,7 @@ export function setupFinance({api}){
  }
  async function load(){
   const ticket=++generation;loading=true;busy=false;error=false;message='';render();
-  try{const [data,paymentData]=await Promise.all([readBoard(),readSales()]);if(ticket!==generation)return;board=data;sales=paymentData;normalize();persist();}
+  try{const [data,paymentData,forecastData]=await Promise.all([readBoard(),readSales(),readForecast().catch(()=>null)]);if(ticket!==generation)return;board=data;sales=paymentData;forecast=forecastData;normalize();persist();}
   catch(e){if(ticket===generation){error=true;message='Não foi possível ler os dados salvos. '+e.message;}}
   finally{if(ticket===generation){loading=false;render();}}
   if(ticket===generation&&!error)await refresh(false);
@@ -141,6 +142,8 @@ export function setupFinance({api}){
   const balance=bankBalance(picked(),currency);
   for(const [title,amount,help]of [['Saldo em contas',balance,'Último saldo consultado · cartões excluídos'],['Entradas',usable?summary.incoming:null,'Efetivadas no período'],['Saídas',usable?summary.outgoing:null,'Inclui transferências não conciliadas']]){const card=node('article',undefined,'fin-metric');card.append(node('span',title),node('strong',money(amount,currency)),node('small',help));metrics.append(card);}root.append(metrics);
   root.append(salesPanel());
+  const projection=node('section',undefined,'fin-projection'),projectionTitle=node('div',undefined,'fin-section-title');projectionTitle.append(node('h2','Previsão financeira'),node('span','Estimativa · não altera o extrato','fin-muted'));projection.append(projectionTitle);
+  const projectionBody=node('div',undefined,'fin-projection-grid');const income=forecast?.totals?.income||0,expense=forecast?.totals?.expense||0;for(const [label,value,help,cls] of [['Receitas previstas',income,'Contratos, assinaturas e repasses esperados','fin-positive'],['Despesas previstas',expense,'Contas recorrentes e custos cadastrados',''],['Resultado projetado',income-expense,'Antes dos repasses e conciliações finais',income-expense>=0?'fin-positive':'fin-negative']]){const card=node('article',undefined,'fin-projection-card');card.append(node('span',label),node('strong',money(value/100,currency),cls),node('small',help));projectionBody.append(card);}projection.append(projectionBody);if(forecast?.items?.length){const list=node('div',undefined,'fin-projection-list');for(const item of forecast.items.slice(0,6)){const row=node('div',undefined,'fin-projection-row');row.append(node('span',item.name),node('span',item.direction==='income'?'Receita':'Despesa','fin-muted'),node('strong',(item.direction==='income'?'+':'−')+money(item.amount_minor/100,item.currency)));list.append(row);}projection.append(list);}else projection.append(node('p','Nenhuma previsão cadastrada para este período.','fin-empty'));root.append(projection);
   const caption=node('div',undefined,'fin-scope'),complete=picked().filter(a=>a.snapshot).length;
   caption.append(node('span',`Movimentações efetivadas de contas bancárias · ${complete}/${picked().length} extratos salvos · não representa receita ou lucro.`));
   const currencyLabel=node('label');currencyLabel.append(node('span','Moeda dos indicadores','sr-only'));const currencySelect=node('select');for(const value of [...new Set(accounts().map(a=>a.currency).filter(Boolean))])currencySelect.append(new Option(value,value));currencySelect.value=currency;currencySelect.onchange=()=>{currency=currencySelect.value;render();};currencyLabel.append(currencySelect);caption.append(currencyLabel);root.append(caption);
@@ -170,5 +173,5 @@ export function setupFinance({api}){
   if(board.saved_months?.length)details.append(node('p','Períodos salvos: '+board.saved_months.join(', ')));root.append(details);
   if(focus){const input=root.querySelector(`[data-focus="${focus}"]`);input?.focus({preventScroll:true});if(caret!==null)input?.setSelectionRange(caret,caret);}
  }
- return{load,clear(){chartObservers.splice(0).forEach(observer=>observer.disconnect());generation++;board=null;sales=null;busy=false;loading=false;message='';search='';page=0;host()?.replaceChildren();}};
+ return{load,clear(){chartObservers.splice(0).forEach(observer=>observer.disconnect());generation++;board=null;sales=null;forecast=null;busy=false;loading=false;message='';search='';page=0;host()?.replaceChildren();}};
 }

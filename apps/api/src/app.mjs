@@ -28,6 +28,7 @@ import { stripeCatalogRoutes } from './modules/stripe-catalog.mjs';
 import { accountRoutes } from './modules/accounts.mjs';
 import { checkoutTemplateRoutes } from './modules/checkout-templates.mjs';
 import { checkoutGatewayRoutes } from './modules/checkout-gateway.mjs';
+import { financeForecastRoutes } from './modules/finance-forecasts.mjs';
 
 const MODULES = [
  identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes, productPaymentRoutes,
@@ -48,6 +49,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  deliveryRoutes(router, deliveryOptions);
  platformOperationsRoutes(router,{...platformOptions,clock});
  financeRoutes(router,financeOptions);
+ financeForecastRoutes(router);
  paymentSalesRoutes(router,salesOptions);
  paymentWebhookRoutes(router,{clock,...(webhookEnv?{env:webhookEnv}:{})});
  stripeCatalogRoutes(router,{clock,...(catalogAdapter?{adapter:catalogAdapter}:{}),...(webhookEnv?{env:webhookEnv}:{})});
