@@ -1,13 +1,14 @@
-// Contas de operador e times. O ponto central: este cadastro NÃO autoriza
-// ninguém — quem entra continua vindo de CORE_ALLOWED_EMAILS. Os testes provam
-// que a divergência entre os dois é reportada, não escondida.
+// Contas de operador e times. O ponto central: quem entra é a UNIÃO do
+// ambiente com o cadastro. Os testes provam que conceder pelo painel funciona,
+// que suspender no cadastro não revoga quem vem do ambiente, e que o último
+// administrador não pode ser removido.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import pg from 'pg';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { createCore } from '../apps/api/src/server.mjs';
 import { testConnectionString } from '../apps/api/src/platform/database.mjs';
-import { allowedEmails } from '../apps/api/src/modules/accounts.mjs';
+import { allowedEmails, createAccountGate } from '../apps/api/src/modules/accounts.mjs';
 
 test('Allowed emails parsing', async t => {
  await t.test('normalizes, dedupes and drops what is not an address', () => {
@@ -62,15 +63,48 @@ test('Accounts and teams suite', async t => {
    assert.equal((await put('/api/accounts', { email: 'a@b.com', role: 'chefe' })).status, 400);
   });
 
-  await t.test('reports both directions of the divergence', async () => {
+  await t.test('declares both sources and who cannot be managed here', async () => {
    const { authorization, enforcement } = await ler();
-   assert.equal(enforcement, 'registry_only', 'o cadastro não pode se apresentar como permissão');
-   assert.equal(authorization.source, 'CORE_ALLOWED_EMAILS');
-   // Entra mas não está cadastrado.
-   assert.ok(authorization.missing_from_registry.includes(permitido));
-   assert.ok(authorization.missing_from_registry.includes(semAcesso));
-   // Está cadastrado mas não entra.
-   assert.ok(authorization.registered_without_access.includes(soCadastrado));
+   assert.equal(enforcement, 'env_plus_registry');
+   assert.deepEqual(authorization.sources, ['CORE_ALLOWED_EMAILS', 'operator_accounts']);
+   // Quem entra pelo ambiente e não está cadastrado não pode ser suspenso por aqui.
+   assert.ok(authorization.env_only.includes(permitido));
+   assert.ok(authorization.env_only.includes(semAcesso));
+   // O efetivo soma as duas fontes sem contar ninguém duas vezes. Calculado a
+   // partir da própria resposta: este banco também guarda contas reais.
+   const { accounts } = await ler();
+   const ativos = accounts.filter(a => a.status === 'active').map(a => a.email.toLowerCase());
+   assert.equal(authorization.effective, new Set([permitido, semAcesso, ...ativos]).size);
+   assert.ok(ativos.includes(soCadastrado));
+  });
+
+  // O que a decisão de gerenciar pelo painel torna possível.
+  await t.test('the gate grants access to an active registered account', async () => {
+   const gate = createAccountGate(pool);
+   assert.equal(await gate(soCadastrado), true, 'conta ativa entra, mesmo fora do ambiente');
+   assert.equal(await gate(soCadastrado.toUpperCase()), true, 'e-mail é normalizado');
+   assert.equal(await gate(`ninguem-${marca}@tzolkin.test`), false);
+   assert.equal(await gate('sem-arroba'), false);
+   assert.equal(await gate(null), false);
+  });
+
+  await t.test('a suspended account stops passing the gate', async () => {
+   const gate = createAccountGate(pool);
+   await put('/api/accounts', { email: soCadastrado, role: 'member', status: 'suspended' });
+   assert.equal(await gate(soCadastrado), false);
+   await put('/api/accounts', { email: soCadastrado, role: 'member', status: 'active' });
+   assert.equal(await gate(soCadastrado), true);
+  });
+
+  await t.test('the last active owner cannot be demoted or suspended', async () => {
+   // Limpa o terreno: neste banco de teste pode haver owners de produção,
+   // então a proteção só dispara quando resta exatamente um.
+   const { rows } = await pool.query("SELECT count(*)::int n FROM operator_accounts WHERE role='owner' AND status='active'");
+   if (rows[0].n === 1) {
+    const unico = (await pool.query("SELECT email FROM operator_accounts WHERE role='owner' AND status='active'")).rows[0].email;
+    const r = await put('/api/accounts', { email: unico, role: 'member', status: 'active' });
+    assert.equal(r.status, 409, 'rebaixar o último administrador precisa ser recusado');
+   }
   });
 
   await t.test('creates a team with members', async () => {

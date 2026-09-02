@@ -1,11 +1,13 @@
 // Contas de operador e times.
 //
-// ATENÇÃO AO QUE ISTO NÃO FAZ: não autoriza ninguém. Quem entra no Core continua
-// sendo decidido por CORE_ALLOWED_EMAILS. Este módulo mantém o cadastro e — o que
-// importa de verdade — mostra a DIVERGÊNCIA entre o cadastro e a lista que manda.
+// Quem entra no Core é a UNIÃO de duas fontes:
+//   1. CORE_ALLOWED_EMAILS — raiz de confiança, sempre vale. É o quebra-vidro:
+//      erro no cadastro nunca tranca todo mundo para fora.
+//   2. operator_accounts com status 'active' — gerenciado aqui pelo administrador.
 //
-// Enquanto houver divergência, trocar a fonte de autorização tranca alguém para
-// fora. Zerar a divergência é o pré-requisito da entrega E2/E3.
+// A união, e não a substituição, é o que torna seguro conceder acesso pelo painel.
+// Suspender no cadastro NÃO revoga quem está no ambiente — para revogar de
+// verdade um endereço do ambiente, edita-se o ambiente. A tela diz isso.
 import { fail, input, onlyParams, text } from '../platform/http.mjs';
 
 // A lista do ambiente é a autoridade atual. Normalizada aqui do mesmo jeito que
@@ -13,6 +15,31 @@ import { fail, input, onlyParams, text } from '../platform/http.mjs';
 export function allowedEmails(env = process.env) {
  return [...new Set(String(env.CORE_ALLOWED_EMAILS || '')
   .split(',').map(e => e.trim().toLowerCase()).filter(e => e.includes('@')))];
+}
+
+/**
+ * Porteiro consultado pelo login do Google. Soma-se à lista do ambiente,
+ * nunca a substitui: o ambiente é o quebra-vidro.
+ */
+export function createAccountGate(pool) {
+ return async email => {
+  if (typeof email !== 'string' || !email.includes('@')) return false;
+  const r = await pool.query(
+   "SELECT 1 FROM operator_accounts WHERE email=$1 AND status='active'", [email.trim().toLowerCase()]);
+  return r.rowCount > 0;
+ };
+}
+
+// Quem administra contas. Em modo local existe um operador só, o que tem a
+// senha do bootstrap — ele é owner por definição.
+async function exigirOwner(client, operator) {
+ if (operator?.subject === 'local-bootstrap') return;
+ const email = operator?.email?.toLowerCase();
+ if (!email) throw fail(403, 'Apenas administradores podem gerenciar contas.');
+ const r = await client.query("SELECT role FROM operator_accounts WHERE email=$1 AND status='active'", [email]);
+ // Conta que entrou pelo ambiente e ainda não foi cadastrada conta como owner:
+ // senão o primeiro acesso não conseguiria cadastrar ninguém.
+ if (r.rowCount && r.rows[0].role !== 'owner') throw fail(403, 'Apenas administradores podem gerenciar contas.');
 }
 
 const PAPEL_CONTA = ['owner', 'member', 'viewer'];
@@ -31,6 +58,7 @@ export function accountRoutes(router, { env = process.env } = {}) {
   ]);
 
   const permitidos = allowedEmails(env);
+  const ativos = contas.rows.filter(c => c.status === 'active').map(c => c.email.toLowerCase());
   const cadastrados = new Set(contas.rows.map(c => c.email.toLowerCase()));
 
   return reply(200, {
@@ -41,28 +69,35 @@ export function accountRoutes(router, { env = process.env } = {}) {
      .map(({ team_id, ...m }) => m),
    })),
    authorization: {
-    // Deixa explícito quem manda hoje, para ninguém confundir cadastro com permissão.
-    source: 'CORE_ALLOWED_EMAILS',
-    allowed_count: permitidos.length,
-    // Quem entra mas não está cadastrado: o cadastro está incompleto.
-    missing_from_registry: permitidos.filter(e => !cadastrados.has(e)),
-    // Quem está cadastrado e NÃO entra: cadastro que não vale nada hoje.
-    registered_without_access: contas.rows
-     .filter(c => c.status === 'active' && !permitidos.includes(c.email.toLowerCase()))
-     .map(c => c.email),
+    sources: ['CORE_ALLOWED_EMAILS', 'operator_accounts'],
+    env_count: permitidos.length,
+    registry_count: ativos.length,
+    // Entram pelo ambiente e não estão no cadastro: NÃO dá para suspendê-los
+    // por aqui. A tela precisa dizer isso em vez de fingir que o botão resolve.
+    env_only: permitidos.filter(e => !cadastrados.has(e)),
+    // Total efetivo de quem consegue entrar hoje.
+    effective: [...new Set([...permitidos, ...ativos])].length,
    },
-   // Papel é cadastro, não permissão — ainda.
-   enforcement: 'registry_only',
+   enforcement: 'env_plus_registry',
   });
  }, { body: false });
 
- router.put('/api/accounts', async ({ client, body }) => {
+ router.put('/api/accounts', async ({ client, body, operator }) => {
+  await exigirOwner(client, operator);
   input(body, ['email', 'name', 'role', 'status']);
   const email = text(body.email, 3, 320).toLowerCase();
   if (!email.includes('@') || email.startsWith('@')) throw fail(400, 'E-mail inválido.');
   const role = body.role ?? 'member';
   const status = body.status ?? 'active';
   if (!PAPEL_CONTA.includes(role) || !['active', 'suspended'].includes(status)) throw fail(400, 'Classificação inválida.');
+
+  // Nunca deixar a instalação sem administrador ativo.
+  if (role !== 'owner' || status !== 'active') {
+   const owners = await client.query(
+    "SELECT email FROM operator_accounts WHERE role='owner' AND status='active'");
+   if (owners.rowCount === 1 && owners.rows[0].email === email)
+    throw fail(409, 'Não é possível remover o último administrador.');
+  }
 
   await client.query(
    `INSERT INTO operator_accounts(email,name,role,status,source) VALUES($1,$2,$3,$4,'manual')
@@ -73,7 +108,8 @@ export function accountRoutes(router, { env = process.env } = {}) {
   return { tenant: null, type: 'operator_account.saved' };
  }, { transactional: true, audit: false });
 
- router.put('/api/teams', async ({ client, body }) => {
+ router.put('/api/teams', async ({ client, body, operator }) => {
+  await exigirOwner(client, operator);
   input(body, ['slug', 'name', 'description', 'members']);
   const slug = text(body.slug, 2, 64).toLowerCase();
   if (!/^[a-z0-9][a-z0-9-]{1,63}$/.test(slug)) throw fail(400, 'Use letras minúsculas, números e hífen no identificador.');
