@@ -1,5 +1,15 @@
 // Arquivos estáticos do painel. Lista fixa: nada de resolução de caminho vinda da URL.
 import { readFileSync } from 'node:fs';
+import { BANK_LOGOS } from './public/finance-model.js';
+
+// Deriva as entradas das marcas de uma constante do código — continua lista
+// fixa, porque a URL nunca influencia o caminho. Evita manter o mesmo conjunto
+// escrito em três lugares (aqui, icons.js e finance-model.js), que divergiria.
+// O formato do slug é conferido: fonte é nossa, mas caminho montado merece guarda.
+const marcas = nomes => Object.fromEntries(nomes.map(nome => {
+ if (!/^[a-z0-9]{2,32}$/.test(nome)) throw new Error(`Marca inválida: ${nome}`);
+ return [`/logos/${nome}.svg`, [`logos/${nome}.svg`, 'image/svg+xml']];
+}));
 
 const FILES = {
  '/': ['index.html', 'text/html'],
@@ -19,10 +29,7 @@ const FILES = {
  '/emails.js': ['emails.js', 'text/javascript'],
  '/emails.css': ['emails.css', 'text/css'],
  '/billing.css': ['billing.css', 'text/css'],
- '/logos/stripe.svg': ['logos/stripe.svg', 'image/svg+xml'],
- '/logos/asaas.svg': ['logos/asaas.svg', 'image/svg+xml'],
- '/logos/nubank.svg': ['logos/nubank.svg', 'image/svg+xml'],
- '/logos/inter.svg': ['logos/inter.svg', 'image/svg+xml'],
+ ...marcas(BANK_LOGOS),
  '/finance-model.js': ['finance-model.js', 'text/javascript'],
  '/finance.css': ['finance.css', 'text/css'],
  '/delivery.js': ['delivery.js', 'text/javascript'],

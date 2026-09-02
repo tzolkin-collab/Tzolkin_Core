@@ -96,7 +96,7 @@ Depois: `node --env-file=.env scripts/import-notion.mjs`.
 - `db:setup` aplica a linha de base e em seguida as migrações pendentes.
 - `npm run db:rotate-password` rotaciona a senha da role e reescreve o `.env` — e **recusa** texto claro e TLS sem certificado/hostname verificados, inclusive em loopback.
 
-Aplicada até agora: `001_membership_por_produto.sql` ([ADR 0002](decisions/0002-vinculo-de-pessoa-por-produto.md)).
+Aplicadas até agora: `001_membership_por_produto.sql` ([ADR 0002](decisions/0002-vinculo-de-pessoa-por-produto.md)) até `014_e9_taxonomia_comercial.sql`.
 
 **`[PROPOSTO]` — ainda falta antes de qualquer ambiente compartilhado:**
 

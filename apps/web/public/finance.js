@@ -8,7 +8,7 @@ const timestamp=value=>value?new Date(value).toLocaleString('pt-BR',{timeZone:'A
 const storageKey='core.finance.filters.v2';
 const svgNode=(tag,attrs)=>{const n=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [key,value]of Object.entries(attrs))n.setAttribute(key,String(value));return n;};
 const institutionBadge=bank=>{const identity=paymentInstitution(bank),badge=node('span',undefined,'fin-institution'),icon=node('span',undefined,'fin-institution-icon');badge.style.setProperty('--institution-color',identity.color);icon.append(identity.logo?providerLogo(identity.logo):paymentInstitutionIcon());badge.append(icon,node('span',identity.name));return badge;};
-const processorBadge=name=>{const stripe=name==='stripe',badge=node('span',undefined,'fin-processor'),mark=node('span',undefined,'fin-processor-mark '+(stripe?'is-stripe':'is-asaas'));if(stripe)mark.append(providerLogo('stripe'));else mark.textContent='A';badge.append(mark,node('span',stripe?'Stripe':'Asaas'));return badge;};
+const processorBadge=name=>{const stripe=name==='stripe',badge=node('span',undefined,'fin-processor'),mark=node('span',undefined,'fin-processor-mark '+(stripe?'is-stripe':'is-asaas'));mark.append(providerLogo(stripe?'stripe':'asaas'));badge.append(mark,node('span',stripe?'Stripe':'Asaas'));return badge;};
 
 export function setupFinance({api}){
  let generation=0,board=null,sales=null,busy=false,loading=false,message='',error=false,page=0,search='';

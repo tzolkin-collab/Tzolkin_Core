@@ -21,6 +21,7 @@ Documentação técnica versionada junto com o código, neste repositório. **N�
 | [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) | Tokens, componentes, navegação e estados de interface |
 | [INFRASTRUCTURE.md](INFRASTRUCTURE.md) | Ambientes, bancos, migrações, backup, deploy e observabilidade |
 | [ROADMAP.md](ROADMAP.md) | Entregas verticais, dependências e critérios de aceite |
+| [PENDENCIAS.md](PENDENCIAS.md) | Risco de infraestrutura, dinheiro parado, modelos vazios e trabalho fora do Core |
 | [TESTING.md](TESTING.md) | Estratégia, comandos e cobertura |
 | [decisions/](decisions/) | ADRs — só decisões relevantes e difíceis de reverter |
 

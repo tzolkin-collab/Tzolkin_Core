@@ -11,14 +11,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS tenants_source_identity ON tenants(source_syst
  WHERE source_system IS NOT NULL AND source_ref IS NOT NULL;
 
 ALTER TABLE products ADD COLUMN IF NOT EXISTS portfolio_kind text NOT NULL DEFAULT 'product'
- CHECK(portfolio_kind IN ('product','platform','service_line','business_unit'));
+ CHECK(portfolio_kind IN ('product','platform','service_line'));
 ALTER TABLE products ADD COLUMN IF NOT EXISTS brand_family text NOT NULL DEFAULT 'tzolkin';
 
 CREATE TABLE IF NOT EXISTS client_engagements (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  tenant_id uuid NOT NULL REFERENCES tenants(id),
  product_id text REFERENCES products(id),
- service_model text NOT NULL CHECK(service_model IN ('consulting','advisory','on_demand','mentorship','subscription','education','unclassified')),
+ service_model text NOT NULL CHECK(service_model IN ('on_demand','education','consulting','advisory','product','unclassified')),
  status text NOT NULL DEFAULT 'active' CHECK(status IN ('planned','active','paused','completed','discontinued','unclassified')),
  label text NOT NULL CHECK(length(label) BETWEEN 2 AND 120),
  source_system text,
@@ -56,7 +56,9 @@ INSERT INTO products(id,name,portfolio_kind,brand_family) VALUES
  ('barber','TZOLKIN Barber','product','tzolkin'),
  ('educare','Educare','platform','tzolkin')
 ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,portfolio_kind=EXCLUDED.portfolio_kind,brand_family=EXCLUDED.brand_family;
-UPDATE products SET portfolio_kind='business_unit' WHERE id IN ('sites','commerce','data');
+-- A linha de base já usa a taxonomia comercial final; a 014 também corrige
+-- bancos existentes que ainda carregam o valor legado.
+UPDATE products SET portfolio_kind='service_line' WHERE id IN ('sites','commerce','data');
 UPDATE products SET portfolio_kind='platform' WHERE id='core';
 
 -- Importa somente organizações cadastrais do Notion. Corpos de página e credenciais não entram no Core.
@@ -72,10 +74,10 @@ ON CONFLICT(slug) DO UPDATE SET
  organization_type=EXCLUDED.organization_type,source_system=EXCLUDED.source_system,source_ref=EXCLUDED.source_ref;
 
 INSERT INTO client_engagements(tenant_id,product_id,service_model,status,label,source_system,source_ref)
-SELECT id,'barber','subscription','planned','TZOLKIN Barber','notion','bzbarber-barber'
+SELECT id,'barber','product','planned','TZOLKIN Barber','notion','bzbarber-barber'
 FROM tenants WHERE source_system='notion' AND source_ref='3822551e-c67e-8045-a818-f79fdc387399'
 ON CONFLICT(tenant_id,label) DO UPDATE SET product_id=EXCLUDED.product_id,service_model=EXCLUDED.service_model,status=EXCLUDED.status;
 INSERT INTO client_engagements(tenant_id,service_model,status,label,source_system,source_ref)
-SELECT id,'mentorship','discontinued','Mentoria Sales','notion','rafael-sales-mentoria'
+SELECT id,'education','discontinued','Mentoria Sales','notion','rafael-sales-mentoria'
 FROM tenants WHERE source_system='notion' AND source_ref='3722551e-c67e-805e-b433-faf64f48e84b'
 ON CONFLICT(tenant_id,label) DO UPDATE SET service_model=EXCLUDED.service_model,status=EXCLUDED.status;

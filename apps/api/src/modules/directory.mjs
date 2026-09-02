@@ -26,7 +26,7 @@ export function directoryRoutes(router) {
  router.post('/api/engagements', async ({ client, body }) => {
   input(body, ['tenant_id', 'product_id', 'service_model', 'status', 'label']);
   if (!isUuid(body.tenant_id) || (body.product_id !== null && !isProductId(body.product_id))) throw fail(400, 'Empresa ou oferta inválida.');
-  if (!['consulting','advisory','on_demand','mentorship','subscription','education','unclassified'].includes(body.service_model) ||
+  if (!['on_demand','education','consulting','advisory','product','unclassified'].includes(body.service_model) ||
       !['planned','active','paused','completed','discontinued','unclassified'].includes(body.status)) throw fail(400, 'Contratação inválida.');
   await client.query(`INSERT INTO client_engagements(tenant_id,product_id,service_model,status,label) VALUES($1,$2,$3,$4,$5)
    ON CONFLICT(tenant_id,label) DO UPDATE SET product_id=EXCLUDED.product_id,service_model=EXCLUDED.service_model,status=EXCLUDED.status`,

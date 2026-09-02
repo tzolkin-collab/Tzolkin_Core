@@ -44,3 +44,51 @@ test('cash totals exclude cards, pending rows and other currencies',()=>{
  const totals=cashSummary(accounts,[row,{...row,type:'DEBIT',amount:-20},{...row,account_id:'card'},{...row,account_id:'dollar',currency:'USD'},{...row,status:'PENDING'}],'BRL');
  assert.equal(totals.incoming,100);assert.equal(totals.outgoing,20);assert.equal(totals.net,80);
 });
+
+// A lista de marcas alimenta três consumidores. Se divergir do disco, o sintoma
+// é um 404 silencioso e o selo cai no pictograma genérico — como se o banco não
+// fosse reconhecido. Este teste transforma isso em falha visível.
+test('every bundled brand has a file on disk and is served by the asset map',async()=>{
+ const {BANK_LOGOS}=await import('../../apps/web/public/finance-model.js');
+ const {existsSync}=await import('node:fs');
+ assert.ok(BANK_LOGOS.length>0);
+ for(const nome of BANK_LOGOS){
+  assert.match(nome,/^[a-z0-9]{2,32}$/,`slug fora do formato: ${nome}`);
+  assert.ok(existsSync(new URL(`../../apps/web/public/logos/${nome}.svg`,import.meta.url)),`sem arquivo: ${nome}.svg`);
+ }
+ // Todo logo que o modelo aponta precisa estar na lista empacotada.
+ const apontados=new Set(['nubank','inter','asaas','itau','bradesco','santander','bancodobrasil','caixa','c6bank','btgpactual','sicredi','sicoob','mercadopago','pagbank','picpay','stripe']);
+ for(const alvo of apontados)assert.ok(BANK_LOGOS.includes(alvo),`marca apontada e não empacotada: ${alvo}`);
+});
+test('institution resolves a logo from the bank name, and unknown stays honest',()=>{
+ assert.equal(paymentInstitution('Nu Pagamentos').logo,'nubank');
+ assert.equal(paymentInstitution('Itaú').logo,'itau');
+ assert.equal(paymentInstitution('PagSeguro').logo,'pagbank');
+ assert.equal(paymentInstitution('Banco Que Não Existe').logo,null);
+ // Banco reconhecido sem marca oficial fica sem logo, e o selo cai no
+ // pictograma neutro com a cor da instituição. Nunca uma marca inventada.
+ assert.equal(paymentInstitution('Banco Inter').logo,'inter');
+ assert.equal(paymentInstitution('Banco Inter').name,'Banco Inter');
+});
+
+// Uma marca fabricada — retângulo com o nome escrito por cima — passou por logo
+// de banco antes deste teste existir. É pior que marca ausente: afirma ser o
+// logo oficial. <text> denuncia isso, e proporção fora do quadrado denuncia
+// wordmark, que o selo de 20px esmaga.
+test('bundled brands are real square vectors, never fabricated wordmarks',async()=>{
+ const {BANK_LOGOS,WIDE_LOGOS}=await import('../../apps/web/public/finance-model.js');
+ const {readFileSync}=await import('node:fs');
+ for(const nome of BANK_LOGOS){
+  const svg=readFileSync(new URL(`../../apps/web/public/logos/${nome}.svg`,import.meta.url),'utf8');
+  assert.ok(!/<text/.test(svg),`${nome}.svg desenha texto: marca fabricada, não oficial`);
+  const vb=(svg.match(/viewBox="([^"]+)"/)||[])[1];
+  assert.ok(vb,`${nome}.svg sem viewBox`);
+  const [,,w,h]=vb.trim().split(/[\s,]+/).map(Number);
+  const razao=w/h;
+  // Marca larga é permitida, mas precisa estar declarada: assim ela renderiza
+  // por altura em vez de ser esmagada num quadrado de 20px sem ninguém notar.
+  const larga=WIDE_LOGOS.includes(nome);
+  if(larga)assert.ok(razao>1.5,`${nome}.svg está em WIDE_LOGOS mas é quadrado (${razao.toFixed(2)})`);
+  else assert.ok(razao>0.85&&razao<1.18,`${nome}.svg tem proporção ${razao.toFixed(2)}: declare em WIDE_LOGOS ou use o símbolo quadrado`);
+ }
+});

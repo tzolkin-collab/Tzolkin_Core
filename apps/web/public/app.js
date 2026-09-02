@@ -3,6 +3,7 @@
 import { setupDelivery, deliveryIcon } from './delivery.js';
 import { setupResource } from './resource.js';
 import {providerLogo,createIcon} from './icons.js';
+import {paymentInstitution} from './finance-model.js';
 import {setupEmails} from './emails.js';
 import {setupTracking} from './tracking.js';
 import {setupFinance} from './finance.js';
@@ -242,9 +243,21 @@ function renderOverviewDashboard(entries,{finance,sales,deploys,infrastructure}=
  // Nome da instituição em vez da contagem: "Nubank · Banco Inter" diz mais que "2 conexões".
  // 'Instituição bancária' é o rótulo genérico do adaptador quando não reconhece o banco — não vale como nome.
  // Só contas do tipo BANK: cartão devolve a bandeira ('MASTERCARD'), que não é instituição.
- const bancos=[...new Set((finance?.accounts||[]).filter(a=>a.type==='BANK').map(a=>a.bank).filter(b=>b&&b!=='Instituição bancária'))];
- const bankDetail=bancos.length?bancos.join(' · '):bankCount?`${bankCount} ${bankCount===1?'conexão sem contas lidas':'conexões sem contas lidas'}`:'Nenhuma conexão';
- $('overview-integrations').replaceChildren(integration('Stripe',sales?.configured?.stripe,`${saleRows.filter(s=>s.provider==='stripe').length} vendas no mês`,providerLogo('stripe')),integration('Asaas',sales?.configured?.asaas,sales?.configured?.asaas?'Leitura por API ativa':'Chave de produção ausente',providerLogo('asaas')),integration('Contas bancárias',bankCount>0,bankDetail),integration('EasyPanel',infrastructure==null?null:infrastructure.status==='ok',infrastructure==null?'Consultando inventário':`${easyCount} serviços no inventário`,providerLogo('easypanel')));
+ // Um banco por linha, com a própria marca. "Contas bancárias · 2" não diz de
+ // qual banco se trata, que é justamente o que se quer saber de relance.
+ // Só contas BANK: cartão devolve a bandeira ('MASTERCARD'), que não é instituição.
+ const porBanco=new Map();
+ for(const conta of (finance?.accounts||[]).filter(a=>a.type==='BANK')){
+  const identidade=paymentInstitution(conta.bank);
+  // Rótulo genérico do adaptador não vale como nome de banco.
+  if(['Instituição bancária','Instituição não informada'].includes(identidade.name))continue;
+  const linha=porBanco.get(identidade.name)||{identidade,contas:0};
+  linha.contas+=1;porBanco.set(identidade.name,linha);
+ }
+ const linhasBanco=porBanco.size
+  ? [...porBanco.values()].map(({identidade,contas})=>integration(identidade.name,true,`${contas} ${contas===1?'conta lida':'contas lidas'}`,identidade.logo?providerLogo(identidade.logo):null))
+  : [integration('Contas bancárias',bankCount>0,bankCount?`${bankCount} ${bankCount===1?'conexão sem contas lidas':'conexões sem contas lidas'}`:'Nenhuma conexão')];
+ $('overview-integrations').replaceChildren(integration('Stripe',sales?.configured?.stripe,`${saleRows.filter(s=>s.provider==='stripe').length} vendas no mês`,providerLogo('stripe')),integration('Asaas',sales?.configured?.asaas,sales?.configured?.asaas?'Leitura por API ativa':'Chave de produção ausente',providerLogo('asaas')),...linhasBanco,integration('EasyPanel',infrastructure==null?null:infrastructure.status==='ok',infrastructure==null?'Consultando inventário':`${easyCount} serviços no inventário`,providerLogo('easypanel')));
  const productEntries=new Map(entries.filter(e=>e.kind==='product').map(e=>[e.payload.name,e.payload]));
  $('overview-product-list').replaceChildren(...overview.products.map(product=>{const contracts=activeContracts.filter(e=>e.product_id===product.id).length,item=productEntries.get(product.name),row=node('button',undefined,'overview-product');row.type='button';row.onclick=()=>{$('context-select').value=product.id;switchContext(product.id).catch(reportError);};row.append(node('span',product.name.slice(0,1),'product-mark'));const text=node('span');text.append(node('strong',product.name),node('small',item?.description||`${contracts} ${contracts===1?'contrato ativo':'contratos ativos'}`));row.append(text,node('span',String(contracts),'overview-product-count'),createIcon('arrow'));return row;}));
  $('overview-actions').replaceChildren(overviewButton('Clientes','Carteira e visão individual','clients','people'),overviewButton('Pessoas','Stakeholders e empresas','people','people'),overviewButton('Financeiro','Bancos, Stripe e Asaas','finance','wallet'),overviewButton('Acompanhamento','Agenda e apontamentos','tracking','calendar'),overviewButton('Projetos e serviços','Repositórios e destinos','delivery','repo'),overviewButton('Acessos','Identidades e permissões','access','shield'));
@@ -254,7 +267,7 @@ function renderOverviewDashboard(entries,{finance,sales,deploys,infrastructure}=
 const CLIENT_LABELS={
  customer:'Cliente',prospect:'Prospect',partner:'Parceiro',internal:'Interna',company:'Empresa',person:'Pessoa física',nonprofit:'Sem fins lucrativos',
  lead:'Lead',onboarding:'Em implantação',active:'Ativo',planned:'Planejado',paused:'Pausado',completed:'Concluído',discontinued:'Descontinuado',unclassified:'A classificar',
- consulting:'Consultoria',advisory:'Assessoria',on_demand:'Sob demanda',mentorship:'Mentoria',subscription:'Produto / assinatura',education:'Educacional',
+ on_demand:'Sob demanda',education:'Educacional',consulting:'Consultoria',advisory:'Assessoria',product:'Produto TZOLKIN',
  owner:'Proprietário',decision_maker:'Decisor',champion:'Champion',finance:'Financeiro',technical:'Técnico',operational:'Operacional',student:'Aluno',contact:'Contato'
 };
 const clientLabel=value=>CLIENT_LABELS[value]||value||'A classificar';

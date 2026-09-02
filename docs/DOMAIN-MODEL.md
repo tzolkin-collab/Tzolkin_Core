@@ -2,7 +2,7 @@
 
 Entidades, identificadores, relações e ciclos de vida. Fonte única dos conceitos usados no restante da documentação.
 
-Revisão: **2026-08-30**.
+Revisão: **2026-09-02**.
 
 ---
 
@@ -26,7 +26,7 @@ Os dois últimos são deliberadamente diferentes. Ver [DATA-OWNERSHIP.md](DATA-O
 
 ## 2. Entidades implementadas `[EXISTENTE E VERIFICADO]`
 
-Conferido em `db/schema.sql` e no banco em 2026-08-30.
+Conferido em `db/schema.sql` e no banco em 2026-09-02.
 
 ### `tenants` — organização
 
@@ -62,8 +62,37 @@ Conferido em `db/schema.sql` e no banco em 2026-08-30.
 |---|---|---|
 | `id` | `text` PK | `^[a-z][a-z0-9-]{1,63}$`. Identificador estável — nunca muda |
 | `name` | `text` | Nome exibido. Sincronizado do catálogo do Notion na importação |
+| `portfolio_kind` | `text` | `product`, `platform` ou `service_line`; recorte do portfólio comercial |
+| `brand_family` | `text` | Família de marca, hoje `tzolkin` |
 
 Hoje: `sites`, `educare`, `barber`, `commerce`, `data`, `core`. Ver [D2](CONTEXT.md#d2--o-próprio-core-e-o-data-são-produtos-contratáveis).
+
+`portfolio_kind` classifica o portfólio: Sites, Commerce e Data são `service_line`; Barber e Skiller são `product`; Core e Educare são `platform`.
+
+`portfolio_kind` descreve o lugar do item no portfólio; não descreve como uma
+contratação é cobrada. A taxonomia de `client_engagements.service_model` é
+`on_demand` | `education` | `consulting` | `advisory` | `product`
+(`unclassified` é o estado transitório de cadastro). Modalidade de cobrança
+fica exclusivamente em `billing_offers.kind`: `one_time`, `installments` ou
+`subscription`.
+
+SaaS, app e white-label são recortes do produto, não da contratação. Enquanto
+esses atributos forem cadastrais e não mudarem autorização, cobrança ou fluxo
+operacional, permanecem no catálogo do Notion (`ecosystem_entries.payload`),
+sem uma coluna redundante no Core. Se algum deles passar a dirigir uma regra
+do sistema, desce-se então para uma coluna própria e com vocabulário explícito.
+
+### `client_engagements` — contratação
+
+| Coluna | Tipo | Regra |
+|---|---|---|
+| `tenant_id`, `product_id` | | Organização e produto relacionados |
+| `service_model` | `text` | `on_demand`, `education`, `consulting`, `advisory`, `product` ou `unclassified` |
+| `status` | `text` | `planned`, `active`, `paused`, `completed`, `discontinued` ou `unclassified` |
+| `label` | `text` | Nome da contratação, 2–120 caracteres |
+
+Esta tabela responde **o que foi vendido**. Ela não repete a modalidade de
+cobrança, que pertence à oferta em `billing_offers.kind`.
 
 ### `ecosystem_entries` — ficha do Notion
 

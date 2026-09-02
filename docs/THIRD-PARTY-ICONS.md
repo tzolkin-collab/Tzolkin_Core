@@ -53,3 +53,19 @@ EasyPanel: official SVG from https://easypanel.io/icon.svg?icon.2sbiocau1w1w9.sv
 # Stripe
 
 SVG obtido sem alterações do catálogo SVGL: https://svgl.app/library/stripe.svg (2026-08-31). Marca pertencente à Stripe; uso para identificar a integração, sem sugerir endosso. Asaas e Pluggy não encontrados na consulta ao catálogo https://api.svgl.app nesta data; aguardando SVGs oficiais do usuário.
+
+# Marcas de instituições financeiras
+
+Doze marcas obtidas sem alterações de https://github.com/Tgentil/Bancos-em-SVG (2026-09-02), indicado pelo usuário: `itau`, `bradesco`, `santander`, `bancodobrasil`, `caixa`, `c6bank`, `btgpactual`, `sicredi`, `sicoob`, `mercadopago`, `pagbank`, `picpay`. Somam-se a `nubank`, `inter`, `stripe` e `asaas`, já presentes.
+
+**Aquele repositório não declara licença.** Isso significa que a *coleção* não concede permissão de uso — e é preciso dizer isso em vez de tratar a ausência como permissão. O que sustenta o uso aqui é outra coisa: cada marca pertence ao banco que ela identifica, não a quem reuniu os arquivos, e o uso é nominativo — identificar a instituição de uma conta dentro de um painel administrativo interno, sem sugerir endosso, parceria ou vínculo. É a mesma base já aplicada a GitHub, Vercel, EasyPanel e Stripe acima.
+
+Consequências práticas, para quem revisar depois:
+
+- Se alguma instituição publicar diretriz de marca própria, ela prevalece sobre esta coleção, e o arquivo deve ser trocado pelo oficial.
+- O uso vale para identificação. **Não** vale para material comercial, página pública de venda ou qualquer peça que possa sugerir endosso.
+- Nenhuma marca foi editada: os SVGs entraram como estavam.
+
+Critério de escolha entre as variantes de cada pasta: proporção conferida por `viewBox` — todas as escolhidas são quadradas (≈1:1), porque o selo renderiza a 20px e logotipo com texto fica ilegível nesse tamanho. A variante do Sicoob chamada "minimalista" foi descartada por conter apenas `fill:none`, invisível sobre fundo claro; usada a `sicoob-vector-logo.svg`.
+
+A lista canônica é `BANK_LOGOS`, em `apps/web/public/finance-model.js`. Ela alimenta o mapa de logos, a allowlist de `icons.js` e os estáticos de `apps/web/assets.mjs` — acrescentar marca é editar um lugar só.

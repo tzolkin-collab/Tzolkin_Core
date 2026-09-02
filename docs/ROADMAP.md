@@ -156,6 +156,88 @@ Primeiro pedaço do contexto C ([PRODUCT.md](PRODUCT.md#c--organização-cliente
 
 ---
 
+## Reforma do painel `[DECIDIDO]` — 2026-09-02
+
+Programa aprovado pelo usuário: o painel deixa de ser só cadastro e passa a **criar** projeto a partir do repositório, publicar, e apontar domínio. Referência externa: ADR "Ecossistema TZOLKIN" no Notion, que já nomeia estes blocos como escopo do Core — *operação: projetos*, *propriedades digitais: sites, lojas, domínios*, *financeiro operacional*.
+
+**Muda a natureza do Core.** Hoje ele é registro e observador, e diz isso no próprio código (`configuration_only`, `read_only`, `record_only`, `not_observed`). O programa o torna executor. A linha já foi cruzada uma vez com cuidado, no EasyPanel: `prepare` → confirmação digitada → `execute` → auditoria, sem retry automático. **Toda entrega abaixo estende esse padrão; nenhuma inventa outro.**
+
+Ordem por dependência. E9 é fundação: sem ele, E10–E14 não têm onde se apoiar.
+
+### E9 — Unir as ilhas: projeto, produto em draft e serviço
+
+**Depende de:** nada. É a fundação do programa.
+
+Hoje `delivery_projects` (cadastro técnico) e `products` (catálogo comercial) são ilhas: **não existe coluna ligando as duas**. E `products` não tem ciclo de vida — só `id`, `name`, `portfolio_kind`, `brand_family`.
+
+Decisão do usuário: criar um projeto técnico cria um **produto em `draft`**, não um produto comercial ativo. O draft funciona como quarentena do namespace `products.id`, que é chave estrangeira de `entitlements`, `memberships`, `app_clients`, `billing_offers`, `checkout_templates` e `client_engagements` — poluí-lo tem alcance largo.
+
+Projeto tem dois tipos: **produto** (tem código, deploy, domínio) e **serviço** (consultoria, assessoria — já modelado em `client_engagements.service_model`).
+
+**Aceite:** vínculo entre projeto técnico, produto e contratação · `products` com ciclo de vida e estado inicial `draft` · **lista conferida de todo lugar que precisa filtrar draft**, para produto em rascunho nunca aparecer em contrato, cobrança, acesso ou `/v1/context` · migração segura em banco com dados reais, sem backfill destrutivo · modelo antecipa E13 e E14 sem implementá-los · os 222 testes seguem passando.
+
+### E10 — Empresas como aba de primeira classe
+
+**Depende de:** E9.
+
+`tenants` já tem `organization_type`, `relationship_kind` e `lifecycle_status` desde a migração 009. Falta a interface: a aba hoje se chama "Clientes" e mistura papéis. Empresas e Pessoas passam a ser irmãs.
+
+**Aceite:** empresa e pessoa navegáveis separadamente · reclassificação pela API, fechando a lacuna do `PUT /api/tenants` · vínculo empresa ↔ pessoa ↔ contratação visível dos dois lados.
+
+### E11 — Pagamentos como centralizador
+
+**Depende de:** E9.
+
+Hoje há *Financeiro* (bancos, Stripe, Asaas) na gestão geral e *Pagamentos* por produto, em telas que não se falam. Vira um lugar só: ofertas, cobranças, conciliação e estado dos provedores.
+
+Nesta entrega a página pública de checkout **sai do processo do painel**. Ela existe hoje em `/c/:productId/:offerSlug` com CSP própria por rota — arranjo deliberadamente provisório, registrado em [BILLING.md](BILLING.md).
+
+**Aceite:** um só lugar responde "quanto entrou e de quem" · checkout público servido fora do processo do painel · nenhuma exceção de CSP sobrando no painel.
+
+### E12 — Vercel alcança o EasyPanel
+
+**Depende de:** E1.7 fase 2 e E1.8 — **é a continuação delas, não uma entrega paralela**.
+
+Assimetria atual: o EasyPanel já publica, reconstrói, reinicia e escreve variáveis pelo Core. A Vercel é só leitura. Esta entrega iguala as duas.
+
+**Aceite:** disparo e escrita de variáveis na Vercel sob o mesmo `prepare`/`execute` do EasyPanel · confirmação digitada do destino · auditoria com ator · nenhum segredo no navegador · nenhum disparo real em teste.
+
+### E13 — Provisionar projeto a partir do repositório
+
+**Depende de:** E9 e E12.
+
+Primeiro passo genuinamente novo do programa: criar o projeto na plataforma a partir de um repositório, escolher destino (EasyPanel, Vercel ou ambos), definir variáveis e publicar. O resultado nasce como produto em `draft` (E9).
+
+**Aceite:** criação sob confirmação explícita · falha parcial não deixa projeto meio-criado sem registro · o que foi criado fica em `delivery_projects` com ator e data · nenhuma credencial trafega pelo formulário.
+
+### E14 — Domínio e DNS
+
+**Depende de:** E13.
+
+Apontar subdomínio de `tzolkin.cloud` para o destino recém-criado. Domínios hospedados na Hostinger; a API de DNS é o escopo, não a gestão de hospedagem.
+
+Ressalva conhecida: CRUD de domínio é lacuna declarada também no EasyPanel — ver [EASYPANEL-OPERATIONS.md](EASYPANEL-OPERATIONS.md).
+
+**Aceite:** apontamento sob confirmação · registro anterior nunca sobrescrito em silêncio · estado real do DNS consultado, não presumido a partir do que o Core pediu.
+
+---
+
+## Correções e entregas pequenas
+
+Independentes entre si, sem dependência do programa acima. Contexto e evidência em [PENDENCIAS.md](PENDENCIAS.md).
+
+| Entrega | Por quê | Aceite resumido |
+|---|---|---|
+| `pluggy_items` em tabela | Cada banco novo hoje exige editar `.env` e redeployar | Tabela manda; `PLUGGY_ITEM_IDS` vira semente importada uma vez |
+| Widget Pluggy Connect | `POST /connect_token` já responde 200 | Página atrás de sessão de operador, CSP só naquela rota, item gravado no sucesso |
+| Sincronização periódica do Pluggy | Setembro com 2 transações, outubro com 0 | Leitura agendada, falha não apaga o extrato anterior |
+| `PUT /api/tenants` | Reclassificar organização hoje exige SQL | Reclassificação auditada pela API |
+| Responsável em `client_engagements` | Depende de decidir se responsável é do cliente ou da contratação | Campo mais importação do Notion |
+| Tela de Times e contas | Migração 013 entregue; interface não | Divergência do cadastro visível nas duas direções |
+| Push: VAPID e tópicos | Avaliação de alerta precisa acontecer no servidor | Assinatura por tópico, avaliação fora do navegador |
+
+---
+
 ## Fora do roadmap até haver decisão
 
 | Item | Trava |
