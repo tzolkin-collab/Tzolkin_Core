@@ -51,6 +51,16 @@
 <div id="tenants" class="client-grid"></div><div id="clients-empty" class="empty-state" hidden><span class="empty-symbol" aria-hidden="true">＋</span><h3>Sua carteira começa aqui.</h3><p>Cadastre o primeiro cliente.</p><button class="secondary" data-open="tenant-dialog">Adicionar cliente</button></div><p id="search-empty" class="empty-list" hidden>Nenhum cliente encontrado.</p>
 </section>
 
+<section id="view-leads" class="view" hidden aria-label="Leads">
+<div class="section-toolbar client-toolbar"><div><h2>Leads</h2><p class="detail">Organizações em prospecção, ainda sem contratação ativa.</p></div><label class="search-label"><span class="sr-only">Buscar lead</span><input id="lead-search" type="search" placeholder="Buscar lead…"></label></div>
+<div id="leads" class="client-grid"></div><p id="leads-empty" class="empty-list" hidden>Nenhum lead encontrado.</p>
+</section>
+
+<section id="view-companies" class="view" hidden aria-label="Empresas">
+<div class="section-toolbar client-toolbar"><div><h2>Empresas</h2><p class="detail">Cadastro organizacional. O relacionamento comercial aparece em Clientes ou Leads.</p></div><label class="search-label"><span class="sr-only">Buscar empresa</span><input id="company-search" type="search" placeholder="Buscar empresa…"></label></div>
+<div id="companies" class="client-grid"></div><p id="companies-empty" class="empty-list" hidden>Nenhuma empresa encontrada.</p>
+</section>
+
 <section id="view-client" class="view" hidden aria-label="Detalhes do cliente"><button id="client-back" class="table-action client-back" type="button">← Voltar para clientes</button><div id="client-detail"></div></section>
 
 <section id="view-people" class="view" hidden aria-label="Pessoas"><div class="section-toolbar"><div><h2>Stakeholders</h2><p class="detail">Pessoas do relacionamento comercial, separadas dos acessos aos produtos.</p></div><label class="search-label"><span class="sr-only">Buscar pessoa</span><input id="people-search" type="search" placeholder="Buscar pessoa ou empresa…"></label></div><div id="stakeholder-directory" class="people-grid"></div><p id="people-empty" class="empty-list" hidden>Nenhum stakeholder encontrado.</p></section>

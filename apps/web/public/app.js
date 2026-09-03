@@ -28,8 +28,9 @@ const CONTEXTS = {
    overview: { title: 'Visão geral', section: 'view-overview', metrics: false },
    tracking: { title: 'Acompanhamento', section: 'view-tracking', metrics:false },
    finance: { title: 'Financeiro', section: 'view-finance', metrics:false },
-   clients: { title: 'Clientes', section: 'view-clients', action: ['Nova empresa', 'tenant-dialog'], metrics:false, hidden:true },
-   companies: { title: 'Empresas', section: 'view-clients', action: ['Nova empresa', 'tenant-dialog'], metrics:false },
+   clients: { title: 'Clientes', section: 'view-clients', action: ['Novo cliente', 'tenant-dialog'], metrics:false },
+   leads: { title: 'Leads', section: 'view-leads', action: ['Novo lead', 'tenant-dialog'], metrics:false },
+   companies: { title: 'Empresas', section: 'view-companies', action: ['Nova empresa', 'tenant-dialog'], metrics:false },
    client: { title: 'Cliente', section: 'view-client', hidden:true, metrics:false },
    people: { title: 'Pessoas', section: 'view-people', action: ['Nova pessoa', 'stakeholder-dialog'], metrics:false },
    emails: { title: 'E-mails', section: 'view-emails', metrics:false, hidden:true },
@@ -52,8 +53,8 @@ const CONTEXTS = {
  },
 };
 
-const SECTIONS = ['view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-client', 'view-people', 'view-products', 'view-access', 'view-deploys', 'view-delivery', 'view-product', 'view-product-orgs', 'view-product-payments'];
-const DATA_NODES = ['tenants', 'client-summary', 'client-detail', 'stakeholder-directory', 'members', 'contracts', 'product-catalog', 'overview-kpis', 'overview-alerts', 'overview-integrations', 'overview-product-list', 'overview-actions', 'product-orgs', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
+const SECTIONS = ['view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-access', 'view-deploys', 'view-delivery', 'view-product', 'view-product-orgs', 'view-product-payments'];
+const DATA_NODES = ['tenants', 'leads', 'companies', 'client-summary', 'client-detail', 'stakeholder-directory', 'members', 'contracts', 'product-catalog', 'overview-kpis', 'overview-alerts', 'overview-integrations', 'overview-product-list', 'overview-actions', 'product-orgs', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
 SECTIONS.push('view-finance','view-emails');
 
 const contextKind = () => (state.context ? 'product' : 'general');
@@ -140,7 +141,7 @@ async function api(path, method = 'GET', body) {
 function renderNav() {
  const context = CONTEXTS[contextKind()];
  $('nav-label').textContent = context.label;
- const groups=contextKind()==='general'?{overview:'Operação',tracking:'Operação',finance:'Operação',companies:'Relacionamentos',people:'Relacionamentos',products:'Portfólio',education:'Portfólio',access:'Gestão',deploys:'Tecnologia',delivery:'Entrega'}:{product:'Produto','product-orgs':'Produto','product-payments':'Produto'};
+ const groups=contextKind()==='general'?{overview:'Operação',tracking:'Operação',finance:'Operação',clients:'Relacionamentos',leads:'Relacionamentos',companies:'Relacionamentos',people:'Relacionamentos',products:'Portfólio',education:'Portfólio',access:'Gestão',deploys:'Tecnologia',delivery:'Entrega'}:{product:'Produto','product-orgs':'Produto','product-payments':'Produto'};
  const items=[];let previous;
  for(const [key,view]of Object.entries(context.views).filter(([,view])=>!view.hidden)){
   if(groups[key]!==previous){const label=node('span',groups[key],'nav-group');label.setAttribute('aria-hidden','true');items.push(label);previous=groups[key];}
@@ -173,7 +174,9 @@ function switchView(view) {
  if (view === 'finance') finance.load().catch(reportError);
  if (view === 'emails') emails.load().catch(reportError);
  if (view === 'people') renderPeople();
- if (view === 'companies') renderTenants();
+ if (view === 'clients') renderTenants();
+ if (view === 'leads') renderLeads();
+ if (view === 'companies') renderCompanies();
  if (view === 'products') renderGeneral();
  if (view === 'client') renderClientDetail();
  if (view === 'product-payments'&&state.product) productPayments.load(state.product.product).catch(reportError);
@@ -307,6 +310,23 @@ function renderTenants() {
  }
 }
 
+function renderDirectory(kind, searchId, targetId, emptyId) {
+ const overview=state.overview;if(!overview)return;
+ const query=$(searchId).value.trim().toLocaleLowerCase('pt-BR');
+ const rows=overview.tenants.filter(t=>kind(t)).filter(t=>(t.name+' '+t.slug).toLocaleLowerCase('pt-BR').includes(query));
+ const target=$(targetId);target.replaceChildren();$(emptyId).hidden=rows.length>0;
+ for(const tenant of rows){
+  const engagements=overview.engagements.filter(e=>e.tenant_id===tenant.id), people=overview.stakeholders.filter(s=>s.tenant_id===tenant.id);
+  const card=node('article',undefined,'client-card'),head=node('header'),identity=node('div');
+  identity.append(node('span',tenant.name.slice(0,1),'client-avatar'),node('span'));identity.lastChild.append(node('h3',tenant.name),node('small',clientLabel(tenant.organization_type)));
+  head.append(identity,node('span',clientLabel(tenant.relationship_kind),'status'));const facts=node('div',undefined,'client-card-facts');
+  const fact=(l,v)=>{const i=node('div');i.append(node('span',l),node('strong',v));return i;};facts.append(fact('Contratação',engagements.length?engagements.length+' vínculo(s)':'Sem vínculo'),fact('Stakeholders',String(people.length)),fact('Situação',clientLabel(tenant.lifecycle_status)));
+  const open=node('button','Abrir organização →','secondary');open.type='button';open.onclick=()=>openClient(tenant.id);card.append(head,facts,open);target.append(card);
+ }
+}
+function renderLeads(){renderDirectory(t=>t.relationship_kind==='prospect','lead-search','leads','leads-empty');}
+function renderCompanies(){renderDirectory(t=>t.organization_type==='company','company-search','companies','companies-empty');}
+
 function openClient(id){state.selectedTenant=id;switchView('client');}
 function renderClientDetail(){
  const tenant=state.overview?.tenants.find(t=>t.id===state.selectedTenant);if(!tenant){switchView('clients');return;}
@@ -344,6 +364,7 @@ function renderGeneral() {
  ]);
  fillDirectorySelects();
  renderTenants();
+ renderLeads(); renderCompanies();
  const names = new Map(overview.tenants.map(t => [t.id, t.name]));
  const products = new Map(overview.products.map(p => [p.id, p.name]));
  $('product-catalog').replaceChildren(...overview.products.map(product => {
@@ -728,6 +749,8 @@ document.querySelectorAll('[data-close]').forEach(button => { button.onclick = (
 $('new-record').onclick = () => openDialog(views()[state.view].action[1]);
 $('context-select').addEventListener('change', event => switchContext(event.target.value).catch(reportError));
 $('client-search').addEventListener('input', renderTenants);
+$('lead-search').addEventListener('input', renderLeads);
+$('company-search').addEventListener('input', renderCompanies);
 $('people-search').addEventListener('input', renderPeople);
 $('client-back').onclick=()=>switchView('clients');
 $('deploy-search').addEventListener('input',()=>{if(deployData)renderDeploys(deployData);});
