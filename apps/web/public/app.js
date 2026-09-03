@@ -746,7 +746,15 @@ bindForm('entitlement-form', body => api('/api/entitlements', 'PUT', {
 
 document.querySelectorAll('[data-open]').forEach(button => { button.onclick = () => openDialog(button.dataset.open); });
 document.querySelectorAll('[data-close]').forEach(button => { button.onclick = () => button.closest('dialog').close(); });
-$('new-record').onclick = () => openDialog(views()[state.view].action[1]);
+$('new-record').onclick = () => {
+ const dialog=views()[state.view].action[1];
+ if(dialog==='tenant-dialog'){
+  const relationship=$('tenant-form').elements.relationship_kind;
+  if(state.view==='leads') relationship.value='prospect';
+  else if(state.view==='clients') relationship.value='customer';
+ }
+ openDialog(dialog);
+};
 $('context-select').addEventListener('change', event => switchContext(event.target.value).catch(reportError));
 $('client-search').addEventListener('input', renderTenants);
 $('lead-search').addEventListener('input', renderLeads);

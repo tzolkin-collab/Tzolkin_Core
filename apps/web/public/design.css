@@ -109,3 +109,11 @@ input:focus,select:focus,textarea:focus,.delivery-dialog input:focus,.delivery-d
 @media(max-width:1100px){.card-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.project-card{padding:18px}.card-facts{gap:18px 12px}.card-facts dt{font-size:12px}.infra-service-row{padding:14px;align-items:flex-start}.infra-service-row>.secondary{font-size:12px}.delivery-target-chip{min-height:44px}.project-card>.delivery-heading>.secondary{width:100%}.card-footer{font-size:12px}}
 @media(prefers-reduced-motion:reduce){.project-card{transition:none}}
+
+/* Directory UX: clear hierarchy, affordances and intentional empty states. */
+.client-toolbar h2{letter-spacing:-.02em}.client-toolbar .detail{max-width:560px;line-height:1.55}
+.client-card,.person-card{transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease}
+.client-card:hover,.person-card:hover{border-color:#d9d1ed;box-shadow:0 8px 24px rgba(42,28,77,.07);transform:translateY(-1px)}
+.client-card>.secondary{border:1px solid #e4def2;color:#5d479b;background:#faf8ff}.client-card>.secondary:hover{background:#f1ecfb;border-color:#cfc2e8}
+.empty-list{padding:48px 20px;text-align:center;border:1px dashed #d8d4df;border-radius:10px;background:#fcfbfe;color:#77727f}
+@media(max-width:600px){.client-card-facts{grid-template-columns:1fr 1fr}.client-card-facts>div:last-child{grid-column:1/-1}}
