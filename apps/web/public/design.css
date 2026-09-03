@@ -108,6 +108,13 @@ input:focus,select:focus,textarea:focus,.delivery-dialog input:focus,.delivery-d
 #easypanel-inventory .deploy-card>.card-tags{padding:14px 20px}#easypanel-inventory .deploy-card>.card-footer{padding:14px 20px;margin:0}
 @media(max-width:1100px){.card-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.project-card{padding:18px}.card-facts{gap:18px 12px}.card-facts dt{font-size:12px}.infra-service-row{padding:14px;align-items:flex-start}.infra-service-row>.secondary{font-size:12px}.delivery-target-chip{min-height:44px}.project-card>.delivery-heading>.secondary{width:100%}.card-footer{font-size:12px}}
+/* Final typography and density pass. */
+:root{font-family:"Myriad Pro","Segoe UI",Arial,sans-serif}
+.topbar{min-height:58px;padding-inline:32px}.crumb-divider{margin-inline:10px}.content{padding:30px 34px}.page-heading{margin-bottom:24px}.page-heading h1{font-size:28px}
+.search-label{position:relative;width:270px}.search-label::before{content:'⌕';position:absolute;z-index:1;left:12px;top:8px;color:#92929a;font-size:19px;line-height:24px;pointer-events:none}.search-label input{height:40px;min-height:40px;padding-left:34px;border-radius:8px;background:#fff}
+.client-toolbar .detail{font-size:12px;max-width:46ch}.client-card{gap:15px;padding:18px}.client-card-facts{padding-block:13px;gap:10px}.client-card-facts strong{font-size:13px}.person-card{padding:16px}.list-panel{overflow:hidden}.record{padding:16px 20px}.record:hover{background:#fcfbff}
+.nav-group,.nav-item{font-family:"Myriad Pro","Segoe UI",Arial,sans-serif}
+@media(max-width:600px){.content{padding:24px 16px}.topbar{padding-inline:20px}.search-label{width:100%}}
 @media(prefers-reduced-motion:reduce){.project-card{transition:none}}
 
 /* Sidebar v2: one visual system, with stronger grouping and a calm workspace rail. */

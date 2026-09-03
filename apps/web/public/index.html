@@ -23,7 +23,7 @@
 <header class="mobile-shellbar"><button id="nav-toggle" class="mobile-menu" type="button" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span><span class="sr-only">Abrir menu</span></button><div class="mobile-identity"><img src="/logo.svg" width="30" height="30" alt=""><span id="mobile-page-title">Visão geral</span></div><button id="mobile-refresh" class="mobile-refresh" type="button" aria-label="Atualizar dados">↻</button></header>
 <aside id="sidebar" class="sidebar" aria-label="Navegação do Core">
 <div class="brand"><img src="/logo.svg" width="36" height="36" alt=""><span>TZOLKIN<span class="brand-product">CORE</span></span></div>
-<div class="context-switch"><label for="context-select">Contexto</label><select id="context-select"><option value="">TZOLKIN · Gestão geral</option></select></div>
+<div class="context-switch"><label for="context-select">ESPAÇO</label><select id="context-select"><option value="">TZOLKIN · Geral</option></select></div>
 <p class="nav-label" id="nav-label">ESPAÇO DE TRABALHO</p>
 <nav id="nav" aria-label="Principal"></nav>
 <div class="sidebar-bottom"><div class="workspace-label"><span class="avatar avatar-brand"><img src="/logo.svg" width="26" height="26" alt=""></span><div>TZOLKIN<small>Gestão interna</small></div></div><button id="logout" class="sign-out">Sair da conta <span aria-hidden="true">↗</span></button></div>
@@ -47,17 +47,17 @@
 
 <section id="view-clients" class="view">
 <div id="client-summary" class="client-summary"></div>
-<div class="section-toolbar client-toolbar"><div><h2>Carteira de clientes</h2><p class="detail">Abra um cliente para ver sua operação, ofertas e pessoas.</p></div><label class="search-label"><span class="sr-only">Buscar cliente</span><input id="client-search" type="search" placeholder="Buscar cliente…"></label></div>
+<div class="section-toolbar client-toolbar"><div><h2>Clientes</h2><p class="detail">Relacionamentos ativos.</p></div><label class="search-label"><span class="sr-only">Buscar cliente</span><input id="client-search" type="search" placeholder="Buscar cliente…"></label></div>
 <div id="tenants" class="client-grid"></div><div id="clients-empty" class="empty-state" hidden><span class="empty-symbol" aria-hidden="true">＋</span><h3>Sua carteira começa aqui.</h3><p>Cadastre o primeiro cliente.</p><button class="secondary" data-open="tenant-dialog">Adicionar cliente</button></div><p id="search-empty" class="empty-list" hidden>Nenhum cliente encontrado.</p>
 </section>
 
 <section id="view-leads" class="view" hidden aria-label="Leads">
-<div class="section-toolbar client-toolbar"><div><h2>Leads</h2><p class="detail">Organizações em prospecção, ainda sem contratação ativa.</p></div><label class="search-label"><span class="sr-only">Buscar lead</span><input id="lead-search" type="search" placeholder="Buscar lead…"></label></div>
+<div class="section-toolbar client-toolbar"><div><h2>Leads</h2><p class="detail">Oportunidades em prospecção.</p></div><label class="search-label"><span class="sr-only">Buscar lead</span><input id="lead-search" type="search" placeholder="Buscar lead…"></label></div>
 <div id="leads" class="client-grid"></div><p id="leads-empty" class="empty-list" hidden>Nenhum lead encontrado.</p>
 </section>
 
 <section id="view-companies" class="view" hidden aria-label="Empresas">
-<div class="section-toolbar client-toolbar"><div><h2>Empresas</h2><p class="detail">Cadastro organizacional. O relacionamento comercial aparece em Clientes ou Leads.</p></div><label class="search-label"><span class="sr-only">Buscar empresa</span><input id="company-search" type="search" placeholder="Buscar empresa…"></label></div>
+<div class="section-toolbar client-toolbar"><div><h2>Empresas</h2><p class="detail">Cadastro das organizações.</p></div><label class="search-label"><span class="sr-only">Buscar empresa</span><input id="company-search" type="search" placeholder="Buscar empresa…"></label></div>
 <div id="companies" class="client-grid"></div><p id="companies-empty" class="empty-list" hidden>Nenhuma empresa encontrada.</p>
 </section>
 

@@ -112,7 +112,7 @@ function clearRenderedData() {
 function signedOut() {
  state.overview = null; state.product = null; state.context = '';
  clearRenderedData();
- $('context-select').replaceChildren(option('', 'TZOLKIN · Gestão geral'));
+ $('context-select').replaceChildren(option('', 'TZOLKIN · Geral'));
  $('workspace').hidden = true; $('login').hidden = false;
  $('password').type = 'password'; $('password').value = '';
  $('show-password').textContent = 'Mostrar'; $('show-password').setAttribute('aria-pressed', 'false');
