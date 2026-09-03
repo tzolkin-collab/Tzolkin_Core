@@ -30,15 +30,19 @@ const CONTEXTS = {
    finance: { title: 'Financeiro', section: 'view-finance', metrics:false },
    clients: { title: 'Clientes', section: 'view-clients', action: ['Novo cliente', 'tenant-dialog'], metrics:false },
    leads: { title: 'Leads', section: 'view-leads', action: ['Novo lead', 'tenant-dialog'], metrics:false },
+   metrics: { title: 'Métricas', section: 'view-overview', metrics:false },
    companies: { title: 'Empresas', section: 'view-companies', action: ['Nova empresa', 'tenant-dialog'], metrics:false },
    client: { title: 'Cliente', section: 'view-client', hidden:true, metrics:false },
    people: { title: 'Pessoas', section: 'view-people', action: ['Nova pessoa', 'stakeholder-dialog'], metrics:false },
    emails: { title: 'E-mails', section: 'view-emails', metrics:false, hidden:true },
    products: { title: 'Produtos', section: 'view-products', action: ['Vincular cliente', 'entitlement-dialog'] },
-   education: { title: 'Educacional', section: 'view-products', metrics:false },
+   education: { title: 'Mentorias', section: 'view-mentorias', metrics:false },
    services: { title: 'Serviços', section: 'view-delivery', metrics:false },
    access: { title: 'Acessos', section: 'view-access', action: ['Vincular acesso', 'member-dialog'] },
+   settings: { title: 'Configurações', section: 'view-settings', metrics:false },
+   security: { title: 'Segurança', section: 'view-security', metrics:false },
    deploys: { title: 'Deploys', section: 'view-deploys', metrics: false },
+   serverMetrics: { title: 'Métricas de servidor', section: 'view-server-metrics', metrics:false },
    delivery: { title: 'Projetos e serviços', section: 'view-delivery', metrics: false, hidden:true },
    resource: { title: 'Projeto e serviço', section: 'view-resource', metrics: false, hidden:true },
   },
@@ -53,7 +57,7 @@ const CONTEXTS = {
  },
 };
 
-const SECTIONS = ['view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-access', 'view-deploys', 'view-delivery', 'view-product', 'view-product-orgs', 'view-product-payments'];
+const SECTIONS = ['view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-mentorias', 'view-access', 'view-settings', 'view-security', 'view-deploys', 'view-server-metrics', 'view-delivery', 'view-product', 'view-product-orgs', 'view-product-payments'];
 const DATA_NODES = ['tenants', 'leads', 'companies', 'client-summary', 'client-detail', 'stakeholder-directory', 'members', 'contracts', 'product-catalog', 'overview-kpis', 'overview-alerts', 'overview-integrations', 'overview-product-list', 'overview-actions', 'product-orgs', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
 SECTIONS.push('view-finance','view-emails');
 
@@ -141,13 +145,13 @@ async function api(path, method = 'GET', body) {
 function renderNav() {
  const context = CONTEXTS[contextKind()];
  $('nav-label').textContent = context.label;
- const groups=contextKind()==='general'?{overview:'Operação',tracking:'Operação',finance:'Operação',clients:'Relacionamentos',leads:'Relacionamentos',companies:'Relacionamentos',people:'Relacionamentos',products:'Portfólio',education:'Portfólio',access:'Gestão',deploys:'Tecnologia',delivery:'Entrega'}:{product:'Produto','product-orgs':'Produto','product-payments':'Produto'};
+ const groups=contextKind()==='general'?{overview:'Visualização',tracking:'Visualização',finance:'Visualização',companies:'Relacionamentos',people:'Relacionamentos',leads:'Operação',metrics:'Operação',clients:'Operação',services:'Operação',products:'Operação',education:'Educacional',settings:'Gestão',access:'Gestão',security:'Gestão',deploys:'Tecnologia',serverMetrics:'Tecnologia'}:{product:'Produto','product-orgs':'Produto','product-payments':'Produto'};
  const items=[];let previous;
  for(const [key,view]of Object.entries(context.views).filter(([,view])=>!view.hidden)){
   if(groups[key]!==previous){const label=node('span',groups[key],'nav-group');label.setAttribute('aria-hidden','true');items.push(label);previous=groups[key];}
   const button = node('button', undefined, 'nav-item' + (key === state.view ? ' active' : ''));
   button.type = 'button'; button.dataset.view = key;
-  const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',emails:'mail',products:'package',education:'book-open',services:'repo',access:'shield',deploys:'cloud',delivery:'repo',product:'package','product-orgs':'people','product-payments':'wallet'})[key]);
+  const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',metrics:'chart',leads:'user-plus',products:'package',education:'graduation-cap',services:'repo',access:'shield',settings:'sliders',security:'lock',deploys:'cloud',serverMetrics:'activity',product:'package','product-orgs':'people','product-payments':'wallet'})[key]);
   icon.classList.add('nav-icon'); button.append(icon, document.createTextNode(view.title));
   if (key === state.view) button.setAttribute('aria-current', 'page');
   button.onclick = () => {switchView(key);closeNavigation();};
@@ -180,7 +184,7 @@ function switchView(view) {
  if (view === 'products') renderGeneral();
  if (view === 'client') renderClientDetail();
  if (view === 'product-payments'&&state.product) productPayments.load(state.product.product).catch(reportError);
- if (view === 'education') renderGeneral();
+ if (view === 'metrics' && state.overview) renderGeneral();
  if (view === 'services') delivery.load().catch(reportError);
 }
 
