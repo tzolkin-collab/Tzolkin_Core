@@ -15,6 +15,13 @@ Object.assign(icons,{
  wallet:[['path',{d:'M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1'}],['path',{d:'M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4'}]],
  shield:[['path',{d:'M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z'}],['path',{d:'m9 12 2 2 4-4'}]],
  package:[['path',{d:'M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z M12 22V12 m-4.5-7.73 9 5.15'}],['polyline',{points:'3.29 7 12 12 20.71 7'}]]
+ ,building:[['path',{d:'M3 21h18'}],['path',{d:'M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16'}],['path',{d:'M15 8h4a2 2 0 0 1 2 2v11'}],['path',{d:'M9 7h2 M9 11h2 M9 15h2 M17 12h2 M17 16h2'}]]
+ ,"user-plus":[['path',{d:'M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'}],['circle',{cx:8.5,cy:7,r:4}],['line',{x1:19,x2:19,y1:8,y2:14}],['line',{x1:16,x2:22,y1:11,y2:11}]]
+ ,chart:[['path',{d:'M3 3v18h18'}],['path',{d:'m7 16 4-5 3 3 5-7'}]]
+ ,"graduation-cap":[['path',{d:'m2 10 10-5 10 5-10 5z'}],['path',{d:'M6 12v5c3 2 9 2 12 0v-5'}],['path',{d:'M22 10v6'}]]
+ ,sliders:[['line',{x1:4,x2:4,y1:4,y2:20}],['line',{x1:12,x2:12,y1:4,y2:20}],['line',{x1:20,x2:20,y1:4,y2:20}],['line',{x1:2,x2:6,y1:8,y2:8}],['line',{x1:10,x2:14,y1:14,y2:14}],['line',{x1:18,x2:22,y1:9,y2:9}]]
+ ,lock:[['rect',{x:4,y:10,width:16,height:11,rx:2}],['path',{d:'M8 10V7a4 4 0 0 1 8 0v3'}]]
+ ,activity:[['polyline',{points:'22 12 18 12 15 21 9 3 6 12 2 12'}]]
 });
 const PLATFORM_LOGOS=['github','vercel','easypanel'];
 export function providerLogo(name){

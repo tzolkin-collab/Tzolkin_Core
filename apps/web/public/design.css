@@ -110,6 +110,17 @@ input:focus,select:focus,textarea:focus,.delivery-dialog input:focus,.delivery-d
 @media(max-width:600px){.project-card{padding:18px}.card-facts{gap:18px 12px}.card-facts dt{font-size:12px}.infra-service-row{padding:14px;align-items:flex-start}.infra-service-row>.secondary{font-size:12px}.delivery-target-chip{min-height:44px}.project-card>.delivery-heading>.secondary{width:100%}.card-footer{font-size:12px}}
 @media(prefers-reduced-motion:reduce){.project-card{transition:none}}
 
+/* Sidebar v2: one visual system, with stronger grouping and a calm workspace rail. */
+.app-shell{grid-template-columns:256px minmax(0,1fr)}
+.sidebar{background:#111113;color:#f4f4f5;border-right:1px solid #27272a;box-shadow:12px 0 32px #18181b12;padding:20px 14px 14px}
+.sidebar>.brand{padding:4px 10px 22px;color:#fafafa}.sidebar>.brand .brand-product{color:#a1a1aa}
+.context-switch{margin:0 4px 14px;padding:12px;border:1px solid #2f2f34;border-radius:10px;background:#18181b}.context-switch label{color:#a1a1aa}.context-switch select{background:#202024;color:#f4f4f5;border-color:#3f3f46}
+.nav-label{display:block;margin:0 10px 6px;color:#71717a;font-size:10px;letter-spacing:.12em}
+.sidebar nav{gap:2px}.nav-group{padding:18px 10px 6px;color:#71717a;font-size:10px;letter-spacing:.12em}.nav-group:first-child{padding-top:4px}
+.nav-item{min-height:42px;padding:10px 12px;border:1px solid transparent;border-radius:8px;color:#a1a1aa;font-size:13px;gap:12px}.nav-item:hover{background:#1f1f23;color:#fafafa}.nav-item.active{background:#241b3b;color:#e9e2ff;box-shadow:inset 3px 0 0 #8b5cf6}.nav-item.active .nav-icon{color:#a78bfa}.nav-icon{width:18px;height:18px;color:#71717a;flex:0 0 18px}
+.workspace-label{border-top:1px solid #2f2f34;padding:16px 8px 10px;color:#e4e4e7}.workspace-label small{color:#a1a1aa}.avatar{background:#242428;border-color:#3f3f46}.sign-out{color:#a1a1aa;border-radius:7px}.sign-out:hover{background:#1f1f23;color:#fafafa}
+@media(max-width:900px){.app-shell{grid-template-columns:minmax(0,1fr)}.sidebar{width:min(320px,88vw)}}
+
 /* Directory UX: clear hierarchy, affordances and intentional empty states. */
 .client-toolbar h2{letter-spacing:-.02em}.client-toolbar .detail{max-width:560px;line-height:1.55}
 .client-card,.person-card{transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease}
