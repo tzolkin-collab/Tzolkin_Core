@@ -12,10 +12,10 @@ const transport = security => {
 };
 
 export function workspaceRoutes(router) {
- router.get('/health', async ({ pool, reply, security }) => {
+ router.get('/health', async ({ pool, reply, security, sessions }) => {
   await pool.query('SELECT 1');
   return reply(200, {
-   service: 'tzolkin-core', database: 'connected', mode: 'local-bootstrap',
+   service: 'tzolkin-core', database: 'connected', mode: sessions.mode === 'google-oidc' ? 'production' : 'local-bootstrap',
    database_transport: transport(security).transport,
   });
  }, { auth: 'public' });
