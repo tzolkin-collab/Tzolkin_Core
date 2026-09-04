@@ -24,7 +24,7 @@ Cada dado tem **um** dono. O dono decide o schema, guarda o registro e responde 
 | **Consumidor final** | **Backend do produto** | banco do produto | Fora do Core, por decisão |
 | Agenda, pedido, estoque, matrícula, progresso | **Backend do produto** | banco do produto | Fora do Core, por decisão |
 | Documentos, calendários, financeiro executivo | **Notion** | workspace | Fonte de verdade; o Core não sincroniza |
-| Contabilidade fiscal | **Contabilizei** | plataforma deles | [BILLING.md](BILLING.md#7-contabilidade) |
+| Contabilidade fiscal | **Contabilizei** | plataforma deles | [BILLING.md](BILLING.md) |
 | Dado de cartão | **Provedor** (Stripe/Asaas) | tokenização/checkout | Nunca no Core — [BILLING.md](BILLING.md) |
 
 ### Os dois tipos de lead não se misturam `[DECIDIDO]`
@@ -44,7 +44,7 @@ Cada dado tem **um** dono. O dono decide o schema, guarda o registro e responde 
 | Status/endereço do produto | **Notion** (cadastral) | `payload.status`, `payload.url` | Cadastro ≠ disponibilidade — [CONTEXT.md §4](CONTEXT.md#4-endereços) |
 | Direitos de acesso | **Core** | nenhuma | Sem cache. O app não guarda direito nem aceita direito vindo do navegador |
 | Financeiro executivo | **Notion**, hoje | — | O Core não lê nem escreve no Notion em runtime |
-| Estado de pagamento | **Provedor** | espelho local futuro | Espelho só se reconcilia periodicamente — [BILLING.md](BILLING.md#6-conciliação-proposto) |
+| Estado de pagamento | **Provedor** | espelho local futuro | Espelho só se reconcilia periodicamente — [BILLING.md](BILLING.md) |
 
 **Não há sincronização automática com o Notion.** A importação é um comando manual e idempotente — [INTEGRATIONS.md](INTEGRATIONS.md#3-notion--catálogo-do-ecossistema-existente-e-verificado).
 

@@ -18,7 +18,7 @@ export function setupEmails({api,configure}){
    for(const rule of rules){const card=el('article',undefined,'email-card'),head=el('div',undefined,'email-card-head'),identity=el('div');identity.append(el('h2',rule.offer_name),el('p',rule.product_name+' · '+rule.offer_slug));const edit=el('button','Configurar','secondary');edit.type='button';edit.setAttribute('aria-label','Configurar '+rule.product_name+' · '+rule.offer_name);edit.onclick=()=>configure({id:rule.product_id,name:rule.product_name});head.append(identity,edit);card.append(head);
     const owner=el('div',undefined,'email-owner');owner.append(rule.provider==='stripe'?providerLogo('stripe'):createIcon('wallet'),el('span',(rule.provider==='stripe'?'Stripe':'Asaas')+' · avisos financeiros pelo '+(rule.owner==='core'?'Core':'processador')+' · rascunho'));card.append(owner);
     if(rule.templates.length){const items=el('ul');for(const t of rule.templates){const li=el('li');li.append(el('span',labels[t.event]),el('code',t.slug));items.append(li);}card.append(items);}else card.append(el('p','Nenhuma referência de template configurada.','email-help'));
-    if(section==='templates')card.append(el('p','Referências apenas. O conteúdo dos templates ainda não está cadastrado.','email-help'));list.append(card);
+    if(section==='templates')card.append(el('p','O conteúdo é editado no contexto do produto. Abra Configurar para continuar no editor próprio.','email-help'));list.append(card);
    }
    if(!rules.length)list.append(el('p',query?'Nenhuma configuração encontrada.':'Crie uma oferta em Produtos e planos → Cobrança e e-mails. As regras salvas aparecerão aqui.','email-empty'));
   }

@@ -19,7 +19,7 @@ export function createDeliveryOptions({ env = process.env, fetchImpl = fetch, cl
     }),
     read(Boolean(env.VERCEL_TOKEN), async () => {
      const projects = await createVercelAdapter({ token: env.VERCEL_TOKEN, teamId: env.VERCEL_TEAM_ID, fetchImpl }).listProjects();
-     return { items: projects.map(p => ({ id: p.id, name: p.name, type: 'app' })), truncated: projects.length >= 100 };
+     return { items: projects.map(p => ({ id: p.id, name: p.name, type: 'app', repository: p.repository })), truncated: projects.length >= 100 };
     }),
     read(Boolean(env.EASYPANEL_URL || env.EASYPANEL_TOKEN), async () => {
      const result = await createEasypanelAdapter({ baseUrl: env.EASYPANEL_URL, token: env.EASYPANEL_TOKEN, fetchImpl }).inventory();

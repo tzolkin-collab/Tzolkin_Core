@@ -109,7 +109,9 @@ Aplicadas até agora: `001_membership_por_produto.sql` ([ADR 0002](decisions/000
 
 ## 4. Backup e restauração `[PROPOSTO]`
 
-**Não existe rotina de backup do `tzolkin_core`.** Hoje o dado é cadastral e reconstruível (6 produtos + 13 fichas, vindos de um JSON versionado). **Isso deixa de ser verdade no minuto em que a primeira organização real for cadastrada.**
+Desde 2026-09-03 há 16 backups PostgreSQL ativos no EasyPanel, incluindo `tzolkin_core`, em
+horários escalonados entre 01:00 e 03:20; `systembots` permanece às 00:00. O destino atual é
+`Local Disk`, sem retenção explícita, e a restauração ainda não foi ensaiada.
 
 Mínimo antes de existir dado real:
 
@@ -147,7 +149,7 @@ Erros são traduzidos para o cliente e **não são registrados em lugar nenhum**
 | Log estruturado com id de correlação | Rastrear uma requisição de ponta a ponta |
 | **Log sem dado sensível** | Nunca senha, token, string de conexão ou dado pessoal desnecessário |
 | Monitoramento de erro | Saber da falha antes do usuário |
-| Monitoramento de integração | Fila do Asaas interrompida (15 falhas) e webhook não entregue precisam gerar alerta — [BILLING.md](BILLING.md#4-capacidades-dos-provedores) |
+| Monitoramento de integração | Fila do Asaas interrompida (15 falhas) e webhook não entregue precisam gerar alerta — [BILLING.md](BILLING.md) |
 | Métrica de saúde | Latência, taxa de erro, saturação do pool |
 | Alerta com destinatário definido | Alerta sem dono é ruído |
 

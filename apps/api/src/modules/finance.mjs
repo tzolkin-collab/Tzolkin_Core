@@ -36,17 +36,52 @@ export function financeRoutes(router,{provider=createPluggy(),env=process.env}={
  // Pluggy: reopening the screen works without resynchronizing the provider.
  router.get('/api/finance/board',async({pool,url,reply})=>{
   const month=url.searchParams.get('month');
-  if([...url.searchParams.keys()].length!==1||!/^20\d{2}-(0[1-9]|1[0-2])$/.test(month))throw fail(400,'Mês inválido.');
+  const year=url.searchParams.get('year');
+  const from=url.searchParams.get('from');
+  const to=url.searchParams.get('to');
+  let targetMonths=[];
+  if(month){
+   if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(month))throw fail(400,'Mês inválido.');
+   targetMonths=[month];
+  }else if(year){
+   if(!/^20\d{2}$/.test(year))throw fail(400,'Ano inválido.');
+   targetMonths=Array.from({length:12},(_,i)=>`${year}-${String(i+1).padStart(2,'0')}`);
+  }else if(from&&to){
+   const f=from.slice(0,7),t=to.slice(0,7);
+   if(!/^20\d{2}-(0[1-9]|1[0-2])$/.test(f)||!/^20\d{2}-(0[1-9]|1[0-2])$/.test(t))throw fail(400,'Período inválido.');
+   const [fy,fm]=f.split('-').map(Number),[ty,tm]=t.split('-').map(Number);
+   const start=fy*12+(fm-1),end=ty*12+(tm-1);
+   if(start>end||end-start>60)throw fail(400,'Período inválido.');
+   for(let m=start;m<=end;m++){
+    const y=Math.floor(m/12),mo=String((m%12)+1).padStart(2,'0');
+    targetMonths.push(`${y}-${mo}`);
+   }
+  }else{
+   throw fail(400,'Mês inválido.');
+  }
   const list=await connections(pool),ids=pluggyItemIds(env);
   const accounts=list.flatMap(c=>(c.payload?.accounts||[]).map(a=>({...a,connection:c.connection,bank:a.bank||'Instituição bancária',balance_updated_at:c.updated_at,bank_updated_at:c.payload.bank_updated_at})));
-  const keys=[...ids.map(id=>'attempt:item:'+id),...accounts.flatMap(a=>['transactions:'+a.id+':'+month,'attempt:transactions:'+a.id+':'+month])];
+  const keys=[...ids.map(id=>'attempt:item:'+id),...accounts.flatMap(a=>targetMonths.flatMap(m=>['transactions:'+a.id+':'+m,'attempt:transactions:'+a.id+':'+m]))];
   const rows=keys.length?(await pool.query('SELECT key,payload,updated_at FROM finance_snapshots WHERE key=ANY($1::text[])',[keys])).rows:[];
   const saved=new Map(rows.map(row=>[row.key,row]));
   const history=accounts.length?(await pool.query("SELECT key,updated_at FROM finance_snapshots WHERE split_part(key,':',1)='transactions' AND split_part(key,':',2)=ANY($1::text[])",[accounts.map(a=>a.id)])).rows:[];
-  reply(200,{month,connections:list.map((c,i)=>{const attempt=saved.get('attempt:item:'+ids[i]);return {...c,attempt:attempt?{payload:attempt.payload,updated_at:attempt.updated_at}:null};}),accounts:accounts.map(a=>{
-   const snapshot=saved.get('transactions:'+a.id+':'+month),attempt=saved.get('attempt:transactions:'+a.id+':'+month);
-   // Keys include provider identifiers; expose only the explicitly scoped fields.
-   return {...a,snapshot:snapshot?{payload:snapshot.payload,updated_at:snapshot.updated_at}:null,attempt:attempt?{payload:attempt.payload,updated_at:attempt.updated_at}:null};
+  reply(200,{month:month||targetMonths[0],year:year||null,from:from||null,to:to||null,target_months:targetMonths,connections:list.map((c,i)=>{const attempt=saved.get('attempt:item:'+ids[i]);return {...c,attempt:attempt?{payload:attempt.payload,updated_at:attempt.updated_at}:null};}),accounts:accounts.map(a=>{
+   if(targetMonths.length===1){
+    const snapshot=saved.get('transactions:'+a.id+':'+targetMonths[0]),attempt=saved.get('attempt:transactions:'+a.id+':'+targetMonths[0]);
+    return {...a,snapshot:snapshot?{payload:snapshot.payload,updated_at:snapshot.updated_at}:null,attempt:attempt?{payload:attempt.payload,updated_at:attempt.updated_at}:null};
+   }
+   const allTx=[];let latestUpdate=null,lastAttempt=null;
+   for(const m of targetMonths){
+    const s=saved.get('transactions:'+a.id+':'+m);
+    if(s?.payload?.transactions){
+     allTx.push(...s.payload.transactions);
+     if(!latestUpdate||Date.parse(s.updated_at)>Date.parse(latestUpdate))latestUpdate=s.updated_at;
+    }
+    const att=saved.get('attempt:transactions:'+a.id+':'+m);
+    if(att&&(!lastAttempt||Date.parse(att.updated_at)>Date.parse(lastAttempt.updated_at)))lastAttempt=att;
+   }
+   const snapshot=allTx.length||latestUpdate?{payload:{transactions:allTx,time_zone:'America/Sao_Paulo'},updated_at:latestUpdate}:null;
+   return {...a,snapshot,attempt:lastAttempt?{payload:lastAttempt.payload,updated_at:lastAttempt.updated_at}:null};
   }),saved_months:[...new Set(history.map(row=>row.key.split(':')[2]))].sort().reverse()});
  });
  router.post('/api/finance/sync',async({pool,reply,req})=>{

@@ -1,10 +1,10 @@
 # Contexto
 
-Atualização `[EXISTENTE E VERIFICADO]` de 2026-08-31: frontend e backend separados em `apps/web` (3100) e `apps/api` (3102), com `npm start` iniciando dois processos. Login via proxy, lista GitHub e TLS verificado conferidos no runtime local; 42 testes unitários/HTTP passaram. Detalhes: [SPLIT-RUNTIME.md](SPLIT-RUNTIME.md). A separação não libera o bootstrap para produção.
+Atualização `[EXISTENTE E VERIFICADO]` de 2026-09-03: frontend e backend separados em `apps/web` (3100) e `apps/api` (3102), com `npm start` iniciando dois processos. Login via proxy, lista GitHub e TLS verificado conferidos no runtime local; 123 testes unitários passaram. Detalhes: [SPLIT-RUNTIME.md](SPLIT-RUNTIME.md). A separação não libera o bootstrap para produção.
 
 Fatos conferidos, restrições, hipóteses e decisões pendentes. Ponto de partida para qualquer trabalho no Core.
 
-Revisão: **2026-08-30**. Convenção de marcas em [README.md](README.md#como-ler-classificação-de-maturidade).
+Revisão: **2026-09-03**. Convenção de marcas em [README.md](README.md#como-ler-classificação-de-maturidade).
 
 ---
 
@@ -21,7 +21,7 @@ Conferido em 2026-08-30 lendo os arquivos, executando `npm test` e consultando o
 | Banco | PostgreSQL 17.11 **remoto em EasyPanel**, base `tzolkin_core`, role `tzolkin_core_app` (dona da base) |
 | Frontend | HTML/CSS/JS sem build, servido pelo próprio processo (`public/`) |
 | Execução | `npm start` → `http://127.0.0.1:3100`, **só loopback**, recusa `NODE_ENV=production`. O processo é local; **o banco não** |
-| Testes | 69 cenários de integração relatados na entrega anterior; 18 testes unitários aprovados nesta revisão, sem banco remoto — ver [TESTING.md](TESTING.md) |
+| Testes | 69 cenários de integração relatados na entrega anterior; 123 testes unitários aprovados em 2026-09-03, sem banco remoto — ver [TESTING.md](TESTING.md) |
 
 ### Dados hoje no banco
 
@@ -50,7 +50,7 @@ Conferido em 2026-08-30 lendo os arquivos, executando `npm test` e consultando o
 
 ### O que o Core **não** faz `[EXISTENTE E VERIFICADO]`
 
-Nenhuma linha de código para: cobrança, assinatura, Stripe, Asaas, Open Finance, Contabilizei, nota fiscal, e-mail, fila, webhook, evento distribuído, cache de direitos, IdP, MFA ou portal de cliente. As seções de [BILLING.md](BILLING.md) e [INTEGRATIONS.md](INTEGRATIONS.md) descrevem desenho, não implementação.
+O Core já lê vendas da Stripe/Asaas, registra webhooks assinados, mantém ofertas e checkout Stripe, projeta previsões financeiras recorrentes e oferece login Google OIDC. Continuam fora do escopo: emissão de cobranças Asaas, split/repasse, Open Finance, Contabilizei, envio de e-mail, eventos distribuídos, cache de direitos, MFA e portal de cliente. O estado detalhado está em [BILLING.md](BILLING.md) e [INTEGRATIONS.md](INTEGRATIONS.md).
 
 ---
 
@@ -126,7 +126,7 @@ Aplicada pela migração `db/migrations/001_membership_por_produto.sql` com a ta
 
 ### D3 — Quem vende e quem recebe no fluxo consumidor → cliente?
 
-O segundo fluxo financeiro (consumidor final paga a um cliente da TZOLKIN dentro de um produto) não tem escopo definido. **Nada de split, repasse, conta conectada ou recebimento para terceiros é implementado antes disso.** Detalhes e o que precisa ser respondido: [BILLING.md](BILLING.md#fluxo-2--consumidor-paga-ao-cliente).
+O segundo fluxo financeiro (consumidor final paga a um cliente da TZOLKIN dentro de um produto) não tem escopo definido. **Nada de split, repasse, conta conectada ou recebimento para terceiros é implementado antes disso.** Detalhes e o que precisa ser respondido: [BILLING.md](BILLING.md#gateway-de-checkout--cria-sessão-só-fluxo-1).
 
 ### D4 — Qual IdP substitui o bootstrap de senha única?
 

@@ -4,7 +4,7 @@ const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefine
 const labels={stripe:'Stripe',asaas:'Asaas',email:'E-mail transacional'};
 const TABS={ofertas:'Ofertas',checkout:'Checkout'};
 
-export function setupProductPayments({api,configure}){
+export function setupProductPayments({api,billing}){
  let generation=0,data=null,product=null,tab='ofertas';
  const host=()=>document.getElementById('view-product-payments');
  // Checkout é aba desta tela, não view própria: é parte de pagamentos, não irmão dele.
@@ -13,7 +13,7 @@ export function setupProductPayments({api,configure}){
  function painelOfertas(panel){
   const heading=el('div',undefined,'section-toolbar'),copy=el('div');
   copy.append(el('h3','Ofertas do produto'),el('p','Preço, processador e automações de e-mail ficam versionados por oferta.','detail'));
-  const button=el('button','Configurar ofertas','primary');button.type='button';button.onclick=()=>configure(product);
+  const button=el('button','Editar ofertas','primary');button.type='button';button.onclick=()=>billing.mount(product,host());
   heading.append(copy,button);panel.append(heading);
 
   const offers=el('div',undefined,'pay-offers');

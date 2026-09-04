@@ -14,7 +14,9 @@
     "test:unit": "node --test test/unit/*.test.mjs",
     "db:setup": "node scripts/setup.mjs",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
-    "db:rotate-password": "node --env-file=.env scripts/rotate-db-password.mjs"
+    "db:rotate-password": "node --env-file=.env scripts/rotate-db-password.mjs",
+    "finance:mock": "node --env-file=.env scripts/seed-mock-finance.mjs",
+    "finance:clean-mock": "node --env-file=.env scripts/clean-mock-finance.mjs"
   },
   "devDependencies": {
     "lucide-static": "^1.38.0",

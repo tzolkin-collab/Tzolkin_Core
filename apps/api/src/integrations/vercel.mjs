@@ -86,10 +86,11 @@ export function createVercelAdapter({ token, teamId = null, baseUrl = BASE, fetc
   // parado há meses precisa aparecer como "sem deploy recente", não sumir.
   async listProjects({ limit = 100 } = {}) {
    const body = await get('/v9/projects', { limit });
-   return (body.projects || []).map(p => ({
+  return (body.projects || []).map(p => ({
     id: p.id,
     name: p.name,
     framework: p.framework || null,
+    repository: typeof p.link?.repo === 'string' && /^[\w.-]+\/[\w.-]+$/.test(p.link.repo) ? p.link.repo : null,
     // Projeto sem repositório conectado não tem commit, e não aceita Deploy Hook.
     git_connected: Boolean(p.link),
     updated_at: iso(p.updatedAt),

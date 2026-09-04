@@ -10,7 +10,7 @@ export function createWeb({ apiOrigin = 'http://127.0.0.1:3102' } = {}) {
  const server = http.createServer(async (req,res) => {
   res.setHeader('Cache-Control','no-store');
   res.setHeader('X-Content-Type-Options','nosniff');
-  res.setHeader('Content-Security-Policy',"default-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors 'none'; form-action 'self'");
+  res.setHeader('Content-Security-Policy',"default-src 'self'; img-src 'self' https: data:; style-src 'self'; script-src 'self'; frame-ancestors 'none'; form-action 'self'");
   res.setHeader('Referrer-Policy','no-referrer');
   const error = (status,message) => { if (!res.headersSent) { res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'}); res.end(JSON.stringify({message})); } else res.destroy(); };
   try {

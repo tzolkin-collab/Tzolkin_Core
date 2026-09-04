@@ -49,4 +49,32 @@ CREATE TABLE IF NOT EXISTS organization_stakeholders (
 CREATE TABLE IF NOT EXISTS ecosystem_entries (
  id text PRIMARY KEY, kind text NOT NULL, payload jsonb NOT NULL, imported_at date NOT NULL
 );
+CREATE TABLE IF NOT EXISTS service_deploy_bindings (
+ provider text NOT NULL CHECK(provider IN ('vercel','easypanel')),
+ external_project_id text NOT NULL CHECK(length(external_project_id) BETWEEN 1 AND 240),
+ external_project_name text NOT NULL CHECK(length(external_project_name) BETWEEN 1 AND 240),
+ engagement_id uuid NOT NULL REFERENCES client_engagements(id),
+ environment text NOT NULL DEFAULT 'production' CHECK(environment IN ('development','staging','production')),
+ updated_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(provider, external_project_id)
+);
+CREATE INDEX IF NOT EXISTS service_deploy_bindings_engagement ON service_deploy_bindings(engagement_id);
+CREATE TABLE IF NOT EXISTS product_resource_bindings (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), product_id text NOT NULL REFERENCES products(id),
+ resource_type text NOT NULL CHECK(resource_type IN ('repository','frontend','backend','domain','api','worker','database','cache','checkout','email')),
+ provider text NOT NULL CHECK(provider IN ('github','vercel','easypanel','hostinger','stripe','asaas','manual')),
+ external_id text NOT NULL CHECK(length(external_id) BETWEEN 1 AND 300),
+ display_name text NOT NULL CHECK(length(display_name) BETWEEN 1 AND 240),
+ environment text CHECK(environment IS NULL OR environment IN ('development','staging','production','internal')),
+ url text CHECK(url IS NULL OR length(url) BETWEEN 8 AND 1000),
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+ UNIQUE(resource_type,provider,external_id)
+);
+CREATE INDEX IF NOT EXISTS product_resource_bindings_product_idx ON product_resource_bindings(product_id,resource_type);
+CREATE TABLE IF NOT EXISTS product_resource_audit (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), binding_id uuid, product_id text NOT NULL REFERENCES products(id),
+ action text NOT NULL CHECK(action IN ('created','updated','deleted')), actor text NOT NULL,
+ before_value jsonb, after_value jsonb, created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS product_resource_audit_product_idx ON product_resource_audit(product_id,created_at DESC);
 COMMIT;

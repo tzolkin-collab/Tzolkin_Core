@@ -14,32 +14,32 @@ export function trackingRoutes(router){
   reply(200,{activities:activities.rows.slice(0,500),logs:logs.rows.slice(0,500),truncated:activities.rows.length>500||logs.rows.length>500,time_zone:'America/Sao_Paulo'});
  });
  async function transaction(pool,fn){const c=await pool.connect();try{await c.query('BEGIN');const result=await fn(c);await c.query('COMMIT');return result;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}
- const audit=(c,id,action,details)=>c.query('INSERT INTO service_activity_audit(activity_id,action,actor,details) VALUES($1,$2,$3,$4)',[id,action,'admin-bootstrap',details]);
- router.post('/api/tracking',async({pool,req,reply})=>{
+ const audit=(c,id,action,details,operator)=>c.query('INSERT INTO service_activity_audit(activity_id,action,actor,details) VALUES($1,$2,$3,$4)',[id,action,operator?.email||operator?.subject||'unknown',details]);
+ router.post('/api/tracking',async({pool,req,reply,operator})=>{
   const b=activityInput(await json(req));
   const result=await transaction(pool,async c=>{
    const row=(await c.query(`INSERT INTO service_activities(id,tenant_id,category,kind,title,starts_at,ends_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(id) DO NOTHING RETURNING *`,Object.values(b))).rows[0];
-   if(row){await audit(c,b.id,'created',b);return row;}
+   if(row){await audit(c,b.id,'created',b,operator);return row;}
    const existing=(await c.query('SELECT * FROM service_activities WHERE id=$1',[b.id])).rows[0];
    if(!existing||Object.entries(b).some(([k,v])=>k.endsWith('_at')?new Date(existing[k]).toISOString()!==v:existing[k]!==v))throw fail(409,'Identificador já usado em outro cadastro.');
    return existing;
   });reply(200,{activity:result});
  });
- router.put('/api/tracking/:id/status',async({pool,params,req,reply})=>{
+ router.put('/api/tracking/:id/status',async({pool,params,req,reply,operator})=>{
   const b=await json(req);input(b,['status','revision']);
   if(!isUuid(params.id)||!['planned','done','cancelled'].includes(b.status)||!Number.isInteger(b.revision)||b.revision<1)throw fail(400,'Status ou revisão inválidos.');
   const row=await transaction(pool,async c=>{
    const result=(await c.query('UPDATE service_activities SET status=$1,revision=revision+1,updated_at=now() WHERE id=$2 AND revision=$3 RETURNING *',[b.status,params.id,b.revision])).rows[0];
    if(!result)throw fail(409,'Registro alterado ou inexistente. Atualize a agenda.');
-   await audit(c,params.id,'status_changed',b);return result;
+   await audit(c,params.id,'status_changed',b,operator);return result;
   });reply(200,{activity:row});
  });
- router.post('/api/tracking/:id/time',async({pool,params,req,reply})=>{
+ router.post('/api/tracking/:id/time',async({pool,params,req,reply,operator})=>{
   if(!isUuid(params.id))throw fail(400,'Atividade inválida.');const b=timeInput(await json(req));
   const result=await transaction(pool,async c=>{
    if(!(await c.query('SELECT id FROM service_activities WHERE id=$1 FOR UPDATE',[params.id])).rows.length)throw fail(404,'Atividade não encontrada.');
    const row=(await c.query('INSERT INTO service_time_logs(id,activity_id,minutes,worked_on,note) VALUES($1,$2,$3,$4,$5) ON CONFLICT(id) DO NOTHING RETURNING *',[b.id,params.id,b.minutes,b.worked_on,b.note])).rows[0];
-   if(row){await audit(c,params.id,'time_logged',b);return row;}
+   if(row){await audit(c,params.id,'time_logged',b,operator);return row;}
    const existing=(await c.query('SELECT id,activity_id,minutes,worked_on::text,note FROM service_time_logs WHERE id=$1',[b.id])).rows[0];
    if(!existing||existing.activity_id!==params.id||Object.entries(b).some(([k,v])=>existing[k]!==v))throw fail(409,'Identificador já usado em outro apontamento.');
    return existing;

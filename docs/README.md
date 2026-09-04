@@ -2,13 +2,14 @@
 
 Documentação técnica versionada junto com o código, neste repositório. **Não substitui** a Wiki, os documentos empresariais nem as rotinas do Notion — descreve o software.
 
-Última revisão completa: **2026-08-30**.
+Última revisão completa: **2026-09-03**.
 
 ## Índice
 
 | Documento | Responde a |
 |---|---|
 | [CONTEXT.md](CONTEXT.md) | O que existe hoje, o que foi decidido, o que é proposta e o que está travado esperando decisão |
+| [BACKLOG.md](BACKLOG.md) | O que está aberto, por ordem de risco. Levantado por auditoria em 2026-09-03, com evidência por item |
 | [PRODUCT.md](PRODUCT.md) | Quem usa, para quê, quais jornadas e o que está fora de escopo |
 | [DOMAIN-MODEL.md](DOMAIN-MODEL.md) | Entidades, identificadores, relações e ciclos de vida |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Módulos, fronteiras, contratos e o pipeline de requisição |
@@ -19,10 +20,22 @@ Documentação técnica versionada junto com o código, neste repositório. **N�
 | [DELIVERY-CATALOG.md](DELIVERY-CATALOG.md) | Cadastro modular, destinos por ambiente, consulta e importação de configurações |
 | [SECURITY.md](SECURITY.md) | Identidade, permissões, segredos e auditoria |
 | [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md) | Tokens, componentes, navegação e estados de interface |
+| [UX-DESIGN-DEPLOY-PROJECTS.md](UX-DESIGN-DEPLOY-PROJECTS.md) | Rotas, fluxos, correlações e direção visual para Projetos, Deploy e ativação |
 | [INFRASTRUCTURE.md](INFRASTRUCTURE.md) | Ambientes, bancos, migrações, backup, deploy e observabilidade |
 | [ROADMAP.md](ROADMAP.md) | Entregas verticais, dependências e critérios de aceite |
 | [PENDENCIAS.md](PENDENCIAS.md) | Risco de infraestrutura, dinheiro parado, modelos vazios e trabalho fora do Core |
 | [TESTING.md](TESTING.md) | Estratégia, comandos e cobertura |
+| [FINANCE.md](FINANCE.md) | Modelo financeiro, fontes, projeções e limites da primeira entrega |
+| [SERVICE-TRACKING.md](SERVICE-TRACKING.md) | Agenda, apontamentos, auditoria e camadas futuras de acompanhamento |
+| [EASYPANEL-OPERATIONS.md](EASYPANEL-OPERATIONS.md) | Cobertura e limites da integração operacional com EasyPanel |
+| [INTERNAL-PLATFORMS.md](INTERNAL-PLATFORMS.md) | Contrato de leitura das plataformas internas |
+| [POSTGRES-TLS.md](POSTGRES-TLS.md) | Transporte TLS do PostgreSQL, verificação e reversão |
+| [PRODUCTION-DEPLOY.md](PRODUCTION-DEPLOY.md) | Preparação, variáveis e verificação do deploy protegido |
+| [CORE-EXECUTION-TODO.md](CORE-EXECUTION-TODO.md) | Plano de execução das etapas do Core |
+| [DESIGN-360.md](DESIGN-360.md) | Auditoria ampla da experiência e do sistema visual |
+| [UX-AUDIT-ETAPA-0.md](UX-AUDIT-ETAPA-0.md) | Auditoria da primeira etapa de UX |
+| [UX-RELATION-MAP.md](UX-RELATION-MAP.md) | Mapa visual de relações e navegação |
+| [THIRD-PARTY-ICONS.md](THIRD-PARTY-ICONS.md) | Fontes e licenças dos ícones de terceiros |
 | [decisions/](decisions/) | ADRs — só decisões relevantes e difíceis de reverter |
 
 ## Como ler: classificação de maturidade

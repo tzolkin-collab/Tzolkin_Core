@@ -22,6 +22,10 @@ import { financeRoutes } from './modules/finance.mjs';
 import { paymentSalesRoutes } from './modules/payment-sales.mjs';
 import { billingRoutes } from './modules/billing.mjs';
 import {emailRoutes} from './modules/emails.mjs';
+import {emailTemplateRoutes} from './modules/email-templates.mjs';
+import {productFaviconRoutes} from './modules/product-favicons.mjs';
+import {productDeployBindingRoutes} from './modules/product-deploy-bindings.mjs';
+import {serviceDeployBindingRoutes} from './modules/service-deploy-bindings.mjs';
 import {productPaymentRoutes} from './modules/product-payments.mjs';
 import { paymentWebhookRoutes } from './modules/payment-webhooks.mjs';
 import { stripeCatalogRoutes } from './modules/stripe-catalog.mjs';
@@ -29,15 +33,19 @@ import { accountRoutes } from './modules/accounts.mjs';
 import { checkoutTemplateRoutes } from './modules/checkout-templates.mjs';
 import { checkoutGatewayRoutes } from './modules/checkout-gateway.mjs';
 import { financeForecastRoutes } from './modules/finance-forecasts.mjs';
+import { managementRoutes } from './modules/management.mjs';
+import { hostingerDnsRoutes } from './modules/hostinger-dns.mjs';
+import { productTopologyRoutes } from './modules/product-topology.mjs';
+import { productResourceBindingRoutes } from './modules/product-resource-bindings.mjs';
 
 const MODULES = [
- identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes, productPaymentRoutes,
+ identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes, emailTemplateRoutes, productFaviconRoutes, productDeployBindingRoutes, productResourceBindingRoutes, serviceDeployBindingRoutes, managementRoutes, productPaymentRoutes, productTopologyRoutes,
  checkoutTemplateRoutes, directoryRoutes, contractsRoutes, accessRoutes, productConsoleRoutes,
 ];
 
 // `security` é o estado do transporte do banco medido por platform/database.mjs.
 // Ausente = não medido; os endpoints reportam 'unknown' em vez de fingir segurança.
-export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, webOrigin,serveAsset, webhookEnv, catalogAdapter, checkoutOptions} = {}) {
+export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, hostingerDnsOptions, webOrigin,serveAsset, webhookEnv, catalogAdapter, checkoutOptions} = {}) {
  if (webOrigin && !(/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(webOrigin)||/^https:\/\/[a-z0-9.-]+(?::[1-9][0-9]{0,4})?$/.test(webOrigin))) throw new Error('Use an explicit HTTP loopback or HTTPS web origin.');
  const sessions = identity||createSessionStore({ adminPassword, clock });
  const router = createRouter();
@@ -47,6 +55,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  deploysRoutes(router, { registry: deployRegistry ?? buildRegistry(), clock });
  infrastructureRoutes(router, { ...infrastructureOptions, clock });
  deliveryRoutes(router, deliveryOptions);
+ hostingerDnsRoutes(router, hostingerDnsOptions);
  platformOperationsRoutes(router,{...platformOptions,clock});
  financeRoutes(router,financeOptions);
  financeForecastRoutes(router);
@@ -62,7 +71,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
   try {
    const origin = webOrigin || `http://127.0.0.1:${server.address().port}`;
    const url = new URL(req.url, origin);
-   if (!['GET', 'POST', 'PUT'].includes(req.method)) throw fail(405, 'Método não permitido.');
+   if (!['GET', 'POST', 'PUT', 'DELETE'].includes(req.method)) throw fail(405, 'Método não permitido.');
    if(req.method==='GET'&&serveAsset?.(url.pathname,res))return;
 
    const matched = router.match(req.method, url.pathname);

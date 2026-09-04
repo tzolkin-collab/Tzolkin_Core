@@ -8,6 +8,6 @@ export function emailRoutes(router){
  router.get('/api/emails',async({pool,reply})=>{
   const result=await pool.query(`SELECT b.product_id,p.name AS product_name,b.slug,b.payload,b.version
    FROM billing_offers b JOIN products p ON p.id=b.product_id AND p.lifecycle_status='active' ORDER BY p.name,b.slug`);
-  return reply(200,{rules:projectEmailRules(result.rows),delivery:'not_integrated',inbound:'not_integrated',templates:'references_only'});
+  return reply(200,{rules:projectEmailRules(result.rows),delivery:'not_integrated',inbound:'not_integrated',templates:'draft_editor'});
  });
 }

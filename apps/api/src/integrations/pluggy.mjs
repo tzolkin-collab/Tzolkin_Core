@@ -1,12 +1,20 @@
 import {fail} from '../platform/http.mjs';
 
+const endpoint = env => {
+ const value = env.PLUGGY_API_BASE?.trim() || 'https://api.pluggy.ai';
+ let url; try { url = new URL(value); } catch { throw fail(503,'PLUGGY_API_BASE inválida.'); }
+ if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw fail(503,'PLUGGY_API_BASE inválida.');
+ return url.origin;
+};
+
 export function createPluggy({env=process.env,fetcher=fetch,clock=Date.now}={}) {
+ const base = endpoint(env);
  let key,expires=0,pending;
  async function request(path,signal) {
   if(!key || clock()>=expires) {
    pending ||= (async()=>{
     if(!env.PLUGGY_CLIENT_ID || !env.PLUGGY_CLIENT_SECRET)throw fail(503,'Configure as credenciais Pluggy no backend.');
-    const r=await fetcher('https://api.pluggy.ai/auth',{method:'POST',redirect:'error',signal,
+    const r=await fetcher(base+'/auth',{method:'POST',redirect:'error',signal,
      headers:{'Content-Type':'application/json'},body:JSON.stringify({clientId:env.PLUGGY_CLIENT_ID,clientSecret:env.PLUGGY_CLIENT_SECRET})});
     if(!r.ok)throw fail(502,'Não foi possível autenticar na Pluggy.');
     const d=await r.json();if(!d.apiKey)throw fail(502,'Resposta de autenticação inválida.');
@@ -14,7 +22,7 @@ export function createPluggy({env=process.env,fetcher=fetch,clock=Date.now}={}) 
    })().finally(()=>{pending=null;});
    await pending;
   }
-  const r=await fetcher('https://api.pluggy.ai'+path,{redirect:'error',signal,headers:{'X-API-KEY':key}});
+  const r=await fetcher(base+path,{redirect:'error',signal,headers:{'X-API-KEY':key}});
   if(r.status===401){key=null;expires=0;}
   if(!r.ok)throw fail(502,r.status===429?'Limite da Pluggy atingido. Tente mais tarde.':'Não foi possível consultar a conexão Pluggy.');
   return r.json();

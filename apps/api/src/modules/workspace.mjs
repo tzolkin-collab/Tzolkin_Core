@@ -26,7 +26,9 @@ export function workspaceRoutes(router) {
   const results = [];
   for (const sql of [
    'SELECT * FROM tenants ORDER BY created_at DESC',
-   "SELECT * FROM products WHERE lifecycle_status='active' ORDER BY name",
+   // O portfólio precisa mostrar produtos ativos e drafts; arquivados ficam
+   // fora da operação corrente, mas continuam no banco para histórico.
+   "SELECT * FROM products WHERE lifecycle_status IN ('active','draft') ORDER BY lifecycle_status DESC,name",
    'SELECT * FROM memberships',
    'SELECT * FROM entitlements',
    'SELECT * FROM client_engagements ORDER BY created_at',

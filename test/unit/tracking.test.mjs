@@ -33,10 +33,10 @@ test('status concorrente falha sem confirmar gravação',async()=>{
 });
 test('repetir criação idêntica não duplica auditoria; payload diferente conflita',async()=>{
  let handler;trackingRoutes({get(){},put(){},post(p,h){if(p==='/api/tracking')handler=h;}});
- let stored=null,audits=0;
- const pool={async connect(){return {async query(sql){if(sql.startsWith('INSERT INTO service_activities')){if(stored)return{rows:[]};stored=activityInput(activity);return{rows:[stored]};}if(sql.startsWith('SELECT * FROM service_activities'))return{rows:[stored]};if(sql.startsWith('INSERT INTO service_activity_audit'))audits++;return{rows:[]};},release(){}};}};
- const invoke=b=>handler({pool,reply(){},req:{headers:{'content-type':'application/json'},async *[Symbol.asyncIterator](){yield Buffer.from(JSON.stringify(b));}}});
- await invoke(activity);await invoke(activity);assert.equal(audits,1);await assert.rejects(invoke({...activity,title:'Outro título'}),e=>e.status===409);
+ let stored=null,audits=0,actors=[];
+ const pool={async connect(){return {async query(sql,params=[]){if(sql.startsWith('INSERT INTO service_activities')){if(stored)return{rows:[]};stored=activityInput(activity);return{rows:[stored]};}if(sql.startsWith('SELECT * FROM service_activities'))return{rows:[stored]};if(sql.startsWith('INSERT INTO service_activity_audit')){audits++;actors.push(params[2]);return{rows:[]};}return{rows:[]};},release(){}};}};
+ const invoke=b=>handler({pool,operator:{email:'operator@example.com'},reply(){},req:{headers:{'content-type':'application/json'},async *[Symbol.asyncIterator](){yield Buffer.from(JSON.stringify(b));}}});
+ await invoke(activity);await invoke(activity);assert.equal(audits,1);assert.equal(actors[0],'operator@example.com');await assert.rejects(invoke({...activity,title:'Outro título'}),e=>e.status===409);
 });
 test('tracking não permite acesso anônimo nem mutação cross-origin',async()=>{
  const pool={query(){assert.fail('Não deve consultar banco sem autenticação');}};

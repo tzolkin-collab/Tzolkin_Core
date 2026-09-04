@@ -2,7 +2,10 @@
 
 Estratégia, comandos e cobertura.
 
-Revisão: **2026-08-30**.
+Revisão: **2026-09-03**.
+
+Verificação atual em 2026-09-03: `npm run test:unit` passou com **123/123 testes** e `npm test`
+passou com **237/237 testes**, incluindo PostgreSQL real e endpoints de webhook.
 
 ---
 
@@ -45,7 +48,7 @@ Após configurar a chave do EasyPanel: **27/27 unitários aprovados**. Dois test
 npm test
 ```
 
-Roda `node --env-file=.env --test "test/**/*.test.mjs"`. Exige o banco preparado e **migrado** ([INFRASTRUCTURE.md](INFRASTRUCTURE.md#preparação-do-core-existente-e-verificado)) e o catálogo importado — a suíte principal confere as 13 entradas.
+Roda `node --env-file=.env --test "test/**/*.test.mjs"`. Exige o banco preparado e **migrado** ([INFRASTRUCTURE.md](INFRASTRUCTURE.md#preparação-do-core-existente-e-verificado)) e o catálogo importado — a suíte principal confere as 16 migrações.
 
 Uma suíte isolada:
 
@@ -154,7 +157,7 @@ Conhecidas e não disfarçadas:
 | Financeiro | Não há código financeiro |
 | Isolamento no banco | Só isolamento por query é testado; não há RLS ([D5](CONTEXT.md#d5--isolamento-no-banco-só-query-ou-rlsseparação-física)) |
 | Contraste e leitor de tela | Não medidos — [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md#7-acessibilidade-existente-e-verificado) |
-| Restauração de backup | Não existe backup ([INFRASTRUCTURE.md](INFRASTRUCTURE.md#4-backup-e-restauração-proposto)) |
+| Restauração de backup | Há 16 backups PostgreSQL agendados, mas nenhum ensaio de restauração registrado ([INFRASTRUCTURE.md](INFRASTRUCTURE.md#4-backup-e-restauração-proposto)) |
 
 ---
 

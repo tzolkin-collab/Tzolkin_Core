@@ -4,7 +4,7 @@ Atualização `[EXISTENTE E VERIFICADO]` de 2026-08-31: web e API agora são wor
 
 Módulos, fronteiras e contratos. Conceitos em [DOMAIN-MODEL.md](DOMAIN-MODEL.md).
 
-Revisão: **2026-08-30**.
+Revisão: **2026-09-03**.
 
 ---
 
@@ -49,7 +49,7 @@ src/
     session.mjs           sessão administrativa e limite de tentativas
     assets.mjs            arquivos estáticos (lista fixa)
   modules/
-    identity.mjs          POST /api/login, POST /api/logout
+    identity.mjs          POST /api/login, POST /api/logout, Google OIDC
     workspace.mjs         GET /health, GET /api/overview                    ← contexto A
     catalog.mjs           GET /api/ecosystem + leitura de products
     directory.mjs         POST|PUT /api/tenants, PUT /api/memberships
@@ -57,6 +57,9 @@ src/
     access.mjs            GET /v1/context                                   ← consumido pelos apps
     product-console.mjs   GET /api/products/:productId/console              ← contexto B
     deploys.mjs           GET /api/deploys                                  ← leitura de provedores
+    delivery.mjs          GET/POST/PUT /api/delivery/*                      ← projetos e ativação
+    finance*.mjs          /api/finance/*                                    ← projeções e vendas
+    payment-*.mjs         /api/webhooks/*                                   ← registro de eventos
   integrations/
     vercel.mjs            adaptador Vercel, SOMENTE LEITURA
 ```
@@ -167,7 +170,7 @@ Contrato que o app precisa respeitar:
 
 ## Catálogo técnico e configurações `[EXISTENTE E VERIFICADO]`
 
-Verificado em 2026-08-31 por `npm run test:unit` e consultas GET aos provedores. `modules/delivery.mjs` registra `GET /api/delivery/options`, `GET/POST /api/delivery/projects`, `PUT /api/delivery/projects/:id` e `GET /api/delivery/settings`. Todos exigem sessão administrativa. Cadastro e auditoria técnica usam uma transação própria nas tabelas `delivery_projects` e `delivery_audit`, sem misturar dados de clientes.
+Verificado em 2026-09-03 por `npm run test:unit` e consultas GET aos provedores. `modules/delivery.mjs` registra `GET /api/delivery/options`, `GET/POST /api/delivery/projects`, `PUT /api/delivery/projects/:id`, `POST /api/delivery/projects/:id/activate` e `GET /api/delivery/settings`. Todos exigem sessão administrativa. Cadastro e auditoria técnica usam uma transação própria nas tabelas `delivery_projects` e `delivery_audit`, sem misturar dados de clientes.
 
 `integrations/delivery-settings.mjs` consulta somente configurações existentes de projetos Vercel e serviços App EasyPanel, validando o destino no inventário e projetando campos permitidos. `public/delivery.js` compara com o formulário atual e permite importação seletiva antes do salvamento normal. Nenhuma alteração remota, comando ou deploy é executado. Contrato, campos, limites e lacunas: [DELIVERY-CATALOG.md](DELIVERY-CATALOG.md).
 

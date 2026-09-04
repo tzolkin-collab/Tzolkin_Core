@@ -2,7 +2,7 @@
 
 APIs, eventos, autenticação, falhas e sincronização. Requisitos financeiros ficam em [BILLING.md](BILLING.md); regras de segredo em [SECURITY.md](SECURITY.md#5-segredos).
 
-Revisão: **2026-08-30**.
+Revisão: **2026-09-03**.
 
 ---
 
@@ -14,8 +14,8 @@ Revisão: **2026-08-30**.
 | Apps → Core, via `GET /v1/context` | `[EXISTENTE E VERIFICADO]`, mas **nenhum app real provisionado** (`app_clients` = 0 linhas) |
 | Notion → Core, catálogo do ecossistema | `[EXISTENTE E VERIFICADO]`, importação manual |
 | Core → EasyPanel | Consulta real autenticada validada: 3 projetos e 9 serviços — ver §10 |
-| Stripe e Asaas | `[IMPLEMENTADO PARCIALMENTE]` — leitura mensal de vendas por API, sob demanda; sem webhooks ou criação de cobranças |
-| Open Finance, Contabilizei, e-mail, webhooks | **Nada implementado** |
+| Stripe e Asaas | `[IMPLEMENTADO PARCIALMENTE]` — leitura mensal de vendas por API e registro de webhooks; sem criação de cobranças |
+| Open Finance, Contabilizei, e-mail | **Nada implementado** |
 
 ---
 
@@ -85,7 +85,7 @@ Regras do consumidor: autenticar o emissor; ignorar duplicado; ignorar versão a
 
 ## 5. Provedores de pagamento `[PARCIAL]`
 
-O Financeiro consulta cobranças da Stripe e pagamentos do Asaas por mês, sob demanda, e persiste apenas a projeção necessária para exibir vendas, taxas, líquido, estornos e situação. A leitura é independente por provedor, não expõe chaves ao navegador e não mistura repasses bancários da Pluggy com receita. Webhooks e criação de cobranças continuam propostos. Capacidades pesquisadas na documentação oficial estão em [BILLING.md §4](BILLING.md#4-capacidades-dos-provedores) — incluindo autenticação de webhook, ordem de eventos, retentativas e idempotência de cada um. Não repetir aqui.
+O Financeiro consulta cobranças da Stripe e pagamentos do Asaas por mês, sob demanda, e persiste apenas a projeção necessária para exibir vendas, taxas, líquido, estornos e situação. A leitura é independente por provedor, não expõe chaves ao navegador e não mistura repasses bancários da Pluggy com receita. Webhooks já registram e deduplicam eventos em `payment_webhooks`; criação de cobranças continua fora do escopo. Regras e limites estão em [BILLING.md](BILLING.md).
 
 Do lado operacional, ao implementar:
 
@@ -106,7 +106,7 @@ Antes de escolher fornecedor, verificar: cobertura das instituições que a TZOL
 
 > 🟡 **HIPÓTESE a derrubar antes de qualquer desenho:** que a API do Asaas agrega todas as contas bancárias. **Não presumir isso.** Asaas é provedor de pagamentos; agregação de contas de terceiros é outro produto, com outro regime.
 
-Regra de leitura: **transferência entre contas próprias não é receita nova** — [BILLING.md](BILLING.md#6-conciliação-proposto).
+Regra de leitura: **transferência entre contas próprias não é receita nova** — [BILLING.md](BILLING.md).
 
 ---
 
@@ -119,7 +119,7 @@ Regra de leitura: **transferência entre contas próprias não é receita nova**
 
 **Encaminhamento `[PROPOSTO]`:** assumir **exportação assistida** (arquivo gerado pelo Core, conferido por pessoa, enviado pelo canal da Contabilizei). Antes de qualquer automação, perguntar diretamente à Contabilizei se existe integração suportada para o plano da TZOLKIN. **Não inventar API.**
 
-Divisão de responsabilidades em [BILLING.md §7](BILLING.md#7-contabilidade).
+Divisão de responsabilidades em [BILLING.md](BILLING.md).
 
 ---
 

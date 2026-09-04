@@ -15,6 +15,11 @@ test('Pluggy follows cursor on fixed host, deduplicates and caches server key',a
  assert.match(urls[2],/accountId=account/);assert.match(urls[2],/dateTo=2026-09-01/);assert.match(urls[2],/after=cursor/);
  assert.ok(!JSON.stringify(rows).includes('secret'));
 });
+test('Pluggy honors a configured HTTPS API base without accepting unsafe URLs',async()=>{
+ const urls=[];const provider=createPluggy({env:{PLUGGY_CLIENT_ID:'test',PLUGGY_CLIENT_SECRET:'test',PLUGGY_API_BASE:'https://pluggy.example.test/'},fetcher:async url=>{urls.push(url);return response(url.endsWith('/auth')?{apiKey:'key'}:{status:'UPDATED',results:[]});}});
+ await provider.accounts('item',AbortSignal.timeout(1000));assert.ok(urls.every(url=>url.startsWith('https://pluggy.example.test/')));
+ assert.throws(()=>createPluggy({env:{PLUGGY_API_BASE:'http://unsafe.test'}}),/inválida/);
+});
 test('Pluggy rejects repeated cursor rather than saving partial results',async()=>{
  const provider=createPluggy({env:{PLUGGY_CLIENT_ID:'test',PLUGGY_CLIENT_SECRET:'test'},fetcher:async url=>response(url.endsWith('/auth')?{apiKey:'secret'}:{results:[],next:'?after=repeated'})});
  await assert.rejects(provider.transactions('account','2026-08',AbortSignal.timeout(1000)),/incompleta/);
@@ -69,6 +74,17 @@ test('saved board survives module recreation and never calls provider',async()=>
  const routes=new Map();financeRoutes({get:(path,fn)=>routes.set(path,fn),post(){}},{provider:{transactions(){throw Error('must not call');},accounts(){throw Error('must not call');}},env:{PLUGGY_ITEM_IDS:'first'}});
  let body;await routes.get('/api/finance/board')({pool:f.pool,url:new URL('http://local/api/finance/board?month=2026-08'),reply:(s,data)=>body=data});
  assert.equal(body.accounts[0].snapshot.payload.transactions[0].id,'saved');assert.deepEqual(body.saved_months,['2026-08']);assert.ok(!JSON.stringify(body).includes('private'));
+});
+
+test('board query by year combines snapshots across months of the year',async()=>{
+ const f=fixture({});
+ f.store.set('transactions:account:2026-01',{payload:{transactions:[{id:'jan'}]}});
+ f.store.set('transactions:account:2026-08',{payload:{transactions:[{id:'aug'}]}});
+ const routes=new Map();financeRoutes({get:(path,fn)=>routes.set(path,fn),post(){}},{env:{PLUGGY_ITEM_IDS:'first'}});
+ let body;await routes.get('/api/finance/board')({pool:f.pool,url:new URL('http://local/api/finance/board?year=2026'),reply:(s,data)=>body=data});
+ assert.equal(body.year,'2026');
+ assert.equal(body.target_months.length,12);
+ assert.deepEqual(body.accounts[0].snapshot.payload.transactions.map(t=>t.id),['jan','aug']);
 });
 
 test('concurrent refresh for same account coalesces into one provider call',async()=>{

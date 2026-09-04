@@ -49,21 +49,24 @@ test('provider failures are isolated and options share a short cache', async () 
 });
 
 function fakePool() {
- let saved = null, snapshot;
+ let saved = null, snapshot, lifecycle = 'draft';
  const calls = [], audit = [];
- const pool = { calls,audit,failAudit:false,
+ const pool = { calls,audit,failAudit:false,readinessReady:false,
   async query(sql,params = []) {
    calls.push(sql);
    if(sql==='BEGIN'){snapshot=structuredClone(saved);return {rows:[]};}
    if(sql==='ROLLBACK'){saved=snapshot;return {rows:[]};}
    if(sql==='COMMIT')return {rows:[]};
    if(sql.startsWith('SELECT id,product_id,specification,revision'))return {rows:saved?[structuredClone(saved)]:[]};
-   if(sql.startsWith('SELECT d.id,d.product_id'))return {rows:saved?[{...structuredClone(saved),lifecycle_status:'draft'}]:[]};
+   if(sql.startsWith('SELECT d.id,d.product_id'))return {rows:saved?[{...structuredClone(saved),lifecycle_status:lifecycle}]:[]};
+   if(sql.startsWith('SELECT d.product_id,p.lifecycle_status,d.specification,d.revision'))return {rows:saved?[{...structuredClone(saved),lifecycle_status:lifecycle,has_repository_connection:pool.readinessReady,has_deploy_connection:pool.readinessReady,has_email_template:pool.readinessReady,has_offer:pool.readinessReady,has_checkout_template:pool.readinessReady,has_contract:pool.readinessReady}]:[]};
    if(sql.startsWith('INSERT INTO products'))return {rows:[]};
    if(sql.startsWith('INSERT INTO delivery_projects')){saved={id:params[0],product_id:params[1],specification:structuredClone(params[2]),revision:1};return {rows:[structuredClone(saved)]};}
    if(sql.startsWith('UPDATE delivery_projects')){saved.specification=structuredClone(params[0]);saved.revision++;return {rows:[structuredClone(saved)]};}
    if(sql.startsWith('UPDATE products SET name'))return {rows:[]};
-   if(sql.startsWith('SELECT lifecycle_status FROM products'))return {rows:[{lifecycle_status:'draft'}]};
+   if(sql.startsWith('SELECT lifecycle_status FROM products'))return {rows:[{lifecycle_status:lifecycle}]};
+   if(sql.startsWith('SELECT d.revision,p.lifecycle_status'))return {rows:saved?[{revision:saved.revision,lifecycle_status:lifecycle}]:[]};
+   if(sql.startsWith("UPDATE products SET lifecycle_status='active'")){lifecycle='active';return {rows:[]};}
    if(sql.startsWith('INSERT INTO delivery_audit')){if(pool.failAudit)throw Error('private');audit.push(params);return {rows:[]};}
    throw Error('Unexpected SQL');
   },async connect(){return {...pool,query:pool.query.bind(pool),release(){}};},
@@ -93,5 +96,9 @@ test('HTTP enforces session, CSRF, revisions, audited transactions and real targ
   assert.equal((await request(endpoint,'PUT',project({revision:1}),headers)).status,409);
   pool.failAudit=true;const fail=await request(endpoint,'PUT',project({name:'Rollback test',revision:2}),headers);assert.equal(fail.status,500);assert.ok(!(await fail.text()).includes('private'));
   const listed=await(await request('/api/delivery/projects','GET',null,headers)).json();assert.equal(listed.projects[0].revision,2);assert.notEqual(listed.projects[0].name,'Rollback test');
+  assert.equal((await request(endpoint+'/activate','POST',{revision:2},headers)).status,409);
+  pool.readinessReady=true;
+  assert.equal((await request(endpoint+'/activate','POST',{revision:2},headers)).status,200);
+  assert.equal((await request(endpoint+'/activate','POST',{revision:2},headers)).status,409);
  } finally {server.closeAllConnections();await new Promise(r=>server.close(r));}
 });

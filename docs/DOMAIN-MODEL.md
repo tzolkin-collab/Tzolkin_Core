@@ -66,7 +66,7 @@ Conferido em `db/schema.sql` e no banco em 2026-09-02.
 | `lifecycle_status` | `text` | `draft`, `active` ou `archived`; produto novo de projeto técnico começa em `draft` |
 | `brand_family` | `text` | Família de marca, hoje `tzolkin` |
 
-Hoje: `sites`, `educare`, `barber`, `commerce`, `data`, `core`. Ver [D2](CONTEXT.md#d2--o-próprio-core-e-o-data-são-produtos-contratáveis).
+Hoje: `sites`, `educare`, `barber`, `commerce`, `data`, `core` e `skiller`. Ver [D2](CONTEXT.md#d2--o-próprio-core-e-o-data-são-produtos-contratáveis).
 
 `portfolio_kind` classifica o portfólio: Sites, Commerce e Data são `service_line`; Barber e Skiller são `product`; Core e Educare são `platform`.
 
@@ -76,6 +76,11 @@ contratação é cobrada. A taxonomia de `client_engagements.service_model` é
 (`unclassified` é o estado transitório de cadastro). Modalidade de cobrança
 fica exclusivamente em `billing_offers.kind`: `one_time`, `installments` ou
 `subscription`.
+
+Para registros antigos, `lifecycle_status` continua compatível com as chaves
+de contrato e acesso. A tela de Produtos exibe a verdade operacional derivada
+do deploy observado e do status cadastral: frentes sem evidência aparecem como
+`Produto em draft` até serem validadas.
 
 SaaS, app e white-label são recortes do produto, não da contratação. Enquanto
 esses atributos forem cadastrais e não mudarem autorização, cobrança ou fluxo
@@ -94,6 +99,14 @@ do sistema, desce-se então para uma coluna própria e com vocabulário explíci
 
 Esta tabela responde **o que foi vendido**. Ela não repete a modalidade de
 cobrança, que pertence à oferta em `billing_offers.kind`.
+
+### `service_deploy_bindings` — execução de um serviço
+
+Um deploy de assessoria, consultoria ou trabalho sob demanda não cria produto
+automaticamente. Esta tabela liga o projeto externo (`vercel` ou `easypanel`)
+à contratação em `client_engagements`, com ambiente explícito. A tela
+**Serviços** usa esse vínculo para mostrar a execução real do contrato; o
+projeto `designer` da Assessoria da Assinatura já nasce classificado aqui.
 
 ### `ecosystem_entries` — ficha do Notion
 
@@ -180,7 +193,7 @@ Nada abaixo existe no código. Ordem sugerida e critérios em [ROADMAP.md](ROADM
 | `commercial_relationships` | Separar cliente comercial de organização técnica | — |
 | `offers` / `price_versions` | Oferta e versão de preço; `plan` é só um rótulo | [BILLING.md](BILLING.md) |
 | `contracts` | Contrato comercial, distinto de `entitlements` (direito técnico) | — |
-| `subscriptions`, `invoices`, `charges`, `payments`, `settlements` | Ciclo financeiro — [BILLING.md](BILLING.md#2-estados-cada-um-é-uma-coisa-diferente) | [D3](CONTEXT.md#d3--quem-vende-e-quem-recebe-no-fluxo-consumidor--cliente) |
+| `subscriptions`, `invoices`, `charges`, `payments`, `settlements` | Ciclo financeiro — [BILLING.md](BILLING.md) | [D3](CONTEXT.md#d3--quem-vende-e-quem-recebe-no-fluxo-consumidor--cliente) |
 | `roles` / `grants` | Papel e escopo sobre o vínculo já existente, com expiração — opção C da [ADR 0002](decisions/0002-vinculo-de-pessoa-por-produto.md) | [SECURITY.md](SECURITY.md#3-permissões-proposto) |
 
 Regra ao criar qualquer uma: **valor monetário nunca em ponto flutuante** (inteiro na menor unidade + moeda) e **nada de `tenant_id` indiscriminado** em tabela global — ver [DATA-OWNERSHIP.md](DATA-OWNERSHIP.md#a-fronteira-por-app).

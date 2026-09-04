@@ -84,7 +84,7 @@ Compromissos, não omissões.
 
 1. **Não virar backend universal.** Operação dos apps não migra para o Core.
 2. **Não ser motor genérico de CRM/OMS/ERP** antes de existir fluxo concreto para modelar.
-3. **Não substituir a contabilidade fiscal.** A Contabilizei segue responsável — [BILLING.md](BILLING.md#7-contabilidade).
+3. **Não substituir a contabilidade fiscal.** A Contabilizei segue responsável — [BILLING.md](BILLING.md).
 4. **Não guardar dado de consumidor final** de cliente nenhum.
 5. **Não guardar lead operacional** dos clientes.
 6. **Não movimentar dinheiro na primeira fase de Open Finance.** Só leitura — [INTEGRATIONS.md](INTEGRATIONS.md#6-open-finance-proposto).

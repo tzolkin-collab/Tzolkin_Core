@@ -5,9 +5,31 @@ import { createDeliveryOptions } from '../integrations/delivery-options.mjs';
 import { createDeliverySettings } from '../integrations/delivery-settings.mjs';
 import { createResourceReader } from '../integrations/resource.mjs';
 
+const readiness = row => {
+ const specification = row.specification || {}, components = specification.components || [];
+ const items = [
+  { key:'identity', label:'Identidade e responsável', ready:Boolean(specification.name && specification.owner), detail:'Nome e responsável definidos no projeto.' },
+  { key:'source', label:'Código-fonte', ready:Boolean(specification.repository_id || row.has_repository_connection), detail:'Repositório selecionado ou conexão de código confirmada.' },
+  { key:'services', label:'Componentes técnicos', ready:components.length > 0, detail:'Ao menos um componente técnico cadastrado.' },
+  { key:'deploy', label:'Deploy de produção', ready:Boolean(row.has_deploy_connection), detail:'Frontend ou backend confirmado em produção.' },
+  { key:'emails', label:'E-mails', ready:Boolean(row.has_email_template), detail:'Ao menos um template de e-mail salvo.' },
+  { key:'checkout', label:'Oferta e checkout', ready:Boolean(row.has_offer && row.has_checkout_template), detail:'Oferta e template de checkout cadastrados.' },
+  { key:'contracts', label:'Contrato de cliente', ready:Boolean(row.has_contract), detail:'Ao menos um contrato ativo preparado para o produto.' },
+ ];
+ return { ready: items.every(item => item.ready), completed: items.filter(item => item.ready).length, total: items.length, items };
+};
+
+const readinessColumns = `
+ EXISTS(SELECT 1 FROM product_resource_bindings r WHERE r.product_id=d.product_id AND r.resource_type='repository') AS has_repository_connection,
+ EXISTS(SELECT 1 FROM product_resource_bindings r WHERE r.product_id=d.product_id AND r.resource_type IN ('frontend','backend') AND r.environment='production') AS has_deploy_connection,
+ EXISTS(SELECT 1 FROM email_templates e WHERE e.product_id=d.product_id) AS has_email_template,
+ EXISTS(SELECT 1 FROM billing_offers b WHERE b.product_id=d.product_id) AS has_offer,
+ EXISTS(SELECT 1 FROM checkout_templates c WHERE c.product_id=d.product_id) AS has_checkout_template,
+ EXISTS(SELECT 1 FROM entitlements e WHERE e.product_id=d.product_id AND e.active) AS has_contract`;
+
 const present = row => ({ id: row.id, product_id: row.product_id || null, product_lifecycle_status: row.lifecycle_status || null,
  revision: row.revision, updated_at: row.updated_at, ...row.specification,
- issues: projectIssues(row.specification), deployment_status: 'not_observed' });
+ issues: projectIssues(row.specification), readiness: readiness(row), deployment_status: 'not_observed' });
 
 export function deliveryRoutes(router, { options = createDeliveryOptions(), settings = createDeliverySettings(), resource = createResourceReader() } = {}) {
  router.get('/api/platforms/resource', async ({url,reply}) => {
@@ -38,7 +60,7 @@ export function deliveryRoutes(router, { options = createDeliveryOptions(), sett
  });
  router.get('/api/delivery/projects', async ({ pool, url, reply }) => {
   onlyParams(url.searchParams, []);
-  const rows = (await pool.query(`SELECT d.id,d.product_id,p.lifecycle_status,d.specification,d.revision,d.updated_at
+  const rows = (await pool.query(`SELECT d.id,d.product_id,p.lifecycle_status,d.specification,d.revision,d.updated_at,${readinessColumns}
    FROM delivery_projects d LEFT JOIN products p ON p.id=d.product_id ORDER BY d.updated_at DESC LIMIT 201`)).rows;
   reply(200, { projects: rows.slice(0, 200).map(present), truncated: rows.length > 200 });
  });
@@ -91,4 +113,33 @@ export function deliveryRoutes(router, { options = createDeliveryOptions(), sett
  };
  router.post('/api/delivery/projects', save);
  router.put('/api/delivery/projects/:id', save);
+ router.delete('/api/delivery/projects/:id', async ({ params, client }) => {
+  if (!isUuid(params.id)) throw fail(400, 'Projeto inválido.');
+  const current = (await client.query(`SELECT d.product_id,p.lifecycle_status,
+    EXISTS(SELECT 1 FROM entitlements e WHERE e.product_id=d.product_id) AS has_contract
+    FROM delivery_projects d LEFT JOIN products p ON p.id=d.product_id WHERE d.id=$1`, [params.id])).rows[0];
+  if (!current) throw fail(404, 'Projeto não encontrado.');
+  if (current.lifecycle_status !== 'draft' || current.has_contract) throw fail(409, 'Só é possível excluir um projeto em draft sem contratos.');
+  await client.query('DELETE FROM delivery_audit WHERE project_id=$1', [params.id]);
+  await client.query('DELETE FROM delivery_projects WHERE id=$1', [params.id]);
+  if (current.product_id) {
+   await client.query('DELETE FROM product_deploy_bindings WHERE product_id=$1', [current.product_id]);
+   await client.query('DELETE FROM products WHERE id=$1 AND lifecycle_status=\'draft\'', [current.product_id]);
+  }
+  return { tenant: null, type: 'delivery.project_deleted' };
+ }, { transactional: true, audit: false });
+ router.post('/api/delivery/projects/:id/activate', async ({ params, body, client }) => {
+  if (!isUuid(params.id) || !body || typeof body !== 'object' || Array.isArray(body) ||
+      Object.keys(body).some(key => key !== 'revision') || !Number.isInteger(body.revision) || body.revision < 1)
+   throw fail(400, 'Projeto ou revisão inválida.');
+  const current = (await client.query(`SELECT d.product_id,p.lifecycle_status,d.specification,d.revision,${readinessColumns}
+   FROM delivery_projects d JOIN products p ON p.id=d.product_id WHERE d.id=$1 FOR UPDATE`, [params.id])).rows[0];
+  if (!current) throw fail(404, 'Projeto não encontrado.');
+  if (current.revision !== body.revision) throw fail(409, 'Este projeto mudou. Reabra o cadastro antes de ativar.');
+  if (current.lifecycle_status !== 'draft') throw fail(409, 'Este produto já está ativo ou arquivado.');
+  const state = readiness(current);
+  if (!state.ready) throw fail(409, `Resolva o checklist antes de ativar: ${state.items.filter(item=>!item.ready).map(item=>item.label).join(', ')}.`);
+  await client.query("UPDATE products SET lifecycle_status='active' WHERE id=$1", [current.product_id]);
+  return { tenant: null, type: 'delivery.product_activated' };
+ }, { transactional: true, audit: false });
 }

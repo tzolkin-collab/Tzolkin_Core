@@ -16,15 +16,17 @@ Ordenado por irreversibilidade, não por esforço. O critério é: **se der erra
 
 | Item | Situação | Se acontecer |
 |---|---|---|
-| **Bancos de cliente sem backup** | 18 de 19 bancos sem rotina. Só `systembots` tem. Kalidash, Assinatura, barbearia, Coelho, o próprio Core e o institucional: nenhum. Mais 8 apps sem backup de volume | Perda definitiva. Não há reconstrução possível a partir do Core |
-| **Backup existente grava em disco local** | A rotina do `systembots` tem destino **Local Disk** — mesma máquina do banco | Protege contra apagar tabela por engano. **Não protege contra perder o servidor**, que é o cenário sem volta |
+| **Backup sem destino externo** | 16 backups PostgreSQL ativos, todos em **Local Disk** no mesmo servidor | Protege contra apagar tabela por engano. **Não protege contra perder o servidor**, que é o cenário sem volta |
+| **Restauração de backup não testada** | Nenhum ensaio registrado em ambiente isolado | Backup sem restauração verificada continua sendo hipótese |
 | **Credenciais em texto aberto no Notion** | Sinalizado como prioridade pelo próprio ADR de infraestrutura. Nunca tratado, e sem item rastreando | Vazamento do Notion vira vazamento de tudo. Rotação depois do fato não desfaz cópia |
 | **Porta 9000 exposta à internet** | `easypanel.landcriativa.com:9000` aceita conexão de qualquer IP, verificado por sondagem. O TLS resolveu interceptação, não exposição | Varredura e força bruta continuam possíveis contra um painel que administra 19 bancos |
 | **Certificado do Postgres vence** | `notAfter = 2027-08-31` `[EXISTENTE E VERIFICADO]` — conferido em 2026-09-02 com `openssl x509 -enddate -in certs/postgres-server.crt` | Com `verify-full`, vencimento **não degrada: para**. O Core perde o banco de uma vez, sem aviso prévio |
 
 **Se for fazer uma só coisa:** backup dos bancos de cliente. É a única da lista que não tem conserto depois — e é configuração de painel, não desenvolvimento.
 
-**Antes de replicar o que existe:** o modelo do `systembots` aponta para disco local. Copiá-lo em 18 bancos cria 18 backups que morrem junto com a máquina. A decisão de destino (S3, outro host, off-site) precisa vir antes da execução, senão o trabalho dá falsa sensação de segurança — que é pior que a ausência dela, porque para de doer.
+**Estado atual:** os 16 agendamentos estão escalonados para evitar quinze `pg_dump` simultâneos,
+mas ainda usam disco local. A decisão de destino (S3, outro host, off-site) e de retenção precisa
+vir antes de considerar a proteção concluída.
 
 ---
 
@@ -88,7 +90,7 @@ Coisas que o software hoje não faz e que apareceram trabalhando, não em planej
 
 - **`audit_events.tenant_id` é `NOT NULL`.** Evento sem cliente associado — alteração de conta de operador, por exemplo — não tem onde ser gravado. As rotas de conta usam `audit:false`. Lacuna da E6 em [ROADMAP.md](ROADMAP.md).
 - **Não existe reclassificação de organização pela API.** `POST /api/tenants` só insere. Tirar um cliente de `unclassified` exige SQL com auditoria manual. Falta `PUT /api/tenants`.
-- **`PLUGGY_ITEM_IDS` é variável de ambiente.** Cada banco novo exige editar `.env` e redeployar. Deveria ser tabela, alimentada pelo widget Pluggy Connect — cujo `POST /connect_token` já responde 200.
+- **`PLUGGY_ITEM_IDS` é variável de ambiente.** Cada banco novo exige editar `.env` e redeployar. Deveria ser tabela, alimentada por um futuro widget Pluggy Connect — o `POST /connect_token` ainda não existe.
 - **A Pluggy não permite listar itens.** `GET /items` responde 401 em toda variação; item só se busca por id. Item criado fora do `.env` é invisível para o Core.
 
 ---

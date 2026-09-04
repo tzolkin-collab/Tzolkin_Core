@@ -1,4 +1,6 @@
 export const brazilMonth=value=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit'}).format(new Date(value));
+export const brazilDay=value=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
+export const brazilYear=value=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Sao_Paulo',year:'numeric'}).format(new Date(value));
 
 // Marcas empacotadas localmente, numa lista só. Três consumidores dependem
 // dela: o mapa `logos` abaixo, a allowlist de icons.js e os estáticos de
@@ -28,14 +30,36 @@ export function paymentInstitution(bank){
  let hash=0;for(const char of key)hash=(Math.imul(hash,31)+char.charCodeAt(0))>>>0;
  return{name,color:colors[key]||palette[hash%palette.length],logo:logos[key]||null};
 }
-export function periodRows(accounts,month){
+
+export function matchesPeriod(date,filter){
+ if(!Number.isFinite(Date.parse(date)))return false;
+ if(typeof filter==='string'){
+  if(/^\d{4}-\d{2}$/.test(filter))return brazilMonth(date)===filter;
+  if(/^\d{4}$/.test(filter))return brazilYear(date)===filter;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(filter))return brazilDay(date)===filter;
+  return true;
+ }
+ if(!filter||typeof filter!=='object')return true;
+ const mode=filter.mode||(filter.start||filter.end?'custom':filter.day?'day':filter.year?'year':filter.month?'month':'all');
+ if(mode==='month'&&filter.month)return brazilMonth(date)===filter.month;
+ if(mode==='year'&&filter.year)return brazilYear(date)===String(filter.year);
+ if(mode==='day'&&filter.day)return brazilDay(date)===filter.day;
+ if(mode==='custom'){
+  const d=brazilDay(date);
+  return (!filter.start||d>=filter.start)&&(!filter.end||d<=filter.end);
+ }
+ return true;
+}
+
+export function periodRows(accounts,filter){
  const unique=new Map();
  for(const account of accounts)for(const row of account.snapshot?.payload.transactions||[]){
-  if(!Number.isFinite(Date.parse(row.date))||brazilMonth(row.date)!==month)continue;
+  if(!matchesPeriod(row.date,filter))continue;
   unique.set(account.id+':'+row.id,{...row,account_id:account.id,account_name:account.name,bank:account.bank,account_type:account.type,currency:row.currency||account.currency});
  }
  return [...unique.values()].sort((a,b)=>Date.parse(b.date)-Date.parse(a.date));
 }
+
 export function cashSummary(accounts,rows,currency){
  const ids=new Set(accounts.filter(a=>a.type==='BANK'&&a.currency===currency).map(a=>a.id));
  const daily=new Map();let incoming=0,outgoing=0;
@@ -49,6 +73,7 @@ export function cashSummary(accounts,rows,currency){
  }
  return{incoming,outgoing,net:incoming-outgoing,daily:[...daily.values()].sort((a,b)=>a.day.localeCompare(b.day))};
 }
+
 export function needsRefresh(snapshot,attempt,month,now=Date.now()){
  const attempted=Date.parse(attempt?.updated_at);
  if(attempt?.payload?.state!=='ok'&&Number.isFinite(attempted)&&now-attempted<600000)return false;
@@ -64,7 +89,40 @@ export function bankBalance(accounts,currency){
 }
 
 // This is net movement from zero, NOT a reconstruction of historical balance.
-export function movementSeries(summary,month){
- const days=new Date(Number(month.slice(0,4)),Number(month.slice(5)),0).getDate();let net=0;
- return Array.from({length:days},(_,i)=>{const day=i+1,point=summary.daily.find(d=>Number(d.day.slice(-2))===day);net+=(point?.incoming||0)-(point?.outgoing||0);return{day,net,incoming:point?.incoming||0,outgoing:point?.outgoing||0};});
+export function movementSeries(summary,filter){
+ let net=0;
+ if(typeof filter==='string'&&/^\d{4}$/.test(filter)||(filter&&typeof filter==='object'&&filter.mode==='year')){
+  const yr=typeof filter==='string'?filter:String(filter.year);
+  return Array.from({length:12},(_,i)=>{
+   const m=String(i+1).padStart(2,'0'),prefix=yr+'-'+m;
+   const points=summary.daily.filter(d=>d.day.startsWith(prefix));
+   const incoming=points.reduce((s,p)=>s+p.incoming,0),outgoing=points.reduce((s,p)=>s+p.outgoing,0);
+   net+=incoming-outgoing;
+   return{day:i+1,label:m,net,incoming,outgoing};
+  });
+ }
+ if(typeof filter==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(filter)||(filter&&typeof filter==='object'&&filter.mode==='day')){
+  const targetDay=typeof filter==='string'?filter:filter.day;
+  const point=summary.daily.find(d=>d.day===targetDay);
+  const incoming=point?.incoming||0,outgoing=point?.outgoing||0;
+  return[{day:1,label:targetDay,net:incoming-outgoing,incoming,outgoing}];
+ }
+ if(filter&&typeof filter==='object'&&filter.mode==='custom'&&filter.start&&filter.end){
+  const start=new Date(filter.start+'T12:00:00Z'),end=new Date(filter.end+'T12:00:00Z');
+  const count=Math.max(1,Math.min(366,Math.round((end.getTime()-start.getTime())/86400000)+1));
+  return Array.from({length:count},(_,i)=>{
+   const cur=new Date(start.getTime()+i*86400000).toISOString().slice(0,10);
+   const point=summary.daily.find(d=>d.day===cur);
+   const incoming=point?.incoming||0,outgoing=point?.outgoing||0;
+   net+=incoming-outgoing;
+   return{day:i+1,label:cur,net,incoming,outgoing};
+  });
+ }
+ const month=typeof filter==='string'?filter:(filter?.month||'2026-01');
+ const days=new Date(Number(month.slice(0,4)),Number(month.slice(5)),0).getDate();
+ return Array.from({length:days},(_,i)=>{
+  const day=i+1,point=summary.daily.find(d=>Number(d.day.slice(-2))===day&&d.day.slice(0,7)===month);
+  net+=(point?.incoming||0)-(point?.outgoing||0);
+  return{day,net,incoming:point?.incoming||0,outgoing:point?.outgoing||0};
+ });
 }

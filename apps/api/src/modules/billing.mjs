@@ -1,5 +1,5 @@
 import {input,text,isProductId,fail} from '../platform/http.mjs';
-import {findProduct} from './catalog.mjs';
+import {findEditableProduct} from './catalog.mjs';
 
 export const EMAIL_EVENTS=['welcome','charge_created','payment_confirmed','due_reminder','overdue','renewal','canceled','refunded'];
 export function validateOffer(body){
@@ -31,12 +31,12 @@ export function billingRoutes(router){
  router.get('/api/billing/offers',async({pool,url,reply})=>{
   const product=url.searchParams.get('product_id');
   if(!isProductId(product)||[...url.searchParams.keys()].some(k=>k!=='product_id')||url.searchParams.getAll('product_id').length!==1)throw fail(400,'Produto inválido.');
-  const result=await pool.query("SELECT b.slug,b.payload,b.version,b.updated_at FROM billing_offers b JOIN products p ON p.id=b.product_id AND p.lifecycle_status='active' WHERE b.product_id=$1 ORDER BY b.slug",[product]);
+  const result=await pool.query("SELECT b.slug,b.payload,b.version,b.updated_at FROM billing_offers b JOIN products p ON p.id=b.product_id AND p.lifecycle_status IN ('active','draft') WHERE b.product_id=$1 ORDER BY b.slug",[product]);
   return reply(200,{offers:result.rows,execution:'draft_only'});
  });
  router.put('/api/billing/offers',async({client,body})=>{
  const offer=validateOffer(body);
-  if (!await findProduct(client, offer.product_id)) throw fail(400, 'Produto não está disponível para cobrança.');
+  if (!await findEditableProduct(client, offer.product_id)) throw fail(400, 'Produto não está disponível para cobrança.');
   const result=await client.query(`INSERT INTO billing_offers(product_id,slug,payload)
    SELECT $1,$2,$3::jsonb WHERE $4=0
    ON CONFLICT(product_id,slug) DO NOTHING RETURNING version`,[offer.product_id,offer.slug,JSON.stringify(offer),body.version]);

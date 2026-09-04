@@ -11,7 +11,7 @@ Não há garantia de disponibilidade absoluta ou recuperação após perda do se
 Não foram configurados backups externos nem executado ensaio de restauração.
 
 Somente administrador interno. O filtro de cliente NÃO é autorização de portal.
-Ator registrado como admin-bootstrap: identidade nominal e equipes pendentes.
+O ator da sessão administrativa é gravado na auditoria; equipes continuam pendentes.
 Agenda em America/Sao_Paulo; formulário atual usa UTC-03. Sem recorrências, edição
 de horário, convites externos ou sincronização. Status pode ser reaberto; histórico
 é preservado. Apontamentos são acrescentados, não apagados; correções auditadas

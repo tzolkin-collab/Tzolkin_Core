@@ -1,6 +1,7 @@
 # ADR 0003 — Configuração de cobrança por conta e oferta, não por produto
 
-- **Status:** `[PROPOSTO]` — nenhuma linha de código financeiro existe. Não vale como acordo.
+- **Status:** `[PROPOSTO]` — a decisão continua proposta; ofertas, checkout, vendas e webhooks já
+  têm implementação parcial descrita em `BILLING.md`.
 - **Data:** 2026-08-30
 
 ## Contexto
@@ -49,7 +50,7 @@ Decorrências:
 
 ## Limites desta ADR
 
-**Não decide o fluxo 2** (consumidor paga ao cliente). Split, repasse e conta conectada estão fora até [D3](../CONTEXT.md#d3--quem-vende-e-quem-recebe-no-fluxo-consumidor--cliente) ser respondida — [BILLING.md](../BILLING.md#fluxo-2--consumidor-paga-ao-cliente).
+**Não decide o fluxo 2** (consumidor paga ao cliente). Split, repasse e conta conectada estão fora até [D3](../CONTEXT.md#d3--quem-vende-e-quem-recebe-no-fluxo-consumidor--cliente) ser respondida — [BILLING.md](../BILLING.md#gateway-de-checkout--cria-sessão-só-fluxo-1).
 
 **Não escolhe provedor por produto.** Escolha comercial do usuário, tomada oferta a oferta.
 

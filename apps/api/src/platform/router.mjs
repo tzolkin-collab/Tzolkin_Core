@@ -14,6 +14,7 @@ export function createRouter() {
   get: (pattern, handler, options) => register('GET', pattern, handler, options),
   post: (pattern, handler, options) => register('POST', pattern, handler, options),
   put: (pattern, handler, options) => register('PUT', pattern, handler, options),
+  delete: (pattern, handler, options) => register('DELETE', pattern, handler, options),
   // Retorna a rota casada e os parâmetros do caminho, ou null.
   match(method, pathname) {
    const parts = pathname.split('/').filter(Boolean);

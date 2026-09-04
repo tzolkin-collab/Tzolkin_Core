@@ -11,6 +11,7 @@ export function createIcon(name){
 // Lucide SVG primitives, same ISC license as the icons above.
 Object.assign(icons,{
  mail:[['path',{d:'m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7'}],['rect',{x:2,y:4,width:20,height:16,rx:2}]],
+ briefcase:[['rect',{x:3,y:7,width:18,height:13,rx:2}],['path',{d:'M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M3 12h18 M10 12v2h4v-2'}]],
  calendar:[['rect',{x:3,y:3,width:18,height:18,rx:2}],['path',{d:'M8 2v3 M16 2v3 M3 9h18 M8 13h.01 M12 13h.01 M16 13h.01 M8 17h.01 M12 17h.01 M16 17h.01'}]],
  wallet:[['path',{d:'M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1'}],['path',{d:'M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4'}]],
  shield:[['path',{d:'M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z'}],['path',{d:'m9 12 2 2 4-4'}]],
@@ -34,6 +35,17 @@ export function providerLogo(name){
  const img=document.createElement('img');img.src='/logos/'+name+'.svg';img.alt='';
  if(!larga){img.width=20;img.height=20;}
  img.className='provider-logo'+(larga?' wide':'');return img;
+}
+
+// Identidade visual do produto. O Core resolve o favicon via um endpoint
+// protegido e allowlisted; se o deploy não expõe um ícone, usamos o pictograma
+// neutro em vez de atribuir a marca da plataforma de deploy.
+export function productFavicon(url){
+ if(!url)return createIcon('package');
+ if(typeof url==='string'&&url.startsWith('/product-favicons/')){const img=document.createElement('img');img.src=url;img.alt='';img.width=24;img.height=24;img.className='product-favicon';img.setAttribute('aria-hidden','true');return img;}
+ try{const parsed=new URL(url);if(parsed.protocol!=='https:')return createIcon('package');}catch{return createIcon('package');}
+ const img=document.createElement('img');img.src='data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';img.alt='';img.width=24;img.height=24;img.className='product-favicon';img.setAttribute('aria-hidden','true');
+ fetch('/api/product-favicon?'+new URLSearchParams({url})).then(response=>response.ok?response.json():null).then(result=>{if(result?.href)img.src=result.href;else img.replaceWith(createIcon('package'));}).catch(()=>img.replaceWith(createIcon('package')));return img;
 }
 
 // Original neutral institution pictogram, not a substitute for an official brand mark.

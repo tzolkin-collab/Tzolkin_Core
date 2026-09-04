@@ -275,7 +275,7 @@ export function setupDelivery({ api,openResource }) {
    }
    card.append(details);
    if (project.issues.length) { const ul = el('ul',null,'delivery-issues'); for (const issue of project.issues) ul.append(el('li',issue)); card.append(ul); }
-   const footer=el('div',null,'card-footer');footer.append(el('span','Cadastro técnico · publicação não verificada'));if(project.updated_at){const date=new Date(project.updated_at);if(!Number.isNaN(date.getTime()))footer.append(el('time','Atualizado '+date.toLocaleDateString('pt-BR')));}card.append(footer);
+   const footer=el('div',null,'card-footer');footer.append(el('span',project.product_lifecycle_status === 'active' ? 'Produto ativo · publicação não verificada' : 'Cadastro técnico · produto em rascunho'));if(project.product_lifecycle_status === 'draft'){const activate=button('Ativar produto',async()=>{activate.disabled=true;try{await api('/api/delivery/projects/'+project.id+'/activate','POST',{revision:project.revision});await load();$('delivery-message').textContent='Produto ativado. A publicação continua sendo uma etapa separada.';}catch(error){$('delivery-message').textContent=error.message;activate.disabled=false;}},'secondary','check');footer.append(activate);}if(project.updated_at){const date=new Date(project.updated_at);if(!Number.isNaN(date.getTime()))footer.append(el('time','Atualizado '+date.toLocaleDateString('pt-BR')));}card.append(footer);
    $('delivery-list').append(card);
   }
  }

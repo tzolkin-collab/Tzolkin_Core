@@ -8,7 +8,7 @@
 // produto (docs/decisions/0002-vinculo-de-pessoa-por-produto.md), e a resposta
 // declara isso em membership_scope.
 import { isProductId, onlyParams, fail } from '../platform/http.mjs';
-import { findProduct, findCatalogEntry } from './catalog.mjs';
+import { findEditableProduct, findCatalogEntry } from './catalog.mjs';
 
 const ORGANIZATIONS = `
  SELECT t.id AS tenant_id, t.name, t.slug, t.status, t.created_at,
@@ -28,12 +28,13 @@ export function productConsoleRoutes(router) {
   onlyParams(url.searchParams, []);
   if (!isProductId(params.productId)) throw fail(400, 'Produto inválido.');
 
-  const product = await findProduct(pool, params.productId);
+  const product = await findEditableProduct(pool, params.productId);
   if (!product) throw fail(404, 'Produto não encontrado.');
 
-  const [organizations, catalog] = await Promise.all([
+  const [organizations, catalog, profile] = await Promise.all([
    pool.query(ORGANIZATIONS, [product.id]).then(result => result.rows),
    findCatalogEntry(pool, product.id),
+   pool.query('SELECT portfolio_kind,brand_family,lifecycle_status FROM products WHERE id=$1',[product.id]).then(result=>result.rows[0]||{}),
   ]);
 
   const active = organizations.filter(row => row.contract_active && row.status === 'active');
@@ -41,6 +42,7 @@ export function productConsoleRoutes(router) {
    product: {
     id: product.id,
     name: product.name,
+    ...profile,
     // Ficha cadastral do Notion quando existir; ausência não é erro.
     catalog: catalog ? { ...catalog.payload, imported_at: catalog.imported_at } : null,
    },

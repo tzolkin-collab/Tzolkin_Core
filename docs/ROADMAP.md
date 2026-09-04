@@ -142,7 +142,7 @@ Já existe: migrações numeradas em `db/migrations/`, uma transação por arqui
 
 **Depende de:** E2, E4 e E6. O fluxo consumidor → cliente depende de [D3](CONTEXT.md#d3--quem-vende-e-quem-recebe-no-fluxo-consumidor--cliente) e **fica fora desta entrega**.
 
-Só o fluxo 1 (cliente paga à TZOLKIN), só sandbox. Sequência em [BILLING.md §8](BILLING.md#8-primeiros-passos-quando-houver-decisão-proposto).
+Só o fluxo 1 (cliente paga à TZOLKIN), só sandbox. Sequência em [BILLING.md](BILLING.md).
 
 **Aceite:** entidade jurídica, conta, ambiente, oferta e versão de preço modelados · webhook de **um** provedor autenticado, deduplicado por id e com histórico · evento fora de ordem não retrocede estado · valores em inteiro com moeda · **nenhuma cobrança real emitida** · confirmação nunca vinda só do retorno de checkout · teste de evento duplicado e de evento antigo.
 
@@ -231,7 +231,7 @@ Independentes entre si, sem dependência do programa acima. Contexto e evidênci
 | Entrega | Por quê | Aceite resumido |
 |---|---|---|
 | `pluggy_items` em tabela | Cada banco novo hoje exige editar `.env` e redeployar | Tabela manda; `PLUGGY_ITEM_IDS` vira semente importada uma vez |
-| Widget Pluggy Connect | `POST /connect_token` já responde 200 | Página atrás de sessão de operador, CSP só naquela rota, item gravado no sucesso |
+| Widget Pluggy Connect | `POST /connect_token` ainda não existe | Página atrás de sessão de operador, CSP só naquela rota, item gravado no sucesso |
 | Sincronização periódica do Pluggy | Setembro com 2 transações, outubro com 0 | Leitura agendada, falha não apaga o extrato anterior |
 | `PUT /api/tenants` | Reclassificar organização hoje exige SQL | Reclassificação auditada pela API |
 | Responsável em `client_engagements` | Depende de decidir se responsável é do cliente ou da contratação | Campo mais importação do Notion |

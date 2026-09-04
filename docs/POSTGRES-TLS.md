@@ -41,7 +41,8 @@ Arquivos `.env.before-tls-*` e `.env.before-rotation-*` foram preservados localm
 
 - TLS obrigatório no servidor foi limitado à role do Core. Outros consumidores ainda precisam de migração e validação próprias; habilitar TLS no servidor não os migra automaticamente.
 - Porta 9000 continua publicada; firewall/allowlist ou rede privada permanecem pendentes. Redis não foi alterado.
-- Único backup agendado encontrado: base `systembots`, em disco local. Ampliar cobertura e testar restauração em ambiente isolado.
+- Em 2026-09-03, 16 backups PostgreSQL estão agendados no EasyPanel, incluindo `tzolkin_core`;
+  continuam em disco local, sem retenção explícita e sem ensaio de restauração em ambiente isolado.
 - Formulários do institucional permanecem desabilitados. Core continua bootstrap local, não pronto para publicação.
 
 Referências: [PostgreSQL 17 — TLS](https://www.postgresql.org/docs/17/ssl-tcp.html), [EasyPanel — PostgreSQL](https://easypanel.io/docs/services/postgres).

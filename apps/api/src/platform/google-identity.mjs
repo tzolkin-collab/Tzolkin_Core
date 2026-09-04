@@ -23,7 +23,9 @@ export function createGoogleIdentity({pool,clientId,clientSecret,publicOrigin,al
    const target=new URL('https://accounts.google.com/o/oauth2/v2/auth');for(const [key,value]of Object.entries({client_id:clientId,redirect_uri:redirectUri,response_type:'code',scope:'openid email',state,nonce,code_challenge:challenge,code_challenge_method:'S256',prompt:'select_account'}))target.searchParams.set(key,value);return target;
   },
   async finish(callbackUrl){const state=callbackUrl.searchParams.get('state'),code=callbackUrl.searchParams.get('code');if(!state||!code||callbackUrl.searchParams.get('error'))throw Error('Autenticação Google não concluída.');
-   const flow=(await pool.query(`DELETE FROM operator_auth_flows WHERE state_hash=$1 AND expires_at>now() RETURNING code_verifier,nonce`,[digest(state)])).rows[0];if(!flow)throw Error('Tentativa de login expirada.');
+   // Consome o estado com UPDATE: a role de runtime não precisa de DELETE.
+   // A condição consumed_at IS NULL mantém o fluxo de uso único de forma atômica.
+   const flow=(await pool.query(`UPDATE operator_auth_flows SET consumed_at=now() WHERE state_hash=$1 AND expires_at>now() AND consumed_at IS NULL RETURNING code_verifier,nonce`,[digest(state)])).rows[0];if(!flow)throw Error('Tentativa de login expirada.');
    const body=new URLSearchParams({client_id:clientId,client_secret:clientSecret,code,code_verifier:flow.code_verifier,grant_type:'authorization_code',redirect_uri:redirectUri});
    const response=await fetcher('https://oauth2.googleapis.com/token',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body,redirect:'error',signal:AbortSignal.timeout(8000)});if(!response.ok)throw Error('Google recusou a autenticação.');const tokens=await response.json();if(typeof tokens.id_token!=='string')throw Error('Identidade Google ausente.');
    const {payload}=await jwtVerify(tokens.id_token,keySet,{issuer:GOOGLE_ISSUERS,audience:clientId,algorithms:['RS256'],clockTolerance:5});const email=String(payload.email||'').toLowerCase();if(payload.nonce!==flow.nonce||payload.email_verified!==true)throw Error('Conta Google não autorizada.');
