@@ -80,7 +80,7 @@ async function seed(){
 
   // 1. Identificar contas bancárias e fazer backup dos saldos originais
   const items=(await pool.query("SELECT key, payload FROM finance_snapshots WHERE key LIKE 'item:%'")).rows;
-  
+
   // Backup dos saldos originais se ainda não existir
   const backupRow=(await pool.query("SELECT payload FROM finance_snapshots WHERE key='meta:mock_balances_backup'")).rows[0];
   if(!backupRow){
