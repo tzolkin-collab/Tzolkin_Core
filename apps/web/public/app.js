@@ -165,17 +165,17 @@ async function api(path, method = 'GET', body) {
 function renderNav() {
  const context = CONTEXTS[contextKind()];
  $('nav-label').textContent = context.label;
- const groups=contextKind()==='general'?{overview:'Visualização',tracking:'Visualização',finance:'Visualização',companies:'Relacionamentos',people:'Relacionamentos',leads:'Operação',clients:'Operação',projects:'Operação',products:'Operação',services:'Operação',emails:'Operação',education:'Educacional',settings:'Gestão',access:'Gestão',management:'Gestão',security:'Gestão',deploys:'Tecnologia',serverMetrics:'Tecnologia'}:{product:'Produto','product-orgs':'Produto','product-payments':'Produto','product-emails':'Produto'};
- const items=[];let previous;
+ const groups=contextKind()==='general'?{overview:'Hoje',tracking:'Hoje',finance:'Hoje',companies:'Relacionamentos',people:'Relacionamentos',leads:'Relacionamentos',clients:'Relacionamentos',projects:'Entrega',products:'Entrega',services:'Entrega',emails:'Entrega',education:'Educação',settings:'Administração',access:'Administração',management:'Administração',security:'Administração',deploys:'Tecnologia',serverMetrics:'Tecnologia'}:{product:'Produto','product-orgs':'Produto','product-payments':'Produto','product-emails':'Produto'};
+ const items=[];let previous,section;
  for(const [key,view]of Object.entries(context.views).filter(([,view])=>!view.hidden)){
-  if(groups[key]!==previous){const label=node('span',groups[key],'nav-group');label.setAttribute('aria-hidden','true');items.push(label);previous=groups[key];}
+  if(groups[key]!==previous){section=node('details',undefined,'nav-section');section.open=groups[key]==='Hoje'||groups[key]===groups[state.view];const label=node('summary',groups[key],'nav-group');section.append(label);items.push(section);previous=groups[key];}
   const button = node('button', undefined, 'nav-item' + (key === state.view ? ' active' : ''));
   button.type = 'button'; button.dataset.view = key;
   const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',metrics:'chart',leads:'user-plus',products:'package',services:'briefcase',education:'graduation-cap',projects:'repo',access:'shield',management:'settings',settings:'sliders',security:'lock',deploys:'cloud',serverMetrics:'activity',product:'package','product-orgs':'people','product-payments':'wallet','product-emails':'mail'})[key]);
   icon.classList.add('nav-icon'); button.append(icon, document.createTextNode(view.title));
   if (key === state.view) button.setAttribute('aria-current', 'page');
   button.onclick = () => {switchView(key);closeNavigation();};
-  items.push(button);
+  section.append(button);
  }
  $('nav').replaceChildren(...items);
 }
