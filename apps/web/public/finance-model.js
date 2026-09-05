@@ -15,7 +15,16 @@ export const brazilYear=value=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Americ
 // WIDE_LOGOS são as marcas cuja versão oficial é horizontal: Inter e Asaas não
 // publicam símbolo quadrado, a marca deles é a própria palavra. Ficam separadas
 // porque 20x20 as esmagaria — renderizam por altura, preservando a proporção.
+//
+// A troca por símbolo quadrado em PNG está em andamento (ver BANK_LOGO_FILES).
+// Enquanto o que se serve continuar sendo o .svg wordmark, as duas precisam
+// continuar declaradas aqui, senão renderizam esmagadas.
 export const WIDE_LOGOS=['inter','asaas','mastercard'];
+// Alvo da troca em andamento. Ainda não é lido por ninguém: marcas() em
+// apps/web/assets.mjs só publica /logos/<nome>.svg, então os PNGs não são
+// servidos. Antes de ligar isto: dar um nome real ao arquivo do Asaas
+// ('images.png' não diz o que é) e adicionar as duas extensões à allowlist.
+export const BANK_LOGO_FILES={inter:'inter.png',asaas:'images.png'};
 export const BANK_LOGOS=['nubank','inter','asaas','mastercard','itau','bradesco','santander','bancodobrasil','caixa','c6bank','btgpactual','sicredi','sicoob','mercadopago','pagbank','picpay','stripe'];
 export function paymentInstitution(bank){
  const name=typeof bank==='string'&&bank.trim()?bank.trim():'Instituição não informada';

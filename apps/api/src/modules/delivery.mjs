@@ -127,7 +127,7 @@ export function deliveryRoutes(router, { options = createDeliveryOptions(), sett
    await client.query('DELETE FROM products WHERE id=$1 AND lifecycle_status=\'draft\'', [current.product_id]);
   }
   return { tenant: null, type: 'delivery.project_deleted' };
- }, { transactional: true, audit: false });
+ }, { transactional: true, audit: false, body: false });
  router.post('/api/delivery/projects/:id/activate', async ({ params, body, client }) => {
   if (!isUuid(params.id) || !body || typeof body !== 'object' || Array.isArray(body) ||
       Object.keys(body).some(key => key !== 'revision') || !Number.isInteger(body.revision) || body.revision < 1)

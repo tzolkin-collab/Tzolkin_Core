@@ -1,6 +1,6 @@
 // Arquivos estáticos do painel. Lista fixa: nada de resolução de caminho vinda da URL.
 import { readFileSync } from 'node:fs';
-import { BANK_LOGOS } from './public/finance-model.js';
+import { BANK_LOGOS, BANK_LOGO_FILES } from './public/finance-model.js';
 
 // Deriva as entradas das marcas de uma constante do código — continua lista
 // fixa, porque a URL nunca influencia o caminho. Evita manter o mesmo conjunto
@@ -22,6 +22,8 @@ const FILES = {
  '/apple-touch-icon.png': ['apple-touch-icon.png', 'image/png'],
  '/app.js': ['app.js', 'text/javascript'],
  '/management-workspace.js': ['management-workspace.js', 'text/javascript'],
+ '/database-model.js': ['database-model.js', 'text/javascript'],
+ '/database-workspace.css': ['database-workspace.css', 'text/css'],
  '/tracking.js': ['tracking.js', 'text/javascript'],
  '/tracking.css': ['tracking.css', 'text/css'],
  '/finance.js': ['finance.js', 'text/javascript'],
@@ -38,6 +40,7 @@ const FILES = {
  '/product-favicons/sites.svg': ['product-favicons/sites.svg', 'image/svg+xml'],
  '/billing.css': ['billing.css', 'text/css'],
  ...marcas(BANK_LOGOS),
+ ...Object.fromEntries(Object.values(BANK_LOGO_FILES).map(file=>[`/logos/${file}`, [`logos/${file}`, 'image/png']])),
  '/finance-model.js': ['finance-model.js', 'text/javascript'],
  '/finance.css': ['finance.css', 'text/css'],
  '/delivery.js': ['delivery.js', 'text/javascript'],
@@ -46,6 +49,10 @@ const FILES = {
  '/delivery.css': ['delivery.css', 'text/css'],
  '/style.css': ['style.css', 'text/css'],
  '/design.css': ['design.css', 'text/css'],
+ '/overview.css': ['overview.css', 'text/css'],
+ '/relationships.css': ['relationships.css', 'text/css'],
+ '/portfolio.css': ['portfolio.css', 'text/css'],
+ '/management.css': ['management.css', 'text/css'],
  '/icons.js': ['icons.js', 'text/javascript'],
  '/card-summary.js': ['card-summary.js', 'text/javascript'],
  '/logos/github.svg': ['logos/github.svg', 'image/svg+xml'],
@@ -55,6 +62,8 @@ const FILES = {
  '/checkout.css': ['checkout.css', 'text/css'],
  '/checkout.js': ['checkout.js', 'text/javascript'],
  '/checkout-gateway.js': ['checkout-gateway.js', 'text/javascript'],
+ '/checkout-editor.js': ['checkout-editor.js', 'text/javascript'],
+ '/checkout-editor.css': ['checkout-editor.css', 'text/css'],
 };
 
 export function serveAsset(pathname, res) {

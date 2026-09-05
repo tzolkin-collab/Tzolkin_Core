@@ -25,7 +25,10 @@ export function createWeb({ apiOrigin = 'http://127.0.0.1:3102' } = {}) {
     if(serveAsset(url.pathname,res)) return;
     return error(404,'Arquivo não encontrado.');
    }
-   if(!['GET','POST','PUT'].includes(req.method)) return error(405,'Método não permitido.');
+   // DELETE encaminhado porque a API tem rotas de exclusão (delivery/projects,
+   // product-resource-bindings) que o painel chama. Sem ele, dev respondia 405
+   // aqui e o verbo parecia quebrado no servidor errado.
+   if(!['GET','POST','PUT','DELETE'].includes(req.method)) return error(405,'Método não permitido.');
    if(req.method !== 'GET' && req.headers.origin !== `http://${host}`) return error(403,'Origem não permitida.');
    if(req.headers['content-length'] && Number(req.headers['content-length']) > 16384) return error(413,'Requisição muito grande.');
    const chunks=[];let size=0;
@@ -35,7 +38,10 @@ export function createWeb({ apiOrigin = 'http://127.0.0.1:3102' } = {}) {
    for(const name of ['origin','cookie','authorization','content-type','accept']) if(req.headers[name]) headers[name]=req.headers[name];
    const proxy=http.request(new URL(url.pathname+url.search,upstream),{method:req.method,headers},response => {
     const outgoing={};
-    for(const name of ['content-type','set-cookie','cache-control','content-security-policy']) if(response.headers[name]) outgoing[name]=response.headers[name];
+    // permissions-policy repassada de propósito: a API a usa para desligar (e,
+    // em /c/, reabrir) a Payment Request API. Sem repassar, dev fica mais
+    // permissivo que produção e esconde justamente o bug de carteira.
+    for(const name of ['content-type','set-cookie','cache-control','content-security-policy','permissions-policy']) if(response.headers[name]) outgoing[name]=response.headers[name];
     res.writeHead(response.statusCode || 502,outgoing); response.pipe(res);
     response.on('error',()=>res.destroy());
    });

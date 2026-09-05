@@ -22,12 +22,41 @@ export function describeTarget(connectionString) {
 // Uma conexão só é considerada criptografada se o socket for TLS de fato.
 const encrypted = client => Boolean(client.connection?.stream?.encrypted);
 
+// Remove credencial de qualquer texto que vá para log ou mensagem de erro.
+// A causa raiz é útil; a senha do banco nunca é.
+export function scrubSecrets(message, connectionString) {
+ let out = String(message ?? '');
+ try {
+  const { password } = new URL(connectionString);
+  if (password) out = out.split(decodeURIComponent(password)).join('***').split(password).join('***');
+ } catch { /* string inutilizável como URL: resta a limpeza genérica abaixo */ }
+ return out.replace(/\/\/[^\s/@]*:[^\s/@]*@/g, '//***:***@');
+}
+
+// Diagnóstico de uma linha, já sem segredo, no formato "[código] mensagem".
+const diagnose = (error, connectionString) => error
+ ? `[${error.code ?? 'sem código'}] ${scrubSecrets(error.message, connectionString)}`
+ : '[sem código] causa não registrada';
+
+// A sonda distingue os quatro fracassos que antes viravam a mesma frase: senha
+// recusada, host inalcançável, tempo esgotado e TLS inválido. Devolver só um
+// booleano apagava a causa e mandava o operador depurar TLS quando o problema
+// era credencial — o custo disso é hora de indisponibilidade.
 async function probe(connectionString, ssl, Client) {
  const client = new Client({ connectionString, ssl, connectionTimeoutMillis: 8000 });
  try {
   await client.connect();
-  return encrypted(client) && (ssl.rejectUnauthorized === false || client.connection.stream.authorized === true);
- } catch { return false; } finally { await client.end().catch(() => {}); }
+  if (!encrypted(client))
+   return { ok: false, error: Object.assign(new Error('O servidor aceitou a conexão sem TLS.'), { code: 'TRANSPORT_PLAINTEXT' }) };
+  if (!(ssl.rejectUnauthorized === false || client.connection.stream.authorized === true))
+   return {
+    ok: false,
+    error: Object.assign(
+     new Error(`Certificado do servidor não validado: ${client.connection.stream.authorizationError ?? 'motivo não informado pelo TLS'}.`),
+     { code: 'TRANSPORT_UNVERIFIED' }),
+   };
+  return { ok: true, error: null };
+ } catch (error) { return { ok: false, error }; } finally { await client.end().catch(() => {}); }
 }
 
 /**
@@ -71,20 +100,37 @@ export async function openDatabase({ connectionString, mode = 'require', ...pool
  const requireVerified = mode === 'require' || ['require', 'verify-ca', 'verify-full'].includes(urlMode) || ['1', 'true'].includes(urlSsl);
  let ssl = false;
  let verified = false;
+ // Guardadas separadas: a sonda estrita explica por que não há TLS verificado;
+ // a permissiva explica por que não houve conexão nenhuma.
+ let strictError = null;
+ let relaxedError = null;
 
  if (mode !== 'disable' && !disabled) {
-  if (await probe(normalized, { ...certificates, rejectUnauthorized: true }, Client)) {
+  const strict = await probe(normalized, { ...certificates, rejectUnauthorized: true }, Client);
+  if (strict.ok) {
    ssl = { ...certificates, rejectUnauthorized: true }; verified = true;
-  } else if (!requireVerified && await probe(normalized, { ...certificates, rejectUnauthorized: false }, Client)) {
-   // Criptografa, mas não prova com quem se está falando: melhor que texto claro,
-   // longe de suficiente. Continua sinalizado como não verificado.
-   ssl = { ...certificates, rejectUnauthorized: false }; verified = false;
+  } else {
+   strictError = strict.error;
+   if (!requireVerified) {
+    const relaxed = await probe(normalized, { ...certificates, rejectUnauthorized: false }, Client);
+    if (relaxed.ok) {
+     // Criptografa, mas não prova com quem se está falando: melhor que texto claro,
+     // longe de suficiente. Continua sinalizado como não verificado.
+     ssl = { ...certificates, rejectUnauthorized: false }; verified = false;
+    } else relaxedError = relaxed.error;
+   }
   }
  }
 
  const tls = ssl !== false;
  if ((!verified && requireVerified) || (!tls && unverified)) {
-  throw new Error('O servidor não aceitou conexão criptografada com a validação exigida. Conexão recusada.');
+  // A frase de sempre continua sendo o começo da mensagem — é contrato de
+  // teste e de runbook. O que muda é que a causa vem junto, sem credencial.
+  const cause = (!tls && unverified ? relaxedError ?? strictError : strictError) ?? null;
+  throw Object.assign(
+   new Error(`O servidor não aceitou conexão criptografada com a validação exigida. Conexão recusada. Causa: ${diagnose(cause, connectionString)}`,
+    cause ? { cause } : undefined),
+   { code: cause?.code ?? 'TRANSPORT_REFUSED', diagnosis: diagnose(cause, connectionString) });
  }
 
  const security = {

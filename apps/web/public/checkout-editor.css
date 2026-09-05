@@ -1,0 +1,87 @@
+/* Seções do editor de checkout. Arquivo próprio, como finance.css e billing.css:
+   o layout de duas colunas e os chips já vivem em design.css, e isto acrescenta
+   só o que o formulário em seções trouxe. */
+.checkout-editor-section {
+ border: 1px solid var(--line);
+ border-radius: 8px;
+ padding: 12px 14px;
+ margin-bottom: 12px;
+ background: var(--surface);
+}
+.checkout-editor-section > summary {
+ cursor: pointer;
+ font-weight: 600;
+ font-size: 14px;
+ list-style: none;
+ display: flex;
+ align-items: center;
+ gap: 8px;
+}
+.checkout-editor-section > summary::-webkit-details-marker { display: none; }
+.checkout-editor-section > summary::before {
+ content: '';
+ width: 6px; height: 6px;
+ border-right: 1.5px solid var(--muted);
+ border-bottom: 1.5px solid var(--muted);
+ transform: rotate(-45deg);
+ transition: transform .15s ease;
+}
+.checkout-editor-section[open] > summary::before { transform: rotate(45deg); }
+.checkout-editor-section > .detail { margin: 8px 0 0; }
+.checkout-editor-section > .billing-grid { margin-top: 12px; }
+.checkout-editor-section textarea {
+ min-height: 68px;
+ resize: vertical;
+ font: inherit;
+ padding: 10px 12px;
+ border: 1px solid var(--line);
+ border-radius: 8px;
+ background: var(--surface);
+ color: var(--text);
+}
+/* Placeholder é onde o padrão aparece: precisa ser legível, não invisível. */
+.checkout-editor-section input::placeholder,
+.checkout-editor-section textarea::placeholder { color: var(--muted); opacity: .75; }
+.checkout-editor-section label > small { color: var(--muted); font-size: 12px; }
+
+/* Camadas: a lista que nomeia o objetivo de cada parte do checkout. */
+.checkout-layers { display: grid; gap: 6px; margin-top: 12px; }
+.checkout-layer {
+ display: grid;
+ gap: 2px;
+ text-align: left;
+ padding: 8px 10px;
+ border: 1px solid var(--line);
+ border-radius: 8px;
+ background: var(--surface);
+ color: var(--text);
+ cursor: pointer;
+ font: inherit;
+}
+.checkout-layer:hover { border-color: var(--brand); }
+.checkout-layer[aria-current] { border-color: var(--brand); background: var(--brand-soft); }
+.checkout-layer strong { font-size: 13px; font-weight: 600; }
+.checkout-layer small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+
+/* O campo que a camada selecionada controla. Marca sem esconder os outros:
+   esconder faria o operador perder a noção do que mais existe. */
+.checkout-editor-section label.campo-da-camada > span { color: var(--brand); font-weight: 600; }
+.checkout-editor-section label.campo-da-camada input,
+.checkout-editor-section label.campo-da-camada select,
+.checkout-editor-section label.campo-da-camada textarea { border-color: var(--brand); }
+
+.checkout-color-field { display: flex; gap: 8px; align-items: center; }
+.checkout-color-field input[type=color] {
+ width: 44px;
+ min-width: 44px;
+ padding: 2px;
+ border: 1px solid var(--line);
+ border-radius: 8px;
+ background: var(--surface);
+ cursor: pointer;
+}
+.checkout-color-field input[type=text] {
+ flex: 1;
+ font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+ text-transform: lowercase;
+}

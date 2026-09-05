@@ -17,12 +17,12 @@ const mockTransactionsNubankSep = [
 
 // --- TRANSAÇÕES NUBANK AGOSTO 2026 ---
 const mockTransactionsNubankAug = [
- {id:'mock-tx-nu-aug-01',date:'2026-08-05T10:00:00Z',description:'Pix recebido · Prime Consultoria (Entrada Projeto)',amount:14500.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
- {id:'mock-tx-nu-aug-02',date:'2026-08-10T11:20:00Z',description:'Pix recebido · Nexus Tech (Implantação de Software)',amount:15000.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
- {id:'mock-tx-nu-aug-03',date:'2026-08-14T15:45:00Z',description:'Pix recebido · Rodrigo Medeiros (Mentoria Avançada)',amount:4500.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
- {id:'mock-tx-nu-aug-04',date:'2026-08-20T15:30:00Z',description:'Pix recebido · Grupo Vanguarda (Consultoria Estratégica)',amount:11500.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
- {id:'mock-tx-nu-aug-05',date:'2026-08-25T14:10:00Z',description:'Pix recebido · Beatriz Santos (Mentoria Individual)',amount:3200.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
- {id:'mock-tx-nu-aug-06',date:'2026-08-28T09:30:00Z',description:'Pix recebido · Inovare Labs (Desenvolvimento MVP)',amount:8900.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-nu-aug-01',date:'2026-08-05T10:00:00Z',description:'Pix recebido · Prime Consultoria (Entrada Projeto)',amount:6500.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-nu-aug-02',date:'2026-08-10T11:20:00Z',description:'Pix recebido · Nexus Tech (Implantação de Software)',amount:7000.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-nu-aug-03',date:'2026-08-14T15:45:00Z',description:'Pix recebido · Rodrigo Medeiros (Mentoria Avançada)',amount:2500.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-nu-aug-04',date:'2026-08-20T15:30:00Z',description:'Pix recebido · Grupo Vanguarda (Consultoria Estratégica)',amount:5500.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-nu-aug-05',date:'2026-08-25T14:10:00Z',description:'Pix recebido · Beatriz Santos (Mentoria Individual)',amount:1800.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-nu-aug-06',date:'2026-08-28T09:30:00Z',description:'Pix recebido · Inovare Labs (Desenvolvimento MVP)',amount:4200.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
  {id:'mock-tx-nu-aug-out-01',date:'2026-08-15T10:00:00Z',description:'Pix enviado · Ferramentas SaaS e Licenças',amount:-890.00,currency:'BRL',type:'DEBIT',status:'POSTED',is_mock:true},
  {id:'mock-tx-nu-aug-out-02',date:'2026-08-22T16:00:00Z',description:'Pix enviado · Serviços de Design e Ilustração',amount:-2100.00,currency:'BRL',type:'DEBIT',status:'POSTED',is_mock:true},
 ];
@@ -36,9 +36,9 @@ const mockTransactionsInterSep = [
 
 // --- TRANSAÇÕES BANCO INTER AGOSTO 2026 ---
 const mockTransactionsInterAug = [
- {id:'mock-tx-inter-aug-01',date:'2026-08-08T14:15:00Z',description:'TED recebida · Repasse Stripe Mensal',amount:16200.50,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
- {id:'mock-tx-inter-aug-02',date:'2026-08-18T16:00:00Z',description:'TED recebida · Faturamento Corporativo Contrato Anual',amount:22000.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
- {id:'mock-tx-inter-aug-03',date:'2026-08-27T11:20:00Z',description:'Recebimento Boleto Cobrança #1980 · Beta Sistemas',amount:7800.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-inter-aug-01',date:'2026-08-08T14:15:00Z',description:'TED recebida · Repasse Stripe Mensal',amount:6667.16,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-inter-aug-02',date:'2026-08-18T16:00:00Z',description:'TED recebida · Faturamento Corporativo Contrato Anual',amount:6500.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-inter-aug-03',date:'2026-08-27T11:20:00Z',description:'Recebimento Boleto Cobrança #1980 · Beta Sistemas',amount:3000.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
 ];
 
 // --- STRIPE VENDAS SETEMBRO 2026 ---
@@ -83,12 +83,18 @@ async function seed(){
 
   // Backup dos saldos originais se ainda não existir
   const backupRow=(await pool.query("SELECT payload FROM finance_snapshots WHERE key='meta:mock_balances_backup'")).rows[0];
-  if(!backupRow){
+  // Só considera "mock aplicado" se TODA conta bancária já está no valor alvo.
+  // Fora disso o saldo é real (o Pluggy ressincroniza por cima) e o backup
+  // precisa ser regravado, senão o clean restaura um valor obsoleto.
+  const ALVOS={Nubank:17000.00,'Banco Inter':10000.00};
+  const bancarias=items.flatMap(it=>(it.payload?.accounts||[]).filter(a=>a.type==='BANK'&&ALVOS[a.bank]!==undefined));
+  const mockAplicado=bancarias.length>0&&bancarias.every(a=>Number(a.balance)===ALVOS[a.bank]);
+  if(!backupRow||!mockAplicado){
    const balanceBackup={};
    for(const it of items){
     balanceBackup[it.key]=(it.payload?.accounts||[]).map(a=>({id:a.id,balance:a.balance}));
    }
-   await pool.query("INSERT INTO finance_snapshots(key,payload,updated_at) VALUES('meta:mock_balances_backup',$1,now()) ON CONFLICT(key) DO NOTHING",[JSON.stringify(balanceBackup)]);
+   await pool.query("INSERT INTO finance_snapshots(key,payload,updated_at) VALUES('meta:mock_balances_backup',$1,now()) ON CONFLICT(key) DO UPDATE SET payload=EXCLUDED.payload,updated_at=now()",[JSON.stringify(balanceBackup)]);
    console.log('✓ Backup dos saldos originais salvo com sucesso em meta:mock_balances_backup');
   }
 
@@ -98,11 +104,11 @@ async function seed(){
    const accounts=(it.payload?.accounts||[]).map(acc=>{
     if(acc.bank==='Nubank'||acc.name?.toLowerCase().includes('nu pagamentos')){
      changed=true;
-     return {...acc,balance:17500.00};
+     return {...acc,balance:17000.00};
     }
     if(acc.bank==='Banco Inter'||acc.name?.toLowerCase().includes('inter')){
      changed=true;
-     return {...acc,balance:10500.00};
+     return {...acc,balance:10000.00};
     }
     if(acc.type==='CREDIT'&&acc.balance===0){
      changed=true;

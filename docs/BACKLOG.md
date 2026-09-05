@@ -312,3 +312,30 @@ Além dos itens 1 a 8 deste backlog:
 - Webhooks reais dos provedores de pagamento e entrega, com destinos configurados nos painéis.
 - Leitura de `audit_events`, `delivery_audit` e `service_activity_audit` no painel para que a
   operação seja investigável.
+
+### 9.9 Conferência de evidências — 2026-09-05
+
+**Verificado nesta data, não presumido por configuração:**
+
+| Área | Evidência | Consequência aberta |
+|---|---|---|
+| Testes | `npm test`: 247 aprovados, 0 falhas | Cobertura não substitui validação visual, staging e iPhone real. |
+| Migrações | 22 aplicadas; última `022_product_resource_bindings.sql` | Não há ensaio documentado de rollback nem restauração de backup. |
+| Inventário | GitHub: 17 repositórios; Vercel: 11 projetos; EasyPanel: 10 serviços; Hostinger: 11 registros | A integração está conectada, mas inventário não é classificação persistida. |
+| Produtos | 7 produtos ativos; 0 drafts; 0 `delivery_projects`; 0 `product_resource_bindings` | Nenhum produto tem arquitetura confirmada no Core. A topologia mostra candidatos, mas todos ainda aguardam confirmação/adopção. |
+| Comercial | 1 oferta, 2 templates de checkout e 0 templates de e-mail em todo o banco | Skiller tem oferta e checkout; nenhum produto está pronto para automação de e-mail. Os demais não têm oferta/checkout suficientes para operação comercial. |
+| Google Cloud | `gcloud` instalado, sem credencial ativa | Não há leitura de projetos, serviços, quotas ou billing do Google Cloud. |
+| PWA/push | Manifest e service worker existem; o worker sabe exibir uma mensagem `push` recebida | Não existe assinatura do navegador, VAPID, endpoint de persistência ou envio pelo servidor. Push real continua não implementado e não foi testado em iPhone. |
+
+**Documentação que precisa de ajuste:**
+
+- `ROADMAP.md` ainda descreve a conexão real do EasyPanel como pendente, mas a consulta atual ao
+  provedor retornou 10 serviços. Atualizar a entrega E1.8 e `INTEGRATIONS.md` para registrar a
+  verificação de 2026-09-05 sem promover as ações operacionais a “entregues”.
+- `CORE-EXECUTION-TODO.md` preserva um programa inteiro com caixas abertas, incluindo telas,
+  design, entidades comerciais, mentoria, integrações, segurança e publicação. Ele é o inventário
+  mais amplo de escopo restante; precisa ser reconciliado com as entregas posteriores para marcar
+  somente o que continua efetivamente aberto.
+- A documentação de segurança mistura fotografia histórica de transporte inseguro com a política
+  atual de produção, que exige TLS verificado. A política está no código; a configuração efetiva
+  de produção, role restrita, backup e recuperação ainda precisam de evidência operacional.

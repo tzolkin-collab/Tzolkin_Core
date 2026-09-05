@@ -42,3 +42,37 @@ test('local proxy rejects non-loopback targets and gives a safe offline error',a
  try {const response=await fetch(`http://127.0.0.1:${web.address().port}/api/session`);assert.equal(response.status,502);assert.match((await response.json()).message,/API indisponível/);}
  finally {await stop(web);}
 });
+
+// Regressão: DELETE existe na API e o painel o chama (app.js e projects.js), mas
+// estava quebrado nos dois runtimes por motivos diferentes — o proxy de dev não
+// encaminhava o verbo (405) e, em produção, app.mjs exigia Content-Type e devolvia
+// 415. Este teste prova os dois consertos e que a guarda de JSON continua de pé.
+test('DELETE sem corpo atravessa proxy e roteador, e a guarda de JSON continua valendo',async()=>{
+ const reserve=http.createServer();await listen(reserve);const port=reserve.address().port;await stop(reserve);
+ const origin=`http://127.0.0.1:${port}`;
+ // Pool sintético: só precisa responder BEGIN/SELECT/ROLLBACK. O SELECT vazio leva
+ // o handler ao 404 — e chegar ao 404 é a prova de que a requisição passou.
+ const client={query:async()=>({rows:[]}),release(){}};
+ const api=createCore({pool:{connect:async()=>client},adminPassword:'synthetic-password-for-delete-test',webOrigin:origin,deployRegistry:[]});
+ await listen(api);
+ const web=createWeb({apiOrigin:`http://127.0.0.1:${api.address().port}`});await new Promise(r=>web.listen(port,'127.0.0.1',r));
+ // Sem Content-Type de propósito: é assim que o navegador manda um DELETE sem corpo.
+ const send=(path,method,headers={})=>fetch(origin+path,{method,headers:{origin,...headers}});
+ try {
+  const login=await fetch(origin+'/api/login',{method:'POST',headers:{origin,'Content-Type':'application/json'},body:JSON.stringify({password:'synthetic-password-for-delete-test'})});
+  assert.equal(login.status,200);
+  const cookie=login.headers.get('set-cookie').split(';')[0];
+
+  const remove=await send('/api/product-resource-bindings/00000000-0000-4000-8000-000000000000','DELETE',{cookie});
+  assert.notEqual(remove.status,405,'o proxy de dev precisa encaminhar DELETE');
+  assert.notEqual(remove.status,415,'DELETE sem corpo não pode exigir Content-Type');
+  assert.equal(remove.status,404);
+  assert.equal((await remove.json()).message,'Conexão não encontrada.');
+
+  // Onde o corpo é obrigatório, 415 continua sendo a resposta certa.
+  assert.equal((await send('/api/checkout-templates','PUT',{cookie})).status,415);
+
+  // Permissions-Policy repassada: dev deixa de ser mais permissivo que produção.
+  assert.match(remove.headers.get('permissions-policy'),/payment=\(\)/);
+ } finally {await stop(web);await stop(api);}
+});

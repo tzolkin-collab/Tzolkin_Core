@@ -86,5 +86,5 @@ export function productResourceBindingRoutes(router) {
   if (isLegacyDeploy(row)) await client.query('DELETE FROM product_deploy_bindings WHERE provider=$1 AND external_project_id=$2 AND product_id=$3', [row.provider,row.external_id,row.product_id]);
   await audit(client, row, 'deleted', operator, row, null);
   return { tenant: null, type: 'product.resource.deleted' };
- }, { transactional: true, audit: false });
+ }, { transactional: true, audit: false, body: false });
 }

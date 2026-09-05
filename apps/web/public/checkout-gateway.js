@@ -1,5 +1,5 @@
-// Aba Checkout, dentro de Pagamentos: aparência e modo de exibição da página
-// pública.
+// Aba Checkout, dentro de Pagamentos: aparência, textos e modo de exibição da
+// página pública.
 //
 // Não é diálogo e não é view própria. Checkout é parte de pagamentos, não irmão
 // dele — e como superfície de configuração (coleção de templates mais prévia),
@@ -7,53 +7,81 @@
 //
 // A prévia é um iframe da página pública DE VERDADE, não uma reprodução. Copiar
 // o cartão para cá duplicaria checkout.css e passaria a mentir no dia em que um
-// dos dois mudasse. O preço dessa honestidade: ela mostra o que está SALVO, por
-// isso recarrega a cada gravação — e diz isso ao operador.
+// dos dois mudasse.
+//
+// A prévia agora acompanha a digitação, sem deixar de ser a página real: o
+// editor manda rascunho de tema e texto por postMessage e a própria página os
+// aplica. Nada de dinheiro trafega nessa ponte — o preço continua vindo de
+// /api/checkout/offer, e no modo prévia a página nunca cria sessão de pagamento.
+//
+// Por que a ponte, e não montar o cartão aqui: a CSP do painel é script-src
+// 'self', então Stripe.js não carrega nesta página, nunca. A área de pagamento
+// só pode existir dentro de /c/, que tem CSP própria. Isso decide a arquitetura
+// sozinho.
+//
+// O formulário em si vive em checkout-editor.js.
+import {buildCheckoutEditor} from './checkout-editor.js';
+
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
 const TYPE_LABELS={HOSTED:'Hospedado na Stripe (redireciona)',EMBEDDED:'Incorporado (fica na sua página)',ELEMENTS:'Elements — ainda não cria sessão'};
 const VIEWPORTS={mobile:'Celular',desktop:'Computador'};
+const TIPO_CURTO={HOSTED:'Hospedado',EMBEDDED:'Incorporado',ELEMENTS:'Elements'};
+const corDoTemplate=payload=>payload.theme?.color||payload.branding?.primary_color||'#111827';
 
 export function setupCheckoutPanel({api}){
- let generation=0,host=null,product=null,templates=[],offers=[],selected=null,previewSlug=null,viewport='mobile',feedback='';
+ let generation=0,host=null,product=null,templates=[],offers=[],schema=null,selected=null,previewSlug=null,viewport='mobile',feedback='';
+ // A moldura é preservada entre renders para não recarregar o iframe a cada
+ // troca de viewport — recarregar perderia o rascunho aplicado.
+ let frame=null,frameSrc=null,pronta=false,editorAtual=null,alerta=null,relogio=null;
  const current=()=>templates.find(row=>row.slug===selected)||null;
  const stripeOffers=()=>offers.filter(row=>row.payload.provider==='stripe');
 
- function editor(){
-  const row=current(),data=row?.payload||{},branding=data.branding||{},form=el('form',undefined,'checkout-admin-form'),grid=el('div',undefined,'billing-grid');
-  function field(name,label,choices,value,type='text'){
-   const wrapper=el('label');wrapper.append(el('span',label));const control=el(choices?'select':'input');control.name=name;
-   if(choices)for(const [v,t] of choices)control.append(new Option(t,v));else control.type=type;
-   control.value=value??'';wrapper.append(control);grid.append(wrapper);return control;
+ function enviarRascunho(){
+  if(!pronta||!frame?.contentWindow||!editorAtual)return;
+  frame.contentWindow.postMessage({type:'checkout-preview-draft',...editorAtual.draft()},location.origin);
+ }
+
+ function destacarCamada(id){
+  if(!pronta||!frame?.contentWindow)return;
+  frame.contentWindow.postMessage({type:'checkout-preview-highlight',layer:id},location.origin);
+ }
+
+ // Só aceita mensagens do nosso próprio iframe, da nossa própria origem.
+ function aoReceber(event){
+  if(event.origin!==location.origin||event.source!==frame?.contentWindow)return;
+  if(event.data?.type==='checkout-preview-ready'){
+   clearTimeout(relogio);pronta=true;
+   if(alerta)alerta.textContent='';
+   enviarRascunho();
+   return;
   }
-  const nome=field('name','Nome do template',null,data.name);nome.required=true;nome.maxLength=100;
-  const slug=field('slug','Slug',null,data.slug);slug.pattern='[a-z][a-z0-9-]{1,63}';slug.maxLength=64;slug.required=true;slug.readOnly=Boolean(row);
-  const tipo=field('type','Modo',Object.entries(TYPE_LABELS),data.type||'HOSTED');
-  const cor=field('primary_color','Cor primária',null,branding.primary_color||'#111827','color');
-  const logo=field('logo_url','URL do logo (https)',null,branding.logo_url||'','url');
-  const raio=field('border_radius','Arredondamento (px)',null,branding.border_radius??12,'number');raio.min='0';raio.max='24';
-  const fonte=field('font_family','Fonte',null,branding.font_family||'system-ui');fonte.maxLength=60;
+  // Clique numa camada da página: seleciona os campos que a controlam. Não
+  // devolve destaque para a prévia — ela já se destacou sozinha, e devolver
+  // deixaria os dois lados se avisando em círculo.
+  if(event.data?.type==='checkout-preview-pick'&&typeof event.data.layer==='string')editorAtual?.selecionarCamada(event.data.layer);
+ }
+ addEventListener('message',aoReceber);
 
-  const padraoWrap=el('label',undefined,'checkbox-label'),padrao=el('input');padrao.type='checkbox';
-  padrao.checked=data.is_default??!templates.length;padraoWrap.append(padrao,el('span','Usar como padrão deste produto'));
-
-  const aviso=el('p',undefined,'billing-status');aviso.setAttribute('role','status');aviso.textContent=feedback;
-  const salvar=el('button',row?'Salvar template':'Criar template','primary');salvar.type='submit';
-  const acoes=el('div',undefined,'checkout-admin-actions');acoes.append(salvar);
-  if(row){const novo=el('button','Novo template','secondary');novo.type='button';novo.onclick=()=>{selected=null;feedback='';render();};acoes.append(novo);}
-
-  form.append(grid,padraoWrap,aviso,acoes);
-  form.onsubmit=async event=>{
-   event.preventDefault();salvar.disabled=true;aviso.textContent='Salvando…';
-   const payload={product_id:product.id,slug:slug.value,name:nome.value,type:tipo.value,
-    branding:{primary_color:cor.value,logo_url:logo.value.trim(),border_radius:Number(raio.value),font_family:fonte.value.trim()},
-    is_default:padrao.checked,version:row?.version||0};
-   try{
-    await api('/api/checkout-templates','PUT',payload);
-    feedback='Template salvo. A prévia ao lado já mostra a versão publicada.';
+ function editor(){
+  if(!schema)return el('p','Carregando o editor…','empty-list');
+  const row=current();
+  editorAtual=buildCheckoutEditor({
+   schema,row,templates,typeLabels:TYPE_LABELS,
+   onDraft:enviarRascunho,
+   onLayer:destacarCamada,
+   onSubmit:async payload=>{
+    await api('/api/checkout-templates','PUT',{...payload,product_id:product.id});
+    feedback='Template salvo e publicado.';
     selected=payload.slug;await reload();
-   }catch(error){aviso.textContent=error.message;salvar.disabled=false;}
-  };
-  return form;
+   },
+  });
+  if(feedback)editorAtual.setFeedback(feedback);
+  if(row){
+   const novo=el('button','Novo template','secondary');novo.type='button';
+   novo.onclick=()=>{selected=null;feedback='';render();};
+   editorAtual.acoes.append(novo);
+  }
+  return editorAtual.form;
  }
 
  function listaTemplates(){
@@ -61,9 +89,9 @@ export function setupCheckoutPanel({api}){
   for(const row of templates){
    const chip=el('button',undefined,'checkout-template-chip');chip.type='button';
    if(row.slug===selected)chip.setAttribute('aria-current','true');
-   const marca=el('span',undefined,'checkout-template-swatch');marca.style.setProperty('background',row.payload.branding?.primary_color||'#111827');
+   const marca=el('span',undefined,'checkout-template-swatch');marca.style.setProperty('background',corDoTemplate(row.payload));
    const texto=el('span');texto.append(el('strong',row.payload.name),
-    el('small',(row.payload.type==='HOSTED'?'Hospedado':row.payload.type==='EMBEDDED'?'Incorporado':'Elements')+(row.payload.is_default?' · padrão':'')));
+    el('small',(TIPO_CURTO[row.payload.type]||row.payload.type)+(row.payload.is_default?' · padrão':'')));
    chip.append(marca,texto);chip.onclick=()=>{selected=row.slug;feedback='';render();};
    box.append(chip);
   }
@@ -73,7 +101,7 @@ export function setupCheckoutPanel({api}){
 
  function previa(){
   const painel=el('section',undefined,'checkout-admin-preview'),topo=el('div',undefined,'section-toolbar'),copy=el('div');
-  copy.append(el('h3','Prévia'),el('p','A página pública real, como está publicada agora.','detail'));
+  copy.append(el('h3','Prévia'),el('p','A página pública real, acompanhando o que você edita.','detail'));
   const alternar=el('div',undefined,'checkout-viewport-switch');
   for(const [chave,rotulo] of Object.entries(VIEWPORTS)){
    const botao=el('button',rotulo,'secondary');botao.type='button';
@@ -97,10 +125,19 @@ export function setupCheckoutPanel({api}){
   }
 
   const url=checkoutLink(product.id,previewSlug);
+  const alvo=url+'?preview=1'+(selected?'&template='+encodeURIComponent(selected):'');
   const moldura=el('div',undefined,'checkout-frame '+viewport);
-  const frame=document.createElement('iframe');
-  frame.src=url;frame.title='Prévia da página de pagamento';frame.loading='lazy';
+  if(!frame||frameSrc!==alvo){
+   pronta=false;
+   frame=document.createElement('iframe');
+   frame.src=alvo;frame.title='Prévia da página de pagamento';frame.loading='lazy';frameSrc=alvo;
+   // Degradação honesta: se a página não responder, o operador precisa saber que
+   // está olhando algo desatualizado — prévia velha e silenciosa é pior.
+   clearTimeout(relogio);
+   relogio=setTimeout(()=>{if(!pronta&&alerta)alerta.textContent='A prévia não respondeu. Ela mostra a última versão salva; recarregue a página para tentar de novo.';},3000);
+  }
   moldura.append(frame);painel.append(moldura);
+  alerta=el('p',undefined,'notice-inline');alerta.setAttribute('role','status');painel.append(alerta);
 
   const rodape=el('p',undefined,'detail');
   const link=document.createElement('a');link.href=url;link.target='_blank';link.rel='noopener';link.textContent=url;
@@ -117,6 +154,7 @@ export function setupCheckoutPanel({api}){
   config.append(el('h3','Templates'),listaTemplates(),editor());
   colunas.append(config,previa());
   host.append(colunas);
+  enviarRascunho();
  }
 
  async function reload(){
@@ -126,9 +164,12 @@ export function setupCheckoutPanel({api}){
    api('/api/billing/offers?'+new URLSearchParams({product_id:product.id})).catch(()=>({offers:[]})),
   ]);
   if(ticket!==generation)return;
-  templates=resultado.templates;offers=ofertas.offers||[];
+  templates=resultado.templates;schema=resultado.schema;offers=ofertas.offers||[];
   if(selected&&!templates.some(row=>row.slug===selected))selected=null;
   if(!selected)selected=templates.find(row=>row.payload.is_default)?.slug||templates[0]?.slug||null;
+  // Uma gravação muda o que está publicado: a prévia precisa recarregar para
+  // deixar de mostrar rascunho e passar a mostrar o que está no ar.
+  frame=null;frameSrc=null;pronta=false;
   render();
  }
 
@@ -140,7 +181,11 @@ export function setupCheckoutPanel({api}){
   catch(error){if(host)host.replaceChildren(el('p',error.message,'security-banner'));}
  }
 
- return {mount,clear(){generation++;host=null;product=null;templates=[];offers=[];selected=null;previewSlug=null;feedback='';}};
+ return {mount,clear(){
+  generation++;clearTimeout(relogio);
+  host=null;product=null;templates=[];offers=[];schema=null;selected=null;previewSlug=null;feedback='';
+  frame=null;frameSrc=null;pronta=false;editorAtual=null;alerta=null;
+ }};
 }
 
 // Link público de uma oferta. Fica fora do painel porque a aba Ofertas também o

@@ -1,0 +1,482 @@
+/* Relationships: component styles. Shared layout and tokens live in style.css. */
+.client-name {
+  font-weight: 600;
+  display: block;
+}
+
+.client-slug {
+  display: block;
+  margin-top: 5px;
+  font-size: 12px;
+  color: #626269;
+}
+
+#product-orgs td:nth-child(2) .client-slug {
+  max-width: 280px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.client-summary {
+  display: grid;
+  grid-template-columns: repeat(4,minmax(0,1fr));
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.client-summary article {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-color: #eaeaea;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.client-summary span {
+  display: block;
+  font-size: 12px;
+  color: #626269;
+}
+
+.client-summary strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 24px;
+  letter-spacing: -.5px;
+}
+
+.client-toolbar {
+  align-items: flex-end;
+}
+
+.client-toolbar .detail {
+  margin-top: 5px;
+  color: #626269;
+  font-size: 12px;
+  max-width: 560px;
+  line-height: 1.55;
+}
+
+.client-filters {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+}
+
+.client-filters>label:first-child {
+  width: 170px;
+}
+
+.client-chip {
+  display: inline-flex;
+  margin: 2px 5px 2px 0;
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: #f6f6f6;
+  color: #5e5e5e;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.client-chip.outline {
+  background: #fafafa;
+  border: 1px solid #e6e6e6;
+  color: #565656;
+}
+
+.client-muted {
+  font-size: 12px;
+  color: #7c7c7c;
+}
+
+.client-count {
+  font-size: 14px;
+}
+
+.clients-table td {
+  vertical-align: middle;
+}
+
+.client-grid {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 12px;
+}
+
+.client-card {
+  display: grid;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  gap: 15px;
+  padding: 18px;
+  transition: border-color .16s ease,box-shadow .16s ease,transform .16s ease;
+}
+
+.client-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.client-card header>div {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.client-card h3 {
+  font-size: 15px;
+}
+
+.person-card h3 {
+  font-size: 15px;
+}
+
+.client-card small {
+  display: block;
+  margin-top: 2px;
+}
+
+.client-avatar {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: #f3f3f3;
+  color: #686868;
+  font-weight: 700;
+}
+
+.person-avatar {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: #f3f3f3;
+  color: #686868;
+  font-weight: 700;
+}
+
+.client-avatar.large {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  font-size: 18px;
+}
+
+.client-card-facts {
+  display: grid;
+  grid-template-columns: 1.2fr 1.2fr .6fr;
+  border-block: 1px solid #efefef;
+  padding-block: 13px;
+  gap: 10px;
+}
+
+.client-card-facts span {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .7px;
+  color: #969696;
+}
+
+.client-card-facts strong {
+  display: block;
+  margin-top: 5px;
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.client-card>.secondary {
+  justify-self: start;
+  border: 1px solid #e8e8e8;
+  color: #717171;
+  background: #fcfcfc;
+}
+
+.client-back {
+  margin: -8px 0 14px;
+  padding-left: 0;
+}
+
+.client-detail-hero {
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: linear-gradient(135deg,#fcfcfc,#fff);
+}
+
+.client-detail-hero>div {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.client-detail-hero h2 {
+  margin: 3px 0;
+  font-size: 24px;
+}
+
+.client-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.client-detail-panel {
+  padding: 21px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+}
+
+.client-detail-panel>h3 {
+  font-size: 16px;
+}
+
+.client-detail-panel>.detail {
+  margin: 4px 0 14px;
+}
+
+.client-detail-panel:last-child {
+  grid-column: 1/-1;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 13px 0;
+  border-top: 1px solid #f1f1f1;
+}
+
+.detail-row>div {
+  min-width: 0;
+}
+
+.detail-row .detail {
+  display: block;
+  margin-top: 3px;
+}
+
+.client-access-count {
+  display: block;
+  padding-top: 13px;
+  border-top: 1px solid #f1f1f1;
+}
+
+.people-grid {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 10px;
+}
+
+.person-card {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fff;
+  padding: 16px;
+  transition: border-color .16s ease,box-shadow .16s ease,transform .16s ease;
+}
+
+.person-card .detail {
+  margin: 3px 0;
+}
+
+.person-company {
+  padding: 0;
+  background: transparent;
+  color: #717171;
+  font-size: 12px;
+}
+
+.person-company:hover {
+  text-decoration: underline;
+}
+
+.client-toolbar h2 {
+  letter-spacing: -.02em;
+}
+
+.client-card:hover {
+  border-color: #dfdfdf;
+  box-shadow: 0 8px 24px rgba(42,28,77,.07);
+  transform: translateY(-1px);
+}
+
+.person-card:hover {
+  border-color: #dfdfdf;
+  box-shadow: 0 8px 24px rgba(42,28,77,.07);
+  transform: translateY(-1px);
+}
+
+.client-card>.secondary:hover {
+  background: #f3f3f3;
+  border-color: #d5d5d5;
+}
+
+@media (max-width:600px) {
+  .client-summary {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 8px;
+  }
+
+  .client-summary article {
+    padding: 14px;
+  }
+
+  .client-summary strong {
+    font-size: 21px;
+  }
+
+  .client-filters {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .client-filters>label:first-child {
+    width: 100%;
+  }
+
+  .client-filters .search-label {
+    width: 100%;
+  }
+
+  .client-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .people-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .client-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .client-card {
+    padding: 17px;
+  }
+
+  .client-card-facts {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .client-card-facts>div:last-child {
+    grid-column: 1/-1;
+  }
+
+  .client-detail-panel:last-child {
+    grid-column: auto;
+  }
+
+  .person-card {
+    grid-template-columns: auto minmax(0,1fr);
+  }
+
+  .person-card>.status {
+    grid-column: 2;
+  }
+
+  .client-detail-hero {
+    padding: 19px;
+  }
+
+  .clients-table {
+    white-space: normal;
+  }
+
+  .clients-table thead {
+    display: none;
+  }
+
+  .clients-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .clients-table tr {
+    display: block;
+    width: 100%;
+    padding: 17px 18px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .clients-table td {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+  }
+
+  .clients-table tr:last-child {
+    border-bottom: 0;
+  }
+
+  .clients-table td+td {
+    margin-top: 12px;
+  }
+
+  .clients-table td:nth-child(2)::before {
+    content: "Contratação";
+    display: block;
+    margin-bottom: 5px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .7px;
+    color: #969696;
+  }
+
+  .clients-table td:nth-child(3)::before {
+    content: "Oferta / marca";
+    display: block;
+    margin-bottom: 5px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .7px;
+    color: #969696;
+  }
+
+  .clients-table td:nth-child(4)::before {
+    content: "Stakeholders";
+    display: block;
+    margin-bottom: 5px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .7px;
+    color: #969696;
+  }
+
+  .clients-table td:nth-child(5)::before {
+    content: "Situação";
+    display: block;
+    margin-bottom: 5px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: .7px;
+    color: #969696;
+  }
+
+  .clients-table td:last-child {
+    margin-top: 8px;
+  }
+
+  .clients-table td:last-child .table-action {
+    padding-left: 0;
+  }
+
+}

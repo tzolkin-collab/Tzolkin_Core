@@ -1,21 +1,60 @@
-:root{--tpl-color:#111827;--tpl-radius:12px;--tpl-font:system-ui,-apple-system,"Segoe UI",sans-serif;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--bg:#f8fafc;--danger:#b91c1c}
+/* Página pública de checkout. Cada valor que o operador controla é um token
+   --tpl-*, escrito por checkout.js via CSSOM. A CSP é style-src 'self': não há
+   <style> inline nem atributo style, e setProperty não passa por ela — é por
+   isso que o tema funciona sem afrouxar política nenhuma.
+   Os padrões abaixo são os valores que a página tinha antes de existir editor:
+   um template sem nenhuma personalização renderiza exatamente igual. */
+:root{
+ --tpl-color:#111827;--tpl-color-contrast:#ffffff;
+ --tpl-ink:#0f172a;--tpl-muted:#64748b;--tpl-line:#e2e8f0;
+ --tpl-bg:#f8fafc;--tpl-surface:#ffffff;--tpl-danger:#b91c1c;
+ --tpl-radius:12px;--tpl-radius-card:18px;--tpl-border:1px;
+ --tpl-shadow:0 1px 3px rgba(15,23,42,.06);
+ --tpl-gap:20px;--tpl-pad-y:28px;--tpl-pad-x:24px;--tpl-width:420px;--tpl-scale:1;
+ --tpl-font:system-ui,-apple-system,"Segoe UI",sans-serif;
+ --tpl-font-display:system-ui,-apple-system,"Segoe UI",sans-serif;
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--tpl-font);-webkit-font-smoothing:antialiased}
+body{margin:0;background:var(--tpl-bg);color:var(--tpl-ink);font-family:var(--tpl-font);-webkit-font-smoothing:antialiased}
 .checkout-shell{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px;gap:16px}
-.checkout-loading,.checkout-error{color:var(--muted);font-size:15px}
-.checkout-error{color:var(--danger);text-align:center;max-width:360px}
-.checkout-card{width:100%;max-width:420px;background:#fff;border:1px solid var(--line);border-radius:calc(var(--tpl-radius) * 1.5);padding:28px 24px;display:flex;flex-direction:column;gap:20px;box-shadow:0 1px 3px rgba(15,23,42,.06)}
+.checkout-loading,.checkout-error{color:var(--tpl-muted);font-size:calc(15px * var(--tpl-scale))}
+.checkout-error{color:var(--tpl-danger);text-align:center;max-width:360px}
+.checkout-card{width:100%;max-width:var(--tpl-width);background:var(--tpl-surface);border:var(--tpl-border) solid var(--tpl-line);border-radius:var(--tpl-radius-card);padding:var(--tpl-pad-y) var(--tpl-pad-x);display:grid;grid-template-columns:1fr;gap:var(--tpl-gap);box-shadow:var(--tpl-shadow)}
+.checkout-col{display:flex;flex-direction:column;gap:var(--tpl-gap);min-width:0}
+/* Duas colunas quando há largura para as duas. A ordem do DOM não muda: no
+   celular resumo e pagamento simplesmente empilham, como sempre foi. */
+@media(min-width:880px){
+ .checkout-card{max-width:var(--tpl-width-wide,860px);grid-template-columns:1fr 1fr;gap:calc(var(--tpl-gap) * 2);align-items:start}
+ .checkout-col-pagamento{border-left:var(--tpl-border) solid var(--tpl-line);padding-left:calc(var(--tpl-gap) * 2)}
+}
 .checkout-brand{display:flex;align-items:center;gap:10px}
 .checkout-brand img{height:32px;max-width:160px;object-fit:contain}
-.checkout-offer h1{font-size:18px;margin:0 0 4px;font-weight:600}
-.checkout-offer p{margin:0;color:var(--muted);font-size:14px}
-.checkout-price{font-size:32px;font-weight:700;letter-spacing:-.01em}
-.checkout-price small{font-size:14px;font-weight:500;color:var(--muted);margin-left:4px}
-.checkout-pay{appearance:none;border:none;border-radius:var(--tpl-radius);background:var(--tpl-color);color:#fff;font-size:16px;font-weight:600;padding:16px;cursor:pointer;width:100%;min-height:52px;touch-action:manipulation}
+.checkout-headline{font-family:var(--tpl-font-display);font-size:calc(22px * var(--tpl-scale));font-weight:650;margin:0;letter-spacing:-.01em}
+.checkout-subheadline{margin:6px 0 0;color:var(--tpl-muted);font-size:calc(14px * var(--tpl-scale))}
+.checkout-offer h1{font-family:var(--tpl-font-display);font-size:calc(18px * var(--tpl-scale));margin:0 0 4px;font-weight:600}
+.checkout-offer p{margin:0;color:var(--tpl-muted);font-size:calc(14px * var(--tpl-scale))}
+.checkout-price{font-family:var(--tpl-font-display);font-size:calc(32px * var(--tpl-scale));font-weight:700;letter-spacing:-.01em}
+.checkout-price small{font-size:calc(14px * var(--tpl-scale));font-weight:500;color:var(--tpl-muted);margin-left:4px}
+.checkout-pay{appearance:none;border:none;border-radius:var(--tpl-radius);background:var(--tpl-color);color:var(--tpl-color-contrast);font-family:var(--tpl-font);font-size:calc(16px * var(--tpl-scale));font-weight:600;padding:16px;cursor:pointer;width:100%;min-height:52px;touch-action:manipulation}
 .checkout-pay:disabled{opacity:.6;cursor:wait}
 .checkout-pay:active{transform:scale(.98)}
-.checkout-note{font-size:12px;color:var(--muted);text-align:center;line-height:1.5}
+.checkout-note{font-size:calc(12px * var(--tpl-scale));color:var(--tpl-muted);text-align:center;line-height:1.5}
+.checkout-guarantee{font-size:calc(13px * var(--tpl-scale));color:var(--tpl-muted);text-align:center;line-height:1.5;margin:0}
 #checkout-embedded{width:100%}
-.checkout-status{width:100%;max-width:420px;background:#fff;border:1px solid var(--line);border-radius:calc(var(--tpl-radius) * 1.5);padding:28px 24px;text-align:center}
-.checkout-status h1{font-size:18px;margin:0 0 8px}
-.checkout-status p{color:var(--muted);font-size:14px;margin:0}
+.checkout-status{width:100%;max-width:var(--tpl-width);background:var(--tpl-surface);border:var(--tpl-border) solid var(--tpl-line);border-radius:var(--tpl-radius-card);padding:var(--tpl-pad-y) var(--tpl-pad-x);text-align:center}
+.checkout-status h1{font-family:var(--tpl-font-display);font-size:calc(18px * var(--tpl-scale));margin:0 0 8px}
+.checkout-status p{color:var(--tpl-muted);font-size:calc(14px * var(--tpl-scale));margin:0}
+/* Daqui para baixo, só a prévia do painel. Nada disto alcança um comprador:
+   depende de .modo-previa, que só existe quando ?preview=1 vem de um iframe da
+   mesma origem. */
+.checkout-preview-slot{border:1px dashed var(--tpl-line);border-radius:var(--tpl-radius);color:var(--tpl-muted);font-size:calc(13px * var(--tpl-scale));text-align:center;padding:18px;line-height:1.5}
+/* Botão desenhado, não clicável: a prévia nunca inicia pagamento. */
+.checkout-pay-preview{display:flex;align-items:center;justify-content:center;cursor:default;user-select:none}
+/* Marcador onde ainda não há conteúdo — sem ele não dá para clicar na logo
+   para definir a logo, porque não existe logo para clicar. */
+.checkout-empty-layer{border:1px dashed var(--tpl-line);border-radius:var(--tpl-radius);color:var(--tpl-muted);font-size:calc(12px * var(--tpl-scale));padding:12px;text-align:center}
+/* Camadas: alvo de clique e destaque. O contorno é externo (outline) para não
+   deslocar nada — mudar o layout ao selecionar mentiria sobre o resultado. */
+.modo-previa [data-layer]{cursor:pointer;border-radius:6px;transition:outline-color .12s ease,background-color .12s ease;outline:2px solid transparent;outline-offset:3px}
+.modo-previa [data-layer]:hover{outline-color:color-mix(in srgb,var(--tpl-color) 35%,transparent);background-color:color-mix(in srgb,var(--tpl-color) 4%,transparent)}
+.modo-previa [data-layer].layer-active{outline-color:var(--tpl-color);background-color:color-mix(in srgb,var(--tpl-color) 7%,transparent)}

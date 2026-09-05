@@ -103,7 +103,10 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
    const context = { req, res, url, params, pool, reply, sessions, sessionToken, productId, security,operator };
    if (!route.transactional) return await route.handler(context);
 
-   context.body = await json(req);
+   // body:false é a declaração que 20+ rotas já usam. Em rota transacional ela
+   // era ignorada e json() exigia Content-Type: application/json, então um
+   // DELETE sem corpo — que é a forma correta de excluir por id — tomava 415.
+   context.body = route.body === false ? {} : await json(req);
    const client = await pool.connect();
    try {
     await client.query('BEGIN');

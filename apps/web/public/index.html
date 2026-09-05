@@ -6,15 +6,26 @@
 <meta name="theme-color" content="#0A0A0A">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<meta name="apple-mobile-web-app-title" content="Core"><link rel="icon" href="/logo.svg"><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/delivery.css"><link rel="stylesheet" href="/design.css"><script src="/app.js" type="module"></script></head>
-<body>
+<meta name="apple-mobile-web-app-title" content="Core"><link rel="icon" href="/logo.svg">
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/design.css">
+<link rel="stylesheet" href="/overview.css">
+<link rel="stylesheet" href="/relationships.css">
+<link rel="stylesheet" href="/portfolio.css">
+<link rel="stylesheet" href="/delivery.css">
+<link rel="stylesheet" href="/management.css">
+<link rel="stylesheet" href="/database-workspace.css">
 <link rel="stylesheet" href="/tracking.css">
 <link rel="stylesheet" href="/finance.css">
 <link rel="stylesheet" href="/billing.css">
 <link rel="stylesheet" href="/emails.css">
 <link rel="stylesheet" href="/projects.css">
 <link rel="stylesheet" href="/product-emails.css">
+<link rel="stylesheet" href="/checkout-editor.css">
 <link rel="stylesheet" href="/product-icons.css">
+<script src="/app.js" type="module"></script>
+</head>
+<body>
 <main id="login" class="login-screen">
 <div class="login-box">
 <div class="brand login-brand"><img src="/logo.svg" width="46" height="46" alt=""><span>TZOLKIN<span class="brand-product">CORE</span></span></div>
@@ -25,11 +36,10 @@
 <div id="workspace" class="app-shell" hidden>
 <header class="mobile-shellbar"><button id="nav-toggle" class="mobile-menu" type="button" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span><span class="sr-only">Abrir menu</span></button><div class="mobile-identity"><img src="/logo.svg" width="30" height="30" alt=""><span id="mobile-page-title">Visão geral</span></div><button id="mobile-refresh" class="mobile-refresh" type="button" aria-label="Atualizar dados">↻</button></header>
 <aside id="sidebar" class="sidebar" aria-label="Navegação do Core">
-<div class="brand"><img src="/logo.svg" width="36" height="36" alt=""><span>TZOLKIN<span class="brand-product">CORE</span></span></div>
-<div class="context-switch"><label for="context-select">ESPAÇO</label><select id="context-select"><option value="">TZOLKIN · Geral</option></select></div>
+<div class="context-switch"><span class="context-label">ESPAÇO</span><details id="context-picker" class="context-picker"><summary><span id="context-current-icon" class="context-current-icon" aria-hidden="true"></span><span id="context-current-copy" class="context-current-copy"><strong>TZOLKIN</strong><small>Gestão geral</small></span><span class="context-chevron" aria-hidden="true">⌄</span></summary><div id="context-options" class="context-options" role="group" aria-label="Selecionar espaço"></div></details><select id="context-select" hidden tabindex="-1" aria-hidden="true"><option value="">TZOLKIN · Geral</option></select></div>
 <p class="nav-label" id="nav-label">ESPAÇO DE TRABALHO</p>
 <nav id="nav" aria-label="Principal"></nav>
-<div class="sidebar-bottom"><div class="workspace-label"><span class="avatar avatar-brand"><img src="/logo.svg" width="26" height="26" alt=""></span><div>TZOLKIN<small>Gestão interna</small></div></div><button id="logout" class="sign-out">Sair da conta <span aria-hidden="true">↗</span></button></div>
+<div class="sidebar-bottom"><button id="logout" class="sign-out">Sair da conta <span aria-hidden="true">↗</span></button></div>
 </aside>
 <button id="nav-backdrop" class="nav-backdrop" type="button" tabindex="-1" aria-label="Fechar menu" hidden></button>
 <div class="app-main">
@@ -74,7 +84,9 @@
 
 <section id="view-access" class="view" hidden><h2 class="section-title">Acessos aos produtos</h2><div id="members" class="list-panel"></div></section>
 <section id="view-settings" class="view" hidden aria-label="Configurações"><div class="section-toolbar"><div><h2>Configurações</h2><p class="detail">Preferências operacionais e integrações do Core.</p></div></div><div class="empty-state"><h3>Configurações do espaço</h3><p>Em breve: preferências, integrações e regras padrão.</p></div></section>
-<section id="view-management" class="view" hidden aria-label="Gestão técnica"><div class="section-toolbar"><div><div class="projects-kicker">INVENTÁRIO E DADOS</div><p class="detail">Banco exclusivo do TZOLKIN Core, DNS Hostinger, Redis observado e APIs ligadas aos produtos. O painel expõe metadados e inventário, sem abrir dados sensíveis.</p></div></div><div class="management-grid"><section id="management-schema" class="management-panel"></section><section id="management-dns" class="management-panel"></section><section id="management-redis" class="management-panel"></section><section id="management-apis" class="management-panel"></section><section id="management-ops" class="management-panel"></section></div></section>
+<section id="view-management" class="view" hidden aria-label="Gestão técnica"><div class="section-toolbar"><div><div class="projects-kicker">OPERAÇÃO E INTEGRAÇÕES</div><h2>Gestão técnica</h2><p class="detail">Domínios, integrações e verificações operacionais dos produtos. Banco de dados e Redis têm áreas próprias para manter a leitura objetiva.</p></div></div><div class="management-grid management-overview-grid"><section id="management-dns" class="management-panel"></section><section id="management-apis" class="management-panel"></section><section id="management-ops" class="management-panel"></section></div></section>
+<section id="view-database" class="view" hidden aria-label="Banco de dados"><section id="management-schema" class="management-panel technical-page-panel"></section></section>
+<section id="view-redis" class="view" hidden aria-label="Redis e caches"><p class="technical-intro">Instâncias de cache encontradas na infraestrutura. Métricas aparecem somente quando a integração autorizada estiver disponível.</p><section id="management-redis" class="management-panel technical-page-panel"></section></section>
 <section id="view-security" class="view" hidden aria-label="Segurança"><div class="section-toolbar"><div><h2>Segurança</h2><p class="detail">Sessões, permissões e saúde de acesso.</p></div></div><div class="empty-state"><h3>Segurança do Core</h3><p>Os controles de segurança serão reunidos nesta área.</p></div></section>
 <section id="view-server-metrics" class="view" hidden aria-label="Métricas de servidor"><div class="section-toolbar"><div><h2>Métricas de servidor</h2><p class="detail">Disponibilidade e capacidade da infraestrutura.</p></div></div><div class="empty-state"><h3>Métricas de infraestrutura</h3><p>Conecte um provedor para acompanhar os indicadores do servidor.</p></div></section>
 <section id="view-tracking" class="view" hidden aria-label="Acompanhamento"></section>

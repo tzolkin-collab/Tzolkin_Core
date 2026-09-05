@@ -14,6 +14,7 @@
 // e fica para quando for desenhado (não fingido) aqui.
 import { readFileSync } from 'node:fs';
 import { fail, json, input, isProductId, onlyParams } from '../platform/http.mjs';
+import { mergeTheme, mergeCopy } from '../platform/checkout-model.mjs';
 import { createStripeCheckoutAdapter } from '../integrations/stripe-checkout.mjs';
 
 const WINDOW_MS = 5 * 60 * 1000;
@@ -53,7 +54,22 @@ export function createIpThrottle({ windowMs = WINDOW_MS, maxAttempts = MAX_ATTEM
 const clientIp = req => req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
 
 const ofertaPublica = row => ({ slug: row.slug, name: row.payload.name, amount_minor: row.payload.amount_minor, currency: row.payload.currency, kind: row.payload.kind, interval: row.payload.interval });
-const templatePublico = row => ({ slug: row.slug, type: row.payload.type, branding: row.payload.branding });
+
+// O tema é completado com os padrões AQUI, não no navegador: os padrões vivem em
+// platform/checkout-model.mjs e mudá-los precisa alcançar quem nunca editou o
+// campo. A tinta sobre a cor principal é calculada, nunca escolhida — é o que
+// impede publicar branco sobre amarelo.
+// Manda o ID da fonte, nunca a pilha CSS: a página tem a própria tabela de
+// id → font-family, e assim nenhuma string vinda de fora chega ao CSS.
+//
+// A tinta sobre a cor principal NÃO viaja daqui: a página a calcula, porque no
+// modo prévia o tema chega por postMessage sem passar pelo servidor, e um
+// contraste que só o servidor soubesse calcular ficaria congelado enquanto o
+// operador mexe na cor. checkout-model.contrastInk continua sendo a autoridade
+// do lado servidor, para o objeto `appearance` da Stripe na etapa 4.
+const temaPublico = payload =>
+ mergeTheme(payload.theme ?? (payload.branding && { color: payload.branding.primary_color, radius: payload.branding.border_radius, logo_url: payload.branding.logo_url }));
+const templatePublico = row => ({ slug: row.slug, type: row.payload.type, branding: row.payload.branding, theme: temaPublico(row.payload), copy: mergeCopy(row.payload.copy) });
 
 async function lerOfertaETemplate(pool, productId, offerSlug, templateSlug) {
  const [produto, oferta, template] = await Promise.all([
