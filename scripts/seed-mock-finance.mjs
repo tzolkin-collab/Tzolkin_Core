@@ -86,7 +86,7 @@ async function seed(){
   // Só considera "mock aplicado" se TODA conta bancária já está no valor alvo.
   // Fora disso o saldo é real (o Pluggy ressincroniza por cima) e o backup
   // precisa ser regravado, senão o clean restaura um valor obsoleto.
-  const ALVOS={Nubank:17000.00,'Banco Inter':10000.00};
+  const ALVOS={Nubank:3742.18,'Banco Inter':2043.65};
   const bancarias=items.flatMap(it=>(it.payload?.accounts||[]).filter(a=>a.type==='BANK'&&ALVOS[a.bank]!==undefined));
   const mockAplicado=bancarias.length>0&&bancarias.every(a=>Number(a.balance)===ALVOS[a.bank]);
   if(!backupRow||!mockAplicado){
@@ -104,11 +104,11 @@ async function seed(){
    const accounts=(it.payload?.accounts||[]).map(acc=>{
     if(acc.bank==='Nubank'||acc.name?.toLowerCase().includes('nu pagamentos')){
      changed=true;
-     return {...acc,balance:17000.00};
+     return {...acc,balance:3742.18};
     }
     if(acc.bank==='Banco Inter'||acc.name?.toLowerCase().includes('inter')){
      changed=true;
-     return {...acc,balance:10000.00};
+     return {...acc,balance:2043.65};
     }
     if(acc.type==='CREDIT'&&acc.balance===0){
      changed=true;
