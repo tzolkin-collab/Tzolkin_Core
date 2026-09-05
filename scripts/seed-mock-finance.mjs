@@ -6,12 +6,12 @@ import {openDatabase} from '../apps/api/src/platform/database.mjs';
 
 // --- TRANSAÇÕES NUBANK SETEMBRO 2026 ---
 const mockTransactionsNubankSep = [
- {id:'mock-tx-nu-sep-01',date:'2026-09-01T10:15:00Z',description:'Pix recebido · Soluções Digitais Ltda (Contrato Mensal)',amount:8500.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
- {id:'mock-tx-nu-sep-02',date:'2026-09-01T14:30:00Z',description:'Pix recebido · Lucas Carvalho (Mentoria Executiva)',amount:3200.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
- {id:'mock-tx-nu-sep-03',date:'2026-09-02T09:20:00Z',description:'Pix recebido · Alpha Marketing (Desenvolvimento Web)',amount:12000.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
- {id:'mock-tx-nu-sep-04',date:'2026-09-02T16:45:00Z',description:'Pix recebido · Horizon Consultoria (Parcela 2/4)',amount:6800.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
- {id:'mock-tx-nu-sep-05',date:'2026-09-03T08:10:00Z',description:'Pix recebido · Marina Silva (Assinatura Consultoria)',amount:1950.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
- {id:'mock-tx-nu-sep-06',date:'2026-09-03T11:00:00Z',description:'Pix recebido · EducarTech (Treinamento In-Company)',amount:9400.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-nu-sep-01',date:'2026-09-01T10:15:00Z',description:'Pix recebido · Soluções Digitais Ltda (Contrato Mensal)',amount:850.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-nu-sep-02',date:'2026-09-01T14:30:00Z',description:'Pix recebido · Lucas Carvalho (Mentoria Executiva)',amount:320.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-nu-sep-03',date:'2026-09-02T09:20:00Z',description:'Pix recebido · Alpha Marketing (Desenvolvimento Web)',amount:1200.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-nu-sep-04',date:'2026-09-02T16:45:00Z',description:'Pix recebido · Horizon Consultoria (Parcela 2/4)',amount:680.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-nu-sep-05',date:'2026-09-03T08:10:00Z',description:'Pix recebido · Marina Silva (Assinatura Consultoria)',amount:195.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-nu-sep-06',date:'2026-09-03T11:00:00Z',description:'Pix recebido · EducarTech (Treinamento In-Company)',amount:940.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
  {id:'mock-tx-nu-sep-out-01',date:'2026-09-02T13:00:00Z',description:'Pix enviado · Infraestrutura Cloud e Servidores',amount:-1450.00,currency:'BRL',type:'DEBIT',status:'POSTED',is_mock:true},
 ];
 
@@ -29,9 +29,9 @@ const mockTransactionsNubankAug = [
 
 // --- TRANSAÇÕES BANCO INTER SETEMBRO 2026 ---
 const mockTransactionsInterSep = [
- {id:'mock-tx-inter-sep-01',date:'2026-09-01T11:45:00Z',description:'TED recebida · Repasse Vendas Gateways',amount:14850.20,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
- {id:'mock-tx-inter-sep-02',date:'2026-09-02T17:10:00Z',description:'Recebimento Boleto Cobrança #2094 · Alpha Soluções',amount:5400.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
- {id:'mock-tx-inter-sep-03',date:'2026-09-03T10:30:00Z',description:'Pix recebido · Contrato Anual Tecnologia',amount:18000.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-inter-sep-01',date:'2026-09-01T11:45:00Z',description:'TED recebida · Repasse Vendas Gateways',amount:1061.90,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-inter-sep-02',date:'2026-09-02T17:10:00Z',description:'Recebimento Boleto Cobrança #2094 · Alpha Soluções',amount:480.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
+ {id:'mock-tx-inter-sep-03',date:'2026-09-03T10:30:00Z',description:'Pix recebido · Contrato Anual Tecnologia',amount:600.00,currency:'BRL',type:'CREDIT',status:'POSTED',is_mock:true},
 ];
 
 // --- TRANSAÇÕES BANCO INTER AGOSTO 2026 ---
