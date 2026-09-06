@@ -41,6 +41,16 @@ const audit = (client, row, action, operator, beforeValue, afterValue) => client
 );
 
 export function productResourceBindingRoutes(router) {
+ router.delete('/api/products/:id/attachments', async ({ client, params, operator }) => {
+  if (!isProductId(params.id)) throw fail(400, 'Produto inválido.');
+  if (!await findEditableProduct(client, params.id)) throw fail(404, 'Produto não encontrado ou arquivado.');
+  const resources = (await client.query(`${select} WHERE product_id=$1 FOR UPDATE`, [params.id])).rows;
+  for (const row of resources) await audit(client, row, 'detached', operator, row, null);
+  await client.query('DELETE FROM product_deploy_bindings WHERE product_id=$1', [params.id]);
+  await client.query('DELETE FROM product_resource_bindings WHERE product_id=$1', [params.id]);
+  return { tenant: null, type: 'product.attachments.detached', detached_resources: resources.length };
+ }, { transactional: true, audit: false, body: false });
+
  router.get('/api/product-resource-bindings', async ({ pool, url, reply }) => {
   onlyParams(url.searchParams, ['product_id']);
   const productId = url.searchParams.get('product_id');
