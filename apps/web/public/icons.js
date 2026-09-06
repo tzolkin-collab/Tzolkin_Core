@@ -42,7 +42,11 @@ export function providerLogo(name){
 export function productFavicon(url){
  if(!url)return createIcon('package');
  if(typeof url==='string'&&url.startsWith('/product-favicons/')){const img=document.createElement('img');img.src=url;img.alt='';img.width=24;img.height=24;img.className='product-favicon';img.setAttribute('aria-hidden','true');return img;}
- try{const parsed=new URL(url);if(parsed.protocol!=='https:')return createIcon('package');}catch{return createIcon('package');}
+ try{const parsed=new URL(url);if(parsed.protocol!=='https:')return createIcon('package');
+  // O Skiller declara o asset oficial em /icon.svg, mas alguns proxies
+  // devolvem HTML ao consultar a raiz do domínio. Use o asset diretamente.
+  if(parsed.hostname==='skiller.tzolkin.cloud'){const img=document.createElement('img');img.src='https://skiller.tzolkin.cloud/icon.svg';img.alt='';img.width=24;img.height=24;img.className='product-favicon';img.setAttribute('aria-hidden','true');return img;}
+ }catch{return createIcon('package');}
  const img=document.createElement('img');img.src='data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';img.alt='';img.width=24;img.height=24;img.className='product-favicon';img.setAttribute('aria-hidden','true');
  fetch('/api/product-favicon?'+new URLSearchParams({url})).then(response=>response.ok?response.json():null).then(result=>{if(result?.href)img.src=result.href;else img.replaceWith(createIcon('package'));}).catch(()=>img.replaceWith(createIcon('package')));return img;
 }
