@@ -26,9 +26,6 @@ const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefine
 const TYPE_LABELS={HOSTED:'Hospedado na Stripe (redireciona)',EMBEDDED:'Incorporado (fica na sua página)',ELEMENTS:'Elements — ainda não cria sessão'};
 const VIEWPORTS={mobile:'Celular',desktop:'Computador'};
 const TIPO_CURTO={HOSTED:'Hospedado',EMBEDDED:'Incorporado',ELEMENTS:'Elements'};
-// Largura de monitor de verdade, para a prévia desktop cruzar o breakpoint de
-// 880px do checkout. A proporção da moldura vive no CSS, junto com a escala.
-const LARGURA_DESKTOP=1280;
 const corDoTemplate=payload=>payload.theme?.color||payload.branding?.primary_color||'#111827';
 
 export function setupCheckoutPanel({api}){
@@ -128,7 +125,7 @@ export function setupCheckoutPanel({api}){
   }
 
   const url=checkoutLink(product.id,previewSlug);
-  const alvo=url+'?preview=1'+(selected?'&template='+encodeURIComponent(selected):'');
+  const alvo=url+'?preview=1&viewport='+viewport+(selected?'&template='+encodeURIComponent(selected):'');
   const moldura=el('div',undefined,'checkout-frame '+viewport);
   if(!frame||frameSrc!==alvo){
    pronta=false;
@@ -143,9 +140,7 @@ export function setupCheckoutPanel({api}){
   // Desktop: o iframe renderiza em 1280px e encolhe por escala. Sem isto ele
   // teria a largura da coluna (~500px), ficaria abaixo do breakpoint de 880px
   // do checkout e a prévia desktop mostraria o layout de celular.
-  // A redução é feita em CSS por unidade de container. Tentei calcular aqui com
-  // ResizeObserver e a conta não chegava a rodar; o CSS resolve sem estado.
-  if(viewport==='desktop')painel.append(el('p',`Renderizado em ${LARGURA_DESKTOP}px de largura e reduzido para caber.`,'checkout-preview-escala'));
+  if(viewport==='desktop')painel.append(el('p','Layout de computador, na largura que a coluna permite.','checkout-preview-escala'));
   alerta=el('p',undefined,'notice-inline');alerta.setAttribute('role','status');painel.append(alerta);
 
   const rodape=el('p',undefined,'detail');

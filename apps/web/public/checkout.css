@@ -27,6 +27,11 @@ body{margin:0;background:var(--tpl-bg);color:var(--tpl-ink);font-family:var(--tp
  .checkout-card{max-width:var(--tpl-width-wide,860px);grid-template-columns:1fr 1fr;gap:calc(var(--tpl-gap) * 2);align-items:start}
  .checkout-col-pagamento{border-left:var(--tpl-border) solid var(--tpl-line);padding-left:calc(var(--tpl-gap) * 2)}
 }
+/* A prévia do painel pede o layout de computador explicitamente: a coluna dela
+   nunca terá 880px, e sem isto a aba "Computador" mostrava o layout de celular.
+   Mesmas regras, sem duplicar valores. */
+:root.previa-desktop .checkout-card{max-width:100%;grid-template-columns:1fr 1fr;gap:calc(var(--tpl-gap) * 2);align-items:start}
+:root.previa-desktop .checkout-col-pagamento{border-left:var(--tpl-border) solid var(--tpl-line);padding-left:calc(var(--tpl-gap) * 2)}
 .checkout-brand{display:flex;align-items:center;gap:10px}
 .checkout-brand img{height:32px;max-width:160px;object-fit:contain}
 .checkout-headline{font-family:var(--tpl-font-display);font-size:calc(22px * var(--tpl-scale));font-weight:650;margin:0;letter-spacing:-.01em}

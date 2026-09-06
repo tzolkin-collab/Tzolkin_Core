@@ -255,6 +255,11 @@ function marcarAtiva(id) {
 
 if (modoPrevia) {
  document.documentElement.classList.add('modo-previa');
+ // O painel diz qual viewport simular. Só vale dentro da prévia: numa aba comum
+ // quem decide o layout continua sendo a largura real da janela. A coluna da
+ // prévia nunca terá os 880px do breakpoint, e sem isto a aba "Computador"
+ // mostrava o layout de celular.
+ if (params.get('viewport') === 'desktop') document.documentElement.classList.add('previa-desktop');
  // Delegação: o card é recriado a cada rascunho, então prender o ouvinte na
  // raiz evita religar tudo a cada tecla digitada no editor.
  root.addEventListener('click', event => {
