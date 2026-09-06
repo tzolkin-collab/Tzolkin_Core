@@ -77,7 +77,8 @@ export function serveAsset(pathname, res) {
  const entry = FILES[pathname];
  if (!entry) return false;
  const [file, type] = entry;
- res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8` });
+ const cacheControl = pathname === '/favicon.svg' || pathname === '/favicon.ico' || pathname.startsWith('/product-favicons/') ? 'no-store' : 'no-cache';
+ res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8`, 'Cache-Control': cacheControl });
  res.end(readFileSync(new URL(`./public/${file}`, import.meta.url)));
  return true;
 }

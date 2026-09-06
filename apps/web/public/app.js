@@ -88,7 +88,9 @@ const catalogForProduct=product=>state.catalog.find(entry=>entry.kind==='product
 const approvedPublicUrl=product=>{const bindings=state.resourceBindings.filter(item=>item.product_id===product?.id&&(!item.environment||item.environment==='production')&&['domain','frontend'].includes(item.resource_type));for(const binding of bindings){const raw=binding.url||`https://${binding.external_id}`;try{const url=new URL(raw);if(url.protocol==='https:'&&!/^api\./i.test(url.hostname))return url.href;}catch{}}return null;};
 // Vínculo aprovado é a fonte de verdade. O deploy observado é evidência
 // técnica/fallback, não identidade pública do produto.
-const productFaviconUrl=product=>approvedPublicUrl(product)||CANONICAL_PRODUCT_URLS[productKey(product)]||LOCAL_PRODUCT_FAVICONS[productKey(product)]||product?.favicon_url||product?.catalog?.url||catalogForProduct(product)?.url||publishedDeployUrl(product)||null;
+// Um SVG oficial local é determinístico e não deve ser substituído por um
+// domínio aprovado que esteja sem favicon ou redirecionando incorretamente.
+const productFaviconUrl=product=>LOCAL_PRODUCT_FAVICONS[productKey(product)]||approvedPublicUrl(product)||CANONICAL_PRODUCT_URLS[productKey(product)]||product?.favicon_url||product?.catalog?.url||catalogForProduct(product)?.url||publishedDeployUrl(product)||null;
 const productLiveUrl=product=>product?.lifecycle_status==='draft'?(publishedDeployUrl(product)||null):(approvedPublicUrl(product)||CANONICAL_PRODUCT_URLS[productKey(product)]||product?.deploy_url||publishedDeployUrl(product)||product?.catalog?.url||catalogForProduct(product)?.url||null);
 const coreSpaceIcon=()=>{const image=document.createElement('img');image.src='/logo.svg';image.width=20;image.height=20;image.alt='';return image;};
 
