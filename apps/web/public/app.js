@@ -9,7 +9,6 @@ import {setupTracking} from './tracking.js';
 import {setupFinance} from './finance.js';
 import {setupBilling} from './billing.js';
 import {setupProductPayments} from './product-payments.js';
-import {setupProjects} from './projects.js';
 import {setupProductEmails} from './product-emails.js';
 import {renderDatabaseWorkspace} from './management-workspace.js';
 const billing=setupBilling({api});
@@ -36,7 +35,7 @@ const CONTEXTS = {
    people: { title: 'Pessoas', section: 'view-people', action: ['Nova pessoa', 'stakeholder-dialog'], metrics:false },
    leads: { title: 'Leads', section: 'view-leads', action: ['Novo lead', 'tenant-dialog'], metrics:false },
    clients: { title: 'Clientes', section: 'view-clients', action: ['Novo cliente', 'tenant-dialog'], metrics:false },
-   projects: { title: 'Projetos e deploys', section: 'view-delivery', action: ['Novo projeto', 'delivery-new'], metrics:false },
+   deploys: { title: 'Deploys', section: 'view-deploys', action: ['Novo projeto', 'delivery-new'], metrics: false },
    products: { title: 'Produtos', section: 'view-products', action: ['Vincular cliente', 'entitlement-dialog'] },
    services: { title: 'Serviços', section: 'view-services', metrics:false },
    client: { title: 'Cliente', section: 'view-client', hidden:true, metrics:false },
@@ -48,7 +47,6 @@ const CONTEXTS = {
    redis: { title: 'Redis e caches', section: 'view-redis', metrics:false },
    settings: { title: 'Configurações', section: 'view-settings', metrics:false, hidden:true },
    security: { title: 'Segurança', section: 'view-security', metrics:false, hidden:true },
-   deploys: { title: 'Deploys', section: 'view-deploys', metrics: false },
    serverMetrics: { title: 'Métricas de servidor', section: 'view-server-metrics', metrics:false, hidden:true },
    resource: { title: 'Projeto e serviço', section: 'view-resource', metrics: false, hidden:true },
   },
@@ -64,7 +62,7 @@ const CONTEXTS = {
  },
 };
 
-const SECTIONS = ['view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-services', 'view-mentorias', 'view-access', 'view-management', 'view-database', 'view-redis', 'view-settings', 'view-security', 'view-deploys', 'view-server-metrics', 'view-delivery', 'view-projects', 'view-product', 'view-product-orgs', 'view-product-payments', 'view-product-emails'];
+const SECTIONS = ['view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-services', 'view-mentorias', 'view-access', 'view-management', 'view-database', 'view-redis', 'view-settings', 'view-security', 'view-deploys', 'view-server-metrics', 'view-delivery', 'view-product', 'view-product-orgs', 'view-product-payments', 'view-product-emails'];
 const DATA_NODES = ['tenants', 'leads', 'companies', 'client-summary', 'client-detail', 'stakeholder-directory', 'members', 'contracts', 'product-catalog', 'product-deployment-list', 'services-list', 'services-summary', 'management-schema', 'management-dns', 'management-redis', 'management-apis', 'overview-kpis', 'overview-alerts', 'overview-integrations', 'overview-product-list', 'overview-actions', 'product-orgs', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
 SECTIONS.push('view-finance','view-emails');
 
@@ -121,7 +119,6 @@ async function renderSecurityBanner() {
 function clearRenderedData() {
  deployData=null; $('deploys-summary').replaceChildren(); $('deploy-results').textContent=''; $('deploy-search').value=''; $('deploy-filter').value='all';
  delivery.clear();
- projects.clear();
  tracking.clear();
  finance.clear();
  emails.clear();
@@ -175,7 +172,7 @@ async function api(path, method = 'GET', body) {
 function renderNav() {
  const context = CONTEXTS[contextKind()];
  $('nav-label').textContent = context.label;
- const groups=contextKind()==='general'?{overview:'Hoje',tracking:'Hoje',finance:'Hoje',companies:'Relacionamentos',people:'Relacionamentos',leads:'Relacionamentos',clients:'Relacionamentos',projects:'Entrega',products:'Entrega',services:'Entrega',emails:'Entrega',education:'Educação',settings:'Administração',access:'Administração',management:'Administração',security:'Administração',database:'Tecnologia',redis:'Tecnologia',deploys:'Tecnologia',serverMetrics:'Tecnologia'}:{product:'Produto','product-orgs':'Produto','product-payments':'Produto','product-emails':'Produto'};
+ const groups=contextKind()==='general'?{overview:'Hoje',tracking:'Hoje',finance:'Hoje',companies:'Relacionamentos',people:'Relacionamentos',leads:'Relacionamentos',clients:'Relacionamentos',products:'Entrega',services:'Entrega',emails:'Entrega',education:'Educação',settings:'Administração',access:'Administração',management:'Administração',security:'Administração',database:'Tecnologia',redis:'Tecnologia',deploys:'Tecnologia',serverMetrics:'Tecnologia'}:{product:'Produto','product-orgs':'Produto','product-payments':'Produto','product-emails':'Produto'};
  const items=[];let previous,section;
  for(const [key,view]of Object.entries(context.views).filter(([,view])=>!view.hidden)){
   if(groups[key]!==previous){section=node('section',undefined,'nav-section');const label=node('h2',groups[key],'nav-group');section.append(label);items.push(section);previous=groups[key];}
@@ -195,7 +192,8 @@ function switchView(view) {
  state.view = view;
  document.body.dataset.view = view;
  const active = views()[view];
- SECTIONS.forEach(id => { $(id).hidden = $(id).id !== active.section; });
+ const visible = new Set([active.section, ...(view === 'deploys' ? ['view-delivery'] : [])]);
+ SECTIONS.forEach(id => { $(id).hidden = !visible.has($(id).id); });
  $('breadcrumb').textContent = $('page-title').textContent = active.title;
  $('mobile-page-title').textContent=active.title;
  $('new-record').hidden = !active.action;
@@ -220,7 +218,7 @@ function switchView(view) {
  if (view === 'client') renderClientDetail();
  if (view === 'product-payments'&&state.product) productPayments.load(state.product.product).catch(reportError);
  if (view === 'product-emails'&&state.product) productEmails.load({...state.product.product,deploy_url:publishedDeployUrl(state.product.product),favicon_url:productFaviconUrl(state.product.product)}).catch(reportError);
- if (view === 'projects') delivery.load().catch(reportError);
+ if (view === 'deploys') delivery.load().catch(reportError);
 }
 
 function renderContextChrome() {
@@ -310,7 +308,7 @@ function renderOverviewDashboard(entries,{finance,sales,deploys,infrastructure}=
  $('overview-integrations').replaceChildren(integration('Stripe',sales?.configured?.stripe,`${saleRows.filter(s=>s.provider==='stripe').length} vendas no mês`,providerLogo('stripe')),integration('Asaas',sales?.configured?.asaas,sales?.configured?.asaas?'Leitura por API ativa':'Chave de produção ausente',providerLogo('asaas')),...linhasBanco,integration('EasyPanel',infrastructure==null?null:infrastructure.status==='ok',infrastructure==null?'Consultando inventário':`${easyCount} serviços no inventário`,providerLogo('easypanel')));
  const productEntries=new Map(entries.filter(e=>e.kind==='product').map(e=>[e.payload.name,e.payload]));
  $('overview-product-list').replaceChildren(...overview.products.map(product=>{const contracts=activeContracts.filter(e=>e.product_id===product.id).length,item=productEntries.get(product.name),row=node('button',undefined,'overview-product');row.type='button';row.onclick=()=>openProductModule(product,'product').catch(reportError);row.append(productFavicon(productFaviconUrl(product)));const text=node('span');text.append(node('strong',product.name),node('small',(productAppearsDraft(product,item)?'Draft · ':'')+(item?.description||`${contracts} ${contracts===1?'contrato ativo':'contratos ativos'}`)));row.append(text,node('span',String(contracts),'overview-product-count'),createIcon('arrow'));return row;}));
- $('overview-actions').replaceChildren(overviewButton('Adicionar cliente','Abrir a carteira e iniciar um relacionamento','clients','people'),overviewButton('Revisar caixa','Bancos, Stripe e Asaas em um só lugar','finance','wallet'),overviewButton('Acompanhar entregas','Projetos, ambientes e ativações','projects','repo'));
+ $('overview-actions').replaceChildren(overviewButton('Adicionar cliente','Abrir a carteira e iniciar um relacionamento','clients','people'),overviewButton('Revisar caixa','Bancos, Stripe e Asaas em um só lugar','finance','wallet'),overviewButton('Acompanhar deploys','GitHub, projetos e ambientes de publicação','deploys','cloud'));
  document.querySelectorAll('[data-overview-view]').forEach(button=>button.onclick=()=>switchView(button.dataset.overviewView));
 }
 
@@ -981,7 +979,6 @@ bindForm('entitlement-form', body => api('/api/entitlements', 'PUT', {
 document.querySelectorAll('[data-open]').forEach(button => { button.onclick = () => openDialog(button.dataset.open); });
 document.querySelectorAll('[data-close]').forEach(button => { button.onclick = () => button.closest('dialog').close(); });
 $('new-record').onclick = () => {
- if (state.view === 'projects') { projects.openNew(); return; }
  const dialog=views()[state.view].action[1];
  if(dialog==='tenant-dialog'){
   const relationship=$('tenant-form').elements.relationship_kind;
@@ -1008,7 +1005,7 @@ $('show-password').onclick = () => {
 };
 $('refresh').onclick = async () => {
  $('refresh').disabled = true;
- try { await load(); if (state.view === 'projects') await projects.load(); if(state.view==='resource') await resource.refresh(); $('notice').textContent = 'Atualizado.'; }
+ try { await load(); if(state.view==='resource') await resource.refresh(); $('notice').textContent = 'Atualizado.'; }
  catch (error) { reportError(error); } finally { $('refresh').disabled = false; }
 };
 $('logout').onclick = async () => {
@@ -1017,7 +1014,6 @@ $('logout').onclick = async () => {
 };
 
 const resource = setupResource({api,activate:()=>switchView('resource'),canOpen:()=>!$('workspace').hidden && contextKind()==='general',back:()=>switchView('deploys')});
-const projects = setupProjects({api,openDeploys:()=>switchView('deploys')});
 const delivery = setupDelivery({ api,openResource:resource.open });
 renderNav();
 switchView(state.view);

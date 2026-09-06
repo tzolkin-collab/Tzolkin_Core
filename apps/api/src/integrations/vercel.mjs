@@ -90,7 +90,7 @@ export function createVercelAdapter({ token, teamId = null, baseUrl = BASE, fetc
     id: p.id,
     name: p.name,
     framework: p.framework || null,
-    repository: typeof p.link?.repo === 'string' && /^[\w.-]+\/[\w.-]+$/.test(p.link.repo) ? p.link.repo : null,
+    repository: githubRepository(p.link),
     // Projeto sem repositório conectado não tem commit, e não aceita Deploy Hook.
     git_connected: Boolean(p.link),
     updated_at: iso(p.updatedAt),
@@ -102,6 +102,15 @@ export function createVercelAdapter({ token, teamId = null, baseUrl = BASE, fetc
    return (body.deployments || []).map(d => normalizar(d, projectName));
   },
  };
+}
+
+// GitHub links usually split organization and repository into separate fields.
+export function githubRepository(link) {
+ if (link?.type && link.type !== 'github') return null;
+ const repo = link?.repo;
+ if (typeof repo !== 'string') return null;
+ if (/^[\w.-]+\/[\w.-]+$/.test(repo)) return repo;
+ return /^[\w.-]+$/.test(repo) && typeof link.org === 'string' && /^[\w.-]+$/.test(link.org) ? `${link.org}/${repo}` : null;
 }
 
 export const _internals = { normalizar, mensagemDeFalha, assunto, ESTADOS };

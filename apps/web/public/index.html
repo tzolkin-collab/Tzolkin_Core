@@ -93,14 +93,13 @@
 <section id="view-finance" class="view" hidden aria-label="Financeiro"></section>
 <section id="view-emails" class="view" hidden aria-label="E-mails"></section>
 
-<section id="view-projects" class="view" hidden aria-label="Projetos"></section>
 <section id="view-resource" class="view" hidden aria-label="Recurso da plataforma"></section>
-<section id="view-delivery" class="view" hidden>
-<div class="section-toolbar"><div><h2>Do repositório ao projeto</h2><p class="delivery-subtitle">Escolha seu código. Organize os serviços. Conecte os destinos.</p></div><button id="delivery-new" class="secondary" type="button">Criar rascunho sem repositório</button></div>
+<section id="view-delivery" class="view" hidden aria-label="GitHub e cadastro técnico">
+<div class="section-toolbar"><div><h2>GitHub e configuração de deploy</h2><p class="delivery-subtitle">Escolha o repositório, organize os serviços e conecte os destinos de publicação.</p></div><button id="delivery-new" class="secondary" type="button">Criar projeto pelo GitHub</button></div>
 <p id="delivery-message" class="notice" role="status"></p>
 <div id="delivery-provider-status" class="delivery-chips" aria-label="Conexões"></div>
 <section class="delivery-repo-panel" aria-label="Repositórios do GitHub"><div class="section-toolbar"><h3>Seus repositórios <span id="delivery-repo-count" class="status"></span></h3><label class="delivery-search"><span class="sr-only">Buscar nos repositórios</span><input id="delivery-repository-search" type="search" placeholder="Buscar organização ou repositório"></label></div><div id="delivery-repositories"></div></section>
-<div class="section-toolbar"><h2>Seus projetos</h2><span class="catalog-caption">Cadastro e publicação são estados diferentes.</span></div>
+<div class="section-toolbar"><h2>Repositórios e configurações</h2><span class="catalog-caption">GitHub, Vercel e EasyPanel no mesmo fluxo.</span></div>
 <div id="delivery-list" class="deploy-grid"></div>
 <dialog id="delivery-dialog" class="delivery-dialog" aria-labelledby="delivery-title"><form id="delivery-form" novalidate>
 <header class="delivery-heading"><div><p class="eyebrow">CATÁLOGO TÉCNICO</p><h2 id="delivery-title">Configurar projeto</h2></div><button id="delivery-close" type="button" class="quiet">Fechar</button></header>

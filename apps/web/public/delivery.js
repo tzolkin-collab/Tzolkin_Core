@@ -1,5 +1,4 @@
 import {createIcon,providerLogo} from './icons.js';
-import {summarizeProject} from './card-summary.js';
 export const deliveryIcon=createIcon;
 export function automaticSettings({snapshot,repository,isNew,bindingCount,dirty = []}) {
  if (!isNew || bindingCount !== 1 || snapshot.status !== 'ok' || !repository || repository.toLowerCase() !== snapshot.repository?.toLowerCase()) return [];
@@ -9,14 +8,14 @@ export function compareSettings(fields, current) {
  return Object.entries(fields).map(([key, remote]) => ({key,...remote,
   current:current[key] ?? '',different:remote.state === 'value' && String(current[key] ?? '') !== String(remote.value)}));
 }
-export function setupDelivery({ api,openResource }) {
+export function setupDelivery({ api,onSaved = async () => {} }) {
  const $ = id => document.getElementById(id);
  const el = (tag, value, cls) => { const n = document.createElement(tag); if (value != null) n.textContent = value; if (cls) n.className = cls; return n; };
  const button = (label, action, cls = 'secondary', icon) => { const b = el('button', null, cls); if(icon) b.append(deliveryIcon(icon)); b.append(document.createTextNode(label)); b.type = 'button'; b.onclick = action; return b; };
  const form = $('delivery-form'), dialog = $('delivery-dialog');
  const kinds = { frontend:'Website', api:'API', worker:'Worker', library:'Biblioteca', database:'Banco', cache:'Cache' };
  const environments = { development:'Desenvolvimento', staging:'Homologação', production:'Produção' };
- let options, editing, rows = [], projects = [], generation = 0, step = 0;
+ let options, editing, rows = [], generation = 0, step = 0;
  const stepIds = ['project','components','review'];
  function showStep(index, focus = true) {
   if(index === 2 && rows.some(row => row.bindings.some(b => b.pending))) { $('delivery-error').textContent='Aguarde a detecção terminar antes de revisar.'; return; }
@@ -204,7 +203,7 @@ export function setupDelivery({ api,openResource }) {
   if(rows.filter(r => !['database','cache'].includes(r.fields.kind.value)).length > 1) form.elements.namedItem('layout').value='monorepo';
   row.refreshComparisons();
  }
- async function open(project, repo = null) {
+ async function open(project, repo = null, components = []) {
   const token = ++generation;
   $('delivery-new').disabled = true; $('delivery-message').textContent = 'Consultando repositórios e destinos…';
   try {
@@ -219,65 +218,11 @@ export function setupDelivery({ api,openResource }) {
    $('delivery-repo').replaceChildren(); repositories(project?.repository_id || repo?.id || ''); repoBanner();
    const labels = { ok:'conectado', not_configured:'não conectado no servidor', error:'consulta indisponível' };
    $('delivery-connections').textContent = ['github','vercel','easypanel'].map(p => `${p}: ${labels[options[p].status]}${options[p].truncated ? ' · lista parcial' : ''}`).join(' / ');
-   for (const c of project?.components || []) addComponent(c);
+   for (const c of project?.components || components) addComponent(c);
+   if(!project && !repo && components.length) form.elements.namedItem('name').value=components[0].name;
    $('delivery-message').textContent = ''; showStep(0,false); dialog.showModal();
   } catch(error) { $('delivery-message').textContent = error.message; }
   finally { $('delivery-new').disabled = false; }
- }
- function renderRepositories() {
-  const area=$('delivery-repositories'); area.replaceChildren();
-  if(!options) return;
-  const github=options.github;
-  $('delivery-repo-count').textContent=github.status === 'ok' ? String(github.items.length) : 'Indisponível';
-  if(github.status !== 'ok') { area.append(el('p',github.status === 'error' ? 'Não foi possível consultar o GitHub. Tente atualizar. Seus cadastros continuam abaixo.' : 'GitHub não conectado no servidor. Você pode criar um rascunho sem repositório.','empty-list')); return; }
-  const search=$('delivery-repository-search').value.toLowerCase().trim();
-  const repos=github.items.filter(r => r.name.toLowerCase().includes(search));
-  if(!repos.length) area.append(el('p',search ? 'Nenhum repositório corresponde à busca.' : 'Nenhum repositório acessível nesta conta.','empty-list'));
-  for(const repo of repos) {
-   const project=projects.find(p => p.repository_id === repo.id), row=el('article',null,'delivery-repo-row');
-   const mark=el('span',null,'delivery-mark'); mark.append(deliveryIcon('repo'));
-   const body=el('div',null,'delivery-repo-body'); body.append(el('h4',repo.name),el('p',repo.archived ? 'Arquivado · somente leitura' : repo.default_branch ? `Branch padrão · ${repo.default_branch}` : 'Branch não informada','detail'));
-   const action=button(project ? 'Abrir projeto' : 'Configurar',() => project ? open(project) : open(null,repo),project ? 'secondary' : 'primary','arrow');
-   action.disabled=repo.archived && !project;
-   row.append(mark,body,el('span',project ? 'Vinculado' : 'Não configurado','status'),action); area.append(row);
-  }
-  if(github.truncated) area.append(el('p','Lista parcial: o limite de consulta foi atingido.','detail'));
- }
- async function load() {
-  const token = ++generation;
-  $('delivery-message').textContent = 'Carregando cadastro…';
-  const [data,available] = await Promise.all([api('/api/delivery/projects'),api('/api/delivery/options')]);
-  if (token !== generation) return;
-  options=available; projects=data.projects; renderRepositories();
-  $('delivery-provider-status').replaceChildren(...['github','vercel','easypanel'].map(provider => {
-   const status=available[provider].status, chip=el('span',null,'delivery-provider ' + (status === 'ok' ? 'connected' : ''));
-   chip.append(providerLogo(provider),document.createTextNode(`${{github:'GitHub',vercel:'Vercel',easypanel:'EasyPanel'}[provider]} · ${status === 'ok' ? 'conectado' : status === 'error' ? 'indisponível' : 'não conectado'}`)); return chip;
-  }));
-  $('delivery-list').replaceChildren(); $('delivery-message').textContent = data.truncated ? 'Mostrando os 200 projetos mais recentes.' : '';
-  if (!data.projects.length) { const empty=el('div',null,'delivery-empty'); empty.append(deliveryIcon('layers'),el('h3','Seu próximo projeto começa acima'),el('p','Escolha um repositório para configurar seus serviços.','detail')); $('delivery-list').append(empty); }
-  for (const project of data.projects) {
-   const card = el('article',null,'delivery-component project-card');
-   const summary=summarizeProject(project);
-   const head = el('div',null,'delivery-heading');
-   const identity=el('div',null,'card-identity'),mark=el('span',null,'card-mark');mark.append(deliveryIcon('layers'));identity.append(mark,el('h3',project.name));
-   head.append(identity,el('span',project.issues.length ? `${project.issues.length} pendências` : 'Cadastro completo','status'),button('Configurações',() => open(project),'secondary','settings'));
-   const repo=el('p',null,'card-repository');repo.append(providerLogo('github'),document.createTextNode(project.repository_name || 'Repositório não vinculado'));
-   const facts=el('dl',null,'card-facts');
-   for(const [label,value,icon] of [['Serviços',summary.services,'server'],['Destinos',summary.targets,'cloud'],['Estrutura',project.layout==='monorepo'?'Monorepo':'Aplicação única','layers'],['Responsável pelo projeto',project.owner||'Não definido','people']]){const cell=el('div'),dt=el('dt');dt.append(deliveryIcon(icon),document.createTextNode(label));cell.append(dt,el('dd',String(value)));facts.append(cell);}
-   card.append(head,repo,facts);
-   const tags=el('div',null,'card-tags');for(const stack of summary.stacks)tags.append(el('span',stack,'status'));for(const env of summary.environments)tags.append(el('span',environments[env]||env,'status'));if(tags.childNodes.length)card.append(tags);
-   const details=el('details',null,'card-services');details.append(el('summary',`Serviços e branches · ${summary.services}`));
-   for (const c of project.components) {
-    const service=el('div',null,'delivery-service-line'); service.append(deliveryIcon(c.kind),el('strong',c.name),el('span',c.stack === 'custom' ? 'Stack pendente' : c.stack,'status'),el('span',c.path,'detail'));
-    for (const b of c.bindings){const target=button(`${environments[b.environment]} · ${b.target_name || b.target_id}`,()=>openResource(b.provider,b.target_id,b.environment),'delivery-target-chip');target.prepend(providerLogo(b.provider));service.append(target);const branch=el('span',null,'card-branch');branch.append(deliveryIcon('branch'),document.createTextNode(b.branch||'Branch não informada'));service.append(branch);}
-    if(!c.bindings.length) service.append(el('span',c.kind === 'library' ? 'Sem deploy próprio' : 'Destino pendente','detail'));
-    details.append(service);
-   }
-   card.append(details);
-   if (project.issues.length) { const ul = el('ul',null,'delivery-issues'); for (const issue of project.issues) ul.append(el('li',issue)); card.append(ul); }
-   const footer=el('div',null,'card-footer');footer.append(el('span',project.product_lifecycle_status === 'active' ? 'Produto ativo · publicação não verificada' : 'Cadastro técnico · produto em rascunho'));if(project.product_lifecycle_status === 'draft'){const activate=button('Ativar produto',async()=>{activate.disabled=true;try{await api('/api/delivery/projects/'+project.id+'/activate','POST',{revision:project.revision});await load();$('delivery-message').textContent='Produto ativado. A publicação continua sendo uma etapa separada.';}catch(error){$('delivery-message').textContent=error.message;activate.disabled=false;}},'secondary','check');footer.append(activate);}if(project.updated_at){const date=new Date(project.updated_at);if(!Number.isNaN(date.getTime()))footer.append(el('time','Atualizado '+date.toLocaleDateString('pt-BR')));}card.append(footer);
-   $('delivery-list').append(card);
-  }
  }
  form.onsubmit = async event => {
   event.preventDefault();
@@ -293,7 +238,7 @@ export function setupDelivery({ api,openResource }) {
    const payload = { name:form.elements.namedItem('name').value,owner:form.elements.namedItem('owner').value,layout:form.elements.namedItem('layout').value,
     repository_id:$('delivery-repo').value || null,components:rows.map(readComponent),...(editing ? { revision:editing.revision } : {}) };
    await api('/api/delivery/projects' + (editing ? '/' + editing.id : ''),editing ? 'PUT' : 'POST',payload);
-   dialog.close(); await load(); $('delivery-message').textContent = 'Cadastro salvo. Nenhum deploy foi disparado.';
+   dialog.close(); await onSaved(); $('delivery-message').textContent = 'Projeto salvo. Use Publicar no destino para iniciar o deploy.';
   } catch(error) { $('delivery-error').textContent = error.message; }
   finally { $('delivery-save').disabled = false; }
  };
@@ -306,8 +251,7 @@ export function setupDelivery({ api,openResource }) {
   const add=button(label,() => addComponent({kind,...(['database','cache'].includes(kind) ? {stack:kind === 'database' ? 'postgres' : 'redis',runtime:'managed',manager:'none'} : {})}),'delivery-kind-button',kind);
   add.append(el('small',hints[kind])); $('delivery-kind-picker').append(add);
  }
- $('delivery-repository-search').oninput=renderRepositories;
  $('delivery-repo-search').oninput = () => { if (options) repositories(); };
  $('delivery-repo').onchange = () => { repoBanner(); rows.forEach(row => { for(const key of ['path','stack','runtime','build','output']) row.dirty.add(key); row.refreshComparisons(); }); };
- return { load, clear() { generation++; options = null; editing = null; rows = []; projects=[]; for(const id of ['delivery-list','delivery-components','delivery-repositories','delivery-provider-status','delivery-review','delivery-selected-repo']) $(id).replaceChildren(); $('delivery-repo-count').textContent=''; $('delivery-message').textContent = ''; } };
+ return { open, clear() { generation++; options = null; editing = null; rows = []; dialog.close(); for(const id of ['delivery-components','delivery-review','delivery-selected-repo']) $(id).replaceChildren(); $('delivery-message').textContent = ''; } };
 }

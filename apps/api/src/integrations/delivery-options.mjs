@@ -23,7 +23,7 @@ export function createDeliveryOptions({ env = process.env, fetchImpl = fetch, cl
     }),
     read(Boolean(env.EASYPANEL_URL || env.EASYPANEL_TOKEN), async () => {
      const result = await createEasypanelAdapter({ baseUrl: env.EASYPANEL_URL, token: env.EASYPANEL_TOKEN, fetchImpl }).inventory();
-     return { items: result.projects.flatMap(p => p.services.map(s => ({ id: `${p.name}/${s.name}`, name: `${p.name} / ${s.name}`, type: s.type }))), truncated: Boolean(result.omitted_projects || result.omitted_services) };
+     return { console_url: new URL(env.EASYPANEL_URL).origin, items: result.projects.flatMap(p => p.services.map(s => ({ id: `${p.name}/${s.name}`, name: `${p.name} / ${s.name}`, type: s.type }))), truncated: Boolean(result.omitted_projects || result.omitted_services) };
     }),
    ]);
    const value = { github, vercel, easypanel, checked_at: new Date(clock()).toISOString() };

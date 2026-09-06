@@ -73,5 +73,15 @@ export function setupEasypanel({api}){
   }catch(error){if(token===generation)panel.replaceChildren(el('p',error.message,'notice-inline'));}
   finally{if(token===generation)panel.removeAttribute('aria-busy');}
  }
- return {render,clear};
+ async function publish(target,notice,onDone=()=>{}) {
+  const token=generation;
+  notice.textContent='Conferindo serviço e configuração…';
+  try {
+   const result=await api('/api/platforms/easypanel/section?'+new URLSearchParams({target_id:target.id,section:'settings'}));
+   if(token!==generation)return;
+   if(result.status!=='ok'||!result.actions?.includes('deploy')){notice.textContent=result.message || 'Publicação indisponível para este serviço.';return;}
+   await confirm(target,'deploy',{},result.revision,notice,onDone);
+  } catch(error) {if(token===generation)notice.textContent=error.message;}
+ }
+ return {render,clear,publish};
 }
