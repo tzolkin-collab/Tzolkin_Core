@@ -23,8 +23,10 @@ export function managementRoutes(router){
     [operator?.email||operator?.subject||'local-operator',params.database||'',params.schema,params.table,
      Number(params.limit)||null,Number(params.offset)||null,params.column||null]);
   } catch(error) {
-   if(error?.code!=='42P01') throw error;
-   console.warn('[management] database_access_audit ausente; leitura entregue sem auditoria.');
+   // Auditoria nunca pode transformar uma leitura válida em erro 500. Isso
+   // cobre tabela ausente, migração parcial e divergência de schema; o código
+   // técnico ajuda o operador a corrigir a instalação sem vazar SQL/segredos.
+   console.warn(`[management] auditoria indisponível (${error?.code||'sem código'}); leitura entregue sem auditoria.`);
   }
   reply(200,result);
  },{body:false});
