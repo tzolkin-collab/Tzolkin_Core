@@ -34,6 +34,6 @@ export function productFaviconRoutes(router){
    const mime=(iconResponse.headers.get('content-type')||'').split(';',1)[0].toLowerCase();if(!mime.startsWith('image/'))return reply(200,{href:null});
    const bytes=Buffer.from(await iconResponse.arrayBuffer());if(bytes.length>120000)return reply(200,{href:null});
    return reply(200,{href:`data:${mime};base64,${bytes.toString('base64')}`});
-  }catch{return reply(200,{href:null});}finally{clearTimeout(timer);}
+  }catch{return reply(200,{href:new URL('/favicon.svg',parsed.href).href});}finally{clearTimeout(timer);}
  },{body:false});
 }
