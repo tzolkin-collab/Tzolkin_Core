@@ -26,13 +26,16 @@ const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefine
 const TYPE_LABELS={HOSTED:'Hospedado na Stripe (redireciona)',EMBEDDED:'Incorporado (fica na sua página)',ELEMENTS:'Elements — ainda não cria sessão'};
 const VIEWPORTS={mobile:'Celular',desktop:'Computador'};
 const TIPO_CURTO={HOSTED:'Hospedado',EMBEDDED:'Incorporado',ELEMENTS:'Elements'};
+// Largura de monitor de verdade, para a prévia desktop cruzar o breakpoint de
+// 880px do checkout. A altura cobre o cartão inteiro com folga.
+const LARGURA_DESKTOP=1280,ALTURA_DESKTOP=860;
 const corDoTemplate=payload=>payload.theme?.color||payload.branding?.primary_color||'#111827';
 
 export function setupCheckoutPanel({api}){
  let generation=0,host=null,product=null,templates=[],offers=[],schema=null,selected=null,previewSlug=null,viewport='mobile',feedback='';
  // A moldura é preservada entre renders para não recarregar o iframe a cada
  // troca de viewport — recarregar perderia o rascunho aplicado.
- let frame=null,frameSrc=null,pronta=false,editorAtual=null,alerta=null,relogio=null;
+ let frame=null,frameSrc=null,pronta=false,editorAtual=null,alerta=null,relogio=null,observador=null;
  const current=()=>templates.find(row=>row.slug===selected)||null;
  const stripeOffers=()=>offers.filter(row=>row.payload.provider==='stripe');
 
@@ -137,6 +140,24 @@ export function setupCheckoutPanel({api}){
    relogio=setTimeout(()=>{if(!pronta&&alerta)alerta.textContent='A prévia não respondeu. Ela mostra a última versão salva; recarregue a página para tentar de novo.';},3000);
   }
   moldura.append(frame);painel.append(moldura);
+  // Desktop: o iframe renderiza em 1280px e encolhe por escala. Sem isto ele
+  // teria a largura da coluna (~500px), ficaria abaixo do breakpoint de 880px
+  // do checkout e a prévia desktop mostraria o layout de celular.
+  const escalaTexto=el('p',undefined,'checkout-preview-escala');
+  if(viewport==='desktop'){
+   const ajustar=()=>{
+    const disponivel=moldura.clientWidth;
+    if(!disponivel)return;
+    const escala=Math.min(1,disponivel/LARGURA_DESKTOP);
+    moldura.style.setProperty('--previa-escala',String(escala));
+    moldura.style.height=Math.round(ALTURA_DESKTOP*escala)+'px';
+    escalaTexto.textContent=`Renderizado em ${LARGURA_DESKTOP}px, exibido a ${Math.round(escala*100)}%`;
+   };
+   requestAnimationFrame(ajustar);
+   observador?.disconnect();
+   observador=new ResizeObserver(ajustar);observador.observe(moldura);
+   painel.append(escalaTexto);
+  }else{observador?.disconnect();observador=null;}
   alerta=el('p',undefined,'notice-inline');alerta.setAttribute('role','status');painel.append(alerta);
 
   const rodape=el('p',undefined,'detail');
@@ -182,9 +203,9 @@ export function setupCheckoutPanel({api}){
  }
 
  return {mount,clear(){
-  generation++;clearTimeout(relogio);
+  generation++;clearTimeout(relogio);observador?.disconnect();
   host=null;product=null;templates=[];offers=[];schema=null;selected=null;previewSlug=null;feedback='';
-  frame=null;frameSrc=null;pronta=false;editorAtual=null;alerta=null;
+  frame=null;frameSrc=null;pronta=false;editorAtual=null;alerta=null;observador=null;
  }};
 }
 

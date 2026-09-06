@@ -59,8 +59,12 @@ export function buildCheckoutEditor({schema,row,templates,typeLabels,onDraft,onS
  };
 
  // ── Camadas ──────────────────────────────────────────────────────────────
- const camadasSecao=secao('Camadas',true,'As partes do checkout. Clique numa camada — ou no próprio elemento na prévia — para editar o que a controla.');
+ const camadasSecao=secao('Camadas',true,'Clique numa camada — ou no próprio elemento na prévia — para editar só o que a controla.');
  const listaCamadas=el('div',undefined,'checkout-layers');
+ const todos=el('button',undefined,'checkout-layer checkout-layer-todos');todos.type='button';
+ todos.append(el('strong','Todos os ajustes'),el('small','Mostra o formulário inteiro, sem filtrar por camada.'));
+ todos.onclick=()=>selecionarCamada(null,true);
+ listaCamadas.append(todos);
  for(const layer of schema.layers){
   const chip=el('button',undefined,'checkout-layer');chip.type='button';
   chip.append(el('strong',layer.label),el('small',layer.purpose));
@@ -69,9 +73,25 @@ export function buildCheckoutEditor({schema,row,templates,typeLabels,onDraft,onS
  }
  camadasSecao.append(listaCamadas);
 
+ // Esconde tudo que não pertence à camada. Seção que fica sem nenhum campo
+ // visível some junto, senão restariam cabeçalhos vazios.
+ function aplicarFiltro(){
+  const layer=schema.layers.find(l=>l.id===camadaAtiva);
+  for(const wrap of form.querySelectorAll('label[data-campo]')){
+   const {campo,grupo}=wrap.dataset;
+   wrap.hidden=Boolean(layer)&&!(grupo==='copy'?layer.copy:layer.theme).includes(campo);
+  }
+  for(const secao of Object.values(secoes)){
+   const marcados=secao.querySelectorAll('label[data-campo]');
+   secao.hidden=marcados.length>0&&[...marcados].every(w=>w.hidden);
+  }
+  if(todos)todos.toggleAttribute('aria-current',!camadaAtiva);
+ }
+
  function selecionarCamada(id,avisarPrevia){
   const layer=schema.layers.find(l=>l.id===id);
   camadaAtiva=layer?id:null;
+  aplicarFiltro();
   for(const [chave,chip] of Object.entries(chips))chip.toggleAttribute('aria-current',chave===camadaAtiva);
   if(avisarPrevia&&onLayer)onLayer(camadaAtiva);
   if(!layer)return;
@@ -80,13 +100,6 @@ export function buildCheckoutEditor({schema,row,templates,typeLabels,onDraft,onS
   const alvo=layer.copy.map(k=>controles.copy[k]).concat(layer.theme.map(k=>controles.theme[k])).find(Boolean);
   if(layer.copy.length)secoes.textos.open=true;
   if(layer.theme.length)secoes.tema.open=true;
-  for(const k of layer.copy)controles.copy[k]?.closest('label')?.classList.add('campo-da-camada');
-  for(const k of layer.theme)controles.theme[k]?.closest('label')?.classList.add('campo-da-camada');
-  for(const grupo of Object.values(controles))for(const [k,node] of Object.entries(grupo)){
-   const pertence=layer.copy.includes(k)||layer.theme.includes(k);
-   node.closest('label')?.classList.toggle('campo-da-camada',pertence);
-  }
-  alvo?.scrollIntoView({block:'nearest'});
   alvo?.focus({preventScroll:true});
  }
 
@@ -108,7 +121,7 @@ export function buildCheckoutEditor({schema,row,templates,typeLabels,onDraft,onS
  secoes.tema=temaSecao;
  const gradeTema=el('div',undefined,'billing-grid');
  for(const token of schema.theme_tokens){
-  const wrap=el('label');wrap.append(el('span',token.label));
+  const wrap=el('label');wrap.dataset.campo=token.key;wrap.dataset.grupo='theme';wrap.append(el('span',token.label));
   let principal;
   if(token.kind==='color'){
    // Seletor e hexadecimal lado a lado: cor de marca chega como código, e
@@ -150,7 +163,7 @@ export function buildCheckoutEditor({schema,row,templates,typeLabels,onDraft,onS
 
  // ── Textos ───────────────────────────────────────────────────────────────
  const campoTexto=(grade,field)=>{
-  const wrap=el('label');wrap.append(el('span',field.label));
+  const wrap=el('label');wrap.dataset.campo=field.key;wrap.dataset.grupo='copy';wrap.append(el('span',field.label));
   const control=el(field.max>200?'textarea':'input');
   control.maxLength=field.max;
   // O padrão como placeholder: vazio mostra visivelmente o que a página dirá.
@@ -169,7 +182,7 @@ export function buildCheckoutEditor({schema,row,templates,typeLabels,onDraft,onS
  // Honestidade sobre o que ainda não tem efeito. Campo que finge funcionar é o
  // defeito que se quis evitar aqui: dá para escrever, some no salvamento e
  // ninguém descobre.
- const secaoPendente=secao('Textos que ainda não aparecem na página',false,
+ const secaoPendente=secoes.pendentes=secao('Textos que ainda não aparecem na página',false,
   'Pix, boleto, cupom e parcelamento ainda não estão implementados. Estes textos são gravados e passam a valer quando cada um entrar — hoje não mudam nada.');
  const gradePendente=el('div',undefined,'billing-grid');
  for(const field of schema.copy_fields.filter(f=>f.pending))campoTexto(gradePendente,field);
@@ -184,6 +197,7 @@ export function buildCheckoutEditor({schema,row,templates,typeLabels,onDraft,onS
  const delta=()=>Object.fromEntries(Object.entries(theme).filter(([k,v])=>v!==padroes.theme[k]));
 
  form.append(camadasSecao,identidade,temaSecao,textos,secaoPendente,aviso,acoes);
+ aplicarFiltro();
  form.onsubmit=async event=>{
   event.preventDefault();salvar.disabled=true;aviso.textContent='Salvando…';
   try{

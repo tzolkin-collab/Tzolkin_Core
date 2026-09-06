@@ -44,6 +44,25 @@
 .checkout-editor-section textarea::placeholder { color: var(--muted); opacity: .75; }
 .checkout-editor-section label > small { color: var(--muted); font-size: 12px; }
 
+/* A prévia "desktop" precisa RENDERIZAR em largura de desktop, não caber na
+   coluna. A coluna dá ~500px ao iframe, abaixo do breakpoint de 880px do
+   checkout — então a prévia desktop mostrava o layout de celular e as duas abas
+   ficavam idênticas. Rendero em 1280px e reduzo por transform: o iframe pensa
+   que é um monitor, e a gente vê em miniatura fiel.
+   A altura da moldura é calculada em JS a partir da escala, porque transform
+   não altera a caixa de layout. */
+/* 560px cortava o conteúdo (652px medidos em produção): o botão de pagar e a
+   nota de rodapé ficavam fora da vista, e a prévia mentia sobre a página. */
+.checkout-frame.mobile iframe { height: 780px; }
+.checkout-frame.desktop { overflow: hidden; }
+.checkout-frame.desktop iframe {
+ width: 1280px;
+ height: 860px;
+ transform: scale(var(--previa-escala, 0.4));
+ transform-origin: top left;
+}
+.checkout-preview-escala { color: var(--muted); font-size: 12px; text-align: right; margin: 6px 0 0; }
+
 /* Camadas: a lista que nomeia o objetivo de cada parte do checkout. */
 .checkout-layers { display: grid; gap: 6px; margin-top: 12px; }
 .checkout-layer {
@@ -60,15 +79,17 @@
 }
 .checkout-layer:hover { border-color: var(--brand); }
 .checkout-layer[aria-current] { border-color: var(--brand); background: var(--brand-soft); }
+.checkout-layer { padding: 7px 10px; }
 .checkout-layer strong { font-size: 13px; font-weight: 600; }
-.checkout-layer small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+/* O propósito só aparece na camada selecionada: com os oito abertos, a lista
+   empurrava o primeiro campo para ~450px abaixo e obrigava a rolar meia tela
+   antes de editar qualquer coisa. */
+.checkout-layer small { display: none; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.checkout-layer[aria-current] small { display: block; margin-top: 2px; }
 
-/* O campo que a camada selecionada controla. Marca sem esconder os outros:
-   esconder faria o operador perder a noção do que mais existe. */
-.checkout-editor-section label.campo-da-camada > span { color: var(--brand); font-weight: 600; }
-.checkout-editor-section label.campo-da-camada input,
-.checkout-editor-section label.campo-da-camada select,
-.checkout-editor-section label.campo-da-camada textarea { border-color: var(--brand); }
+/* Escape do filtro: volta a mostrar o formulário inteiro. */
+.checkout-layer-todos { border-style: dashed; }
+.checkout-layer-todos[aria-current] { border-style: solid; }
 
 .checkout-color-field { display: flex; gap: 8px; align-items: center; }
 .checkout-color-field input[type=color] {

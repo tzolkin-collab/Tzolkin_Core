@@ -52,7 +52,7 @@ body{margin:0;background:var(--tpl-bg);color:var(--tpl-ink);font-family:var(--tp
 .checkout-pay-preview{display:flex;align-items:center;justify-content:center;cursor:default;user-select:none}
 /* Marcador onde ainda não há conteúdo — sem ele não dá para clicar na logo
    para definir a logo, porque não existe logo para clicar. */
-.checkout-empty-layer{border:1px dashed var(--tpl-line);border-radius:var(--tpl-radius);color:var(--tpl-muted);font-size:calc(12px * var(--tpl-scale));padding:12px;text-align:center}
+.checkout-empty-layer{border:1px dashed var(--tpl-line);border-radius:var(--tpl-radius);color:var(--tpl-muted);font-size:calc(11px * var(--tpl-scale));padding:6px 10px;text-align:center;opacity:.75}
 /* Camadas: alvo de clique e destaque. O contorno é externo (outline) para não
    deslocar nada — mudar o layout ao selecionar mentiria sobre o resultado. */
 .modo-previa [data-layer]{cursor:pointer;border-radius:6px;transition:outline-color .12s ease,background-color .12s ease;outline:2px solid transparent;outline-offset:3px}
