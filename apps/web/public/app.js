@@ -36,8 +36,7 @@ const CONTEXTS = {
    people: { title: 'Pessoas', section: 'view-people', action: ['Nova pessoa', 'stakeholder-dialog'], metrics:false },
    leads: { title: 'Leads', section: 'view-leads', action: ['Novo lead', 'tenant-dialog'], metrics:false },
    clients: { title: 'Clientes', section: 'view-clients', action: ['Novo cliente', 'tenant-dialog'], metrics:false },
-   projects: { title: 'Projetos', section: 'view-projects', action: ['Novo projeto', 'project-new'], metrics:false },
-   delivery: { title: 'Entrega unificada', section: 'view-delivery', metrics:false },
+   projects: { title: 'Projetos e deploys', section: 'view-delivery', action: ['Novo projeto', 'delivery-new'], metrics:false },
    products: { title: 'Produtos', section: 'view-products', action: ['Vincular cliente', 'entitlement-dialog'] },
    services: { title: 'Serviços', section: 'view-services', metrics:false },
    client: { title: 'Cliente', section: 'view-client', hidden:true, metrics:false },
@@ -176,7 +175,7 @@ async function api(path, method = 'GET', body) {
 function renderNav() {
  const context = CONTEXTS[contextKind()];
  $('nav-label').textContent = context.label;
- const groups=contextKind()==='general'?{overview:'Hoje',tracking:'Hoje',finance:'Hoje',companies:'Relacionamentos',people:'Relacionamentos',leads:'Relacionamentos',clients:'Relacionamentos',delivery:'Entrega',projects:'Entrega',products:'Entrega',services:'Entrega',emails:'Entrega',education:'Educação',settings:'Administração',access:'Administração',management:'Administração',security:'Administração',database:'Tecnologia',redis:'Tecnologia',deploys:'Tecnologia',serverMetrics:'Tecnologia'}:{product:'Produto','product-orgs':'Produto','product-payments':'Produto','product-emails':'Produto'};
+ const groups=contextKind()==='general'?{overview:'Hoje',tracking:'Hoje',finance:'Hoje',companies:'Relacionamentos',people:'Relacionamentos',leads:'Relacionamentos',clients:'Relacionamentos',projects:'Entrega',products:'Entrega',services:'Entrega',emails:'Entrega',education:'Educação',settings:'Administração',access:'Administração',management:'Administração',security:'Administração',database:'Tecnologia',redis:'Tecnologia',deploys:'Tecnologia',serverMetrics:'Tecnologia'}:{product:'Produto','product-orgs':'Produto','product-payments':'Produto','product-emails':'Produto'};
  const items=[];let previous,section;
  for(const [key,view]of Object.entries(context.views).filter(([,view])=>!view.hidden)){
   if(groups[key]!==previous){section=node('section',undefined,'nav-section');const label=node('h2',groups[key],'nav-group');section.append(label);items.push(section);previous=groups[key];}
@@ -221,8 +220,7 @@ function switchView(view) {
  if (view === 'client') renderClientDetail();
  if (view === 'product-payments'&&state.product) productPayments.load(state.product.product).catch(reportError);
  if (view === 'product-emails'&&state.product) productEmails.load({...state.product.product,deploy_url:publishedDeployUrl(state.product.product),favicon_url:productFaviconUrl(state.product.product)}).catch(reportError);
- if (view === 'projects') projects.load().catch(reportError);
- if (view === 'delivery') delivery.load().catch(reportError);
+ if (view === 'projects') delivery.load().catch(reportError);
 }
 
 function renderContextChrome() {
