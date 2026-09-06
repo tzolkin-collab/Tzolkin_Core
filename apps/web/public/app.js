@@ -90,7 +90,7 @@ const approvedPublicUrl=product=>{const bindings=state.resourceBindings.filter(i
 // técnica/fallback, não identidade pública do produto.
 // Identidade de produto vem exclusivamente do domínio público aprovado. Os
 // arquivos locais só pertencem à identidade do próprio Core.
-const productFaviconUrl=product=>approvedPublicUrl(product)||CANONICAL_PRODUCT_URLS[productKey(product)]||product?.favicon_url||product?.catalog?.url||catalogForProduct(product)?.url||publishedDeployUrl(product)||null;
+const productFaviconUrl=product=>CANONICAL_PRODUCT_URLS[productKey(product)]||approvedPublicUrl(product)||product?.favicon_url||product?.catalog?.url||catalogForProduct(product)?.url||publishedDeployUrl(product)||null;
 const productLiveUrl=product=>product?.lifecycle_status==='draft'?(publishedDeployUrl(product)||null):(approvedPublicUrl(product)||CANONICAL_PRODUCT_URLS[productKey(product)]||product?.deploy_url||publishedDeployUrl(product)||product?.catalog?.url||catalogForProduct(product)?.url||null);
 const coreSpaceIcon=()=>{const image=document.createElement('img');image.src='/logo.svg';image.width=20;image.height=20;image.alt='';return image;};
 

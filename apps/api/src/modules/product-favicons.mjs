@@ -9,6 +9,8 @@ const inlineDataIcon=href=>{
  try{return `data:${match[1]};base64,${Buffer.from(decodeURIComponent(match[3])).toString('base64')}`;}catch{return null;}
 };
 const iconHref=html=>{
+ const embedded=html.match(/\bhref=(['"])(data:image\/[\s\S]*?)\1/i)?.[2];
+ if(embedded)return embedded;
  const links=[...html.matchAll(/<link\b[^>]*>/gi)].map(match=>match[0]);
  for(const link of links){
   const rel=link.match(/\brel=["']([^"']+)["']/i)?.[1]||'';
@@ -25,7 +27,7 @@ export function productFaviconRoutes(router){
   try{
    const response=await fetch(parsed.href,{redirect:'follow',signal:controller.signal,headers:{accept:'text/html,application/xhtml+xml'}});if(!response.ok)return reply(200,{href:null});
    const html=await response.text();if(html.length>300000)return reply(200,{href:null});
-   const candidates=[iconHref(html),'/favicon.svg','/favicon.ico'].filter(Boolean);let iconResponse=null,icon=null;
+   const candidates=[iconHref(html),'/favicon.svg','/icon.svg','/favicon.ico','/icon.ico','/icon.png'].filter(Boolean);let iconResponse=null,icon=null;
    for(const href of candidates){const dataIcon=inlineDataIcon(href);if(dataIcon)return reply(200,{href:dataIcon});try{const candidate=new URL(href,response.url||parsed.href);if(candidate.protocol!=='https:')continue;const result=await fetch(candidate.href,{redirect:'follow',signal:controller.signal,headers:{accept:'image/*'}});if(result.ok){icon=candidate;iconResponse=result;break;}}catch{}}
    // Alguns hosts permitem carregar o favicon no navegador, mas bloqueiam o
    // fetch server-side. O host já foi validado; nesse caso entregamos o
