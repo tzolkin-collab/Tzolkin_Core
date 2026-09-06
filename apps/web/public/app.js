@@ -81,19 +81,11 @@ const publishedDeployUrl=product=>readyDeployment(product)?.url||null;
 // existe um domínio canônico conhecido, ele é a fonte da identidade visual;
 // não usamos o domínio efêmero do deploy para buscar o favicon.
 const CANONICAL_PRODUCT_URLS={educare:'https://tzolkin-educare.vercel.app/'};
-const CANONICAL_FAVICON_SOURCES={
- educare:'/product-favicons/educare.svg',
- sites:'/product-favicons/sites.svg',
- // O deploy observado do Skiller é uma URL efêmera da Vercel, cujo favicon
- // é o ícone padrão da plataforma. A identidade do produto vive no domínio
- // canônico e precisa ser resolvida por ele.
- skiller:'https://skiller.tzolkin.cloud/'
-};
 const catalogForProduct=product=>state.catalog.find(entry=>entry.kind==='product'&&(entry.payload?.id===product?.id||entry.payload?.name===product?.name))?.payload||null;
 const approvedDomainUrl=product=>{const binding=state.resourceBindings.find(item=>item.product_id===product?.id&&item.resource_type==='domain'&&item.environment==='production');if(!binding)return null;const raw=binding.url||`https://${binding.external_id}`;try{const url=new URL(raw);return url.protocol==='https:'?url.href:null;}catch{return null;}};
 // Vínculo aprovado é a fonte de verdade. O deploy observado é evidência
 // técnica/fallback, não identidade pública do produto.
-const productFaviconUrl=product=>approvedDomainUrl(product)||CANONICAL_FAVICON_SOURCES[productKey(product)]||product?.favicon_url||product?.catalog?.url||catalogForProduct(product)?.url||publishedDeployUrl(product)||null;
+const productFaviconUrl=product=>approvedDomainUrl(product)||product?.favicon_url||product?.catalog?.url||catalogForProduct(product)?.url||publishedDeployUrl(product)||null;
 const productLiveUrl=product=>product?.lifecycle_status==='draft'?(publishedDeployUrl(product)||null):(approvedDomainUrl(product)||CANONICAL_PRODUCT_URLS[productKey(product)]||product?.deploy_url||publishedDeployUrl(product)||product?.catalog?.url||catalogForProduct(product)?.url||null);
 const coreSpaceIcon=()=>{const image=document.createElement('img');image.src='/logo.svg';image.width=20;image.height=20;image.alt='';return image;};
 
