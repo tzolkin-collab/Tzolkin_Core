@@ -39,20 +39,22 @@ export function renderDatabaseWorkspace(root,options){
   const dbSelect=el('select');dbSelect.setAttribute('aria-label','Banco de dados');
   databases.forEach(d=>{const o=option(d.name,d.name+(d.current?' · Core':'')+(!d.accessible?' · sem acesso':''));o.disabled=!d.accessible;dbSelect.append(o);});dbSelect.value=database;dbSelect.onchange=()=>selectDatabase(dbSelect.value);
   const connection=el('div',undefined,'dbx-connection');connection.append(el('span','PostgreSQL','dbx-engine'),dbSelect);
-  const schemaSelect=el('select');schemaSelect.setAttribute('aria-label','Schema');
-  [...new Set(tables.map(t=>t.schema))].forEach(name=>schemaSelect.append(option(name,name)));schemaSelect.value=schema;schemaSelect.disabled=loading;
-  schemaSelect.onchange=()=>{schema=schemaSelect.value;selectTable(tables.find(t=>t.schema===schema));};
   const search=el('input');search.type='search';search.placeholder='Buscar tabela…';search.value=query;search.setAttribute('aria-label','Buscar tabela');search.oninput=()=>{query=search.value;renderNavigatorList();};
-  const selectors=el('div',undefined,'dbx-selectors');selectors.append(connection,schemaSelect,search);
+  const selectors=el('div',undefined,'dbx-selectors');selectors.append(connection,search);
   const list=el('div',undefined,'dbx-table-list');list.setAttribute('aria-label','Tabelas do schema');
   const footer=el('div',undefined,'dbx-nav-footer');footer.append(button('Vínculos e classificação',()=>{mode='bindings';renderEditor();}));
   navigator.replaceChildren(head,selectors,list,footer);renderNavigatorList();
  }
  function renderNavigatorList(){
   const list=navigator.querySelector('.dbx-table-list');if(!list)return;
-  const visible=tables.filter(t=>(!schema||t.schema===schema)&&t.name.toLowerCase().includes(query.trim().toLowerCase()));
-  list.replaceChildren(...visible.map(table=>{const b=button('',()=>selectTable(table),'dbx-table-item'+(active&&tableKey(active)===tableKey(table)?' active':''));b.setAttribute('aria-current',active&&tableKey(active)===tableKey(table)?'true':'false');b.title=table.schema+'.'+table.name;b.append(el('span',table.kind==='VIEW'?'▤':'▦','dbx-table-icon'),el('span',table.name),el('small',String(table.columns.length)));return b;}));
-  if(!visible.length)list.append(notice(loading?'Carregando…':'Nenhuma tabela encontrada.'));
+  const term=query.trim().toLowerCase(),groups=new Map();
+  tables.filter(t=>t.name.toLowerCase().includes(term)).forEach(table=>{if(!groups.has(table.schema))groups.set(table.schema,[]);groups.get(table.schema).push(table);});
+  if(!groups.size){list.replaceChildren(notice(loading?'Carregando…':'Nenhuma tabela encontrada.'));return;}
+  list.replaceChildren(...[...groups.entries()].map(([name,items])=>{
+   const group=el('div',undefined,'dbx-tree-group'),head=button('',()=>{schema=name;renderNavigatorList();},'dbx-schema-item'+(schema===name?' active':''));head.setAttribute('aria-expanded',schema===name?'true':'false');head.append(el('span',schema===name?'⌄':'›','dbx-tree-chevron'),el('span','◇','dbx-schema-icon'),el('strong',name),el('small',`${items.length} tabelas`));
+   const children=el('div',undefined,'dbx-schema-children');children.hidden=schema!==name;
+   children.append(...items.map(table=>{const b=button('',()=>selectTable(table),'dbx-table-item'+(active&&tableKey(active)===tableKey(table)?' active':''));b.setAttribute('aria-current',active&&tableKey(active)===tableKey(table)?'true':'false');b.title=table.schema+'.'+table.name;b.append(el('span',table.kind==='VIEW'?'◫':'▦','dbx-table-icon'),el('span',table.name),el('small',String(table.columns.length)));return b;}));group.append(head,children);return group;
+  }));
  }
  function renderEditor(){
   request++;
