@@ -1033,3 +1033,4 @@ tbody tr:hover {
   }
 
 }
+#view-deploys .provider-tabs{display:flex;gap:8px;margin:18px 0}.provider-tabs button{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:999px;padding:8px 16px;font:inherit;cursor:pointer}.provider-tabs button.active{background:var(--brand);color:#fff;border-color:var(--brand)}

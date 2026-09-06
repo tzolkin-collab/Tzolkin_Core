@@ -998,6 +998,7 @@ $('people-search').addEventListener('input', renderPeople);
 $('client-back').onclick=()=>switchView('clients');
 $('deploy-search').addEventListener('input',()=>{if(deployData)renderDeploys(deployData);});
 $('deploy-filter').addEventListener('change',()=>{if(deployData)renderDeploys(deployData);});
+document.querySelectorAll('[data-provider-tab]').forEach(tab=>tab.addEventListener('click',()=>{document.querySelectorAll('[data-provider-tab]').forEach(item=>item.classList.toggle('active',item===tab));document.querySelectorAll('[data-provider-panel]').forEach(panel=>{panel.hidden=panel.dataset.providerPanel!==tab.dataset.providerTab;});}));
 $('org-search').addEventListener('input', () => { if (state.product) renderProductOrganizations(); });
 $('show-password').onclick = () => {
  const show = $('password').type === 'password';
