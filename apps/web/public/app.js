@@ -80,16 +80,16 @@ const publishedDeployUrl=product=>readyDeployment(product)?.url||null;
 // O endereço de catálogo pode ser um alias ainda sem DNS (Educare). Quando
 // existe um domínio canônico conhecido, ele é a fonte da identidade visual;
 // não usamos o domínio efêmero do deploy para buscar o favicon.
-const CANONICAL_PRODUCT_URLS={educare:'https://tzolkin-educare.vercel.app/'};
+const CANONICAL_PRODUCT_URLS={educare:'https://tzolkin-educare.vercel.app/',skiller:'https://skiller.tzolkin.cloud/'};
 // Fallbacks locais preservam a identidade visual enquanto um domínio aprovado
 // ainda não estiver carregado no contexto atual.
 const LOCAL_PRODUCT_FAVICONS={educare:'/product-favicons/educare.svg',sites:'/product-favicons/sites.svg'};
 const catalogForProduct=product=>state.catalog.find(entry=>entry.kind==='product'&&(entry.payload?.id===product?.id||entry.payload?.name===product?.name))?.payload||null;
-const approvedDomainUrl=product=>{const binding=state.resourceBindings.find(item=>item.product_id===product?.id&&item.resource_type==='domain'&&(!item.environment||item.environment==='production'));if(!binding)return null;const raw=binding.url||`https://${binding.external_id}`;try{const url=new URL(raw);return url.protocol==='https:'?url.href:null;}catch{return null;}};
+const approvedPublicUrl=product=>{const bindings=state.resourceBindings.filter(item=>item.product_id===product?.id&&(!item.environment||item.environment==='production')&&['domain','frontend'].includes(item.resource_type));for(const binding of bindings){const raw=binding.url||`https://${binding.external_id}`;try{const url=new URL(raw);if(url.protocol==='https:'&&!/^api\./i.test(url.hostname))return url.href;}catch{}}return null;};
 // Vínculo aprovado é a fonte de verdade. O deploy observado é evidência
 // técnica/fallback, não identidade pública do produto.
-const productFaviconUrl=product=>approvedDomainUrl(product)||LOCAL_PRODUCT_FAVICONS[productKey(product)]||product?.favicon_url||product?.catalog?.url||catalogForProduct(product)?.url||publishedDeployUrl(product)||null;
-const productLiveUrl=product=>product?.lifecycle_status==='draft'?(publishedDeployUrl(product)||null):(approvedDomainUrl(product)||CANONICAL_PRODUCT_URLS[productKey(product)]||product?.deploy_url||publishedDeployUrl(product)||product?.catalog?.url||catalogForProduct(product)?.url||null);
+const productFaviconUrl=product=>approvedPublicUrl(product)||CANONICAL_PRODUCT_URLS[productKey(product)]||LOCAL_PRODUCT_FAVICONS[productKey(product)]||product?.favicon_url||product?.catalog?.url||catalogForProduct(product)?.url||publishedDeployUrl(product)||null;
+const productLiveUrl=product=>product?.lifecycle_status==='draft'?(publishedDeployUrl(product)||null):(approvedPublicUrl(product)||CANONICAL_PRODUCT_URLS[productKey(product)]||product?.deploy_url||publishedDeployUrl(product)||product?.catalog?.url||catalogForProduct(product)?.url||null);
 const coreSpaceIcon=()=>{const image=document.createElement('img');image.src='/logo.svg';image.width=20;image.height=20;image.alt='';return image;};
 
 function node(tag, text, className) {
