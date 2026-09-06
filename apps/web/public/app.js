@@ -90,8 +90,11 @@ const CANONICAL_FAVICON_SOURCES={
  skiller:'https://skiller.tzolkin.cloud/'
 };
 const catalogForProduct=product=>state.catalog.find(entry=>entry.kind==='product'&&(entry.payload?.id===product?.id||entry.payload?.name===product?.name))?.payload||null;
-const productFaviconUrl=product=>CANONICAL_FAVICON_SOURCES[productKey(product)]||product?.favicon_url||product?.catalog?.url||catalogForProduct(product)?.url||publishedDeployUrl(product)||null;
-const productLiveUrl=product=>product?.lifecycle_status==='draft'?(publishedDeployUrl(product)||null):(CANONICAL_PRODUCT_URLS[productKey(product)]||product?.deploy_url||publishedDeployUrl(product)||product?.catalog?.url||catalogForProduct(product)?.url||null);
+const approvedDomainUrl=product=>{const binding=state.resourceBindings.find(item=>item.product_id===product?.id&&item.resource_type==='domain'&&item.environment==='production');if(!binding)return null;const raw=binding.url||`https://${binding.external_id}`;try{const url=new URL(raw);return url.protocol==='https:'?url.href:null;}catch{return null;}};
+// Vínculo aprovado é a fonte de verdade. O deploy observado é evidência
+// técnica/fallback, não identidade pública do produto.
+const productFaviconUrl=product=>approvedDomainUrl(product)||CANONICAL_FAVICON_SOURCES[productKey(product)]||product?.favicon_url||product?.catalog?.url||catalogForProduct(product)?.url||publishedDeployUrl(product)||null;
+const productLiveUrl=product=>product?.lifecycle_status==='draft'?(publishedDeployUrl(product)||null):(approvedDomainUrl(product)||CANONICAL_PRODUCT_URLS[productKey(product)]||product?.deploy_url||publishedDeployUrl(product)||product?.catalog?.url||catalogForProduct(product)?.url||null);
 const coreSpaceIcon=()=>{const image=document.createElement('img');image.src='/logo.svg';image.width=20;image.height=20;image.alt='';return image;};
 
 function node(tag, text, className) {
