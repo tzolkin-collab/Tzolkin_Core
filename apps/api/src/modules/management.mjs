@@ -13,14 +13,19 @@ export function managementRoutes(router){
   onlyParams(url.searchParams,['database','schema','table','limit','offset','column','value','sort','direction']);
   const params=Object.fromEntries(url.searchParams);
   const result=await withDatabase(pool,params.database,selected=>readTableRows(selected,params));
-  // Trilha própria, não audit_events: aquela tabela exige tenant_id NOT NULL e a
-  // leitura de uma tabela do banco não tem tenant, então o INSERT violava a
-  // constraint e a rota devolvia 500 em toda chamada. Ver migração 024.
-  // Grava o nome da coluna filtrada, nunca o valor procurado.
-  await pool.query(`INSERT INTO database_access_audit(actor,database_name,schema_name,table_name,row_limit,row_offset,filter_column)
-   VALUES($1,$2,$3,$4,$5,$6,$7)`,
-   [operator?.email||operator?.subject||'local-operator',params.database||'',params.schema,params.table,
-    Number(params.limit)||null,Number(params.offset)||null,params.column||null]);
+  // Trilha própria, não audit_events: grava o nome da coluna filtrada, nunca o
+  // valor procurado. A auditoria é importante, mas não pode transformar uma
+  // migração pendente em falha de leitura. O deploy aplica a 024; este fallback
+  // mantém o explorador funcional enquanto a tabela ainda não existir.
+  try {
+   await pool.query(`INSERT INTO database_access_audit(actor,database_name,schema_name,table_name,row_limit,row_offset,filter_column)
+    VALUES($1,$2,$3,$4,$5,$6,$7)`,
+    [operator?.email||operator?.subject||'local-operator',params.database||'',params.schema,params.table,
+     Number(params.limit)||null,Number(params.offset)||null,params.column||null]);
+  } catch(error) {
+   if(error?.code!=='42P01') throw error;
+   console.warn('[management] database_access_audit ausente; leitura entregue sem auditoria.');
+  }
   reply(200,result);
  },{body:false});
 }
