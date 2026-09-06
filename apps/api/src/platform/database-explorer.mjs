@@ -21,13 +21,17 @@ export async function withDatabase(pool,name,task){
  try{return await task(selected);}finally{await selected.end();}
 }
 export async function inspectSchema(pool){
- const rows=await pool.query(`SELECT c.table_schema,c.table_name,c.column_name,c.data_type,c.is_nullable,t.table_type,
+ const rows=await pool.query(`SELECT n.nspname AS table_schema,r.relname AS table_name,a.attname AS column_name,format_type(a.atttypid,a.atttypmod) AS data_type,
+ CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END AS is_nullable,
+ CASE WHEN r.relkind IN ('v','m') THEN 'VIEW' ELSE 'BASE TABLE' END AS table_type,
  EXISTS(SELECT 1 FROM pg_index i JOIN pg_class r ON r.oid=i.indrelid JOIN pg_namespace n ON n.oid=r.relnamespace
- JOIN pg_attribute a ON a.attrelid=r.oid AND a.attname=c.column_name
- WHERE i.indisprimary AND n.nspname=c.table_schema AND r.relname=c.table_name AND a.attnum=ANY(i.indkey)) AS primary_key
- FROM information_schema.columns c JOIN information_schema.tables t USING(table_schema,table_name)
- WHERE c.table_schema NOT IN ('pg_catalog','information_schema') AND c.table_schema NOT LIKE 'pg_%'
- ORDER BY c.table_schema,c.table_name,c.ordinal_position`);
+ JOIN pg_attribute pa ON pa.attrelid=r.oid AND pa.attnum=ANY(i.indkey)
+ WHERE i.indisprimary AND n.nspname=ns.nspname AND r.relname=rel.relname AND pa.attnum=a.attnum) AS primary_key
+ FROM pg_class rel JOIN pg_namespace ns ON ns.oid=rel.relnamespace
+ JOIN pg_attribute a ON a.attrelid=rel.oid AND a.attnum>0 AND NOT a.attisdropped
+ JOIN pg_class r ON r.oid=rel.oid JOIN pg_namespace n ON n.oid=rel.relnamespace
+ WHERE rel.relkind IN ('r','p','v','m') AND ns.nspname NOT IN ('pg_catalog','information_schema') AND ns.nspname NOT LIKE 'pg_%'
+ ORDER BY ns.nspname,rel.relname,a.attnum`);
  const relations=await pool.query(`SELECT sn.nspname AS table_schema,s.relname AS table_name,sa.attname AS column_name,
  tn.nspname AS foreign_table_schema,t.relname AS foreign_table_name,ta.attname AS foreign_column_name,c.conname AS constraint_name
  FROM pg_constraint c JOIN pg_class s ON s.oid=c.conrelid JOIN pg_namespace sn ON sn.oid=s.relnamespace

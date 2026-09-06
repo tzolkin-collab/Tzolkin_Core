@@ -23,11 +23,11 @@ export function productFaviconRoutes(router){
   try{parsed=new URL(target);if(parsed.protocol!=='https:'||parsed.username||parsed.password||!allowedHost(parsed.hostname))throw Error();}catch{throw fail(400,'Endereço de favicon inválido.');}
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),3500);
   try{
-   const response=await fetch(parsed.href,{redirect:'error',signal:controller.signal,headers:{accept:'text/html,application/xhtml+xml'}});if(!response.ok)return reply(200,{href:null});
+   const response=await fetch(parsed.href,{redirect:'follow',signal:controller.signal,headers:{accept:'text/html,application/xhtml+xml'}});if(!response.ok)return reply(200,{href:null});
    const html=await response.text();if(html.length>300000)return reply(200,{href:null});
-   const href=iconHref(html)||'/favicon.ico';const dataIcon=inlineDataIcon(href);if(dataIcon)return reply(200,{href:dataIcon});
-   const icon=new URL(href,parsed.href);if(icon.protocol!=='https:')return reply(200,{href:null});
-   const iconResponse=await fetch(icon.href,{redirect:'error',signal:controller.signal,headers:{accept:'image/*'}});if(!iconResponse.ok)return reply(200,{href:null});
+   const candidates=[iconHref(html),'/favicon.svg','/favicon.ico'].filter(Boolean);let iconResponse=null,icon=null;
+   for(const href of candidates){const dataIcon=inlineDataIcon(href);if(dataIcon)return reply(200,{href:dataIcon});try{const candidate=new URL(href,response.url||parsed.href);if(candidate.protocol!=='https:')continue;const result=await fetch(candidate.href,{redirect:'follow',signal:controller.signal,headers:{accept:'image/*'}});if(result.ok){icon=candidate;iconResponse=result;break;}}catch{}}
+   if(!iconResponse||!icon)return reply(200,{href:null});
    const mime=(iconResponse.headers.get('content-type')||'').split(';',1)[0].toLowerCase();if(!mime.startsWith('image/'))return reply(200,{href:null});
    const bytes=Buffer.from(await iconResponse.arrayBuffer());if(bytes.length>120000)return reply(200,{href:null});
    return reply(200,{href:`data:${mime};base64,${bytes.toString('base64')}`});
