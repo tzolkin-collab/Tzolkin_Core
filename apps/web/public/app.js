@@ -624,7 +624,7 @@ function renderDeploys(data) {
   const card = node('article', undefined, 'deploy-card');
   const topo = node('header');
   const identidade = node('div', undefined, 'deploy-head');
-  const mark=node('span',undefined,'deploy-project-mark');mark.append(providerLogo(projeto.provider));identidade.append(mark,node('h3', projeto.project || 'Projeto sem nome'));
+  const mark=node('span',undefined,'deploy-project-mark');const vercelMark=providerLogo('vercel');vercelMark.alt='Vercel';vercelMark.setAttribute('aria-label','Vercel');mark.append(vercelMark);identidade.append(mark,node('h3', projeto.project || 'Projeto sem nome'));
   // Sem repositório não há commit, não há rollback por commit e não dá para criar Deploy Hook.
   if (projeto.git_connected === false) identidade.append(node('span', 'sem repositório', 'status'));
   const actions=node('div',undefined,'deploy-project-actions');actions.append(node('span', projeto.provider, 'ecosystem-category'));
