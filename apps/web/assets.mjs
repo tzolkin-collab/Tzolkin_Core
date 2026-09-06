@@ -13,6 +13,13 @@ const marcas = nomes => Object.fromEntries(nomes.map(nome => {
 
 const FILES = {
  '/': ['index.html', 'text/html'],
+ // O favicon precisa de uma rota própria e estável. Não depender de
+ // /logo.svg aqui: navegadores, crawlers e instaladores PWA procuram
+ // /favicon.svg ou /favicon.ico diretamente.
+ '/favicon.svg': ['logo.svg', 'image/svg+xml'],
+ // Compatibilidade com navegadores/crawlers que ignoram favicon SVG e
+ // solicitam este caminho por convenção.
+ '/favicon.ico': ['icon-192.png', 'image/png'],
  // PWA. O manifest e o service worker precisam ser servidos na raiz do escopo:
  // um service worker so controla o caminho de onde e servido.
  '/manifest.webmanifest': ['manifest.webmanifest', 'application/manifest+json'],
