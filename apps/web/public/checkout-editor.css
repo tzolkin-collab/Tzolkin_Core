@@ -54,11 +54,24 @@
 /* 560px cortava o conteúdo (652px medidos em produção): o botão de pagar e a
    nota de rodapé ficavam fora da vista, e a prévia mentia sobre a página. */
 .checkout-frame.mobile iframe { height: 780px; }
-.checkout-frame.desktop { overflow: hidden; }
+/* A escala sai de unidade de container: 100cqw é a largura disponível na
+   coluna, e dividir por 1280 dá o fator. CSS puro — sem JS, sem observer, e a
+   conta se refaz sozinha quando a coluna muda de tamanho.
+   O iframe é absoluto para não esticar a moldura: quem manda na altura é o
+   aspect-ratio, senão os 860px do conteúdo venceriam a conta. */
+.checkout-frame.desktop {
+ position: relative;
+ container-type: inline-size;
+ aspect-ratio: 1280 / 860;
+ overflow: hidden;
+}
 .checkout-frame.desktop iframe {
+ position: absolute;
+ top: 0;
+ left: 0;
  width: 1280px;
  height: 860px;
- transform: scale(var(--previa-escala, 0.4));
+ transform: scale(calc(100cqw / 1280));
  transform-origin: top left;
 }
 .checkout-preview-escala { color: var(--muted); font-size: 12px; text-align: right; margin: 6px 0 0; }

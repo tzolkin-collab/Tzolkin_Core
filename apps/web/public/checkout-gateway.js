@@ -27,15 +27,15 @@ const TYPE_LABELS={HOSTED:'Hospedado na Stripe (redireciona)',EMBEDDED:'Incorpor
 const VIEWPORTS={mobile:'Celular',desktop:'Computador'};
 const TIPO_CURTO={HOSTED:'Hospedado',EMBEDDED:'Incorporado',ELEMENTS:'Elements'};
 // Largura de monitor de verdade, para a prévia desktop cruzar o breakpoint de
-// 880px do checkout. A altura cobre o cartão inteiro com folga.
-const LARGURA_DESKTOP=1280,ALTURA_DESKTOP=860;
+// 880px do checkout. A proporção da moldura vive no CSS, junto com a escala.
+const LARGURA_DESKTOP=1280;
 const corDoTemplate=payload=>payload.theme?.color||payload.branding?.primary_color||'#111827';
 
 export function setupCheckoutPanel({api}){
  let generation=0,host=null,product=null,templates=[],offers=[],schema=null,selected=null,previewSlug=null,viewport='mobile',feedback='';
  // A moldura é preservada entre renders para não recarregar o iframe a cada
  // troca de viewport — recarregar perderia o rascunho aplicado.
- let frame=null,frameSrc=null,pronta=false,editorAtual=null,alerta=null,relogio=null,observador=null;
+ let frame=null,frameSrc=null,pronta=false,editorAtual=null,alerta=null,relogio=null;
  const current=()=>templates.find(row=>row.slug===selected)||null;
  const stripeOffers=()=>offers.filter(row=>row.payload.provider==='stripe');
 
@@ -143,21 +143,9 @@ export function setupCheckoutPanel({api}){
   // Desktop: o iframe renderiza em 1280px e encolhe por escala. Sem isto ele
   // teria a largura da coluna (~500px), ficaria abaixo do breakpoint de 880px
   // do checkout e a prévia desktop mostraria o layout de celular.
-  const escalaTexto=el('p',undefined,'checkout-preview-escala');
-  if(viewport==='desktop'){
-   const ajustar=()=>{
-    const disponivel=moldura.clientWidth;
-    if(!disponivel)return;
-    const escala=Math.min(1,disponivel/LARGURA_DESKTOP);
-    moldura.style.setProperty('--previa-escala',String(escala));
-    moldura.style.height=Math.round(ALTURA_DESKTOP*escala)+'px';
-    escalaTexto.textContent=`Renderizado em ${LARGURA_DESKTOP}px, exibido a ${Math.round(escala*100)}%`;
-   };
-   requestAnimationFrame(ajustar);
-   observador?.disconnect();
-   observador=new ResizeObserver(ajustar);observador.observe(moldura);
-   painel.append(escalaTexto);
-  }else{observador?.disconnect();observador=null;}
+  // A redução é feita em CSS por unidade de container. Tentei calcular aqui com
+  // ResizeObserver e a conta não chegava a rodar; o CSS resolve sem estado.
+  if(viewport==='desktop')painel.append(el('p',`Renderizado em ${LARGURA_DESKTOP}px de largura e reduzido para caber.`,'checkout-preview-escala'));
   alerta=el('p',undefined,'notice-inline');alerta.setAttribute('role','status');painel.append(alerta);
 
   const rodape=el('p',undefined,'detail');
@@ -203,9 +191,9 @@ export function setupCheckoutPanel({api}){
  }
 
  return {mount,clear(){
-  generation++;clearTimeout(relogio);observador?.disconnect();
+  generation++;clearTimeout(relogio);
   host=null;product=null;templates=[];offers=[];schema=null;selected=null;previewSlug=null;feedback='';
-  frame=null;frameSrc=null;pronta=false;editorAtual=null;alerta=null;observador=null;
+  frame=null;frameSrc=null;pronta=false;editorAtual=null;alerta=null;
  }};
 }
 
