@@ -36,6 +36,7 @@ export function billingRoutes(router){
  });
  router.put('/api/billing/offers',async({client,body})=>{
  const offer=validateOffer(body);
+  if (offer.product_id === 'sites') throw fail(409, 'TZOLKIN Sites é contratado por formulário/proposta, não por checkout.');
   if (!await findEditableProduct(client, offer.product_id)) throw fail(400, 'Produto não está disponível para cobrança.');
   const result=await client.query(`INSERT INTO billing_offers(product_id,slug,payload)
    SELECT $1,$2,$3::jsonb WHERE $4=0

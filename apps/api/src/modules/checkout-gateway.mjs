@@ -89,6 +89,7 @@ export function checkoutGatewayRoutes(router, { env = process.env, adapterFactor
   onlyParams(url.searchParams, ['product_id', 'offer_slug', 'template_slug']);
   const productId = url.searchParams.get('product_id'), offerSlug = url.searchParams.get('offer_slug'), templateSlug = url.searchParams.get('template_slug');
   if (!isProductId(productId) || !isProductId(offerSlug) || (templateSlug !== null && !isProductId(templateSlug))) throw fail(400, 'Identificador inválido.');
+  if (productId === 'sites') throw fail(409, 'TZOLKIN Sites não possui checkout público.');
   const { produto, oferta, template } = await lerOfertaETemplate(pool, productId, offerSlug, templateSlug);
   // A publishable key não é segredo -- é feita para ir ao navegador. Só ela
   // (nunca a secreta) viaja nesta rota pública.
@@ -104,6 +105,7 @@ export function checkoutGatewayRoutes(router, { env = process.env, adapterFactor
   const { product_id: productId, offer_slug: offerSlug } = body;
   const templateSlug = body.template_slug ?? null;
   if (!isProductId(productId) || !isProductId(offerSlug) || (templateSlug !== null && !isProductId(templateSlug))) throw fail(400, 'Identificador inválido.');
+  if (productId === 'sites') throw fail(409, 'TZOLKIN Sites não possui checkout público.');
 
   const { oferta, template } = await lerOfertaETemplate(pool, productId, offerSlug, templateSlug);
   const offer = oferta.payload, tpl = template.payload;
