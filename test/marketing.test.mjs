@@ -9,6 +9,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { createCore } from '../apps/api/src/server.mjs';
 import { testConnectionString } from '../apps/api/src/platform/database.mjs';
 import { guardarCredencial } from '../apps/api/src/modules/marketing.mjs';
+import http from 'node:http';
 
 const CHAVE = randomBytes(32).toString('base64');
 const TOKEN_FALSO = 'EAAG' + 'z'.repeat(190);
@@ -234,6 +235,163 @@ test('Campanhas de marketing', async t => {
   } finally { client.release(); }
   server.closeAllConnections();
   await new Promise(r => server.close(r));
+  await pool.end();
+ }
+});
+
+// Graph de mentira: um servidor local. Permite exercitar troca e conferência
+// de verdade, inclusive provar que o token viaja no cabeçalho.
+function grafoFalso() {
+ const recebidas = [];
+ const servidor = http.createServer((req, res) => {
+  const url = new URL(req.url, 'http://127.0.0.1');
+  recebidas.push({ path: url.pathname, query: url.search, auth: req.headers.authorization || null });
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  if (url.pathname.endsWith('/oauth/access_token')) {
+   return res.end(JSON.stringify({ access_token: 'TOKEN-LONGO-' + 'y'.repeat(60), expires_in: 5184000 }));
+  }
+  if (url.pathname.endsWith('/debug_token')) {
+   return res.end(JSON.stringify({ data: { is_valid: true, expires_at: 0, scopes: ['ads_read'], type: 'SYSTEM_USER' } }));
+  }
+  res.end(JSON.stringify({ data: [] }));
+ });
+ return { servidor, recebidas };
+}
+
+test('Conectar credencial pelo painel', async t => {
+ const pool = new pg.Pool({ connectionString: testConnectionString().connectionString, max: 3 });
+ const marca = randomUUID().slice(0, 8).replace(/-/g, '');
+ const adminPassword = randomBytes(32).toString('base64url');
+
+ const { servidor, recebidas } = grafoFalso();
+ await new Promise(r => servidor.listen(0, '127.0.0.1', r));
+ const grafo = `http://127.0.0.1:${servidor.address().port}`;
+ const env = { CORE_MARKETING_KEY: CHAVE, META_GRAPH_BASE: grafo };
+
+ const server = createCore({ pool, adminPassword, marketingOptions: { env, adapter: adaptadorFalso(marca) } });
+ await new Promise(r => server.listen(0, '127.0.0.1', r));
+ const origin = `http://127.0.0.1:${server.address().port}`;
+
+ // Core sem chave de cifragem: reproduz exatamente o estado de produção hoje.
+ const semChave = createCore({ pool, adminPassword, marketingOptions: { env: { META_GRAPH_BASE: grafo } } });
+ await new Promise(r => semChave.listen(0, '127.0.0.1', r));
+ const origemSemChave = `http://127.0.0.1:${semChave.address().port}`;
+
+ const entrar = async alvo => {
+  const r = await fetch(alvo + '/api/login', {
+   method: 'POST', headers: { origin: alvo, 'Content-Type': 'application/json' },
+   body: JSON.stringify({ password: adminPassword }),
+  });
+  return r.headers.get('set-cookie').split(';')[0];
+ };
+ const cookie = await entrar(origin);
+ const cookieSemChave = await entrar(origemSemChave);
+ const conectar = (corpo, alvo = origin, ck = cookie) => fetch(alvo + '/api/marketing/credential', {
+  method: 'POST', headers: { cookie: ck, origin: alvo, 'Content-Type': 'application/json' },
+  body: JSON.stringify(corpo),
+ });
+
+ const TOKEN_UI = 'EAAX' + 'k'.repeat(120);
+
+ try {
+  await t.test('exige sessão', async () => {
+   const r = await fetch(origin + '/api/marketing/credential', {
+    method: 'POST', headers: { origin, 'Content-Type': 'application/json' }, body: '{}',
+   });
+   assert.equal(r.status, 401);
+  });
+
+  await t.test('recusa mutação de outra origem', async () => {
+   const r = await fetch(origin + '/api/marketing/credential', {
+    method: 'POST', headers: { cookie, origin: 'https://outro.example', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: TOKEN_UI }),
+   });
+   assert.equal(r.status, 403);
+  });
+
+  await t.test('sem chave de cifragem recusa antes de tocar na Meta', async () => {
+   const antes = recebidas.length;
+   const r = await conectar({ token: TOKEN_UI, label: `X ${marca}` }, origemSemChave, cookieSemChave);
+   assert.equal(r.status, 503);
+   assert.match((await r.json()).message, /CORE_MARKETING_KEY/);
+   assert.equal(recebidas.length, antes, 'não pode consultar a Meta sem ter onde guardar');
+  });
+
+  await t.test('token malformado é recusado', async () => {
+   assert.equal((await conectar({ token: 'curto' })).status, 400);
+   assert.equal((await conectar({ token: TOKEN_UI + ' com espaco' })).status, 400);
+   assert.equal((await conectar({ token: TOKEN_UI, campo_estranho: 1 })).status, 400);
+   assert.equal((await conectar({ token: TOKEN_UI, exchange: true })).status, 400, 'troca sem app id/secret');
+  });
+
+  await t.test('conecta, confere na Meta e não devolve o token', async () => {
+   const r = await conectar({ token: TOKEN_UI, label: `Painel ${marca}`, app_id: '1234567890', app_secret: 'segredo' });
+   assert.equal(r.status, 200);
+   const corpo = await r.json();
+   const texto = JSON.stringify(corpo);
+   assert.ok(!texto.includes(TOKEN_UI), 'o token não pode voltar na resposta');
+   assert.ok(!texto.includes('segredo'), 'a chave secreta do app também não');
+   assert.equal(corpo.configured, true);
+   assert.equal(corpo.verified, true);
+   assert.equal(corpo.never_expires, true, 'expires_at 0 na Meta significa não expira');
+   assert.equal(corpo.connected_via, 'panel');
+   assert.ok(corpo.fingerprint);
+
+   const chamada = recebidas.find(c => c.path.includes('debug_token'));
+   assert.ok(chamada, 'o token precisa ser conferido antes de gravar');
+   assert.equal(chamada.auth, `Bearer ${TOKEN_UI}`, 'vai no cabeçalho');
+  });
+
+  await t.test('o banco guarda cifrado, nunca em claro', async () => {
+   const linha = (await pool.query(
+    'SELECT token_ciphertext,connected_via,connected_by_subject FROM marketing_credentials WHERE label=$1',
+    [`Painel ${marca}`])).rows[0];
+   assert.ok(!linha.token_ciphertext.toString('utf8').includes('EAAX'));
+   assert.equal(linha.connected_via, 'panel');
+   assert.equal(linha.connected_by_subject, 'local-bootstrap');
+  });
+
+  await t.test('troca de token curto acontece no servidor', async () => {
+   const r = await conectar({
+    token: 'EAAcurto' + 'z'.repeat(30), label: `Trocado ${marca}`,
+    exchange: true, app_id: '1234567890', app_secret: 'segredo',
+   });
+   assert.equal(r.status, 200);
+   const corpo = await r.json();
+   assert.ok(!JSON.stringify(corpo).includes('TOKEN-LONGO'), 'nem o token trocado volta');
+   assert.ok(recebidas.some(c => c.path.endsWith('/oauth/access_token')));
+  });
+
+  await t.test('conectar de novo revoga a anterior: uma ativa por provedor', async () => {
+   const ativas = await pool.query(
+    "SELECT count(*)::int c FROM marketing_credentials WHERE provider='meta' AND active");
+   assert.equal(ativas.rows[0].c, 1);
+   const antiga = await pool.query(
+    'SELECT active,revoked_at FROM marketing_credentials WHERE label=$1', [`Painel ${marca}`]);
+   assert.equal(antiga.rows[0].active, false);
+   assert.ok(antiga.rows[0].revoked_at, 'a anterior fica no histórico, não é apagada');
+  });
+
+  await t.test('revogar desativa sem apagar, e revogar duas vezes é conflito', async () => {
+   const revogar = () => fetch(origin + '/api/marketing/credential/revoke', {
+    method: 'POST', headers: { cookie, origin },
+   });
+   assert.equal((await revogar()).status, 200);
+   const linhas = await pool.query(
+    'SELECT count(*)::int c FROM marketing_credentials WHERE label LIKE $1', [`%${marca}`]);
+   assert.equal(linhas.rows[0].c, 2, 'as duas linhas continuam no banco');
+   assert.equal((await revogar()).status, 409);
+  });
+
+  await t.test('depois de revogar, a tela volta ao estado vazio honesto', async () => {
+   const corpo = await (await fetch(origin + '/api/marketing/overview', { headers: { cookie } })).json();
+   assert.equal(corpo.configured, false);
+   assert.equal(corpo.key_configured, true);
+  });
+ } finally {
+  await pool.query('DELETE FROM marketing_credentials WHERE label LIKE $1', [`%${marca}`]);
+  for (const s2 of [server, semChave]) { s2.closeAllConnections(); await new Promise(r => s2.close(r)); }
+  await new Promise(r => servidor.close(r));
   await pool.end();
  }
 });

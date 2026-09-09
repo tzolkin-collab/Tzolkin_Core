@@ -13,9 +13,9 @@
 // margem errada vira decisão de preço errada.
 //
 // Ver docs/INTEGRATIONS.md e db/migrations/026_marketing_campaigns.sql
-import { fail, input, isProductId, isUuid, onlyParams, text } from '../platform/http.mjs';
+import { fail, input, isProductId, isUuid, json, onlyParams, text } from '../platform/http.mjs';
 import { readKey, seal, open, fingerprint, scrub } from '../platform/secrets.mjs';
-import { createMetaGraphAdapter } from '../integrations/meta-graph.mjs';
+import { createMetaGraphAdapter, exchangeLongLivedToken } from '../integrations/meta-graph.mjs';
 import { commercialPermission } from '../modules/commercial-keys.mjs';
 
 const PROVIDER = 'meta';
@@ -65,7 +65,17 @@ export function credencialPublica(linha, clock = Date.now) {
   last_verified_at: linha.last_verified_at,
   last_error: linha.last_error,
   created_at: linha.created_at,
+  connected_by: linha.connected_by_email || linha.connected_by_subject || null,
+  connected_via: linha.connected_via || 'script',
  };
+}
+
+/**
+ * A chave de cifragem existe? A tela precisa saber ANTES de alguém digitar um
+ * token, senão o formulário aceita a credencial e falha ao gravar.
+ */
+export function chaveConfigurada(env) {
+ try { readKey(env); return true; } catch { return false; }
 }
 
 /**
@@ -152,7 +162,8 @@ export function marketingRoutes(router, { env = process.env, clock = Date.now, a
 
   // Sem credencial não é erro: é estado vazio honesto, como em stripe-catalog.
   if (!cred.rowCount) return reply(200, {
-   ...credencialPublica(null), accounts: [], campaigns: [], summary: null,
+   ...credencialPublica(null), key_configured: chaveConfigurada(env),
+   accounts: [], campaigns: [], summary: null,
    last_sync: null, unassigned: 0, window: { since, until },
   });
 
@@ -168,6 +179,7 @@ export function marketingRoutes(router, { env = process.env, clock = Date.now, a
 
   return reply(200, {
    ...credencialPublica(cred.rows[0], clock),
+   key_configured: chaveConfigurada(env),
    window: { since, until },
    accounts: contas.rows,
    campaigns: linhas,
@@ -415,11 +427,104 @@ export function marketingRoutes(router, { env = process.env, clock = Date.now, a
  // ---------------------------------------------------------------------------
  // Saúde do token, conferida na Meta
  // ---------------------------------------------------------------------------
+
+ // ---------------------------------------------------------------------------
+ // Conectar a credencial pelo painel
+ // ---------------------------------------------------------------------------
+ // Fora de transação: a troca e a conferência na Meta são chamadas de rede, e
+ // segurar conexão do pool durante rede esgota o pool. O corpo é lido aqui
+ // porque só rota transacional recebe `body` pronto do app.mjs.
+ //
+ // O token entra e não volta: a resposta é a mesma forma pública do GET.
+ // Nada neste caminho escreve o token em log.
+ router.post('/api/marketing/credential', async ({ req, pool, reply, operator }) => {
+  await commercialPermission(pool, operator, true, true);
+
+  // Falha antes de tocar na Meta: sem chave não há onde guardar com segurança,
+  // e é melhor dizer isso do que gravar em claro.
+  readKey(env);
+
+  const body = await json(req, 8192);
+  input(body, ['token', 'label', 'exchange', 'app_id', 'app_secret']);
+
+  // `text()` não serve: apara e limita a 200, e um token da Graph passa disso.
+  const informado = typeof body.token === 'string' ? body.token.trim() : '';
+  if (informado.length < 20 || informado.length > 1000 || /[\u0000-\u001f\s]/.test(informado))
+   throw fail(400, 'Token inválido.');
+
+  const rotulo = text(body.label ?? 'Meta Ads', 2, 120);
+  const trocar = body.exchange === true;
+  const appId = body.app_id == null || body.app_id === ''
+   ? (env.META_APP_ID || null) : String(body.app_id).trim();
+  const appSecret = body.app_secret == null || body.app_secret === ''
+   ? (env.META_APP_SECRET || null) : String(body.app_secret).trim();
+  if (appId != null && !/^\d{5,25}$/.test(appId)) throw fail(400, 'ID do app inválido.');
+  if (trocar && (!appId || !appSecret))
+   throw fail(400, 'A troca por token de longa duração exige ID e chave secreta do app.');
+
+  let token = informado;
+  let tipo = 'long_lived_user';
+  let expiraEm = null;
+  let escopos = [];
+
+  if (trocar) {
+   const trocado = await exchangeLongLivedToken({
+    appId, appSecret, shortLivedToken: token,
+    ...(env.META_GRAPH_BASE ? { baseUrl: env.META_GRAPH_BASE } : {}),
+    ...(env.META_GRAPH_VERSION ? { version: env.META_GRAPH_VERSION } : {}),
+   });
+   token = trocado.access_token;
+   expiraEm = trocado.expires_at;
+   tipo = trocado.token_type;
+  }
+
+  // Conferir antes de gravar: guardar credencial que já não funciona só adia a
+  // descoberta para a primeira coleta. Sem app id/secret não dá para conferir —
+  // segue mesmo assim, e a tela diz que não foi conferida.
+  if (appId && appSecret) {
+   const estado = await createMetaGraphAdapter({
+    token, appId, appSecret,
+    ...(env.META_GRAPH_BASE ? { baseUrl: env.META_GRAPH_BASE } : {}),
+    ...(env.META_GRAPH_VERSION ? { version: env.META_GRAPH_VERSION } : {}),
+   }).debugToken();
+   if (!estado.valid) throw fail(400, 'A Meta considera este token inválido' + (estado.error ? `: ${scrub(estado.error, token)}` : '.'));
+   escopos = estado.scopes;
+   if (estado.never_expires) { expiraEm = null; tipo = 'system_user'; }
+   else if (estado.expires_at) expiraEm = estado.expires_at;
+  }
+
+  const client = await pool.connect();
+  try {
+   await client.query('BEGIN');
+   const gravada = await guardarCredencial(client, {
+    token, label: rotulo, tokenType: tipo, scopes: escopos, expiresAt: expiraEm, appId,
+    operator, via: 'panel',
+   }, env);
+   await client.query('COMMIT');
+   const linha = (await pool.query('SELECT * FROM marketing_credentials WHERE id=$1', [gravada.id])).rows[0];
+   // A resposta é a forma pública: validade, escopos e impressão digital.
+   return reply(200, { ...credencialPublica(linha, clock), verified: Boolean(appId && appSecret) });
+  } catch (e) { await client.query('ROLLBACK'); throw e; }
+  finally { client.release(); }
+ });
+
+ // Revogar sem apagar: a role de produção não tem DELETE, e o histórico de
+ // qual token esteve ativo em cada período tem valor.
+ router.post('/api/marketing/credential/revoke', async ({ client, operator, reply }) => {
+  await commercialPermission(client, operator, true, true);
+  const r = await client.query(
+   'UPDATE marketing_credentials SET active=false, revoked_at=now(), updated_at=now() WHERE provider=$1 AND active RETURNING id',
+   [PROVIDER]);
+  if (!r.rowCount) throw fail(409, 'Não há credencial ativa para revogar.');
+  return { body: { ok: true, revoked: r.rows[0].id } };
+ }, { transactional: true, body: false, audit: false });
+
  router.get('/api/marketing/credential', async ({ pool, reply, url }) => {
   onlyParams(url.searchParams, ['verify']);
   const cred = await pool.query('SELECT * FROM marketing_credentials WHERE provider=$1 AND active', [PROVIDER]);
-  if (!cred.rowCount) return reply(200, credencialPublica(null));
-  const publico = credencialPublica(cred.rows[0], clock);
+  const chave = chaveConfigurada(env);
+  if (!cred.rowCount) return reply(200, { ...credencialPublica(null), key_configured: chave });
+  const publico = { ...credencialPublica(cred.rows[0], clock), key_configured: chave };
   if (url.searchParams.get('verify') !== '1') return reply(200, publico);
 
   const aberto = await abrirAdaptador(pool);
@@ -443,10 +548,11 @@ export function marketingRoutes(router, { env = process.env, clock = Date.now, a
 }
 
 /**
- * Grava a credencial cifrada. Usada pelo script de conexão, não por rota HTTP:
- * o token nunca deve transitar pelo navegador nem aparecer no chat.
+ * Grava a credencial cifrada. Usada pelo script do servidor e pela rota do
+ * painel — e nos dois casos o token só existe em memória até virar texto
+ * cifrado. Nenhuma leitura posterior o devolve.
  */
-export async function guardarCredencial(client, { token, label, tokenType, scopes, expiresAt, appId }, env = process.env) {
+export async function guardarCredencial(client, { token, label, tokenType, scopes, expiresAt, appId, operator = null, via = 'script' }, env = process.env) {
  const selado = seal(token, readKey(env));
  // Uma ativa por provedor: a anterior sai de cena antes de a nova entrar.
  await client.query(
@@ -454,11 +560,13 @@ export async function guardarCredencial(client, { token, label, tokenType, scope
   [PROVIDER]);
  const r = await client.query(
   `INSERT INTO marketing_credentials
-     (provider,label,token_ciphertext,token_iv,token_tag,token_fingerprint,token_type,scopes,expires_at,app_id)
-   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     (provider,label,token_ciphertext,token_iv,token_tag,token_fingerprint,token_type,scopes,
+      expires_at,app_id,connected_by_subject,connected_by_email,connected_via)
+   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
    RETURNING id,label,token_fingerprint,token_type,scopes,expires_at,created_at`,
   [PROVIDER, label, selado.ciphertext, selado.iv, selado.tag, selado.fingerprint,
-   tokenType, scopes || [], expiresAt, appId]);
+   tokenType, scopes || [], expiresAt, appId,
+   operator?.subject ?? null, operator?.email ?? null, via]);
  return r.rows[0];
 }
 

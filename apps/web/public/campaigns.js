@@ -62,10 +62,24 @@ export function setupCampaigns({ api, onError = () => {} }) {
    const corpo = el('div');
    corpo.append(
     el('h3', 'Nenhuma credencial da Meta conectada'),
-    el('p', 'A conexão é feita no servidor, não por esta tela — o token não deve passar pelo navegador.'));
-   const passo = el('code', 'npm run marketing:connect', 'campaign-cmd');
-   corpo.append(passo);
-   corpo.append(el('small', 'Use marketing:exchange se o seu token ainda for de curta duração.'));
+    el('p', 'Conecte um token de Usuário do Sistema (não expira) ou de longa duração. Ele é cifrado no servidor e nunca volta para esta tela.'));
+   // Sem a chave de cifragem não há onde guardar com segurança. Dizer isso
+   // antes é melhor do que aceitar o token e falhar ao gravar.
+   if (dados && dados.key_configured === false) {
+    const aviso = el('div', undefined, 'campaign-key-missing');
+    aviso.append(el('strong', 'Falta a chave de cifragem no servidor.'),
+     el('p', 'Defina CORE_MARKETING_KEY no ambiente do serviço e reinicie o Core. Gere o valor com:'),
+     el('code', `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`, 'campaign-cmd'));
+    corpo.append(aviso);
+   }
+   const acoes = el('div', undefined, 'campaign-actions');
+   const conectar = el('button', 'Conectar token', 'primary');
+   conectar.type = 'button';
+   conectar.disabled = dados?.key_configured === false;
+   conectar.onclick = () => abrirCredencial();
+   acoes.append(conectar);
+   corpo.append(acoes);
+   corpo.append(el('small', 'Também dá para conectar pelo servidor, com npm run marketing:connect.'));
    card.append(corpo);
    return card;
   }
@@ -89,6 +103,7 @@ export function setupCampaigns({ api, onError = () => {} }) {
   fato('Impressão digital', dados.fingerprint);
   fato('Escopos', (dados.scopes || []).join(', ') || '—');
   fato('Última conferência', dados.last_verified_at ? new Date(dados.last_verified_at).toLocaleString('pt-BR') : 'nunca');
+  if (dados.connected_by) fato('Conectado por', `${dados.connected_by}${dados.connected_via === 'panel' ? ' (painel)' : ' (servidor)'}`);
   card.append(fatos);
 
   if (!dados.can_read_ads) {
@@ -120,9 +135,51 @@ export function setupCampaigns({ api, onError = () => {} }) {
    } catch (e) { onError(e); }
    finally { coletar.disabled = false; coletar.textContent = 'Coletar campanhas'; }
   };
-  acoes.append(conferir, coletar);
+  const substituir = el('button', 'Substituir token', 'secondary');
+  substituir.type = 'button';
+  substituir.onclick = () => abrirCredencial();
+  acoes.append(substituir, conferir, coletar);
   card.append(acoes);
   return card;
+ }
+
+ // ---------------------------------------------------------------------------
+ // Conectar credencial pelo painel
+ // ---------------------------------------------------------------------------
+ function abrirCredencial() {
+  const dialog = document.getElementById('marketing-credential-dialog');
+  if (!dialog) return;
+  const form = dialog.querySelector('form');
+  form.reset();
+  const erro = form.querySelector('.form-error');
+  erro.textContent = '';
+  const aviso = form.querySelector('.marketing-key-warning');
+  aviso.hidden = dados?.key_configured !== false;
+  if (!aviso.hidden) aviso.textContent = 'CORE_MARKETING_KEY não está definida no servidor. A gravação vai falhar até ela existir.';
+
+  const enviar = form.querySelector('button.primary');
+  form.onsubmit = async evento => {
+   evento.preventDefault();
+   erro.textContent = '';
+   const dados0 = new FormData(form);
+   const corpo = {
+    token: String(dados0.get('token') || ''),
+    label: String(dados0.get('label') || 'Meta Ads'),
+    exchange: dados0.get('exchange') === 'on',
+    app_id: String(dados0.get('app_id') || '') || null,
+    app_secret: String(dados0.get('app_secret') || '') || null,
+   };
+   enviar.disabled = true; enviar.textContent = 'Conectando…';
+   try {
+    await api('/api/marketing/credential', 'POST', corpo);
+    // Limpa os campos sensíveis antes de fechar, para o token não ficar no DOM.
+    form.reset();
+    dialog.close();
+    await load(periodo);
+   } catch (e) { erro.textContent = e.message; }
+   finally { enviar.disabled = false; enviar.textContent = 'Conectar'; }
+  };
+  dialog.showModal();
  }
 
  // ---------------------------------------------------------------------------
