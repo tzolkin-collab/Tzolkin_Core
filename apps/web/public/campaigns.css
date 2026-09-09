@@ -1,0 +1,63 @@
+/* Campanhas. Mesma paleta e mesmas medidas do restante do painel branco:
+   nada aqui inventa um sistema visual paralelo.
+
+   A única ênfase deliberada é o cartão "SEM DONO" — gasto não atribuído é a
+   pendência que esta tela existe para cobrar, e precisa saltar aos olhos. */
+
+.campaign-hero{margin-bottom:20px}
+.campaign-hero h2{margin:4px 0 6px;font-size:24px;letter-spacing:-.5px}
+.campaign-hero p{margin:0;color:#707078;font-size:13px;max-width:66ch}
+
+/* --- credencial --- */
+.campaign-credential{border:1px solid #e7e7ed;border-radius:10px;background:#fff;padding:18px;margin-bottom:22px}
+.campaign-credential.empty{display:flex;gap:14px;align-items:flex-start;background:#fafafd;border-style:dashed}
+.campaign-credential.empty svg{width:20px;flex:0 0 auto;color:#8a7fc4;margin-top:2px}
+.campaign-credential.empty h3{margin:0 0 6px;font-size:15px}
+.campaign-credential.empty p{margin:0 0 10px;color:#666674;font-size:13px;line-height:1.6}
+.campaign-credential.empty small{display:block;margin-top:8px;color:#888894;font-size:11px}
+.campaign-cmd{display:inline-block;border:1px solid #e3e3ea;border-radius:6px;background:#f5f5f9;
+ padding:7px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#44444f}
+.campaign-credential-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.campaign-credential-head strong{font-size:15px}
+.campaign-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px 20px;margin:0 0 14px}
+.campaign-facts dt{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#888894;margin-bottom:3px}
+.campaign-facts dd{margin:0;font-size:13px;color:#333;overflow-wrap:anywhere}
+.campaign-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* --- resumo --- */
+.campaign-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:22px}
+.campaign-kpi{border:1px solid #e7e7ed;border-radius:10px;background:#fff;padding:14px 16px}
+.campaign-kpi strong{display:block;font-size:22px;letter-spacing:-.5px;margin:6px 0 2px}
+.campaign-kpi small{display:block;color:#888894;font-size:11px;line-height:1.5}
+/* Gasto sem dono não pode passar despercebido. */
+.campaign-kpi.warn{border-color:#f0d9a8;background:#fffcf5}
+.campaign-kpi.warn strong{color:#8a6d1f}
+
+/* --- lista --- */
+.campaign-group{margin-bottom:26px}
+.campaign-group h3{margin:0 0 4px;font-size:15px}
+.campaign-group>p.detail{margin:0 0 12px;color:#888894;font-size:12px}
+.campaign-row{border:1px solid #e7e7ed;border-radius:10px;background:#fff;padding:14px 16px;margin-bottom:8px}
+.campaign-row-head{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}
+.campaign-row-head strong{font-size:14px;overflow-wrap:anywhere}
+.campaign-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;
+ padding-bottom:12px;border-bottom:1px solid #f1f1f5}
+.campaign-metrics .detail{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#888894}
+.campaign-metrics strong{font-size:14px}
+.campaign-row-foot{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-top:11px}
+.campaign-binding{display:inline-flex;gap:6px;align-items:center;font-size:12px;color:#6550bb}
+.campaign-binding svg{width:15px}
+.link-button{border:0;background:none;color:#6550bb;font:inherit;font-size:12px;padding:0;cursor:pointer;text-decoration:underline}
+
+/* Sugestão fica visualmente distinta do vínculo confirmado: é palpite. */
+.campaign-suggestion{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+ border:1px dashed #ded8f5;border-radius:7px;background:#faf8ff;
+ padding:9px 11px;margin:0 0 4px;color:#5d4fa8;font-size:12px;line-height:1.55}
+
+.service-card-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+@media(max-width:700px){
+ .campaign-hero h2{font-size:21px}
+ .campaign-row-head{flex-direction:column;align-items:flex-start;gap:6px}
+ .campaign-row-foot{flex-direction:column;align-items:stretch}
+}

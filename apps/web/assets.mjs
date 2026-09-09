@@ -41,6 +41,8 @@ const FILES = {
  '/projects.js': ['projects.js', 'text/javascript'],
  '/projects.css': ['projects.css', 'text/css'],
  '/product-emails.js': ['product-emails.js', 'text/javascript'],
+ '/campaigns.js': ['campaigns.js', 'text/javascript'],
+ '/campaigns.css': ['campaigns.css', 'text/css'],
  '/product-emails.css': ['product-emails.css', 'text/css'],
  '/product-icons.css': ['product-icons.css', 'text/css'],
  '/product-favicons/educare.svg': ['product-favicons/educare.svg', 'image/svg+xml'],

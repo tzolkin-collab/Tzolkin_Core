@@ -16,7 +16,9 @@
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",
     "db:rotate-password": "node --env-file=.env scripts/rotate-db-password.mjs",
     "finance:mock": "node --env-file=.env scripts/seed-mock-finance.mjs",
-    "finance:clean-mock": "node --env-file=.env scripts/clean-mock-finance.mjs"
+    "finance:clean-mock": "node --env-file=.env scripts/clean-mock-finance.mjs",
+    "marketing:connect": "node --env-file=.env scripts/connect-meta-token.mjs",
+    "marketing:exchange": "node --env-file=.env scripts/connect-meta-token.mjs --exchange"
   },
   "devDependencies": {
     "lucide-static": "^1.38.0",

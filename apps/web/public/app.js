@@ -11,10 +11,12 @@ import {setupBilling} from './billing.js';
 import {setupProductPayments} from './product-payments.js';
 import {setupProductEmails} from './product-emails.js';
 import {renderDatabaseWorkspace} from './management-workspace.js';
+import {setupCampaigns} from './campaigns.js';
 const billing=setupBilling({api});
 const productPayments=setupProductPayments({api,billing});
 const emails=setupEmails({api,configure:product=>openProductModule(product,'product-emails')});
 const productEmails=setupProductEmails({api});
+const campaigns=setupCampaigns({api,onError:reportError});
 const finance=setupFinance({api});
 const tracking=setupTracking({api});
 const $ = id => document.getElementById(id);
@@ -34,6 +36,7 @@ const CONTEXTS = {
    companies: { title: 'Empresas', section: 'view-companies', action: ['Nova empresa', 'tenant-dialog'], metrics:false },
    people: { title: 'Pessoas', section: 'view-people', action: ['Nova pessoa', 'stakeholder-dialog'], metrics:false },
    leads: { title: 'Leads', section: 'view-leads', action: ['Novo lead', 'tenant-dialog'], metrics:false },
+   campaigns: { title: 'Campanhas', section: 'view-campaigns', metrics:false },
    clients: { title: 'Clientes', section: 'view-clients', action: ['Novo cliente', 'tenant-dialog'], metrics:false },
    deploys: { title: 'Deploys', section: 'view-deploys', action: ['Novo projeto', 'delivery-new'], metrics: false },
    products: { title: 'Produtos', section: 'view-products', action: ['Vincular cliente', 'entitlement-dialog'] },
@@ -49,6 +52,7 @@ const CONTEXTS = {
    security: { title: 'Segurança', section: 'view-security', metrics:false, hidden:true },
    serverMetrics: { title: 'Métricas de servidor', section: 'view-server-metrics', metrics:false, hidden:true },
    resource: { title: 'Projeto e serviço', section: 'view-resource', metrics: false, hidden:true },
+   serviceCampaigns: { title: 'Campanhas do serviço', section: 'view-service-campaigns', metrics: false, hidden:true },
   },
  },
  product: {
@@ -58,11 +62,12 @@ const CONTEXTS = {
    'product-orgs': { title: 'Clientes', section: 'view-product-orgs', action: ['Vincular cliente', 'entitlement-dialog'] },
    'product-payments': { title: 'Cobrança', section: 'view-product-payments', metrics:false },
    'product-emails': { title: 'E-mails', section: 'view-product-emails', metrics:false },
+   'product-campaigns': { title: 'Campanhas', section: 'view-product-campaigns', metrics:false },
   },
  },
 };
 
-const SECTIONS = ['view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-services', 'view-mentorias', 'view-access', 'view-management', 'view-database', 'view-redis', 'view-settings', 'view-security', 'view-deploys', 'view-server-metrics', 'view-delivery', 'view-product', 'view-product-orgs', 'view-product-payments', 'view-product-emails'];
+const SECTIONS = ['view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-services', 'view-mentorias', 'view-access', 'view-management', 'view-database', 'view-redis', 'view-settings', 'view-security', 'view-deploys', 'view-server-metrics', 'view-delivery', 'view-product', 'view-product-orgs', 'view-product-payments', 'view-product-emails', 'view-campaigns', 'view-product-campaigns', 'view-service-campaigns'];
 const DATA_NODES = ['tenants', 'leads', 'companies', 'client-summary', 'client-detail', 'stakeholder-directory', 'members', 'contracts', 'product-catalog', 'product-deployment-list', 'services-list', 'services-summary', 'management-schema', 'management-dns', 'management-redis', 'management-apis', 'overview-kpis', 'overview-alerts', 'overview-integrations', 'overview-product-list', 'overview-actions', 'product-orgs', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
 SECTIONS.push('view-finance','view-emails');
 
@@ -219,6 +224,8 @@ function switchView(view) {
  if (view === 'product-payments'&&state.product) productPayments.load(state.product.product).catch(reportError);
  if (view === 'product-emails'&&state.product) productEmails.load({...state.product.product,deploy_url:publishedDeployUrl(state.product.product),favicon_url:productFaviconUrl(state.product.product)}).catch(reportError);
  if (view === 'deploys') delivery.load().catch(reportError);
+ if (view === 'campaigns') campaigns.load().catch(reportError);
+ if (view === 'product-campaigns'&&state.product) campaigns.loadProduct(state.product.product).catch(reportError);
 }
 
 function renderContextChrome() {
@@ -428,7 +435,13 @@ function renderServices(){
   const facts=node('div',undefined,'service-card-facts'),bindings=state.serviceBindings.filter(b=>b.engagement_id===engagement.id);
   facts.append(node('span',bindings.length?`${bindings.length} projeto${bindings.length===1?'':'s'} conectado${bindings.length===1?'':'s'}`:'Nenhum projeto conectado','detail'));
   for(const binding of bindings){const project=state.deploys.find(p=>p.provider===binding.provider&&(String(p.project_id)===String(binding.external_project_id)||p.project===binding.external_project_name));const latest=project?.deployments?.[0];const row=node('div',undefined,'service-deploy-row');row.append(node('strong',binding.external_project_name),node('span',`${binding.provider==='vercel'?'Vercel':'EasyPanel'} · ${latest?.state_label||latest?.state||'sem deploy observado'}`,'detail'));if(latest?.url)row.append(catalogLink('Abrir ↗',latest.url,'product-live-link'));facts.append(row);}
-  const action=node('button','Abrir cliente →','secondary');action.type='button';action.onclick=()=>openClient(engagement.tenant_id);card.append(head,facts,action);return card;
+  const action=node('button','Abrir cliente →','secondary');action.type='button';action.onclick=()=>openClient(engagement.tenant_id);
+  // Campanhas por contratação: sob demanda, assessoria e consultoria têm
+  // investimento próprio, e somá-los ao produto esconderia o custo real.
+  const campanhas=node('button','Campanhas','secondary');campanhas.type='button';
+  campanhas.onclick=()=>{switchView('serviceCampaigns');campaigns.loadService(engagement.id,engagement.label).catch(reportError);};
+  const acoes=node('div',undefined,'service-card-actions');acoes.append(action,campanhas);
+  card.append(head,facts,acoes);return card;
  }));
 }
 
@@ -737,8 +750,9 @@ function renderProductArchitecture(product) {
 
 function renderProductRecord(product) {
  const panel = node('div', undefined, 'context-card product-record-card');
- const lifecycle=productLifecycle(product,product.catalog||null),appearsDraft=productAppearsDraft(product,product.catalog||null),live=appearsDraft?(publishedDeployUrl(product)||null):productLiveUrl(product);const identity=node('div',undefined,'product-record-identity');identity.append(productFavicon(productFaviconUrl(product)),node('div'));identity.lastChild.append(node('span','CATÁLOGO DE PRODUTO','overview-kicker'),node('h2', product.name), node('p', 'Identificador: ' + product.id, 'detail'));panel.append(identity);
- const actions=node('div',undefined,'product-record-actions');for(const [label,view,icon] of [['Cobrança','product-payments','wallet'],['E-mails','product-emails','mail']]){const button=node('button',undefined,'secondary');button.type='button';button.append(createIcon(icon),document.createTextNode(label));button.onclick=()=>switchView(view);actions.append(button);}const detach=node('button','Desatrelar conexões','quiet');detach.type='button';detach.onclick=async()=>{if(!window.confirm(`Desatrelar domínios, bancos e deploys de ${product.name}? Nenhum dado externo será apagado.`))return;detach.disabled=true;try{await api(`/api/products/${encodeURIComponent(product.id)}/attachments`,'DELETE');state.resourceBindings=state.resourceBindings.filter(item=>item.product_id!==product.id);state.bindings=state.bindings.filter(item=>item.product_id!==product.id);state.topology=await api('/api/products/topology').catch(()=>null);renderProductRecord(product);}catch(error){detach.disabled=false;reportError(error);}};actions.append(detach);panel.append(actions);
+ const isSites=product.id==='sites';
+ const lifecycle=productLifecycle(product,product.catalog||null),appearsDraft=productAppearsDraft(product,product.catalog||null),live=appearsDraft?(publishedDeployUrl(product)||null):productLiveUrl(product);const identity=node('div',undefined,'product-record-identity');identity.append(productFavicon(productFaviconUrl(product)),node('div'));identity.lastChild.append(node('span',isSites?'SERVIÇO SOB DEMANDA':'CATÁLOGO DE PRODUTO','overview-kicker'),node('h2', product.name), node('p', 'Identificador: ' + product.id, 'detail'));panel.append(identity);
+ const actions=node('div',undefined,'product-record-actions');for(const [label,view,icon] of (isSites?[['Captação inbound','product-orgs','user-plus'],['E-mails','product-emails','mail']]:[['Cobrança','product-payments','wallet'],['E-mails','product-emails','mail']])){const button=node('button',undefined,'secondary');button.type='button';button.append(createIcon(icon),document.createTextNode(label));button.onclick=()=>switchView(view);actions.append(button);}const detach=node('button','Desatrelar conexões','quiet');detach.type='button';detach.onclick=async()=>{if(!window.confirm(`Desatrelar domínios, bancos e deploys de ${product.name}? Nenhum dado externo será apagado.`))return;detach.disabled=true;try{await api(`/api/products/${encodeURIComponent(product.id)}/attachments`,'DELETE');state.resourceBindings=state.resourceBindings.filter(item=>item.product_id!==product.id);state.bindings=state.bindings.filter(item=>item.product_id!==product.id);state.topology=await api('/api/products/topology').catch(()=>null);renderProductRecord(product);}catch(error){detach.disabled=false;reportError(error);}};actions.append(detach);panel.append(actions);
  const catalog = product.catalog;
  if (catalog) {
   panel.append(node('p', catalog.description, 'context-description'));
@@ -750,7 +764,7 @@ function renderProductRecord(product) {
  } else {
   panel.append(node('p', 'Sem ficha no catálogo importado do Notion. Nada foi inferido para preencher este espaço.', 'context-description'));
  }
- const facts=node('div',undefined,'product-record-facts');for(const [label,value] of [['Tipo',product.portfolio_kind||'Produto'],['Estado operacional',lifecycle.label],['Família',product.brand_family||'TZOLKIN']]){const fact=node('div');fact.append(node('span',label),node('strong',String(value)));facts.append(fact);}panel.append(facts);
+ const facts=node('div',undefined,'product-record-facts');for(const [label,value] of (isSites?[['Modelo','Serviço sob demanda'],['Entrada','Formulário inbound'],['Cobrança','Sem checkout']]:[['Tipo',product.portfolio_kind||'Produto'],['Estado operacional',lifecycle.label],['Família',product.brand_family||'TZOLKIN']])){const fact=node('div');fact.append(node('span',label),node('strong',String(value)));facts.append(fact);}panel.append(facts);
  const connection=node('section',undefined,'product-connection-card'),deployment=readyDeployment(product),project=state.deploys.find(item=>deploymentBelongsToProduct(item,product));connection.append(node('h3','Conexão de deploy'),node('p',deployment?`${project?.project||'Projeto'} · ${project?.provider==='vercel'?'Vercel':'EasyPanel'} · READY observado`:'Nenhum deploy READY vinculado a este produto.','detail'));const connectionActions=node('div',undefined,'product-connection-actions');if(deployment?.url)connectionActions.append(catalogLink('Abrir produção ↗',deployment.url,'product-live-link'));const openDeploys=node('button','Ver projetos e deploys →','secondary');openDeploys.type='button';openDeploys.onclick=()=>{state.context='';state.view='deploys';clearRenderedData();renderContextChrome();renderNav();load().catch(reportError);};connectionActions.append(openDeploys);connection.append(connectionActions);panel.append(connection);
  panel.append(renderProductArchitecture(product));
  $('product-record').replaceChildren(panel);

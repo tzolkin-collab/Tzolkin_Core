@@ -37,15 +37,17 @@ import { managementRoutes } from './modules/management.mjs';
 import { hostingerDnsRoutes } from './modules/hostinger-dns.mjs';
 import { productTopologyRoutes } from './modules/product-topology.mjs';
 import { productResourceBindingRoutes } from './modules/product-resource-bindings.mjs';
+import { commercialIntakeRoutes, commercialKeyRoutes } from './modules/commercial-intake.mjs';
+import { marketingRoutes } from './modules/marketing.mjs';
 
 const MODULES = [
  identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes, emailTemplateRoutes, productFaviconRoutes, productDeployBindingRoutes, productResourceBindingRoutes, serviceDeployBindingRoutes, managementRoutes, productPaymentRoutes, productTopologyRoutes,
- checkoutTemplateRoutes, directoryRoutes, contractsRoutes, accessRoutes, productConsoleRoutes,
+ checkoutTemplateRoutes, directoryRoutes, contractsRoutes, accessRoutes, productConsoleRoutes, commercialIntakeRoutes, commercialKeyRoutes,
 ];
 
 // `security` é o estado do transporte do banco medido por platform/database.mjs.
 // Ausente = não medido; os endpoints reportam 'unknown' em vez de fingir segurança.
-export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, hostingerDnsOptions, webOrigin,serveAsset, webhookEnv, catalogAdapter, checkoutOptions} = {}) {
+export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, hostingerDnsOptions, webOrigin,serveAsset, webhookEnv, catalogAdapter, checkoutOptions, marketingOptions} = {}) {
  if (webOrigin && !(/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(webOrigin)||/^https:\/\/[a-z0-9.-]+(?::[1-9][0-9]{0,4})?$/.test(webOrigin))) throw new Error('Use an explicit HTTP loopback or HTTPS web origin.');
  const sessions = identity||createSessionStore({ adminPassword, clock });
  const router = createRouter();
@@ -64,6 +66,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  stripeCatalogRoutes(router,{clock,...(catalogAdapter?{adapter:catalogAdapter}:{}),...(webhookEnv?{env:webhookEnv}:{})});
  accountRoutes(router,{...(webhookEnv?{env:webhookEnv}:{})});
  checkoutGatewayRoutes(router,{...(webhookEnv?{env:webhookEnv}:{}),...checkoutOptions});
+ marketingRoutes(router,{clock,...(webhookEnv?{env:webhookEnv}:{}),...marketingOptions});
 
  const server = http.createServer(async (req, res) => {
   securityHeaders(res);
@@ -110,10 +113,11 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
    const client = await pool.connect();
    try {
     await client.query('BEGIN');
-    const { tenant, type } = await route.handler({ ...context, client });
+    const result = await route.handler({ ...context, client });
+    const { tenant, type } = result || {};
     if(route.audit!==false)await client.query('INSERT INTO audit_events(type,tenant_id,actor_subject,actor_email) VALUES($1,$2,$3,$4)', [type, tenant,operator?.subject,operator?.email]);
     await client.query('COMMIT');
-    return reply(200, { ok: true, tenant_id: tenant });
+    return reply(200, result?.response || result?.body || { ok: true, tenant_id: tenant });
    } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
   } catch (error) {
    const { status, message } = describeError(error);
