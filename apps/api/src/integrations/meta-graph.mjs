@@ -248,8 +248,11 @@ export function createMetaGraphAdapter({ token, baseUrl = BASE, version = VERSIO
 
   /** Contas de anúncio ao alcance do token. */
   async listAdAccounts({ limit = 100 } = {}) {
+   // Sem business{name}: ler o Gerenciador de Negocios dono da conta pode exigir
+   // business_management, que esta integracao nao pede. O nome da empresa e
+   // cosmetico; perder a coleta inteira por causa dele nao e.
    const { itens } = await paginar('/me/adaccounts', {
-    fields: 'id,name,account_status,currency,timezone_name,business{name}', limit,
+    fields: 'id,name,account_status,currency,timezone_name', limit,
    });
    return itens.map(normalizarConta).filter(c => c.external_id);
   },
@@ -295,12 +298,16 @@ export function createMetaGraphAdapter({ token, baseUrl = BASE, version = VERSIO
 // ---------------------------------------------------------------------------
 const DIALOG_BASE = 'https://www.facebook.com';
 
-// `ads_read` lê campanhas e métricas. `business_management` é o que expõe as
-// contas de anúncio que pertencem ao Business Manager — a "conta principal" —
-// e não só as atribuídas diretamente ao usuário. Nada de `ads_management`:
-// esta integração não escreve, e pedir permissão que não se usa é superfície
-// de risco sem retorno.
-export const OAUTH_SCOPES = ['ads_read', 'business_management'];
+// Só `ads_read`. Pela referência de permissões da Meta, ela cobre as contas de
+// anúncio que o usuário possui OU às quais recebeu acesso — o que inclui as do
+// Gerenciador de Negócios em que ele tem papel.
+//
+// `business_management` já esteve aqui e saiu: ela LÊ E ESCREVE na API do
+// Gerenciador de Negócios (reivindicar conta de anúncio, gerenciar ativos),
+// traz pages_read_engagement e pages_show_list como dependência, e a Meta cita
+// permissão desnecessária como motivo comum de rejeição na Análise do App.
+// Nada de `ads_management` pelo mesmo motivo: esta integração não escreve.
+export const OAUTH_SCOPES = ['ads_read'];
 
 /**
  * Monta o endereço do diálogo de autorização. Não carrega segredo nenhum: o

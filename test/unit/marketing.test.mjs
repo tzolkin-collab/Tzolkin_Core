@@ -305,14 +305,17 @@ test('OAuth da Meta', async t => {
   assert.equal(url.searchParams.get('client_id'), '1234567890');
   assert.equal(url.searchParams.get('redirect_uri'), RETORNO);
   assert.equal(url.searchParams.get('response_type'), 'code');
-  assert.equal(url.searchParams.get('scope'), 'ads_read,business_management');
+  assert.equal(url.searchParams.get('scope'), 'ads_read');
   assert.equal(url.searchParams.get('auth_type'), 'rerequest', 'sem isto a Meta pula permissão recusada antes');
   assert.equal(url.searchParams.get('client_secret'), null, 'o segredo do app nunca vai para o navegador');
  });
 
- await t.test('só pede leitura: nada de ads_management', () => {
-  assert.ok(OAUTH_SCOPES.includes('ads_read'));
+ await t.test('só pede leitura: nenhuma permissão que escreve', () => {
+  assert.deepEqual(OAUTH_SCOPES, ['ads_read']);
+  // ads_management escreve em anúncio; business_management lê E escreve no
+  // Gerenciador de Negócios. Permissão desnecessária também reprova na Análise.
   assert.ok(!OAUTH_SCOPES.includes('ads_management'));
+  assert.ok(!OAUTH_SCOPES.includes('business_management'));
  });
 
  await t.test('entrada malformada é recusada antes de montar o endereço', () => {

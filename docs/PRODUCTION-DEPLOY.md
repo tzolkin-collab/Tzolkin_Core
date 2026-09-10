@@ -27,7 +27,7 @@ O Core usa Authorization Code Flow com PKCE, `state` e `nonce`. O backend troca 
 
 1. `developers.facebook.com` → criar um app do tipo **Empresa** e adicionar o produto **Login do Facebook para Empresas** (ou Login do Facebook).
 2. Em **URIs de redirecionamento do OAuth válidos**, cadastrar exatamente `https://core.tzolkin.cloud/api/marketing/meta/callback`. A Meta compara caractere por caractere; barra no fim ou `http` no lugar de `https` faz a autorização falhar.
-3. Permissões pedidas: `ads_read` e `business_management` — esta última é a que expõe as contas de anúncio do Business Manager, e não só as atribuídas direto ao usuário. Nenhuma permissão de escrita.
+3. Permissão pedida: só `ads_read`. Pela referência da Meta, ela já cobre as contas de anúncio que você possui **ou às quais recebeu acesso** — inclusive pelo Gerenciador de Negócios. `business_management` ficou de fora de propósito: ela lê **e escreve** na API do Gerenciador de Negócios, traz permissões de Página como dependência, e permissão desnecessária é motivo comum de rejeição na Análise do App.
 4. ID e chave secreta do app (Configurações → Básico) vão para `META_APP_ID` e `META_APP_SECRET` no ambiente do serviço.
 5. Com o app em modo **Desenvolvimento**, só quem tem papel no app consegue autorizar — suficiente para conectar a conta da própria TZOLKIN. Conectar contas de anúncio de **clientes**, como a Utmify faz, exige Revisão do App com Acesso Avançado a `ads_read`, e em geral Verificação da Empresa.
 6. O token que volta é de usuário, com ~60 dias. A Meta não renova sozinha: o painel avisa com 14 dias de antecedência, e reconectar é um clique.
