@@ -14,7 +14,7 @@ import {
 import { credencialPublica, sugerirVinculo } from '../../apps/api/src/modules/marketing.mjs';
 
 const CHAVE = randomBytes(32).toString('base64');
-const env = { CORE_MARKETING_KEY: CHAVE };
+const env = { META_MARKETING_KEY: CHAVE };
 const TOKEN = 'EAABsbCS1iHgBA' + 'x'.repeat(180);
 
 test('Credencial cifrada em repouso', async t => {
@@ -38,7 +38,7 @@ test('Credencial cifrada em repouso', async t => {
 
  await t.test('chave errada não decifra', () => {
   const selado = seal(TOKEN, readKey(env));
-  const outra = readKey({ CORE_MARKETING_KEY: randomBytes(32).toString('base64') });
+  const outra = readKey({ META_MARKETING_KEY: randomBytes(32).toString('base64') });
   assert.throws(() => open(selado, outra), /ilegível/);
  });
 
@@ -51,9 +51,9 @@ test('Credencial cifrada em repouso', async t => {
  });
 
  await t.test('chave de tamanho errado é recusada na largada', () => {
-  assert.throws(() => readKey({}), /CORE_MARKETING_KEY/);
-  assert.throws(() => readKey({ CORE_MARKETING_KEY: 'curta' }), /32 bytes/);
-  assert.throws(() => readKey({ CORE_MARKETING_KEY: randomBytes(16).toString('base64') }), /32 bytes/);
+  assert.throws(() => readKey({}), /META_MARKETING_KEY/);
+  assert.throws(() => readKey({ META_MARKETING_KEY: 'curta' }), /32 bytes/);
+  assert.throws(() => readKey({ META_MARKETING_KEY: randomBytes(16).toString('base64') }), /32 bytes/);
  });
 
  await t.test('impressão digital não é reversível nem colide com o token', () => {

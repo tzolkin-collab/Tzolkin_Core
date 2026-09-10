@@ -54,7 +54,7 @@ test('Campanhas de marketing', async t => {
  const pool = new pg.Pool({ connectionString: testConnectionString().connectionString, max: 3 });
  const marca = randomUUID().slice(0, 8).replace(/-/g, '');
  const adminPassword = randomBytes(32).toString('base64url');
- const env = { CORE_MARKETING_KEY: CHAVE };
+ const env = { META_MARKETING_KEY: CHAVE };
 
  const server = createCore({
   pool, adminPassword,
@@ -266,7 +266,7 @@ test('Conectar credencial pelo painel', async t => {
  const { servidor, recebidas } = grafoFalso();
  await new Promise(r => servidor.listen(0, '127.0.0.1', r));
  const grafo = `http://127.0.0.1:${servidor.address().port}`;
- const env = { CORE_MARKETING_KEY: CHAVE, META_GRAPH_BASE: grafo };
+ const env = { META_MARKETING_KEY: CHAVE, META_GRAPH_BASE: grafo };
 
  const server = createCore({ pool, adminPassword, marketingOptions: { env, adapter: adaptadorFalso(marca) } });
  await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -313,7 +313,7 @@ test('Conectar credencial pelo painel', async t => {
    const antes = recebidas.length;
    const r = await conectar({ token: TOKEN_UI, label: `X ${marca}` }, origemSemChave, cookieSemChave);
    assert.equal(r.status, 503);
-   assert.match((await r.json()).message, /CORE_MARKETING_KEY/);
+   assert.match((await r.json()).message, /META_MARKETING_KEY/);
    assert.equal(recebidas.length, antes, 'não pode consultar a Meta sem ter onde guardar');
   });
 

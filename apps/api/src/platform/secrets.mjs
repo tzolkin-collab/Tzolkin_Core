@@ -8,7 +8,7 @@
 //
 // POR QUE CIFRADA
 // O banco tem backup, e backup circula — hoje são 16 agendamentos em disco
-// local. A chave fica em `CORE_MARKETING_KEY`, FORA do banco: quem leva o dump
+// local. A chave fica em `META_MARKETING_KEY`, FORA do banco: quem leva o dump
 // não leva o token. Guardar a chave no mesmo banco anularia o exercício.
 //
 // POR QUE GCM, E NÃO CBC
@@ -27,7 +27,7 @@ const KEY_BYTES = 32;
  * Lê a chave-mestra do ambiente. Falha alto e cedo: um Core que aceita rodar
  * sem chave acabaria guardando credencial em texto claro sem ninguém notar.
  */
-export function readKey(env = process.env, name = 'CORE_MARKETING_KEY') {
+export function readKey(env = process.env, name = 'META_MARKETING_KEY') {
  const raw = env[name];
  if (!raw) throw Object.assign(
   new Error(`Defina ${name} no ambiente do servidor. Gere com: node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`),

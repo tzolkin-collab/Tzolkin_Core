@@ -3,7 +3,7 @@
 -- Três decisões que moldam este schema:
 --
 -- 1. A CREDENCIAL FICA CIFRADA. `marketing_credentials` guarda texto cifrado
---    (AES-256-GCM) e nunca o token. A chave vive em CORE_MARKETING_KEY, fora
+--    (AES-256-GCM) e nunca o token. A chave vive em META_MARKETING_KEY, fora
 --    do banco — backup vazado não vira acesso ao Gerenciador de Anúncios.
 --
 -- 2. CAMPANHA PERTENCE A PRODUTO **OU** A CONTRATAÇÃO, NUNCA AOS DOIS.

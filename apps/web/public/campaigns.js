@@ -68,7 +68,7 @@ export function setupCampaigns({ api, onError = () => {} }) {
    if (dados && dados.key_configured === false) {
     const aviso = el('div', undefined, 'campaign-key-missing');
     aviso.append(el('strong', 'Falta a chave de cifragem no servidor.'),
-     el('p', 'Defina CORE_MARKETING_KEY no ambiente do serviço e reinicie o Core. Gere o valor com:'),
+     el('p', 'Defina META_MARKETING_KEY no ambiente do serviço e reinicie o Core. Gere o valor com:'),
      el('code', `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`, 'campaign-cmd'));
     corpo.append(aviso);
    }
@@ -155,7 +155,7 @@ export function setupCampaigns({ api, onError = () => {} }) {
   erro.textContent = '';
   const aviso = form.querySelector('.marketing-key-warning');
   aviso.hidden = dados?.key_configured !== false;
-  if (!aviso.hidden) aviso.textContent = 'CORE_MARKETING_KEY não está definida no servidor. A gravação vai falhar até ela existir.';
+  if (!aviso.hidden) aviso.textContent = 'META_MARKETING_KEY não está definida no servidor. A gravação vai falhar até ela existir.';
 
   const enviar = form.querySelector('button.primary');
   form.onsubmit = async evento => {

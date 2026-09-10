@@ -18,7 +18,7 @@
 // O script pede o token e lê sem eco. Nada do que você digitar é impresso.
 //
 // PRÉ-REQUISITOS NO AMBIENTE
-//   CORE_MARKETING_KEY  chave de cifragem (32 bytes base64)
+//   META_MARKETING_KEY  chave de cifragem (32 bytes base64)
 //   META_APP_ID         id do app (obrigatório para --exchange e para conferir validade)
 //   META_APP_SECRET     segredo do app (idem)
 //   DATABASE_URL        banco do Core
@@ -137,7 +137,7 @@ async function main() {
   console.log('\nCredencial conectada.');
   console.log('  id:          ' + gravada.id);
   console.log('  impressão:   ' + gravada.token_fingerprint + '   (identifica o token sem revelá-lo)');
-  console.log('  cifrada com: CORE_MARKETING_KEY');
+  console.log('  cifrada com: META_MARKETING_KEY');
   console.log('\nSe havia outra credencial ativa, ela foi revogada agora.');
   console.log('Próximo passo: abra Campanhas no painel e rode a coleta.');
  } catch (e) {

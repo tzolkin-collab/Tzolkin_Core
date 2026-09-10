@@ -19,7 +19,7 @@ O Core usa Authorization Code Flow com PKCE, `state` e `nonce`. O backend troca 
 
 `PUBLIC_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `CORE_ALLOWED_EMAILS`, `DATABASE_URL` da role `tzolkin_core_runtime` e `DATABASE_SSL=require`. A senha compartilhada não é lida em produção.
 
-`CORE_MARKETING_KEY` (32 bytes em base64) é obrigatória para conectar a credencial de marketing. Como desenvolvimento e produção apontam para o mesmo banco, ela precisa ter **o mesmo valor nos dois ambientes**: um token cifrado com uma chave não é legível pela outra. Sem ela o painel de Campanhas abre, avisa e desabilita a conexão — não quebra.
+`META_MARKETING_KEY` (32 bytes em base64) é obrigatória para conectar a credencial de marketing. Como desenvolvimento e produção apontam para o mesmo banco, ela precisa ter **o mesmo valor nos dois ambientes**: um token cifrado com uma chave não é legível pela outra. Sem ela o painel de Campanhas abre, avisa e desabilita a conexão — não quebra.
 
 `META_APP_ID` e `META_APP_SECRET` são opcionais. Sem elas o token é gravado, mas o Core não confere escopos nem avisa quando estiver perto de expirar; e a troca de token curto por token de longa duração fica indisponível.
 
