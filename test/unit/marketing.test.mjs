@@ -10,6 +10,7 @@ import { readKey, seal, open, fingerprint, scrub } from '../../apps/api/src/plat
 import {
  createMetaGraphAdapter, exchangeLongLivedToken,
  decimalParaCentavos, unidadeMenorParaCentavos, _internals,
+ buildAuthorizeUrl, exchangeCodeForToken, OAUTH_SCOPES,
 } from '../../apps/api/src/integrations/meta-graph.mjs';
 import { credencialPublica, sugerirVinculo } from '../../apps/api/src/modules/marketing.mjs';
 
@@ -290,5 +291,51 @@ test('Sugestão de vínculo é conservadora', async t => {
  await t.test('casa palavra inteira, não pedaço de outra palavra', () => {
   // "barbearia" contém "barber", mas não é o produto Barber.
   assert.equal(sugerirVinculo('anuncio para barbearias', produtos, contratacoes), null);
+ });
+});
+
+test('OAuth da Meta', async t => {
+ const RETORNO = 'https://core.tzolkin.cloud/api/marketing/meta/callback';
+
+ await t.test('o endereço de autorização vai para a Meta e não carrega segredo', () => {
+  const url = buildAuthorizeUrl({ appId: '1234567890', redirectUri: RETORNO, state: 's'.repeat(43) });
+  assert.equal(url.protocol, 'https:');
+  assert.equal(url.hostname, 'www.facebook.com');
+  assert.match(url.pathname, /\/dialog\/oauth$/);
+  assert.equal(url.searchParams.get('client_id'), '1234567890');
+  assert.equal(url.searchParams.get('redirect_uri'), RETORNO);
+  assert.equal(url.searchParams.get('response_type'), 'code');
+  assert.equal(url.searchParams.get('scope'), 'ads_read,business_management');
+  assert.equal(url.searchParams.get('auth_type'), 'rerequest', 'sem isto a Meta pula permissão recusada antes');
+  assert.equal(url.searchParams.get('client_secret'), null, 'o segredo do app nunca vai para o navegador');
+ });
+
+ await t.test('só pede leitura: nada de ads_management', () => {
+  assert.ok(OAUTH_SCOPES.includes('ads_read'));
+  assert.ok(!OAUTH_SCOPES.includes('ads_management'));
+ });
+
+ await t.test('entrada malformada é recusada antes de montar o endereço', () => {
+  assert.throws(() => buildAuthorizeUrl({ appId: 'abc', redirectUri: RETORNO, state: 's'.repeat(43) }), /ID do app/);
+  assert.throws(() => buildAuthorizeUrl({ appId: '1234567890', redirectUri: RETORNO, state: 'curto' }), /Estado/);
+  assert.throws(() => buildAuthorizeUrl({ appId: '1234567890', redirectUri: 'javascript:alert(1)', state: 's'.repeat(43) }), /retorno/);
+ });
+
+ await t.test('a troca do código usa o mesmo redirect_uri e fala só com a Graph', async () => {
+  const fetchImpl = fetchFalso(new Map([['/oauth/access_token', { access_token: 'CURTO' + 'a'.repeat(40) }]]));
+  const r = await exchangeCodeForToken({ appId: '1234567890', appSecret: 'segredo', code: 'codigo-da-meta', redirectUri: RETORNO, fetchImpl });
+  assert.ok(r.access_token.startsWith('CURTO'));
+  const chamada = new URL(fetchImpl.chamadas[0].url);
+  assert.equal(chamada.hostname, 'graph.facebook.com');
+  assert.equal(chamada.searchParams.get('redirect_uri'), RETORNO);
+  assert.equal(chamada.searchParams.get('code'), 'codigo-da-meta');
+  assert.equal(fetchImpl.chamadas[0].options.redirect, 'error');
+ });
+
+ await t.test('troca sem token na resposta é erro, não credencial vazia', async () => {
+  const fetchImpl = fetchFalso(new Map([['/oauth/access_token', {}]]));
+  await assert.rejects(
+   () => exchangeCodeForToken({ appId: '1', appSecret: 's', code: 'c'.repeat(12), redirectUri: RETORNO, fetchImpl }),
+   /não devolveu/);
  });
 });

@@ -10,9 +10,22 @@ import { createCore } from '../apps/api/src/server.mjs';
 import { testConnectionString } from '../apps/api/src/platform/database.mjs';
 import { guardarCredencial } from '../apps/api/src/modules/marketing.mjs';
 import http from 'node:http';
+import { digest } from '../apps/api/src/platform/session.mjs';
 
 const CHAVE = randomBytes(32).toString('base64');
 const TOKEN_FALSO = 'EAAG' + 'z'.repeat(190);
+
+// O banco de teste hoje É o de produção: não há DATABASE_URL_TEST no .env.
+// guardarCredencial revoga a credencial ativa (uma por provedor), então rodar
+// estes testes com um token real conectado o desligaria em produção. Havendo
+// credencial ativa que não seja de teste, o conjunto é pulado.
+const AVISO_BANCO_REAL = 'há credencial real da Meta ativa neste banco; defina DATABASE_URL_TEST para rodar sem tocá-la';
+async function credencialRealAtiva(pool) {
+ const r = await pool.query(
+  "SELECT count(*)::int c FROM marketing_credentials WHERE provider='meta' AND active " +
+  "AND label NOT LIKE 'Teste %' AND label NOT LIKE 'Painel %' AND label NOT LIKE 'Trocado %'");
+ return r.rows[0].c > 0;
+}
 
 // Adaptador falso com o mesmo contrato do real.
 function adaptadorFalso(marca) {
@@ -52,6 +65,8 @@ function adaptadorFalso(marca) {
 
 test('Campanhas de marketing', async t => {
  const pool = new pg.Pool({ connectionString: testConnectionString().connectionString, max: 3 });
+ if (await credencialRealAtiva(pool)) { t.skip(AVISO_BANCO_REAL); await pool.end(); return; }
+ const inicio = (await pool.query('SELECT now() AS t')).rows[0].t;
  const marca = randomUUID().slice(0, 8).replace(/-/g, '');
  const adminPassword = randomBytes(32).toString('base64url');
  const env = { META_MARKETING_KEY: CHAVE };
@@ -229,7 +244,7 @@ test('Campanhas de marketing', async t => {
    await client.query('DELETE FROM marketing_campaign_insights WHERE campaign_external_id LIKE $1', [`%${marca}`]);
    await client.query('DELETE FROM marketing_campaigns WHERE external_id LIKE $1', [`%${marca}`]);
    await client.query('DELETE FROM marketing_accounts WHERE external_id LIKE $1', [`%${marca}`]);
-   await client.query('DELETE FROM marketing_sync_runs WHERE actor_subject=$1 OR actor_subject IS NULL', ['local-bootstrap']);
+   await client.query('DELETE FROM marketing_sync_runs WHERE actor_subject=$1 AND started_at >= $2', ['local-bootstrap', inicio]);
    await client.query('DELETE FROM marketing_credentials WHERE label=$1', [`Teste ${marca}`]);
    await client.query('COMMIT');
   } finally { client.release(); }
@@ -260,6 +275,8 @@ function grafoFalso() {
 
 test('Conectar credencial pelo painel', async t => {
  const pool = new pg.Pool({ connectionString: testConnectionString().connectionString, max: 3 });
+ if (await credencialRealAtiva(pool)) { t.skip(AVISO_BANCO_REAL); await pool.end(); return; }
+ const inicio = (await pool.query('SELECT now() AS t')).rows[0].t;
  const marca = randomUUID().slice(0, 8).replace(/-/g, '');
  const adminPassword = randomBytes(32).toString('base64url');
 
@@ -391,6 +408,141 @@ test('Conectar credencial pelo painel', async t => {
  } finally {
   await pool.query('DELETE FROM marketing_credentials WHERE label LIKE $1', [`%${marca}`]);
   for (const s2 of [server, semChave]) { s2.closeAllConnections(); await new Promise(r => s2.close(r)); }
+  await new Promise(r => servidor.close(r));
+  await pool.end();
+ }
+});
+
+test('Conectar com Facebook (OAuth)', async t => {
+ const pool = new pg.Pool({ connectionString: testConnectionString().connectionString, max: 3 });
+ if (await credencialRealAtiva(pool)) { t.skip(AVISO_BANCO_REAL); await pool.end(); return; }
+ const inicio = (await pool.query('SELECT now() AS t')).rows[0].t;
+ const adminPassword = randomBytes(32).toString('base64url');
+
+ const { servidor, recebidas } = grafoFalso();
+ await new Promise(r => servidor.listen(0, '127.0.0.1', r));
+ const grafo = `http://127.0.0.1:${servidor.address().port}`;
+ const env = {
+  META_MARKETING_KEY: CHAVE, META_GRAPH_BASE: grafo,
+  META_APP_ID: '1234567890', META_APP_SECRET: 'segredo-do-app-de-teste',
+ };
+ const server = createCore({ pool, adminPassword, marketingOptions: { env } });
+ await new Promise(r => server.listen(0, '127.0.0.1', r));
+ const origin = `http://127.0.0.1:${server.address().port}`;
+
+ const semApp = createCore({ pool, adminPassword, marketingOptions: { env: { META_MARKETING_KEY: CHAVE } } });
+ await new Promise(r => semApp.listen(0, '127.0.0.1', r));
+ const origemSemApp = `http://127.0.0.1:${semApp.address().port}`;
+
+ const entrar = async alvo => {
+  const r = await fetch(alvo + '/api/login', {
+   method: 'POST', headers: { origin: alvo, 'Content-Type': 'application/json' },
+   body: JSON.stringify({ password: adminPassword }),
+  });
+  return r.headers.get('set-cookie').split(';')[0];
+ };
+ const cookie = await entrar(origin);
+ const cookieSemApp = await entrar(origemSemApp);
+ const autorizar = (alvo = origin, ck = cookie) =>
+  fetch(alvo + '/api/marketing/meta/authorize', { method: 'POST', headers: { cookie: ck, origin: alvo } });
+ // O retorno vem do navegador, redirecionado pela Meta: sem cookie de propósito,
+ // que é como ele chega em desenvolvimento (SameSite=Strict).
+ const retornar = qs => fetch(origin + '/api/marketing/meta/callback?' + qs, { redirect: 'manual' });
+ const destinoDe = r => r.headers.get('location');
+ const iniciar = async () => new URL((await (await autorizar()).json()).url).searchParams.get('state');
+
+ try {
+  await t.test('iniciar exige sessão e a origem exata', async () => {
+   const semSessao = await fetch(origin + '/api/marketing/meta/authorize', { method: 'POST', headers: { origin } });
+   assert.equal(semSessao.status, 401);
+   const outraOrigem = await fetch(origin + '/api/marketing/meta/authorize', {
+    method: 'POST', headers: { cookie, origin: 'https://outro.example' },
+   });
+   assert.equal(outraOrigem.status, 403);
+  });
+
+  await t.test('sem app da Meta configurado, não inicia fluxo', async () => {
+   const r = await autorizar(origemSemApp, cookieSemApp);
+   assert.equal(r.status, 503);
+   assert.match((await r.json()).message, /META_APP_ID/);
+  });
+
+  await t.test('a tela sabe se o OAuth está disponível', async () => {
+   const com = await (await fetch(origin + '/api/marketing/overview', { headers: { cookie } })).json();
+   assert.equal(com.oauth_available, true);
+   const sem = await (await fetch(origemSemApp + '/api/marketing/overview', { headers: { cookie: cookieSemApp } })).json();
+   assert.equal(sem.oauth_available, false);
+  });
+
+  let state;
+  await t.test('autorizar devolve o diálogo da Meta e guarda o state só como hash', async () => {
+   const r = await autorizar();
+   assert.equal(r.status, 200);
+   const url = new URL((await r.json()).url);
+   assert.equal(url.hostname, 'www.facebook.com');
+   assert.equal(url.searchParams.get('redirect_uri'), origin + '/api/marketing/meta/callback');
+   assert.equal(url.searchParams.get('client_secret'), null);
+   state = url.searchParams.get('state');
+   assert.ok(state && state.length >= 32);
+   const cru = await pool.query('SELECT 1 FROM marketing_oauth_states WHERE state_hash=$1', [state]);
+   assert.equal(cru.rowCount, 0, 'o state não pode ser guardado em claro');
+   const hash = await pool.query('SELECT redirect_uri FROM marketing_oauth_states WHERE state_hash=$1', [digest(state)]);
+   assert.equal(hash.rowCount, 1);
+  });
+
+  await t.test('retorno válido troca o código no servidor e grava a credencial por OAuth', async () => {
+   const antes = recebidas.length;
+   const r = await retornar(`code=codigo-de-teste-12345&state=${state}`);
+   assert.equal(r.status, 302);
+   assert.equal(destinoDe(r), '/?view=campaigns&meta=ok');
+   const chamadas = recebidas.slice(antes);
+   assert.ok(chamadas.some(c => c.path.endsWith('/oauth/access_token') && c.query.includes('code=codigo-de-teste-12345')), 'troca do código');
+   assert.ok(chamadas.some(c => c.path.endsWith('/oauth/access_token') && c.query.includes('fb_exchange_token')), 'troca por token longo');
+   assert.ok(chamadas.some(c => c.path.endsWith('/debug_token')), 'conferência antes de gravar');
+   const cred = (await pool.query(
+    "SELECT connected_via, connected_by_subject, token_ciphertext FROM marketing_credentials WHERE provider='meta' AND active")).rows[0];
+   assert.equal(cred.connected_via, 'oauth');
+   assert.equal(cred.connected_by_subject, 'local-bootstrap', 'o autor vem do state, não do cookie');
+   assert.ok(!cred.token_ciphertext.toString('utf8').includes('TOKEN-LONGO'), 'gravado cifrado');
+  });
+
+  await t.test('o mesmo state não serve duas vezes', async () => {
+   const r = await retornar(`code=codigo-de-teste-12345&state=${state}`);
+   assert.equal(destinoDe(r), '/?view=campaigns&meta=expired');
+  });
+
+  await t.test('state inventado não passa', async () => {
+   const r = await retornar(`code=codigo-de-teste-12345&state=${'a'.repeat(43)}`);
+   assert.equal(destinoDe(r), '/?view=campaigns&meta=expired');
+   const lixo = await retornar('code=codigo-de-teste-12345&state=' + encodeURIComponent('<script>'));
+   assert.equal(destinoDe(lixo), '/?view=campaigns&meta=expired');
+  });
+
+  await t.test('recusa na Meta queima o state e não grava nada', async () => {
+   const contar = async () => (await pool.query(
+    "SELECT count(*)::int c FROM marketing_credentials WHERE connected_via='oauth'")).rows[0].c;
+   const antes = await contar();
+   const novo = await iniciar();
+   const r = await retornar(`error=access_denied&error_reason=user_denied&state=${novo}`);
+   assert.equal(destinoDe(r), '/?view=campaigns&meta=denied');
+   const reuso = await retornar(`code=codigo-de-teste-12345&state=${novo}`);
+   assert.equal(destinoDe(reuso), '/?view=campaigns&meta=expired', 'recusa também consome o state');
+   assert.equal(await contar(), antes);
+  });
+
+  await t.test('o redirecionamento nunca carrega token nem mensagem do provedor', async () => {
+   const novo = await iniciar();
+   const r = await retornar(`error=access_denied&error_description=${encodeURIComponent('detalhe interno da Meta')}&state=${novo}`);
+   const destino = destinoDe(r);
+   assert.ok(!destino.includes('detalhe'), 'mensagem do provedor fica fora da URL');
+   assert.match(destino, /^\/\?view=campaigns&meta=[a-z]+$/);
+  });
+ } finally {
+  await pool.query(
+   "DELETE FROM marketing_credentials WHERE connected_via='oauth' AND connected_by_subject='local-bootstrap' AND created_at >= $1", [inicio]);
+  await pool.query(
+   "DELETE FROM marketing_oauth_states WHERE operator_subject='local-bootstrap' AND created_at >= $1", [inicio]);
+  for (const s2 of [server, semApp]) { s2.closeAllConnections(); await new Promise(r => s2.close(r)); }
   await new Promise(r => servidor.close(r));
   await pool.end();
  }

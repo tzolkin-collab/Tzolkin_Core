@@ -15,7 +15,9 @@
 // Ver docs/INTEGRATIONS.md e db/migrations/026_marketing_campaigns.sql
 import { fail, input, isProductId, isUuid, json, onlyParams, text } from '../platform/http.mjs';
 import { readKey, seal, open, fingerprint, scrub } from '../platform/secrets.mjs';
-import { createMetaGraphAdapter, exchangeLongLivedToken } from '../integrations/meta-graph.mjs';
+import { createMetaGraphAdapter, exchangeLongLivedToken, buildAuthorizeUrl, exchangeCodeForToken } from '../integrations/meta-graph.mjs';
+import { randomBytes } from 'node:crypto';
+import { digest } from '../platform/session.mjs';
 import { commercialPermission } from '../modules/commercial-keys.mjs';
 
 const PROVIDER = 'meta';
@@ -76,6 +78,11 @@ export function credencialPublica(linha, clock = Date.now) {
  */
 export function chaveConfigurada(env) {
  try { readKey(env); return true; } catch { return false; }
+}
+
+/** OAuth depende do app da Meta: sem ID e segredo não existe diálogo de autorização. */
+export function oauthConfigurado(env) {
+ return Boolean(env.META_APP_ID && env.META_APP_SECRET);
 }
 
 /**
@@ -162,7 +169,7 @@ export function marketingRoutes(router, { env = process.env, clock = Date.now, a
 
   // Sem credencial não é erro: é estado vazio honesto, como em stripe-catalog.
   if (!cred.rowCount) return reply(200, {
-   ...credencialPublica(null), key_configured: chaveConfigurada(env),
+   ...credencialPublica(null), key_configured: chaveConfigurada(env), oauth_available: oauthConfigurado(env),
    accounts: [], campaigns: [], summary: null,
    last_sync: null, unassigned: 0, window: { since, until },
   });
@@ -180,6 +187,7 @@ export function marketingRoutes(router, { env = process.env, clock = Date.now, a
   return reply(200, {
    ...credencialPublica(cred.rows[0], clock),
    key_configured: chaveConfigurada(env),
+   oauth_available: oauthConfigurado(env),
    window: { since, until },
    accounts: contas.rows,
    campaigns: linhas,
@@ -508,6 +516,110 @@ export function marketingRoutes(router, { env = process.env, clock = Date.now, a
   finally { client.release(); }
  });
 
+ // ---------------------------------------------------------------------------
+ // OAuth — "Conectar com Facebook", o mesmo fluxo que a Utmify usa
+ // ---------------------------------------------------------------------------
+ // O token vai da Meta direto para o servidor. Ninguém copia, cola nem vê.
+ const RETORNO_META = '/api/marketing/meta/callback';
+ const enderecoDeRetorno = url => env.META_REDIRECT_URI || (url.origin + RETORNO_META);
+ const extrasGraph = () => ({
+  ...(env.META_GRAPH_BASE ? { baseUrl: env.META_GRAPH_BASE } : {}),
+  ...(env.META_GRAPH_VERSION ? { version: env.META_GRAPH_VERSION } : {}),
+ });
+
+ // Inicia o fluxo. POST, e não GET, para passar pela checagem de origem do
+ // app.mjs: um GET poderia ser disparado por qualquer página que o operador
+ // abrisse. A resposta é só o endereço; quem navega até a Meta é o navegador.
+ router.post('/api/marketing/meta/authorize', async ({ client, url, operator }) => {
+  await commercialPermission(client, operator, true, true);
+  if (!oauthConfigurado(env))
+   throw fail(503, 'Defina META_APP_ID e META_APP_SECRET no servidor para conectar com o Facebook.');
+  // Sem chave não há onde guardar o token que vai voltar: melhor falhar aqui
+  // do que depois de a pessoa autorizar na Meta.
+  readKey(env);
+
+  const state = randomBytes(32).toString('base64url');
+  const retorno = enderecoDeRetorno(url);
+  await client.query(
+   `INSERT INTO marketing_oauth_states(state_hash,provider,redirect_uri,operator_subject,operator_email,expires_at)
+    VALUES($1,$2,$3,$4,$5,now()+interval '10 minutes')`,
+   [digest(state), PROVIDER, retorno, operator?.subject ?? null, operator?.email ?? null]);
+  const destino = buildAuthorizeUrl({
+   appId: String(env.META_APP_ID).trim(), redirectUri: retorno, state,
+   ...(env.META_GRAPH_VERSION ? { version: env.META_GRAPH_VERSION } : {}),
+  });
+  return { body: { url: destino.href } };
+ }, { transactional: true, body: false, audit: false });
+
+ // Retorno da Meta. Público porque o cookie de sessão pode não vir junto — em
+ // desenvolvimento ele é SameSite=Strict e não viaja num redirecionamento
+ // vindo de facebook.com. Quem autentica é o `state`: criado por um dono
+ // autenticado, guardado como hash, válido por 10 minutos, consumido uma vez.
+ //
+ // Sempre termina num redirecionamento para a tela com um código curto. A
+ // mensagem de erro do provedor nunca vai para a URL: URL entra em histórico e
+ // em log de proxy.
+ router.get(RETORNO_META, async ({ url, pool, res }) => {
+  const voltar = codigo => {
+   res.writeHead(302, { Location: `/?view=campaigns&meta=${codigo}`, 'Cache-Control': 'no-store' });
+   res.end();
+  };
+  const state = url.searchParams.get('state');
+  if (typeof state !== 'string' || !/^[A-Za-z0-9_-]{32,100}$/.test(state)) return voltar('expired');
+
+  // Consome antes de qualquer outra decisão: recusa e erro também queimam o
+  // `state`, para que ele não possa ser reaproveitado.
+  const fluxo = (await pool.query(
+   `UPDATE marketing_oauth_states SET consumed_at=now()
+     WHERE state_hash=$1 AND provider=$2 AND consumed_at IS NULL AND expires_at>now()
+     RETURNING redirect_uri, operator_subject, operator_email`,
+   [digest(state), PROVIDER])).rows[0];
+  if (!fluxo) return voltar('expired');
+
+  const code = url.searchParams.get('code');
+  if (url.searchParams.get('error') || !code) return voltar('denied');
+  if (!/^[\x21-\x7e]{10,2000}$/.test(code)) return voltar('error');
+  if (!oauthConfigurado(env)) return voltar('config');
+
+  const appId = String(env.META_APP_ID).trim();
+  const appSecret = String(env.META_APP_SECRET);
+  let token = null;
+  try {
+   const curto = await exchangeCodeForToken({ appId, appSecret, code, redirectUri: fluxo.redirect_uri, ...extrasGraph() });
+   const longo = await exchangeLongLivedToken({ appId, appSecret, shortLivedToken: curto.access_token, ...extrasGraph() });
+   token = longo.access_token;
+   let tipo = longo.token_type;
+   let expiraEm = longo.expires_at;
+
+   // Conferir antes de gravar, como nos outros dois caminhos de conexão.
+   const estado = await createMetaGraphAdapter({ token, appId, appSecret, ...extrasGraph() }).debugToken();
+   if (!estado.valid) return voltar('invalid');
+   if (estado.never_expires) { expiraEm = null; tipo = 'system_user'; }
+   else if (estado.expires_at) expiraEm = estado.expires_at;
+
+   const client = await pool.connect();
+   try {
+    await client.query('BEGIN');
+    await guardarCredencial(client, {
+     token, label: 'Meta Ads (Facebook Login)', tokenType: tipo, scopes: estado.scopes,
+     expiresAt: expiraEm, appId,
+     // O autor vem do state, não do cookie — que pode nem ter vindo.
+     operator: { subject: fluxo.operator_subject, email: fluxo.operator_email }, via: 'oauth',
+    }, env);
+    await client.query('COMMIT');
+   } catch (e) { await client.query('ROLLBACK'); throw e; }
+   finally { client.release(); }
+
+   // Autorizou, mas desmarcou a leitura de anúncios: grava mesmo assim (a tela
+   // já mostra o aviso de `ads_read`), e o código diz o que aconteceu.
+   return voltar(estado.scopes.includes('ads_read') ? 'ok' : 'scope');
+  } catch {
+   return voltar('error');
+  } finally {
+   token = null;
+  }
+ }, { auth: 'public', body: false });
+
  // Revogar sem apagar: a role de produção não tem DELETE, e o histórico de
  // qual token esteve ativo em cada período tem valor.
  router.post('/api/marketing/credential/revoke', async ({ client, operator, reply }) => {
@@ -523,8 +635,9 @@ export function marketingRoutes(router, { env = process.env, clock = Date.now, a
   onlyParams(url.searchParams, ['verify']);
   const cred = await pool.query('SELECT * FROM marketing_credentials WHERE provider=$1 AND active', [PROVIDER]);
   const chave = chaveConfigurada(env);
-  if (!cred.rowCount) return reply(200, { ...credencialPublica(null), key_configured: chave });
-  const publico = { ...credencialPublica(cred.rows[0], clock), key_configured: chave };
+  const oauth = oauthConfigurado(env);
+  if (!cred.rowCount) return reply(200, { ...credencialPublica(null), key_configured: chave, oauth_available: oauth });
+  const publico = { ...credencialPublica(cred.rows[0], clock), key_configured: chave, oauth_available: oauth };
   if (url.searchParams.get('verify') !== '1') return reply(200, publico);
 
   const aberto = await abrirAdaptador(pool);

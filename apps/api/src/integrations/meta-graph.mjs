@@ -290,4 +290,57 @@ export function createMetaGraphAdapter({ token, baseUrl = BASE, version = VERSIO
  };
 }
 
-export const _internals = { normalizarConta, normalizarCampanha, normalizarInsight, mensagemDeFalha, OBJETIVOS, ESTADOS };
+// ---------------------------------------------------------------------------
+// OAuth (Facebook Login) — o fluxo que ferramentas como a Utmify usam
+// ---------------------------------------------------------------------------
+const DIALOG_BASE = 'https://www.facebook.com';
+
+// `ads_read` lê campanhas e métricas. `business_management` é o que expõe as
+// contas de anúncio que pertencem ao Business Manager — a "conta principal" —
+// e não só as atribuídas diretamente ao usuário. Nada de `ads_management`:
+// esta integração não escreve, e pedir permissão que não se usa é superfície
+// de risco sem retorno.
+export const OAUTH_SCOPES = ['ads_read', 'business_management'];
+
+/**
+ * Monta o endereço do diálogo de autorização. Não carrega segredo nenhum: o
+ * app secret só aparece na troca do código, que é servidor-a-servidor.
+ */
+export function buildAuthorizeUrl({ appId, redirectUri, state, scopes = OAUTH_SCOPES, version = VERSION, dialogBase = DIALOG_BASE }) {
+ if (!/^\d{5,25}$/.test(String(appId || ''))) throw new Error('ID do app da Meta inválido.');
+ if (typeof state !== 'string' || state.length < 32) throw new Error('Estado OAuth inválido.');
+ if (typeof redirectUri !== 'string' || !/^https?:\/\//.test(redirectUri)) throw new Error('Endereço de retorno inválido.');
+ const url = new URL(`/${version}/dialog/oauth`, dialogBase);
+ url.searchParams.set('client_id', String(appId));
+ url.searchParams.set('redirect_uri', redirectUri);
+ url.searchParams.set('state', state);
+ url.searchParams.set('response_type', 'code');
+ url.searchParams.set('scope', scopes.join(','));
+ // Sem isto, uma permissão recusada antes não é perguntada de novo, e o token
+ // volta sem `ads_read` em silêncio — a coleta falharia sem motivo aparente.
+ url.searchParams.set('auth_type', 'rerequest');
+ return url;
+}
+
+/**
+ * Troca o código do retorno por um token de usuário (curta duração).
+ * Server-to-server: é a única chamada, além da troca por token longo, que leva
+ * o app secret — e o resultado nunca chega ao navegador.
+ */
+export async function exchangeCodeForToken({ appId, appSecret, code, redirectUri, baseUrl = BASE, version = VERSION, fetchImpl = fetch }) {
+ if (!appId || !appSecret || !code || !redirectUri) throw new Error('Troca de código incompleta.');
+ const url = new URL(`/${version}/oauth/access_token`, baseUrl);
+ url.searchParams.set('client_id', String(appId));
+ url.searchParams.set('client_secret', String(appSecret));
+ // Tem de ser idêntico ao do pedido de autorização, ou a Meta recusa.
+ url.searchParams.set('redirect_uri', redirectUri);
+ url.searchParams.set('code', String(code));
+ const response = await fetchImpl(url, { method: 'GET', redirect: 'error', signal: AbortSignal.timeout(TIMEOUT_MS) });
+ const corpo = await response.json().catch(() => ({}));
+ if (!response.ok) throw Object.assign(new Error(mensagemDeFalha(response.status, corpo?.error?.code)), { providerStatus: response.status });
+ const token = texto(corpo.access_token, 1000);
+ if (!token) throw new Error('A Meta não devolveu um token na troca do código.');
+ return { access_token: token };
+}
+
+export const _internals = { normalizarConta, normalizarCampanha, normalizarInsight, mensagemDeFalha, OBJETIVOS, ESTADOS, DIALOG_BASE };

@@ -46,8 +46,21 @@ const SERVICE_MODELS = {
  advisory: 'Assessoria', product: 'Produto', unclassified: 'A classificar',
 };
 
+// Retorno do OAuth da Meta. O servidor põe só um código curto na URL — nunca a
+// mensagem do provedor — e o texto mora aqui.
+const AVISOS = {
+ ok: ['ok', 'Conta da Meta conectada. Agora rode a coleta para trazer as campanhas.'],
+ scope: ['warn', 'Conectado, mas a autorização veio sem permissão de leitura de anúncios (ads_read). Reconecte e mantenha essa permissão marcada.'],
+ denied: ['warn', 'A autorização foi cancelada na Meta. Nada foi gravado.'],
+ expired: ['warn', 'A autorização expirou ou já tinha sido usada. Tente conectar de novo.'],
+ invalid: ['error', 'A Meta devolveu um token inválido. Tente conectar de novo.'],
+ config: ['error', 'O servidor não tem META_APP_ID e META_APP_SECRET configurados.'],
+ error: ['error', 'Não foi possível concluir a conexão com a Meta. Tente de novo.'],
+};
+
 export function setupCampaigns({ api, onError = () => {} }) {
  let dados = null, alvos = null, carregando = false, periodo = { since: null, until: null };
+ let aviso = null;
 
  const host = id => document.getElementById(id);
 
@@ -73,12 +86,24 @@ export function setupCampaigns({ api, onError = () => {} }) {
     corpo.append(aviso);
    }
    const acoes = el('div', undefined, 'campaign-actions');
-   const conectar = el('button', 'Conectar token', 'primary');
+   // OAuth primeiro: é o caminho em que ninguém copia nem vê o token.
+   if (dados?.oauth_available) {
+    const facebook = el('button', 'Conectar com Facebook', 'primary');
+    facebook.type = 'button';
+    facebook.disabled = dados?.key_configured === false;
+    facebook.onclick = () => conectarComFacebook(facebook);
+    acoes.append(facebook);
+   }
+   const conectar = el('button', dados?.oauth_available ? 'Colar token manualmente' : 'Conectar token',
+    dados?.oauth_available ? 'secondary' : 'primary');
    conectar.type = 'button';
    conectar.disabled = dados?.key_configured === false;
    conectar.onclick = () => abrirCredencial();
    acoes.append(conectar);
    corpo.append(acoes);
+   if (dados && !dados.oauth_available) {
+    corpo.append(el('small', 'Para conectar com o Facebook em um clique, defina META_APP_ID e META_APP_SECRET no servidor.'));
+   }
    corpo.append(el('small', 'Também dá para conectar pelo servidor, com npm run marketing:connect.'));
    card.append(corpo);
    return card;
@@ -103,7 +128,8 @@ export function setupCampaigns({ api, onError = () => {} }) {
   fato('Impressão digital', dados.fingerprint);
   fato('Escopos', (dados.scopes || []).join(', ') || '—');
   fato('Última conferência', dados.last_verified_at ? new Date(dados.last_verified_at).toLocaleString('pt-BR') : 'nunca');
-  if (dados.connected_by) fato('Conectado por', `${dados.connected_by}${dados.connected_via === 'panel' ? ' (painel)' : ' (servidor)'}`);
+  const via = { oauth: ' (Facebook Login)', panel: ' (token colado no painel)', script: ' (servidor)' }[dados.connected_via] || '';
+  if (dados.connected_by) fato('Conectado por', dados.connected_by + via);
   card.append(fatos);
 
   if (!dados.can_read_ads) {
@@ -135,9 +161,17 @@ export function setupCampaigns({ api, onError = () => {} }) {
    } catch (e) { onError(e); }
    finally { coletar.disabled = false; coletar.textContent = 'Coletar campanhas'; }
   };
-  const substituir = el('button', 'Substituir token', 'secondary');
+  const substituir = el('button', dados.oauth_available ? 'Colar outro token' : 'Substituir token', 'secondary');
   substituir.type = 'button';
   substituir.onclick = () => abrirCredencial();
+  // Token de usuário expira em ~60 dias e a Meta não renova sozinha: reconectar
+  // é um clique, e vira ação principal quando a contagem aperta.
+  if (dados.oauth_available) {
+   const reconectar = el('button', 'Reconectar com Facebook', dados.expiring_soon || dados.expired ? 'primary' : 'secondary');
+   reconectar.type = 'button';
+   reconectar.onclick = () => conectarComFacebook(reconectar);
+   acoes.append(reconectar);
+  }
   acoes.append(substituir, conferir, coletar);
   card.append(acoes);
   return card;
@@ -146,6 +180,21 @@ export function setupCampaigns({ api, onError = () => {} }) {
  // ---------------------------------------------------------------------------
  // Conectar credencial pelo painel
  // ---------------------------------------------------------------------------
+ // OAuth: o servidor cria o state e devolve o endereço da Meta; o navegador só
+ // navega. O token volta direto para o servidor, sem passar por esta tela.
+ async function conectarComFacebook(botao) {
+  const rotulo = botao.textContent;
+  botao.disabled = true; botao.textContent = 'Abrindo a Meta…';
+  try {
+   const { url } = await api('/api/marketing/meta/authorize', 'POST');
+   // Só segue para a Meta: um endereço inesperado na resposta não vira navegação.
+   const destino = new URL(url);
+   if (destino.protocol !== 'https:' || !/(^|\.)facebook\.com$/.test(destino.hostname))
+    throw new Error('Endereço de autorização inesperado.');
+   location.assign(destino.href);
+  } catch (e) { onError(e); botao.disabled = false; botao.textContent = rotulo; }
+ }
+
  function abrirCredencial() {
   const dialog = document.getElementById('marketing-credential-dialog');
   if (!dialog) return;
@@ -334,6 +383,13 @@ export function setupCampaigns({ api, onError = () => {} }) {
   capa.append(titulo);
   root.append(capa);
 
+  // Resultado de um fluxo que voltou da Meta. Aparece uma vez.
+  if (aviso) {
+   const nota = el('p', aviso.texto, 'campaign-flash ' + aviso.tipo);
+   nota.setAttribute('role', 'status');
+   root.append(nota);
+  }
+
   root.append(cartaoCredencial());
   if (!dados?.configured) return;
 
@@ -453,6 +509,8 @@ export function setupCampaigns({ api, onError = () => {} }) {
    dados = await api('/api/marketing/overview' + (q.toString() ? `?${q}` : ''));
   } finally { carregando = false; }
   render();
+  // O aviso de retorno da Meta vale para esta renderização, não para as próximas.
+  aviso = null;
   return dados;
  }
 
@@ -470,5 +528,10 @@ export function setupCampaigns({ api, onError = () => {} }) {
   return r;
  }
 
- return { load, loadProduct, loadService, render, get data() { return dados; } };
+ function flash(codigo) {
+  const a = Object.hasOwn(AVISOS, codigo) ? AVISOS[codigo] : null;
+  aviso = a ? { tipo: a[0], texto: a[1] } : null;
+ }
+
+ return { load, loadProduct, loadService, render, flash, get data() { return dados; } };
 }

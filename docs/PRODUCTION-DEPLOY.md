@@ -21,7 +21,18 @@ O Core usa Authorization Code Flow com PKCE, `state` e `nonce`. O backend troca 
 
 `META_MARKETING_KEY` (32 bytes em base64) é obrigatória para conectar a credencial de marketing. Como desenvolvimento e produção apontam para o mesmo banco, ela precisa ter **o mesmo valor nos dois ambientes**: um token cifrado com uma chave não é legível pela outra. Sem ela o painel de Campanhas abre, avisa e desabilita a conexão — não quebra.
 
-`META_APP_ID` e `META_APP_SECRET` são opcionais. Sem elas o token é gravado, mas o Core não confere escopos nem avisa quando estiver perto de expirar; e a troca de token curto por token de longa duração fica indisponível.
+`META_APP_ID` e `META_APP_SECRET` habilitam o botão **Conectar com Facebook** — OAuth, o mesmo fluxo que ferramentas como a Utmify usam. Sem elas o painel só aceita token colado, o Core não confere escopos nem avisa quando o token estiver perto de expirar, e a troca de token curto por longo fica indisponível.
+
+### Meta — app para o "Conectar com Facebook"
+
+1. `developers.facebook.com` → criar um app do tipo **Empresa** e adicionar o produto **Login do Facebook para Empresas** (ou Login do Facebook).
+2. Em **URIs de redirecionamento do OAuth válidos**, cadastrar exatamente `https://core.tzolkin.cloud/api/marketing/meta/callback`. A Meta compara caractere por caractere; barra no fim ou `http` no lugar de `https` faz a autorização falhar.
+3. Permissões pedidas: `ads_read` e `business_management` — esta última é a que expõe as contas de anúncio do Business Manager, e não só as atribuídas direto ao usuário. Nenhuma permissão de escrita.
+4. ID e chave secreta do app (Configurações → Básico) vão para `META_APP_ID` e `META_APP_SECRET` no ambiente do serviço.
+5. Com o app em modo **Desenvolvimento**, só quem tem papel no app consegue autorizar — suficiente para conectar a conta da própria TZOLKIN. Conectar contas de anúncio de **clientes**, como a Utmify faz, exige Revisão do App com Acesso Avançado a `ads_read`, e em geral Verificação da Empresa.
+6. O token que volta é de usuário, com ~60 dias. A Meta não renova sozinha: o painel avisa com 14 dias de antecedência, e reconectar é um clique.
+
+`META_REDIRECT_URI` sobrescreve o endereço de retorno quando o Core estiver atrás de outro domínio.
 
 ### `PORT` **é** lida em produção
 

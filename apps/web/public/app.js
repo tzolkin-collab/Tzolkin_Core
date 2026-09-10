@@ -1029,6 +1029,21 @@ $('logout').onclick = async () => {
 
 const resource = setupResource({api,activate:()=>switchView('resource'),canOpen:()=>!$('workspace').hidden && contextKind()==='general',back:()=>switchView('deploys')});
 const delivery = setupDelivery({ api,openResource:resource.open });
+// Volta de fluxo externo — OAuth da Meta, clique em notificação: `?view=`
+// escolhe a tela inicial e `?meta=` traz o resultado da conexão. Os dois saem
+// da barra de endereço em seguida, para um recarregar não repetir o aviso.
+{
+ const params = new URLSearchParams(location.search);
+ const pedida = params.get('view');
+ if (pedida && Object.hasOwn(CONTEXTS.general.views, pedida) && !CONTEXTS.general.views[pedida].hidden) state.view = pedida;
+ const meta = params.get('meta');
+ if (meta && /^[a-z]{2,12}$/.test(meta)) campaigns.flash(meta);
+ if (params.has('view') || params.has('meta')) {
+  params.delete('view'); params.delete('meta');
+  const resto = params.toString();
+  history.replaceState(null, '', location.pathname + (resto ? '?' + resto : '') + location.hash);
+ }
+}
 renderNav();
 switchView(state.view);
 renderContextChrome();

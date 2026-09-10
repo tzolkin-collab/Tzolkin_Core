@@ -82,3 +82,9 @@
 .campaign-group.pendente{border-left:3px solid #f0d9a8;padding-left:13px}
 .campaign-group.pendente .campaign-group-total strong{color:#8a6d1f}
 @media(max-width:700px){.campaign-group-head{flex-direction:column}.campaign-group-total{text-align:left}}
+
+/* Retorno do OAuth: aparece uma vez, no topo. */
+.campaign-flash{border:1px solid;border-radius:8px;padding:10px 13px;margin:0 0 16px;font-size:13px;line-height:1.55}
+.campaign-flash.ok{border-color:#cfe8d6;background:#f4fbf6;color:#2f6b43}
+.campaign-flash.warn{border-color:#f0d9a8;background:#fffcf5;color:#7a6430}
+.campaign-flash.error{border-color:#f0c9c9;background:#fff6f6;color:#8a2f2f}
