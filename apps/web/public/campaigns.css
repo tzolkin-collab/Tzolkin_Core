@@ -35,7 +35,7 @@
 
 /* --- lista --- */
 .campaign-group{margin-bottom:26px}
-.campaign-group h3{margin:0 0 4px;font-size:15px}
+.campaign-group h3{margin:0;font-size:15px}
 .campaign-group>p.detail{margin:0 0 12px;color:#888894;font-size:12px}
 .campaign-row{border:1px solid #e7e7ed;border-radius:10px;background:#fff;padding:14px 16px;margin-bottom:8px}
 .campaign-row-head{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -71,3 +71,14 @@
 #marketing-credential-form details summary{font-size:12px;cursor:pointer;color:#555560}
 #marketing-credential-form details small{display:block;margin:8px 0;color:#888894;font-size:11px;line-height:1.55}
 #marketing-credential-form code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
+
+/* Cabecalho de grupo: o subtotal a direita e o que permite comparar produtos. */
+.campaign-group-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:10px}
+.campaign-group-head .overview-kicker{display:block;margin-bottom:3px}
+.campaign-group-total{text-align:right;flex:0 0 auto}
+.campaign-group-total strong{display:block;font-size:17px;letter-spacing:-.3px}
+.campaign-group-total small{display:block;color:#888894;font-size:11px;margin-top:2px}
+/* Grupo sem dono: pendencia, nao resultado. */
+.campaign-group.pendente{border-left:3px solid #f0d9a8;padding-left:13px}
+.campaign-group.pendente .campaign-group-total strong{color:#8a6d1f}
+@media(max-width:700px){.campaign-group-head{flex-direction:column}.campaign-group-total{text-align:left}}

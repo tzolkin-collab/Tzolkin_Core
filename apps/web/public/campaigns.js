@@ -356,21 +356,61 @@ export function setupCampaigns({ api, onError = () => {} }) {
    return;
   }
 
-  // Sem dono vem primeiro: é a pendência que a tela existe para cobrar.
-  const semDono = dados.campaigns.filter(c => !c.product_id && !c.engagement_id);
-  const comDono = dados.campaigns.filter(c => c.product_id || c.engagement_id);
-
-  if (semDono.length) {
-   const bloco = el('section', undefined, 'campaign-group');
-   bloco.append(el('h3', `Sem atribuição (${semDono.length})`));
-   bloco.append(el('p', 'Enquanto estiverem aqui, esse gasto não entra no custo de nenhum produto nem de nenhuma contratação.', 'detail'));
-   for (const c of semDono) bloco.append(linhaCampanha(c));
-   root.append(bloco);
+  // Segmentação por dono: é a pergunta que esta tela existe para responder —
+  // quanto cada produto e cada contratação consumiu em anúncios. Agrupar por
+  // "atribuída / não atribuída" respondia outra coisa.
+  //
+  // Sem atribuição vem primeiro mesmo assim: enquanto estiver ali, o gasto não
+  // entra no custo de ninguém, e o total por produto está incompleto.
+  const grupos = new Map();
+  const chaveDe = c => {
+   if (c.product_id) return `p:${c.product_id}`;
+   if (c.engagement_id) return `e:${c.engagement_id}`;
+   return 'sem';
+  };
+  for (const c of dados.campaigns) {
+   const chave = chaveDe(c);
+   if (!grupos.has(chave)) {
+    grupos.set(chave, {
+     chave,
+     tipo: c.product_id ? 'produto' : c.engagement_id ? 'servico' : 'sem',
+     titulo: c.product_id
+      ? (c.product_name || c.product_id)
+      : c.engagement_id ? `${c.tenant_name} — ${c.engagement_label}` : 'Sem atribuição',
+     etiqueta: c.product_id
+      ? 'PRODUTO'
+      : c.engagement_id ? (SERVICE_MODELS[c.service_model] || 'CONTRATAÇÃO').toUpperCase() : null,
+     campanhas: [], gasto: 0, cliques: 0, leads: 0,
+    });
+   }
+   const g = grupos.get(chave);
+   g.campanhas.push(c);
+   g.gasto += Number(c.spend_cents || 0);
+   g.cliques += Number(c.clicks || 0);
+   g.leads += Number(c.leads || 0);
   }
-  if (comDono.length) {
-   const bloco = el('section', undefined, 'campaign-group');
-   bloco.append(el('h3', `Atribuídas (${comDono.length})`));
-   for (const c of comDono) bloco.append(linhaCampanha(c));
+
+  // Sem dono primeiro; o resto por gasto, que é a ordem em que se toma decisão.
+  const ordenados = [...grupos.values()].sort((a, b) =>
+   (a.tipo === 'sem' ? -1 : b.tipo === 'sem' ? 1 : 0) || b.gasto - a.gasto);
+
+  for (const g of ordenados) {
+   const bloco = el('section', undefined, 'campaign-group' + (g.tipo === 'sem' ? ' pendente' : ''));
+   const cabecalho = el('div', undefined, 'campaign-group-head');
+   const titulo = el('div');
+   if (g.etiqueta) titulo.append(el('span', g.etiqueta, 'overview-kicker'));
+   titulo.append(el('h3', `${g.titulo} · ${g.campanhas.length} campanha${g.campanhas.length === 1 ? '' : 's'}`));
+   const total = el('div', undefined, 'campaign-group-total');
+   total.append(el('strong', dinheiro(g.gasto, moeda)));
+   const porLead = custoPor(g.gasto, g.leads, moeda);
+   total.append(el('small', porLead ? `${porLead} por lead · ${numero(g.leads)} leads` : `${numero(g.cliques)} cliques`));
+   cabecalho.append(titulo, total);
+   bloco.append(cabecalho);
+
+   if (g.tipo === 'sem') {
+    bloco.append(el('p', 'Enquanto estiverem aqui, esse gasto não entra no custo de nenhum produto nem de nenhuma contratação — e o total dos outros grupos está incompleto.', 'detail'));
+   }
+   for (const c of g.campanhas) bloco.append(linhaCampanha(c));
    root.append(bloco);
   }
  }

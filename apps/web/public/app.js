@@ -177,13 +177,13 @@ async function api(path, method = 'GET', body) {
 function renderNav() {
  const context = CONTEXTS[contextKind()];
  $('nav-label').textContent = context.label;
- const groups=contextKind()==='general'?{overview:'Hoje',tracking:'Hoje',finance:'Hoje',companies:'Relacionamentos',people:'Relacionamentos',leads:'Relacionamentos',clients:'Relacionamentos',products:'Entrega',services:'Entrega',emails:'Entrega',education:'Educação',settings:'Administração',access:'Administração',management:'Administração',security:'Administração',database:'Bases de dados',redis:'Bases de dados',deploys:'Tecnologia',serverMetrics:'Tecnologia'}:{product:'Produto','product-orgs':'Produto','product-payments':'Produto','product-emails':'Produto'};
+ const groups=contextKind()==='general'?{overview:'Hoje',tracking:'Hoje',finance:'Hoje',companies:'Relacionamentos',people:'Relacionamentos',leads:'Relacionamentos',campaigns:'Relacionamentos',clients:'Relacionamentos',products:'Entrega',services:'Entrega',emails:'Entrega',education:'Educação',settings:'Administração',access:'Administração',management:'Administração',security:'Administração',database:'Bases de dados',redis:'Bases de dados',deploys:'Tecnologia',serverMetrics:'Tecnologia'}:{product:'Produto','product-orgs':'Produto','product-payments':'Produto','product-emails':'Produto','product-campaigns':'Produto'};
  const items=[];let previous,section;
  for(const [key,view]of Object.entries(context.views).filter(([,view])=>!view.hidden)){
   if(groups[key]!==previous){section=node('section',undefined,'nav-section');const label=node('h2',groups[key],'nav-group');section.append(label);items.push(section);previous=groups[key];}
   const button = node('button', undefined, 'nav-item' + (key === state.view ? ' active' : ''));
   button.type = 'button'; button.dataset.view = key;
-  const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',metrics:'chart',leads:'user-plus',products:'package',services:'briefcase',education:'graduation-cap',projects:'repo',delivery:'cloud',access:'shield',management:'settings',database:'database',redis:'cache',settings:'sliders',security:'lock',deploys:'cloud',serverMetrics:'activity',product:'package','product-orgs':'people','product-payments':'wallet','product-emails':'mail'})[key]);
+  const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',metrics:'chart',leads:'user-plus',products:'package',services:'briefcase',education:'graduation-cap',projects:'repo',delivery:'cloud',access:'shield',management:'settings',database:'database',redis:'cache',settings:'sliders',security:'lock',deploys:'cloud',serverMetrics:'activity',product:'package','product-orgs':'people','product-payments':'wallet','product-emails':'mail',campaigns:'chart','product-campaigns':'chart'})[key]);
   icon.classList.add('nav-icon'); button.append(icon, document.createTextNode(view.title));
   if (key === state.view) button.setAttribute('aria-current', 'page');
   button.onclick = () => {switchView(key);closeNavigation();};
