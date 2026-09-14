@@ -4,6 +4,7 @@
     {
       "id": "sites",
       "name": "TZOLKIN Sites",
+      "portfolio_kind": "service_line",
       "category": "Serviço produtizado",
       "description": "Sites institucionais, landing pages e portais.",
       "status": "Publicado no Notion",
@@ -14,6 +15,7 @@
     {
       "id": "educare",
       "name": "Educare by TZOLKIN",
+      "portfolio_kind": "platform",
       "category": "Educação",
       "description": "Frente educacional da TZOLKIN.",
       "status": "Domínio a validar",
@@ -24,6 +26,7 @@
     {
       "id": "core",
       "name": "TZOLKIN Core",
+      "portfolio_kind": "internal",
       "category": "Gestão transversal",
       "description": "Clientes, produtos contratados e permissões do ecossistema.",
       "status": "Local",
