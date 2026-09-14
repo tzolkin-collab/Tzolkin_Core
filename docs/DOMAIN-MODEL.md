@@ -62,13 +62,15 @@ Conferido em `db/schema.sql` e no banco em 2026-09-02.
 |---|---|---|
 | `id` | `text` PK | `^[a-z][a-z0-9-]{1,63}$`. Identificador estável — nunca muda |
 | `name` | `text` | Nome exibido. Sincronizado do catálogo do Notion na importação |
-| `portfolio_kind` | `text` | `product`, `platform` ou `service_line`; recorte do portfólio comercial |
+| `portfolio_kind` | `text` | `product`, `platform`, `service_line` ou `internal`; recorte do portfólio |
 | `lifecycle_status` | `text` | `draft`, `active` ou `archived`; produto novo de projeto técnico começa em `draft` |
 | `brand_family` | `text` | Família de marca, hoje `tzolkin` |
 
-Hoje: `sites`, `educare`, `core` e `skiller`. Barber, Commerce e Data foram removidos do portfólio em 2026-09-14, com a ficha do Notion e a contratação planejada do Bzbarber (migração 031). Ver [D2](CONTEXT.md#d2--o-próprio-core-e-o-data-são-produtos-contratáveis): a parte sobre o Data perdeu o objeto; a do Core segue aberta.
+Hoje: `skiller`, `educare`, `sites`, `mentorias`, `consultorias` e `core`. Barber, Commerce e Data foram removidos do portfólio em 2026-09-14, com a ficha do Notion e a contratação planejada do Bzbarber (migração 031).
 
-`portfolio_kind` classifica o portfólio: Sites é `service_line`; Skiller é `product`; Core e Educare são `platform`.
+`portfolio_kind` classifica o portfólio (migração 032, [ADR 0007](decisions/0007-portfolio-kind-rotulo-ou-regra.md#classificação-decidida-aceita)): Skiller é `product`; Educare é `platform`, de assinatura de cursos e conteúdos; Sites, Mentorias e Consultorias são `service_line`; Core é `internal`, o que responde [D2](CONTEXT.md#d2--o-próprio-core-e-o-data-são-produtos-contratáveis). Cada item ativo ou em rascunho vira um contexto no seletor de espaços do painel.
+
+**O tipo governa o que o item pode fazer** (`CAPABILITIES` em `apps/api/src/modules/catalog.mjs`, ADR 0007 opção B): só `product` e `platform` dão acesso de usuários e vendem por checkout; `service_line` tem ciclo comercial por proposta (captação e contratações); `internal` só é operado. O painel monta a navegação de cada contexto pelas capacidades que a API devolve.
 
 `portfolio_kind` descreve o lugar do item no portfólio; não descreve como uma
 contratação é cobrada. A taxonomia de `client_engagements.service_model` é

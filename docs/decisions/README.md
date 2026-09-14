@@ -10,6 +10,7 @@ Registro de decisões de arquitetura. **Só o que é relevante e caro reverter**
 | [0004](0004-integracoes-comerciais-por-produto.md) | Integrações comerciais no contexto do produto | `[ACEITA]` |
 | [0005](0005-taxonomia-cliente-produto-servico.md) | Separar cliente, pessoa, oferta, projeto e linha educacional | `[ACEITA]` |
 | [0006](0006-checkout-transparente-e-escopo-pci.md) | Checkout transparente com Elements; escopo PCI do cartão Asaas | `[ACEITA]` para o transparente · `[PENDENTE DE DECISÃO]` para cartão Asaas |
+| [0007](0007-portfolio-kind-rotulo-ou-regra.md) | O que `portfolio_kind` governa: rótulo cadastral ou regra do sistema | `[ACEITA]` — classificação (032) e opção B, implementada |
 
 ## Regras
 

@@ -122,6 +122,8 @@ Aplicada pela migração `db/migrations/001_membership_por_produto.sql` com a ta
 
 ### D2 — O próprio Core e o Data são produtos contratáveis?
 
+**Resolvida em 2026-09-14** na [ADR 0007](decisions/0007-portfolio-kind-rotulo-ou-regra.md#classificação-decidida-aceita): o Core é `internal` (migração 032) e o Data saiu do portfólio (migração 031). Item `internal` não aceita contrato de acesso, oferta nem contratação: a regra está na política de capacidades da mesma ADR.
+
 `products` contém `core` e `data`, então é possível registrar contrato de organização para eles como para Barber. Faz sentido para `data` (produto vendável); para `core` (gestão interna da TZOLKIN) provavelmente não. Sem decisão, não se cria bloqueio nem exceção no código.
 
 ### D3 — Quem vende e quem recebe no fluxo consumidor → cliente?
