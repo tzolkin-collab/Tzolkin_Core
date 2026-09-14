@@ -1,6 +1,6 @@
 # ADR-0008: Origem da cobrança de linhas de serviço
 
-**Status:** `[PROPOSTO]`
+**Status:** `[ACEITA]` — opção B, em 2026-09-14
 **Data:** 2026-09-14
 **Decisores:** TZOLKIN
 
@@ -66,10 +66,20 @@ De B para C é aditivo. De B para A exige mover versões financeiras para a cont
 separação entre renovação, aditivo e operação. Trocar o provedor não muda a origem da cobrança,
 porque o domínio guarda parcelas e o adaptador traduz para Asaas, Stripe ou registro manual.
 
-## Decisões pendentes
+## Decisão — 2026-09-14
 
-- Aceitar A, B ou C.
-- Escolher o emissor único de NFS-e.
-- Confirmar elegibilidade e tarifa efetiva do Pix Automático no Asaas.
-- Definir quando uma parcela paga passa a disponível para caixa e indicadores.
+Decidido pelo dono:
+
+- **Opção B aceita.** A cobrança de linha de serviço nasce de uma versão aceita de
+  `commercial_contracts`. A contratação agrupa a operação; o contrato guarda a condição acordada.
+- **Emissor de NFS-e: Contabilizei, por enquanto.** O Core registra a nota emitida, não emite.
+  Migrar a emissão para o Asaas só depois de a Contabilizei confirmar que importa nota emitida
+  pelo Asaas sem gerar uma segunda nota para a mesma venda.
+- **Disponível = crédito no extrato bancário**, confirmado pela conciliação via Pluggy. O webhook
+  do provedor marca **pago**; o saldo informado pelo processador (Asaas, Stripe) não basta para a
+  parcela contar como caixa nem entrar nos indicadores de dinheiro disponível.
+
+Continua pendente:
+
+- Confirmar elegibilidade e tarifa efetiva do Pix Automático no Asaas — pergunta ao fornecedor.
 

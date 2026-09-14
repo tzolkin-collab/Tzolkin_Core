@@ -26,19 +26,24 @@ Ao salvar contrato com Plano igual ao slug de uma oferta do mesmo produto, o Cor
 
 **Só fluxo 1** (Tzolkin vende, Tzolkin recebe): conta única via `STRIPE_SECRET_KEY`, sem Connect, sem split. Fluxo 2 (consumidor paga o cliente, ex.: TZOLKIN Barber) depende de D3 — ver `docs/decisions/0003`.
 
-## Linhas de serviço — cobrança nasce da proposta `[PROPOSTO]`
+## Linhas de serviço — cobrança nasce do contrato comercial `[DECIDIDO]` — 2026-09-14
 
 Mentorias, Consultorias e Sites são `service_line`: o cliente contrata trabalho e mantém o que foi
 entregue. Elas não ganham `checkout` nem contrato de acesso só para reutilizar o fluxo de SaaS.
 
-Fluxo recomendado para decisão na ADR 0008:
+Fluxo decidido na [ADR 0008](decisions/0008-origem-da-cobranca-de-servicos.md) (opção B), ainda não
+implementado:
 
-1. uma proposta aceita gera ou atualiza um `commercial_contract`;
-2. o contrato fixa escopo, valor, moeda, vencimentos e responsável;
+1. somente uma versão **aceita** de `commercial_contracts` pode gerar plano de recebimento. Não há
+   entidade de proposta antes dele (a opção C pode entrar depois, sem quebrar este fluxo);
+2. o contrato fixa escopo, valor, moeda, vencimentos e responsável. Aditivo ou renovação vira nova
+   versão e não reescreve cobranças já emitidas;
 3. cada vencimento origina uma cobrança no Asaas, ou um registro de cobrança externa no Cobre PJ;
 4. webhook do provedor confirma **pago**, sem depender do retorno do checkout;
-5. conciliação com o saldo/extrato confirma **disponível**;
-6. emissão fiscal ocorre uma única vez pelo emissor escolhido;
+5. **disponível** só quando o crédito aparece no **extrato bancário**, pela conciliação via Pluggy.
+   O saldo informado pelo processador (Asaas, Stripe) não conta como caixa;
+6. a NFS-e é emitida **uma única vez, pela Contabilizei**. O Core registra a nota, não emite. Migrar a
+   emissão para o Asaas depende de a Contabilizei confirmar que importa a nota sem duplicar;
 7. atraso muda a operação financeira, mas não revoga automaticamente uma entrega ou acesso sem
    política contratual explícita.
 
