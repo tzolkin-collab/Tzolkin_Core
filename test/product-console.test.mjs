@@ -61,8 +61,8 @@ test('Product console scoping suite', async t => {
   });
 
   await t.test('empty product context reports zeroes, not fabricated data', async () => {
-   const data = await (await openConsole('barber')).json();
-   assert.equal(data.product.id, 'barber');
+   const data = await (await openConsole('skiller')).json();
+   assert.equal(data.product.id, 'skiller');
    assert.deepEqual(data.organizations, []);
    assert.equal(data.summary.organizations, 0);
    assert.equal(data.summary.active_contracts, 0);
@@ -97,8 +97,8 @@ test('Product console scoping suite', async t => {
    assert.deepEqual(educare.organizations.filter(row => row.tenant_id === ids[0]), []);
    assert.equal(educare.organizations.filter(row => row.tenant_id === ids[1]).length, 1);
 
-   const barber = await (await openConsole('barber')).json();
-   assert.deepEqual(barber.organizations.filter(row => ids.includes(row.tenant_id)), []);
+   const skiller = await (await openConsole('skiller')).json();
+   assert.deepEqual(skiller.organizations.filter(row => ids.includes(row.tenant_id)), []);
   });
 
   await t.test('membership scope is declared as product-scoped', async () => {
@@ -107,16 +107,16 @@ test('Product console scoping suite', async t => {
   });
 
   await t.test('people are counted per product, not per organization', async () => {
-   // Mesma organização, segundo contrato: a pessoa vinculada em `sites` não conta em `commerce`.
+   // Mesma organização, segundo contrato: a pessoa vinculada em `sites` não conta em `skiller`.
    assert.equal((await req('/api/entitlements', 'PUT',
-    { tenant_id: ids[0], product_id: 'commerce', plan: 'console-test', rights: [], active: true })).status, 200);
-   const commerce = await (await openConsole('commerce')).json();
-   const row = commerce.organizations.find(entry => entry.tenant_id === ids[0]);
+    { tenant_id: ids[0], product_id: 'skiller', plan: 'console-test', rights: [], active: true })).status, 200);
+   const skiller = await (await openConsole('skiller')).json();
+   const row = skiller.organizations.find(entry => entry.tenant_id === ids[0]);
    assert.equal(row.active_memberships, 0);
    assert.equal(row.total_memberships, 0);
    const sites = await (await openConsole('sites')).json();
    assert.equal(sites.organizations.find(entry => entry.tenant_id === ids[0]).active_memberships, 1);
-   assert.equal(commerce.summary.reachable_memberships, 0);
+   assert.equal(skiller.summary.reachable_memberships, 0);
   });
 
   await t.test('revoked contract stays visible but leaves the active count', async () => {

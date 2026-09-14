@@ -78,7 +78,7 @@ SECTIONS.push('view-finance','view-emails');
 const contextKind = () => (state.context ? 'product' : 'general');
 const views = () => CONTEXTS[contextKind()].views;
 const productName = () => state.product?.product?.name || state.context;
-const DEPLOY_ALIASES={educare:['tzolkin-educare'],sites:['tzolkin-sites'],barber:['barber','tzolkin-barber'],commerce:['commerce','tzolkin-commerce'],core:['core','tzolkin-core'],data:['data','tzolkin-data'],skiller:['skiller','tzolkin-skiller']};
+const DEPLOY_ALIASES={educare:['tzolkin-educare'],sites:['tzolkin-sites'],core:['core','tzolkin-core'],skiller:['skiller','tzolkin-skiller']};
 const productKey=product=>String(product?.id||product?.name||'').toLowerCase().replace(/^tzolkin[ -]/,'').replace(/\s+/g,'-');
 const bindingForDeployment=project=>state.bindings.find(binding=>binding.provider===project?.provider&&(String(binding.external_project_id)===String(project?.project_id)||binding.external_project_name===project?.project));
 const deploymentBelongsToProduct=(project,product)=>{const binding=bindingForDeployment(project);return binding?binding.product_id===product?.id:DEPLOY_ALIASES[productKey(product)]?.includes(String(project.project).toLowerCase());};

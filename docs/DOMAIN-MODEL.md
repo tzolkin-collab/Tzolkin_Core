@@ -52,7 +52,7 @@ Conferido em `db/schema.sql` e no banco em 2026-09-02.
 
 `subject` é o **identificador de identidade externa** — preferir `issuer + sub` do IdP. **Não é e-mail, não é prova de autenticação.** O app autentica a pessoa antes de perguntar ao Core.
 
-**Escopo: organização E produto.** Uma pessoa vinculada em Barber não alcança Commerce, ainda que a mesma organização contrate os dois. A API declara `membership_scope: "product"`. Decisão em [ADR 0002](decisions/0002-vinculo-de-pessoa-por-produto.md); histórico em [D1](CONTEXT.md#d1--vínculo-de-pessoa-por-produto-resolvida).
+**Escopo: organização E produto.** Uma pessoa vinculada em Sites não alcança Skiller, ainda que a mesma organização contrate os dois. A API declara `membership_scope: "product"`. Decisão em [ADR 0002](decisions/0002-vinculo-de-pessoa-por-produto.md); histórico em [D1](CONTEXT.md#d1--vínculo-de-pessoa-por-produto-resolvida).
 
 **Ciclo de vida:** criado/atualizado por upsert; `active=false` revoga na consulta seguinte, sem cache.
 
@@ -66,9 +66,9 @@ Conferido em `db/schema.sql` e no banco em 2026-09-02.
 | `lifecycle_status` | `text` | `draft`, `active` ou `archived`; produto novo de projeto técnico começa em `draft` |
 | `brand_family` | `text` | Família de marca, hoje `tzolkin` |
 
-Hoje: `sites`, `educare`, `barber`, `commerce`, `data`, `core` e `skiller`. Ver [D2](CONTEXT.md#d2--o-próprio-core-e-o-data-são-produtos-contratáveis).
+Hoje: `sites`, `educare`, `core` e `skiller`. Barber, Commerce e Data foram removidos do portfólio em 2026-09-14, com a ficha do Notion e a contratação planejada do Bzbarber (migração 031). Ver [D2](CONTEXT.md#d2--o-próprio-core-e-o-data-são-produtos-contratáveis): a parte sobre o Data perdeu o objeto; a do Core segue aberta.
 
-`portfolio_kind` classifica o portfólio: Sites, Commerce e Data são `service_line`; Barber e Skiller são `product`; Core e Educare são `platform`.
+`portfolio_kind` classifica o portfólio: Sites é `service_line`; Skiller é `product`; Core e Educare são `platform`.
 
 `portfolio_kind` descreve o lugar do item no portfólio; não descreve como uma
 contratação é cobrada. A taxonomia de `client_engagements.service_model` é

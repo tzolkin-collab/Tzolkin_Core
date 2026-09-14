@@ -2,7 +2,7 @@
 //
 // Existe separado de billing_offers de propósito: a oferta é o que se cobra
 // (preço, processador, modalidade); o template é como a página aparece e o que
-// ela diz. Vários produtos, várias marcas — "Skiller" e "TZOLKIN Barber"
+// ela diz. Vários produtos, várias marcas — "Skiller" e "Educare"
 // reutilizam a mesma oferta com templates diferentes, sem duplicar preço.
 //
 // O schema do tema e da copy vive em platform/checkout-model.mjs, e é de lá que

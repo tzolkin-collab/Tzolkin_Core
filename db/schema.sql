@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), type text NOT NULL, tenant_id uuid NOT NULL REFERENCES tenants(id),
  created_at timestamptz NOT NULL DEFAULT now()
 );
-INSERT INTO products(id,name) VALUES ('sites','TZOLKIN Sites'),('educare','Educare'),('barber','TZOLKIN Barber'),('commerce','TZOLKIN Commerce') ON CONFLICT DO NOTHING;
+INSERT INTO products(id,name) VALUES ('sites','TZOLKIN Sites'),('educare','Educare') ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS client_engagements (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id uuid NOT NULL REFERENCES tenants(id), product_id text REFERENCES products(id),
  service_model text NOT NULL CHECK(service_model IN ('on_demand','education','consulting','advisory','product','unclassified')),

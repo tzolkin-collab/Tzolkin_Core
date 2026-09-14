@@ -1,8 +1,8 @@
 // Catálogo da Stripe confrontado com as ofertas do Core.
 //
 // SOMENTE LEITURA, e de propósito: importar automaticamente exigiria adivinhar
-// a qual produto do Core cada oferta pertence. "Skiller Pro" e "A Mesa" não são
-// produtos do catálogo (sites, educare, barber, commerce, data, core), e inventar
+// a qual produto do Core cada oferta pertence. "Skiller Pro" e "A Mesa" são nomes
+// de oferta, não ids do catálogo (sites, educare, skiller, core), e inventar
 // esse vínculo criaria dado falso — o contrário do que este Core promete.
 //
 // Esta rota mostra o que existe lá, o que já existe aqui, e o que falta decidir.

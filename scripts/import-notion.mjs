@@ -13,6 +13,6 @@ try {
  }
  for(const [index,resource] of catalog.resources.entries()) await client.query('INSERT INTO ecosystem_entries VALUES($1,$2,$3,$4) ON CONFLICT(id) DO UPDATE SET payload=EXCLUDED.payload,imported_at=EXCLUDED.imported_at',['resource-'+index,'resource',JSON.stringify(resource),catalog.imported_at]);
  await client.query('COMMIT');
- console.log('Catálogo importado: 6 produtos e 7 atalhos. Ids preservados; nome e ficha sincronizados com o catálogo.');
+ console.log(`Catálogo importado: ${catalog.products.length} produtos e ${catalog.resources.length} atalhos. Ids preservados; nome e ficha sincronizados com o catálogo.`);
 } catch(error) { await client.query('ROLLBACK'); console.error('Importação não concluída.',error.code||'Erro'); process.exitCode=1; }
 finally {client.release();await pool.end();}

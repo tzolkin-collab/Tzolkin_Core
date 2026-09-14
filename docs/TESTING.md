@@ -137,10 +137,10 @@ Roda contra um **stub HTTP local** que imita a Vercel: nenhuma chamada sai da m�
 | Produto inexistente ⇒ 404; formato inválido ⇒ 400 | Inclui maiúscula e início com dígito |
 | Parâmetro de query não previsto ⇒ 400 | |
 | Produto sem contratos devolve zeros e lista vazia | **Estado vazio real, sem dado inventado** |
-| Só lista organizações com contrato **daquele** produto | **Isolamento entre produtos** — a de `sites` não aparece em `barber` nem em `educare` |
+| Só lista organizações com contrato **daquele** produto | **Isolamento entre produtos** — a de `sites` não aparece em `skiller` nem em `educare` |
 | Devolve plano, direitos, status e contagem de vínculos | |
 | Declara `membership_scope: "product"` | Torna o escopo do vínculo verificável pelo consumidor |
-| Pessoas contadas por produto, não por organização | Vínculo em `sites` não conta no `commerce` da mesma organização |
+| Pessoas contadas por produto, não por organização | Vínculo em `sites` não conta no `skiller` da mesma organização |
 | Contrato revogado continua visível e sai do total ativo; `version` incrementa | Histórico preservado |
 | Organização suspensa é sinalizada e sai do total ativo | Mesmo critério de `/v1/context` |
 | Produto catalogado traz a ficha do Notion; não catalogado traz `null` | Ausência não é erro nem invenção |

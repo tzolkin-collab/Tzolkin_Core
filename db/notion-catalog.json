@@ -22,36 +22,6 @@
       "note": "Produção registrada no Notion: https://tzolkin-educare.vercel.app/. Subdomínio próprio ainda a validar."
     },
     {
-      "id": "commerce",
-      "name": "TZOLKIN Commerce",
-      "category": "E-commerce",
-      "description": "Frente de comércio eletrônico.",
-      "status": "Disponibilidade a validar",
-      "url": "https://ecom.tzolkin.cloud/",
-      "source": "https://app.notion.com/p/3cc2551ec67e81cbb6d8c5b90e14e1f3",
-      "note": "Endereço cadastrado; disponibilidade não confirmada."
-    },
-    {
-      "id": "barber",
-      "name": "TZOLKIN Barber",
-      "category": "SaaS vertical",
-      "description": "Produto para barbearias.",
-      "status": "Disponibilidade a validar",
-      "url": "https://barber.tzolkin.cloud/",
-      "source": "https://app.notion.com/p/3cc2551ec67e81019b7bd6be9e3c65a0",
-      "note": "Domínio informado pelo proprietário; disponibilidade não confirmada."
-    },
-    {
-      "id": "data",
-      "name": "TZOLKIN Data",
-      "category": "Tracking e inteligência",
-      "description": "Mensuração de aquisição, WhatsApp, CRM, propostas e vendas.",
-      "status": "Planejamento",
-      "url": null,
-      "source": "https://app.notion.com/p/3cc2551ec67e81c6bd30e34518f67242",
-      "note": "data.tzolkin.cloud é um endereço proposto, não publicado."
-    },
-    {
       "id": "core",
       "name": "TZOLKIN Core",
       "category": "Gestão transversal",
