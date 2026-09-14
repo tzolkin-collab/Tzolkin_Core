@@ -26,7 +26,10 @@ test('Core real PostgreSQL security and contract suite',async t=>{
    const {entries}=await response.json();
    assert.equal(entries.filter(e=>e.kind==='product').length,3);
    assert.equal(entries.filter(e=>e.kind==='resource').length,7);
-   for(const {payload} of entries) assert.ok(Object.keys(payload).every(k=>['id','name','category','description','status','url','source','note'].includes(k)));
+   // portfolio_kind entrou no catálogo para o importador não criar Core, Educare e Sites como `product`
+   // num banco novo (ADR 0007). O banco compartilhado escondia a divergência: lá a ficha foi importada
+   // antes de o campo existir.
+   for(const {payload} of entries) assert.ok(Object.keys(payload).every(k=>['id','name','portfolio_kind','category','description','status','url','source','note'].includes(k)));
    assert.equal(entries.find(e=>e.payload.id==='core').payload.url,null);
   });
   await t.test('unknown tenant fields rejected',async()=>assert.equal((await req('/api/tenants','POST',{name:'Test',slug:'test',admin:true})).status,400));

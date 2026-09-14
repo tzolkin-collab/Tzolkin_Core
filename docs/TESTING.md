@@ -4,10 +4,10 @@ Estratégia, comandos e cobertura.
 
 Revisão: **2026-09-14**.
 
-Verificação atual em 2026-09-14: `npm test` passou com **377 testes aprovados, 0 falhas e 1
-ignorado**, incluindo PostgreSQL real, endpoints de webhook, marketing e o novo CRUD de portfólio.
-O teste ignorado cria trigger e simula rollback; ele só roda quando `DATABASE_URL_TEST` aponta para
-uma base dedicada com nome `tzolkin_test_commercial_<12 hex>`.
+Verificação atual em 2026-09-14: `npm test` passou com **398 testes aprovados, 0 falhas e 0
+ignorados**, num banco descartável criado para a execução e apagado no final. Inclui PostgreSQL real,
+endpoints de webhook, marketing, portfólio e o teste de trigger com rollback, que antes ficava
+ignorado por falta de base dedicada.
 
 ---
 
@@ -21,7 +21,7 @@ Por quê: o que precisa ser garantido — isolamento, negação de acesso, atomi
 
 | Regra | Como |
 |---|---|
-| Base separada quando houver | `DATABASE_URL_TEST` tem precedência sobre `DATABASE_URL`. **Sem ela, os testes escrevem na mesma base do cadastro** — hoje é o caso |
+| Base separada, sempre | `npm test` cria um banco descartável, força `DATABASE_URL` e `DATABASE_URL_TEST` para ele nos processos de teste e o apaga no final. **A suíte não escreve no banco do cadastro** |
 | Só registro sintético | Nomes e `slug` únicos por execução (`randomUUID`) |
 | Limpeza obrigatória | Bloco `finally` remove exatamente o que a execução criou |
 | Nunca toca dado existente | Remoção por lista de ids da própria execução, nunca por critério amplo |
@@ -42,8 +42,7 @@ npm run test:unit
 
 Após a entrega do inventário EasyPanel: **25/25 unitários aprovados**, incluindo 7 novos testes em `test/unit/easypanel.test.mjs`. A API HTTP do Core é exercitada em loopback com sessão real e pool que recusa consultas; o provedor é simulado. Sem banco remoto, sem credencial real e sem prova de compatibilidade com a versão do painel do usuário.
 
-O glob atual inclui também `test/unit/`; `npm test` é a verificação completa disponível. Use base
-dedicada para habilitar a suíte comercial destrutiva.
+O glob inclui também `test/unit/`; `npm test` é a verificação completa e já roda isolada.
 
 Após configurar a chave do EasyPanel: **27/27 unitários aprovados**. Dois testes novos cobrem o formato real de listas separadas, descarte de segredos, serviços órfãos e projetos duplicados. Consulta real de leitura pelo adaptador confirmada com 3 projetos e 9 serviços; nenhuma alteração remota executada.
 
@@ -51,9 +50,24 @@ Após configurar a chave do EasyPanel: **27/27 unitários aprovados**. Dois test
 npm test
 ```
 
-Roda `node --env-file=.env --test "test/**/*.test.mjs"`. Exige o banco preparado e **migrado**
-([INFRASTRUCTURE.md](INFRASTRUCTURE.md#preparação-do-core-existente-e-verificado)); a verificação de
-2026-09-14 foi feita após aplicar a migração 030.
+Roda `scripts/test-commercial.mjs --all`, que:
+
+1. cria um banco descartável `tzolkin_test_commercial_<12 hex>` no mesmo servidor do `DATABASE_URL`;
+2. aplica `db/schema.sql` e todas as migrações duas vezes, provando que reaplicar não quebra;
+3. carrega as tabelas de captação do repositório vizinho `../tzolkin-site/db/` e o catálogo local
+   `db/notion-catalog.json`, sem rede;
+4. roda `test/**/*.test.mjs` **em série**: em paralelo, as suítes que dividem o banco contariam as
+   chaves e os produtos umas das outras;
+5. apaga o banco no final, inclusive quando algum teste falha.
+
+Precisa da role do `DATABASE_URL` com permissão para criar banco e do repositório `tzolkin-site` ao
+lado deste. Leva cerca de dois minutos. Se o processo for morto à força, o banco fica para trás;
+o prefixo `tzolkin_test_` identifica o que pode ser removido. `npm run test:unit` continua sendo a
+checagem rápida, sem banco.
+
+Rodar a suíte contra um banco semeado de verdade também revela divergência que o banco compartilhado
+escondia: em 2026-09-14 o teste do ecossistema passava lá contra fichas importadas antes de
+`portfolio_kind` existir no catálogo.
 
 Uma suíte isolada:
 

@@ -10,7 +10,7 @@
     "start": "node scripts/dev.mjs",
     "start:api": "node --env-file=.env apps/api/src/server.mjs",
     "start:web": "node apps/web/server.mjs",
-    "test": "node --env-file=.env --test \"test/**/*.test.mjs\"",
+    "test": "node scripts/test-commercial.mjs --all",
     "test:unit": "node --test test/unit/*.test.mjs",
     "db:setup": "node scripts/setup.mjs",
     "db:migrate": "node --env-file=.env scripts/migrate.mjs",

@@ -6,5 +6,14 @@ try {await admin.connect();await admin.query(`CREATE DATABASE ${name}`);created=
  testClient=new pg.Client({connectionString:url.href,connectionTimeoutMillis:10000});await testClient.connect();await testClient.query(readFileSync('db/schema.sql','utf8'));if(!await applyMigrations(testClient,()=>{}))throw Error('MIGRATIONS_FAILED');if(!await applyMigrations(testClient,()=>{}))throw Error('MIGRATIONS_REPLAY_FAILED');
  for(const path of ['001_leads.sql','002_lead_delivery.sql','004_core_outbox.sql'])await testClient.query(readFileSync('../tzolkin-site/db/'+path,'utf8'));
  await testClient.end();testClient=null;
- const code=await new Promise(resolve=>{const p=spawn(process.execPath,['--test',...(process.argv.includes('--all')?['test/**/*.test.mjs']:['test/commercial-intake.test.mjs'])],{env:{...process.env,DATABASE_URL_TEST:url.href},stdio:'inherit'});p.on('exit',resolve);});process.exitCode=code||0;
+ // DATABASE_URL é forçada para o banco descartável nos processos filhos. Nem o importador nem um
+ // teste que leia process.env.DATABASE_URL direto consegue alcançar o banco de produção.
+ const isolado={...process.env,DATABASE_URL:url.href,DATABASE_URL_TEST:url.href};
+ // Catálogo do Notion: vem de db/notion-catalog.json, arquivo local, sem rede. Sem ele as suítes que
+ // conferem ecosystem_entries falham num banco novo.
+ const importCode=await new Promise(resolve=>{const p=spawn(process.execPath,['scripts/import-notion.mjs'],{env:isolado,stdio:'inherit'});p.on('exit',resolve);});
+ if(importCode)throw Error('CATALOG_IMPORT_FAILED');
+ // Os arquivos de integração dividem este banco. Em paralelo, um conta as chaves ou os produtos do
+ // outro; em série, cada arquivo vê só o que ele mesmo criou.
+ const code=await new Promise(resolve=>{const p=spawn(process.execPath,['--test','--test-concurrency=1',...(process.argv.includes('--all')?['test/**/*.test.mjs']:['test/commercial-intake.test.mjs'])],{env:isolado,stdio:'inherit'});p.on('exit',resolve);});process.exitCode=code||0;
 } catch(e){console.error({error:e.code||e.message});process.exitCode=1;}finally{await testClient?.end();if(created&&/^tzolkin_test_commercial_[0-9a-f]{12}$/.test(name))await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);await admin.end();}
