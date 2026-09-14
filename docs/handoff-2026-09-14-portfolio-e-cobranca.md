@@ -5,8 +5,13 @@ Sessão de **2026-09-14**. Para continuar num chat novo, peça:
 
 - **Repositório:** `D:\Códigos\Tzolkin\Projetos\Outros\Site - Tzolkin\tzolkin-core`
 - **Branch:** `codex/revisao-seguranca-core` (a `main` preserva o estado antigo)
-- **Último commit:** `04d08da feat: remover Barber, Commerce e Data do portfolio`
-- **Nada foi enviado por push.**
+- **Encerrado em:** 2026-09-14
+- **Commits:** `dde07ef` (classificação e ADR) e `feat: capacidades do portfolio por tipo`
+- **Migração:** `032_classificacao_do_portfolio.sql` aplicada e conferida no banco compartilhado
+- **Verificação final:** 386 aprovados, 0 falhas e 1 teste isolado ignorado
+
+> Este handoff foi concluído. As seções abaixo preservam o estado recebido e as decisões que
+> orientaram a implementação; a cobrança das linhas de serviço continua como próxima frente.
 
 ---
 
@@ -15,8 +20,8 @@ Sessão de **2026-09-14**. Para continuar num chat novo, peça:
 | Frente | Código | Banco compartilhado | Commit |
 |---|---|---|---|
 | Remover Barber, Commerce e Data | pronto | **aplicado** (migração `031`) | ✅ `04d08da` |
-| Classificação do portfólio (Core `internal`, Mentorias e Consultorias) | pronto | ❌ **migração `032` NÃO aplicada** | ❌ |
-| Opção B da ADR 0007: o tipo governa o que o item pode fazer | pronto e testado | não precisa de migração | ❌ |
+| Classificação do portfólio (Core `internal`, Mentorias e Consultorias) | pronto | ✅ migração `032` aplicada | ✅ `dde07ef` |
+| Opção B da ADR 0007: o tipo governa o que o item pode fazer | pronto e testado | não precisa de migração | ✅ commit de capacidades |
 | Pesquisa de cobrança (Contabilizei e alternativas) | — | — | resultado só neste arquivo (§6) |
 
 Conferido no fim da sessão: última migração aplicada é a `031`. Os produtos são

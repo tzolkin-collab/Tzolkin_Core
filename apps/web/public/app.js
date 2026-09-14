@@ -45,7 +45,6 @@ const CONTEXTS = {
    services: { title: 'Serviços', section: 'view-services', metrics:false },
    client: { title: 'Cliente', section: 'view-client', hidden:true, metrics:false },
    emails: { title: 'E-mails', section: 'view-emails', metrics:false },
-   education: { title: 'Mentorias', section: 'view-mentorias', metrics:false },
    access: { title: 'Acessos', section: 'view-access', action: ['Vincular acesso', 'member-dialog'] },
    management: { title: 'Gestão técnica', section: 'view-management', metrics:false },
    database: { title: 'Banco de dados', section: 'view-database', metrics:false },
@@ -64,6 +63,7 @@ const CONTEXTS = {
    'product-inbound': {title:'Inbound',section:'view-commercial',metrics:false},
    'product-keys': {title:'Chaves de integração',section:'view-product-keys',metrics:false},
    'product-orgs': { title: 'Clientes', section: 'view-product-orgs', action: ['Vincular cliente', 'entitlement-dialog'] },
+   'product-engagements': { title: 'Contratações', section: 'view-product-engagements', metrics:false },
    'product-payments': { title: 'Cobrança', section: 'view-product-payments', metrics:false },
    'product-emails': { title: 'E-mails', section: 'view-product-emails', metrics:false },
    'product-campaigns': { title: 'Campanhas', section: 'view-product-campaigns', metrics:false },
@@ -71,12 +71,25 @@ const CONTEXTS = {
  },
 };
 
-const SECTIONS = ['view-commercial','view-product-keys','view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-services', 'view-mentorias', 'view-access', 'view-management', 'view-database', 'view-redis', 'view-settings', 'view-security', 'view-deploys', 'view-server-metrics', 'view-delivery', 'view-product', 'view-product-orgs', 'view-product-payments', 'view-product-emails', 'view-campaigns', 'view-product-campaigns', 'view-service-campaigns'];
-const DATA_NODES = ['tenants', 'leads', 'companies', 'client-summary', 'client-detail', 'stakeholder-directory', 'members', 'contracts', 'product-catalog', 'product-deployment-list', 'services-list', 'services-summary', 'management-schema', 'management-dns', 'management-redis', 'management-apis', 'overview-kpis', 'overview-alerts', 'overview-integrations', 'overview-product-list', 'overview-actions', 'product-orgs', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
+const SECTIONS = ['view-commercial','view-product-keys','view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-services', 'view-access', 'view-management', 'view-database', 'view-redis', 'view-settings', 'view-security', 'view-deploys', 'view-server-metrics', 'view-delivery', 'view-product', 'view-product-orgs', 'view-product-engagements', 'view-product-payments', 'view-product-emails', 'view-campaigns', 'view-product-campaigns', 'view-service-campaigns'];
+const DATA_NODES = ['tenants', 'leads', 'companies', 'client-summary', 'client-detail', 'stakeholder-directory', 'members', 'contracts', 'product-catalog', 'product-deployment-list', 'services-list', 'services-summary', 'management-schema', 'management-dns', 'management-redis', 'management-apis', 'overview-kpis', 'overview-alerts', 'overview-integrations', 'overview-product-list', 'overview-actions', 'product-orgs', 'product-engagements', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
 SECTIONS.push('view-finance','view-emails');
 
 const contextKind = () => (state.context ? 'product' : 'general');
 const views = () => CONTEXTS[contextKind()].views;
+
+// Telas de contexto que dependem de uma capacidade do tipo do item. A regra é do
+// servidor (catalog.mjs, ADR 0007); a tela só lê as capacidades que ele devolve.
+const VIEW_CAPABILITIES = {'product-inbound':['commercial'],'product-keys':['access','commercial'],'product-orgs':['access'],'product-engagements':['commercial'],'product-payments':['checkout']};
+const contextProduct = () => state.product?.product || state.overview?.products?.find(product => product.id === state.context) || null;
+const hasCapability = (product, capability) => Boolean(product?.capabilities?.includes(capability));
+const contextKindLabel = () => PORTFOLIO_KIND_LABELS[contextProduct()?.portfolio_kind] || 'Produto';
+// Enquanto as capacidades não chegam, só aparecem as telas que não dependem de nenhuma.
+const viewAllowed = key => {
+ if (contextKind() !== 'product' || !VIEW_CAPABILITIES[key]) return true;
+ const product = contextProduct();
+ return VIEW_CAPABILITIES[key].some(capability => hasCapability(product, capability));
+};
 const productName = () => state.product?.product?.name || state.context;
 const DEPLOY_ALIASES={educare:['tzolkin-educare'],sites:['tzolkin-sites'],core:['core','tzolkin-core'],skiller:['skiller','tzolkin-skiller']};
 const productKey=product=>String(product?.id||product?.name||'').toLowerCase().replace(/^tzolkin[ -]/,'').replace(/\s+/g,'-');
@@ -181,14 +194,14 @@ async function api(path, method = 'GET', body) {
 
 function renderNav() {
  const context = CONTEXTS[contextKind()];
- $('nav-label').textContent = context.label;
- const groups=contextKind()==='general'?{overview:'Hoje',tracking:'Hoje',finance:'Hoje',companies:'Relacionamentos',people:'Relacionamentos',leads:'Relacionamentos',campaigns:'Relacionamentos',clients:'Relacionamentos',products:'Entrega',services:'Entrega',emails:'Entrega',education:'Educação',settings:'Administração',access:'Administração',management:'Administração',security:'Administração',database:'Bases de dados',redis:'Bases de dados',deploys:'Tecnologia',serverMetrics:'Tecnologia'}:{product:'Produto','product-inbound':'Produto','product-keys':'Produto','product-orgs':'Produto','product-payments':'Produto','product-emails':'Produto','product-campaigns':'Produto'};
+ $('nav-label').textContent = contextKind() === 'product' ? `GESTÃO · ${contextKindLabel().toUpperCase()}` : context.label;
+ const groups=contextKind()==='general'?{overview:'Hoje',tracking:'Hoje',finance:'Hoje',companies:'Relacionamentos',people:'Relacionamentos',leads:'Relacionamentos',campaigns:'Relacionamentos',clients:'Relacionamentos',products:'Entrega',services:'Entrega',emails:'Entrega',settings:'Administração',access:'Administração',management:'Administração',security:'Administração',database:'Bases de dados',redis:'Bases de dados',deploys:'Tecnologia',serverMetrics:'Tecnologia'}:Object.fromEntries(Object.keys(context.views).map(key=>[key,contextKindLabel()]));
  const items=[];let previous,section;
- for(const [key,view]of Object.entries(context.views).filter(([,view])=>!view.hidden)){
+ for(const [key,view]of Object.entries(context.views).filter(([key,view])=>!view.hidden&&viewAllowed(key))){
   if(groups[key]!==previous){section=node('section',undefined,'nav-section');const label=node('h2',groups[key],'nav-group');section.append(label);items.push(section);previous=groups[key];}
   const button = node('button', undefined, 'nav-item' + (key === state.view ? ' active' : ''));
   button.type = 'button'; button.dataset.view = key;
-  const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',metrics:'chart',leads:'user-plus',products:'package',services:'briefcase',education:'graduation-cap',projects:'repo',delivery:'cloud',access:'shield',management:'settings',database:'database',redis:'cache',settings:'sliders',security:'lock',deploys:'cloud',serverMetrics:'activity',product:'package','product-inbound':'user-plus','product-keys':'lock','product-orgs':'people','product-payments':'wallet','product-emails':'mail',campaigns:'chart','product-campaigns':'chart'})[key]);
+  const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',metrics:'chart',leads:'user-plus',products:'package',services:'briefcase',projects:'repo',delivery:'cloud',access:'shield',management:'settings',database:'database',redis:'cache',settings:'sliders',security:'lock',deploys:'cloud',serverMetrics:'activity',product:'package','product-inbound':'user-plus','product-keys':'lock','product-orgs':'people','product-engagements':'briefcase','product-payments':'wallet','product-emails':'mail',campaigns:'chart','product-campaigns':'chart'})[key]);
   icon.classList.add('nav-icon'); button.append(icon, document.createTextNode(view.title));
   if (key === state.view) button.setAttribute('aria-current', 'page');
   button.onclick = () => {switchView(key);closeNavigation();};
@@ -198,6 +211,7 @@ function renderNav() {
 }
 
 function switchView(view) {
+ if (!views()[view] || !viewAllowed(view)) view = Object.keys(views())[0];
  if(view !== 'resource' && state.view === 'resource') { resource.clear(); history.replaceState(null,'',location.pathname+location.search); }
  if(state.view!==view) commercial.clear();
  state.view = view;
@@ -239,7 +253,7 @@ function switchView(view) {
 function renderContextChrome() {
  const product = contextKind() === 'product';
  $('crumb-context').textContent = product ? `TZOLKIN · ${productName()}` : 'TZOLKIN';
- $('eyebrow').textContent = product ? `PRODUTO · ${String(productName()).toUpperCase()}` : 'TZOLKIN CORE';
+ $('eyebrow').textContent = product ? `${contextKindLabel().toUpperCase()} · ${String(productName()).toUpperCase()}` : 'TZOLKIN CORE';
  document.body.dataset.context = product ? 'product' : 'general';
  renderContextPicker(state.overview?.products || []);
 }
@@ -334,6 +348,8 @@ const CLIENT_LABELS={
  owner:'Proprietário',decision_maker:'Decisor',champion:'Champion',finance:'Financeiro',technical:'Técnico',operational:'Operacional',student:'Aluno',contact:'Contato'
 };
 const clientLabel=value=>CLIENT_LABELS[value]||value||'A classificar';
+// Separado de CLIENT_LABELS: lá `product` é modalidade de contratação e `internal` é tipo de relacionamento.
+const PORTFOLIO_KIND_LABELS={product:'Produto',platform:'Plataforma',service_line:'Linha de serviço',internal:'Interno'};
 
 function renderTenants() {
  const overview = state.overview;
@@ -419,9 +435,11 @@ function record(title, detail, edit) {
 const productLifecycle=(product,info)=>{
  const deployment=readyDeployment(product);
  const evidenceStatus=info?.status||'';
- const isUnproven=product.lifecycle_status==='draft'||(!deployment&&['Planejamento','Disponibilidade a validar'].includes(evidenceStatus))||(!deployment&&product.id==='skiller');
+ // Software sem deploy e sem ficha no catálogo não tem evidência nenhuma de estar no ar.
+ const isUnproven=product.lifecycle_status==='draft'||(!deployment&&['Planejamento','Disponibilidade a validar'].includes(evidenceStatus))||(!deployment&&!info&&hasCapability(product,'access'));
  if(isUnproven)return {label:'Produto em draft',tone:'building',next:'Concluir checklist do projeto antes de ativar'};
  if(deployment)return {label:'No ar',tone:'active',next:'Deploy READY observado no provedor'};
+ if(!hasCapability(product,'checkout')&&hasCapability(product,'commercial'))return {label:'Linha de serviço',tone:'',next:'Contratada por proposta; deploy não é requisito'};
  if(evidenceStatus==='Local')return {label:'Plataforma interna',tone:'building',next:'Uso interno; ainda sem publicação externa'};
  if(evidenceStatus==='Planejamento')return {label:'Em planejamento',tone:'building',next:'Criar ou vincular um projeto de deploy'};
  return {label:'Sem deploy observado',tone:'building',next:'Vincular projeto e validar produção'};
@@ -758,9 +776,12 @@ function renderProductArchitecture(product) {
 
 function renderProductRecord(product) {
  const panel = node('div', undefined, 'context-card product-record-card');
- const isSites=product.id==='sites';
- const lifecycle=productLifecycle(product,product.catalog||null),appearsDraft=productAppearsDraft(product,product.catalog||null),live=appearsDraft?(publishedDeployUrl(product)||null):productLiveUrl(product);const identity=node('div',undefined,'product-record-identity');identity.append(productFavicon(productFaviconUrl(product)),node('div'));identity.lastChild.append(node('span',isSites?'SERVIÇO SOB DEMANDA':'CATÁLOGO DE PRODUTO','overview-kicker'),node('h2', product.name), node('p', 'Identificador: ' + product.id, 'detail'));panel.append(identity);
- const actions=node('div',undefined,'product-record-actions');for(const [label,view,icon] of (isSites?[['Captação inbound','product-inbound','user-plus'],['Chaves de integração','product-keys','lock'],['E-mails','product-emails','mail']]:[['Cobrança','product-payments','wallet'],['E-mails','product-emails','mail']])){const button=node('button',undefined,'secondary');button.type='button';button.append(createIcon(icon),document.createTextNode(label));button.onclick=()=>switchView(view);actions.append(button);}const detach=node('button','Desatrelar conexões','quiet');detach.type='button';detach.onclick=async()=>{if(!window.confirm(`Desatrelar domínios, bancos e deploys de ${product.name}? Nenhum dado externo será apagado.`))return;detach.disabled=true;try{await api(`/api/products/${encodeURIComponent(product.id)}/attachments`,'DELETE');state.resourceBindings=state.resourceBindings.filter(item=>item.product_id!==product.id);state.bindings=state.bindings.filter(item=>item.product_id!==product.id);state.topology=await api('/api/products/topology').catch(()=>null);renderProductRecord(product);}catch(error){detach.disabled=false;reportError(error);}};actions.append(detach);panel.append(actions);
+ // Linha de serviço: vende por proposta, sem checkout nem acesso de usuários.
+ const serviceLine=!hasCapability(product,'checkout')&&hasCapability(product,'commercial');
+ const kicker=(PORTFOLIO_KIND_LABELS[product.portfolio_kind]||'Produto').toUpperCase();
+ const recordActions=serviceLine?[['Captação inbound','product-inbound','user-plus'],['Contratações','product-engagements','briefcase'],['Chaves de integração','product-keys','lock'],['E-mails','product-emails','mail']]:hasCapability(product,'checkout')?[['Cobrança','product-payments','wallet'],['E-mails','product-emails','mail']]:[];
+ const lifecycle=productLifecycle(product,product.catalog||null),appearsDraft=productAppearsDraft(product,product.catalog||null),live=appearsDraft?(publishedDeployUrl(product)||null):productLiveUrl(product);const identity=node('div',undefined,'product-record-identity');identity.append(productFavicon(productFaviconUrl(product)),node('div'));identity.lastChild.append(node('span',kicker,'overview-kicker'),node('h2', product.name), node('p', 'Identificador: ' + product.id, 'detail'));panel.append(identity);
+ const actions=node('div',undefined,'product-record-actions');for(const [label,view,icon] of recordActions){const button=node('button',undefined,'secondary');button.type='button';button.append(createIcon(icon),document.createTextNode(label));button.onclick=()=>switchView(view);actions.append(button);}const detach=node('button','Desatrelar conexões','quiet');detach.type='button';detach.onclick=async()=>{if(!window.confirm(`Desatrelar domínios, bancos e deploys de ${product.name}? Nenhum dado externo será apagado.`))return;detach.disabled=true;try{await api(`/api/products/${encodeURIComponent(product.id)}/attachments`,'DELETE');state.resourceBindings=state.resourceBindings.filter(item=>item.product_id!==product.id);state.bindings=state.bindings.filter(item=>item.product_id!==product.id);state.topology=await api('/api/products/topology').catch(()=>null);renderProductRecord(product);}catch(error){detach.disabled=false;reportError(error);}};actions.append(detach);panel.append(actions);
  const catalog = product.catalog;
  if (catalog) {
   panel.append(node('p', catalog.description, 'context-description'));
@@ -772,7 +793,7 @@ function renderProductRecord(product) {
  } else {
   panel.append(node('p', 'Sem ficha no catálogo importado do Notion. Nada foi inferido para preencher este espaço.', 'context-description'));
  }
- const facts=node('div',undefined,'product-record-facts');for(const [label,value] of (isSites?[['Modelo','Serviço sob demanda'],['Entrada','Formulário inbound'],['Cobrança','Sem checkout']]:[['Tipo',product.portfolio_kind||'Produto'],['Estado operacional',lifecycle.label],['Família',product.brand_family||'TZOLKIN']])){const fact=node('div');fact.append(node('span',label),node('strong',String(value)));facts.append(fact);}panel.append(facts);
+ const facts=node('div',undefined,'product-record-facts');for(const [label,value] of (serviceLine?[['Tipo','Linha de serviço'],['Entrada','Formulário inbound ou proposta'],['Cobrança','Fora do checkout']]:[['Tipo',PORTFOLIO_KIND_LABELS[product.portfolio_kind]||'Produto'],['Estado operacional',lifecycle.label],['Família',product.brand_family||'TZOLKIN']])){const fact=node('div');fact.append(node('span',label),node('strong',String(value)));facts.append(fact);}panel.append(facts);
  const connection=node('section',undefined,'product-connection-card'),deployment=readyDeployment(product),project=state.deploys.find(item=>deploymentBelongsToProduct(item,product));connection.append(node('h3','Conexão de deploy'),node('p',deployment?`${project?.project||'Projeto'} · ${project?.provider==='vercel'?'Vercel':'EasyPanel'} · READY observado`:'Nenhum deploy READY vinculado a este produto.','detail'));const connectionActions=node('div',undefined,'product-connection-actions');if(deployment?.url)connectionActions.append(catalogLink('Abrir produção ↗',deployment.url,'product-live-link'));const openDeploys=node('button','Ver projetos e deploys →','secondary');openDeploys.type='button';openDeploys.onclick=()=>{state.context='';state.view='deploys';clearRenderedData();renderContextChrome();renderNav();load().catch(reportError);};connectionActions.append(openDeploys);connection.append(connectionActions);panel.append(connection);
  panel.append(renderProductArchitecture(product));
  $('product-record').replaceChildren(panel);
@@ -827,17 +848,36 @@ function renderProductOrganizations() {
  }
 }
 
+function renderProductEngagements(engagements) {
+ const root=$('product-engagements');if(!root||!state.product)return;
+ if(!engagements.length){root.replaceChildren(node('p',`Nenhuma contratação ligada a ${state.product.product.name}.`,'empty-list'));return;}
+ root.replaceChildren(...engagements.map(engagement=>{
+  const card=node('article',undefined,'service-card'),head=node('header'),title=node('div');
+  title.append(node('h3',engagement.label),node('p',`${engagement.tenant_name} · ${clientLabel(engagement.service_model)}`,'detail'));
+  head.append(title,node('span',clientLabel(engagement.status),'status '+(['active','planned'].includes(engagement.status)?'active':'building')));
+  card.append(head);return card;
+ }));
+}
+
 function renderProduct() {
- const context = state.product;
- renderMetrics([
+ const context = state.product, product = context.product, engagements = context.engagements || [];
+ const access = hasCapability(product, 'access');
+ // Contrato de acesso só existe onde o tipo dá acesso; linha de serviço mede contratações.
+ renderMetrics(access ? [
   ['Organizações', context.summary.organizations],
   ['Contratos ativos', context.summary.active_contracts],
   ['Contratos revogados', context.summary.revoked_contracts],
   ['Pessoas alcançadas', context.summary.reachable_memberships, 'com vínculo neste produto'],
- ]);
- renderProductRecord({...context.product,deploy_url:publishedDeployUrl(context.product)});
+ ] : hasCapability(product, 'commercial') ? [
+  ['Contratações', engagements.length],
+  ['Em curso', engagements.filter(e => ['planned', 'active', 'paused'].includes(e.status)).length],
+  ['Concluídas', engagements.filter(e => e.status === 'completed').length],
+ ] : []);
+ renderProductRecord({...product,deploy_url:publishedDeployUrl(product)});
+ $('product-rights-title').hidden = $('product-rights').hidden = !access;
  renderProductRights(context.organizations);
  renderProductOrganizations();
+ renderProductEngagements(engagements);
 }
 
 /* ---------- carregamento ---------- */
@@ -855,10 +895,13 @@ function fillDirectorySelects() {
   select.replaceChildren(option('', 'Selecione o cliente'),...customers.map(t=>option(t.id,t.name)));
   if(customers.some(t=>t.id===previous))select.value=previous;
  }
+ // Os dois formulários com este seletor são de acesso (vínculo e contrato):
+ // linha de serviço e item interno nem aparecem como opção.
+ const accessProducts = overview.products.filter(p => hasCapability(p, 'access'));
  for (const select of document.querySelectorAll('.product-select')) {
   const previous = select.value;
-  select.replaceChildren(option('', 'Selecione o produto'), ...overview.products.map(p => option(p.id, p.name)));
-  if (overview.products.some(p => p.id === previous)) select.value = previous;
+  select.replaceChildren(option('', 'Selecione o produto'), ...accessProducts.map(p => option(p.id, p.name)));
+  if (accessProducts.some(p => p.id === previous)) select.value = previous;
  }
 }
 
@@ -866,7 +909,7 @@ function fillContextSelect(products) {
  const select = $('context-select');
  select.replaceChildren(option('', 'TZOLKIN · Gestão geral'));
  const group = document.createElement('optgroup');
- group.label = 'Gestão de produto';
+ group.label = 'Portfólio';
  group.append(...products.map(p => option(p.id, p.name)));
  select.append(group);
  select.value = state.context;
@@ -921,6 +964,10 @@ async function load() {
   if(!state.deploys.length) await api('/api/deploys').then(data=>{state.deploys=data.projects||[];}).catch(()=>{});
   $('login').hidden = true; $('workspace').hidden = false;
  renderProduct();
+  // As capacidades do item acabaram de chegar: a navegação passa a ser a do tipo,
+  // e uma tela que o tipo não tem volta para a visão geral.
+  renderNav();
+  if(!viewAllowed(state.view))switchView(Object.keys(views())[0]);
   if(state.view==='product-payments')await productPayments.load(state.product.product);
   if(state.view==='product-emails')await productEmails.load({...state.product.product,deploy_url:publishedDeployUrl(state.product.product),favicon_url:productFaviconUrl(state.product.product)});
  }

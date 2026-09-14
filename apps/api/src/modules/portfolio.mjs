@@ -2,7 +2,7 @@
 //
 // Dois cadastros separados, como decidido no ADR-0005:
 //  - PORTFÓLIO (products): o que a TZOLKIN vende — produto, plataforma ou
-//    linha de serviço.
+//    linha de serviço — e o que ela opera para si mesma (interno).
 //  - CONTRATAÇÃO (client_engagements): o que um cliente comprou — sob demanda,
 //    consultoria, assessoria, mentoria ou produto —, ligada a um item do
 //    portfólio quando fizer sentido.
@@ -21,9 +21,10 @@
 import { fail, input, isProductId, isUuid, onlyParams, text } from '../platform/http.mjs';
 import { commercialPermission } from './commercial-keys.mjs';
 import { SERVICE_MODELS } from './commercial-intake.mjs';
-import { findProduct } from './catalog.mjs';
+import { CAPABILITIES, capabilitiesOf, requireProductFor } from './catalog.mjs';
 
-export const PORTFOLIO_KINDS = ['product', 'platform', 'service_line'];
+// `internal`: software da própria TZOLKIN, sem comprador externo (ADR 0007).
+export const PORTFOLIO_KINDS = ['product', 'platform', 'service_line', 'internal'];
 export const ENGAGEMENT_STATUS = ['planned', 'active', 'paused', 'completed', 'discontinued', 'unclassified'];
 
 // O próprio Core é item do portfólio. Arquivá-lo ou devolvê-lo a rascunho
@@ -92,10 +93,39 @@ function exigirSemDependentes(dependentes, acao) {
  throw fail(409, `Não dá para ${acao} enquanto houver ${lista}. Encerre ou mova esses vínculos antes.`);
 }
 
+// Reclassificar não pode cortar em silêncio o que depende de uma capacidade que
+// o tipo novo não tem (catalog.mjs). Só as capacidades PERDIDAS são conferidas.
+const DEPENDENTES_POR_CAPACIDADE = {
+ access: [
+  ['contratos de produto ativos', 'SELECT count(*)::int AS n FROM entitlements WHERE product_id=$1 AND active'],
+  ['vínculos de acesso ativos', 'SELECT count(*)::int AS n FROM memberships WHERE product_id=$1 AND active'],
+  ['chaves de contexto ativas', "SELECT count(*)::int AS n FROM app_clients WHERE product_id=$1 AND active AND revoked_at IS NULL AND 'context:read'=ANY(scopes)"],
+ ],
+ checkout: [['ofertas de cobrança', 'SELECT count(*)::int AS n FROM billing_offers WHERE product_id=$1']],
+ product_engagement: [
+  ['contratações do tipo produto em curso', "SELECT count(*)::int AS n FROM client_engagements WHERE product_id=$1 AND service_model='product' AND archived_at IS NULL AND status IN ('planned','active','paused')"],
+ ],
+ commercial: [
+  ['chaves comerciais ativas', "SELECT count(*)::int AS n FROM app_clients WHERE product_id=$1 AND active AND revoked_at IS NULL AND scopes && ARRAY['commercial:intake','commercial:read']::text[]"],
+  ['contratações em curso', "SELECT count(*)::int AS n FROM client_engagements WHERE product_id=$1 AND archived_at IS NULL AND status IN ('planned','active','paused')"],
+ ],
+};
+
+export async function dependentesDaReclassificacao(client, id, de, para) {
+ const perdidas = Object.keys(CAPABILITIES).filter(c => CAPABILITIES[c].includes(de) && !CAPABILITIES[c].includes(para));
+ const vivos = [];
+ for (const capacidade of perdidas)
+  for (const [rotulo, sql] of DEPENDENTES_POR_CAPACIDADE[capacidade] || []) {
+   const n = (await client.query(sql, [id])).rows[0]?.n || 0;
+   if (n > 0) vivos.push(`${rotulo}: ${n}`);
+  }
+ return vivos;
+}
+
 function validarItem(body) {
  const name = text(body.name, 2, 120);
  if (!PORTFOLIO_KINDS.includes(body.portfolio_kind))
-  throw fail(400, 'Tipo inválido: use produto, plataforma ou linha de serviço.');
+  throw fail(400, 'Tipo inválido: use produto, plataforma, linha de serviço ou interno.');
  const brand = body.brand_family == null || body.brand_family === ''
   ? 'tzolkin' : String(body.brand_family).trim().toLowerCase();
  if (!FAMILIA.test(brand)) throw fail(400, 'Família inválida: letras minúsculas, números e hífen.');
@@ -130,8 +160,13 @@ async function validarContratacao(client, body, anterior = null) {
  if (body.service_model === 'product' && productId === null)
   throw fail(400, 'Contratação do tipo produto precisa indicar o produto.');
  const label = text(body.label, 2, 120);
- if (productId !== null && productId !== anterior?.product_id && !await findProduct(client, productId))
-  throw fail(400, 'Produto não está disponível para contratação.');
+ // Contratação de produto exige item que venda acesso; as demais, item com ciclo
+ // comercial (o Core, interno, não é contratado). Também confere quando só o
+ // tipo da contratação passa a ser produto.
+ const passaAProduto = body.service_model === 'product' && anterior?.service_model !== 'product';
+ if (productId !== null && (productId !== anterior?.product_id || passaAProduto))
+  await requireProductFor(client, productId, body.service_model === 'product' ? 'product_engagement' : 'commercial',
+   { missing: fail(400, 'Produto não está disponível para contratação.') });
  return { product_id: productId, service_model: body.service_model, status: body.status, label };
 }
 
@@ -162,7 +197,7 @@ export function portfolioRoutes(router) {
      WHERE $1 OR p.lifecycle_status <> 'archived'
      ORDER BY p.name`, [incluirArquivados]);
   return reply(200, {
-   items: r.rows.map(item => ({ ...item, protected: PROTEGIDOS.has(item.id) })),
+   items: r.rows.map(item => ({ ...item, protected: PROTEGIDOS.has(item.id), capabilities: capabilitiesOf(item.portfolio_kind) })),
    kinds: PORTFOLIO_KINDS,
   });
  }, { body: false });
@@ -191,6 +226,11 @@ export function portfolioRoutes(router) {
   const campos = validarItem(body);
   const antes = await carregarItem(client, params.id, revisao(body));
   if (antes.lifecycle_status === 'archived') throw fail(409, 'Item arquivado. Restaure antes de editar.');
+  if (campos.portfolio_kind !== antes.portfolio_kind) {
+   const vivos = await dependentesDaReclassificacao(client, antes.id, antes.portfolio_kind, campos.portfolio_kind);
+   if (vivos.length)
+    throw fail(409, `Não dá para mudar o tipo enquanto houver ${vivos.join('; ')}. Encerre ou mova esses vínculos antes.`);
+  }
   const r = await client.query(
    `UPDATE products SET name=$2, portfolio_kind=$3, brand_family=$4, revision=revision+1, updated_at=now()
      WHERE id=$1 RETURNING ${COLUNAS}`,

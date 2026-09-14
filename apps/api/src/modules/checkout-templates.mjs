@@ -17,7 +17,7 @@
 //
 // REQUER a migração 023 (checkout_template_revisions).
 import {input,text,isProductId,fail} from '../platform/http.mjs';
-import {findEditableProduct} from './catalog.mjs';
+import {requireProductFor} from './catalog.mjs';
 import {validateTheme,validateCopy,mergeTheme,assertPayloadSize,editorSchema,isFont} from '../platform/checkout-model.mjs';
 
 export const TEMPLATE_TYPES=['HOSTED','EMBEDDED','ELEMENTS'];
@@ -64,7 +64,7 @@ export function checkoutTemplateRoutes(router){
  router.get('/api/checkout-templates',async({pool,url,reply})=>{
   const product=url.searchParams.get('product_id');
   if(!isProductId(product)||[...url.searchParams.keys()].some(k=>k!=='product_id')||url.searchParams.getAll('product_id').length!==1)throw fail(400,'Produto inválido.');
-  if(!await findEditableProduct(pool, product))throw fail(404,'Produto não encontrado.');
+  await requireProductFor(pool,product,'checkout',{draft:true,missing:fail(404,'Produto não encontrado.')});
   const result=await pool.query('SELECT slug,payload,version,updated_at FROM checkout_templates WHERE product_id=$1 ORDER BY slug',[product]);
   // O descritor vai junto para o editor renderizar os campos a partir dele, em
   // vez de repetir a lista de tokens e textos no front — e as duas divergirem.
@@ -73,7 +73,7 @@ export function checkoutTemplateRoutes(router){
 
  router.put('/api/checkout-templates',async({client,body,operator})=>{
   const tpl=validateTemplate(body);
-  if(!await findEditableProduct(client,tpl.product_id))throw fail(400,'Produto não está disponível para checkout.');
+  await requireProductFor(client,tpl.product_id,'checkout',{draft:true,missing:fail(400,'Produto não está disponível para checkout.')});
   // Trava a linha antes de decidir: o before_value da revisão precisa do estado
   // exato que está sendo substituído, não de uma leitura anterior à transação.
   const anterior=(await client.query('SELECT payload,version FROM checkout_templates WHERE product_id=$1 AND slug=$2 FOR UPDATE',[tpl.product_id,tpl.slug])).rows[0]||null;

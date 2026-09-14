@@ -8,7 +8,16 @@
 // produto (docs/decisions/0002-vinculo-de-pessoa-por-produto.md), e a resposta
 // declara isso em membership_scope.
 import { isProductId, onlyParams, fail } from '../platform/http.mjs';
-import { findEditableProduct, findCatalogEntry } from './catalog.mjs';
+import { findEditableProduct, findCatalogEntry, capabilitiesOf } from './catalog.mjs';
+
+// Contratações do item: é o que uma linha de serviço tem no lugar de contrato de
+// acesso. Arquivadas ficam fora, como nas demais listas de trabalho.
+const ENGAGEMENTS = `
+ SELECT e.id, e.tenant_id, t.name AS tenant_name, e.label, e.service_model, e.status, e.updated_at
+   FROM client_engagements e
+   JOIN tenants t ON t.id = e.tenant_id
+  WHERE e.product_id = $1 AND e.archived_at IS NULL
+  ORDER BY t.name, e.label`;
 
 const ORGANIZATIONS = `
  SELECT t.id AS tenant_id, t.name, t.slug, t.status, t.created_at,
@@ -31,10 +40,11 @@ export function productConsoleRoutes(router) {
   const product = await findEditableProduct(pool, params.productId);
   if (!product) throw fail(404, 'Produto não encontrado.');
 
-  const [organizations, catalog, profile] = await Promise.all([
+  const [organizations, catalog, profile, engagements] = await Promise.all([
    pool.query(ORGANIZATIONS, [product.id]).then(result => result.rows),
    findCatalogEntry(pool, product.id),
    pool.query('SELECT portfolio_kind,brand_family,lifecycle_status FROM products WHERE id=$1',[product.id]).then(result=>result.rows[0]||{}),
+   pool.query(ENGAGEMENTS, [product.id]).then(result => result.rows),
   ]);
 
   const active = organizations.filter(row => row.contract_active && row.status === 'active');
@@ -43,6 +53,7 @@ export function productConsoleRoutes(router) {
     id: product.id,
     name: product.name,
     ...profile,
+    capabilities: capabilitiesOf(profile.portfolio_kind),
     // Ficha cadastral do Notion quando existir; ausência não é erro.
     catalog: catalog ? { ...catalog.payload, imported_at: catalog.imported_at } : null,
    },
@@ -57,6 +68,7 @@ export function productConsoleRoutes(router) {
    },
    membership_scope: 'product',
    organizations,
+   engagements,
    generated_at: new Date().toISOString(),
   });
  }, { body: false });

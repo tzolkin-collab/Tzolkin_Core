@@ -1,5 +1,6 @@
 // Contexto A — gestão geral da TZOLKIN: visão transversal do Core.
 // Retorna o cadastro completo; ainda sem paginação (volume atual é cadastral).
+import { capabilitiesOf } from './catalog.mjs';
 
 // Estado do transporte do banco, em forma consumível. 'unknown' quando não medido:
 // nunca reportar 'tls' sem prova. Não expõe host nem credencial.
@@ -37,7 +38,9 @@ export function workspaceRoutes(router) {
   ]) results.push(await pool.query(sql));
   const [tenants, products, memberships, entitlements, engagements, stakeholders] = results;
   return reply(200, {
-   tenants: tenants.rows, products: products.rows,
+   // A tela monta o seletor e a navegação de cada contexto pelas capacidades;
+   // ela não conhece a regra, só a lê daqui (ADR 0007).
+   tenants: tenants.rows, products: products.rows.map(product => ({ ...product, capabilities: capabilitiesOf(product.portfolio_kind) })),
    memberships: memberships.rows, entitlements: entitlements.rows,
    engagements: engagements.rows, stakeholders: stakeholders.rows,
    // O operador precisa ver, sem procurar, que o banco está em texto claro.

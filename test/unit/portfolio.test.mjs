@@ -64,6 +64,11 @@ test('Portfólio: criar', async t => {
   assert.equal(client.chamadas[1].params[2], 'created');
  });
 
+ await t.test('aceita os quatro tipos, inclusive interno', async () => {
+  for (const portfolio_kind of ['product', 'platform', 'service_line', 'internal'])
+   assert.equal(_internals.validarItem({ name: 'Item', portfolio_kind }).portfolio_kind, portfolio_kind);
+ });
+
  await t.test('entrada inválida é recusada antes de tocar o banco', async () => {
   for (const body of [
    { id: 'Maiusculo', name: 'Item', portfolio_kind: 'product' },

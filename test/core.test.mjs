@@ -32,16 +32,16 @@ test('Core real PostgreSQL security and contract suite',async t=>{
   await t.test('unknown tenant fields rejected',async()=>assert.equal((await req('/api/tenants','POST',{name:'Test',slug:'test',admin:true})).status,400));
   await t.test('creates two isolated tenants',async()=>{for(let n=0;n<2;n++){const r=await req('/api/tenants','POST',{name:`Integration ${n}`,slug:`test-${randomUUID()}`});assert.equal(r.status,200);ids.push((await r.json()).tenant_id);}});
   await t.test('membership and entitlement persist',async()=>{
-   assert.equal((await req('/api/memberships','PUT',{tenant_id:ids[0],product_id:'sites',subject,active:true})).status,200);
-   assert.equal((await req('/api/entitlements','PUT',{tenant_id:ids[0],product_id:'sites',plan:'test',rights:['dashboard.read'],active:true})).status,200);
-   await pool.query('INSERT INTO app_clients(token_hash,product_id) VALUES($1,$2)',[tokenHash,'sites']);
-   const r=await context(ids[0]);assert.equal(r.status,200);const data=await r.json();assert.equal(data.product_id,'sites');assert.deepEqual(data.rights,['dashboard.read']);
+   assert.equal((await req('/api/memberships','PUT',{tenant_id:ids[0],product_id:'educare',subject,active:true})).status,200);
+   assert.equal((await req('/api/entitlements','PUT',{tenant_id:ids[0],product_id:'educare',plan:'test',rights:['dashboard.read'],active:true})).status,200);
+   await pool.query('INSERT INTO app_clients(token_hash,product_id) VALUES($1,$2)',[tokenHash,'educare']);
+   const r=await context(ids[0]);assert.equal(r.status,200);const data=await r.json();assert.equal(data.product_id,'educare');assert.deepEqual(data.rights,['dashboard.read']);
   });
   await t.test('app credential cannot administer Core',async()=>assert.equal((await req('/api/overview','GET',undefined,{cookie:'',authorization:`Bearer ${token}`})).status,401));
   await t.test('other tenant cannot be accessed without membership',async()=>assert.equal((await context(ids[1])).status,403));
   await t.test('product cannot be selected by caller',async()=>assert.equal((await req(`/v1/context?tenant_id=${ids[0]}&subject=${encodeURIComponent(subject)}&product_id=skiller`,'GET',undefined,{authorization:`Bearer ${token}`})).status,400));
-  await t.test('membership revocation immediately denies access',async()=>{await req('/api/memberships','PUT',{tenant_id:ids[0],product_id:'sites',subject,active:false});assert.equal((await context(ids[0])).status,403);await req('/api/memberships','PUT',{tenant_id:ids[0],product_id:'sites',subject,active:true});});
-  await t.test('entitlement revocation increments version and denies',async()=>{await req('/api/entitlements','PUT',{tenant_id:ids[0],product_id:'sites',plan:'test',rights:[],active:false});assert.equal((await context(ids[0])).status,403);const row=await pool.query('SELECT version FROM entitlements WHERE tenant_id=$1',[ids[0]]);assert.equal(Number(row.rows[0].version),2);await req('/api/entitlements','PUT',{tenant_id:ids[0],product_id:'sites',plan:'test',rights:[],active:true});});
+  await t.test('membership revocation immediately denies access',async()=>{await req('/api/memberships','PUT',{tenant_id:ids[0],product_id:'educare',subject,active:false});assert.equal((await context(ids[0])).status,403);await req('/api/memberships','PUT',{tenant_id:ids[0],product_id:'educare',subject,active:true});});
+  await t.test('entitlement revocation increments version and denies',async()=>{await req('/api/entitlements','PUT',{tenant_id:ids[0],product_id:'educare',plan:'test',rights:[],active:false});assert.equal((await context(ids[0])).status,403);const row=await pool.query('SELECT version FROM entitlements WHERE tenant_id=$1',[ids[0]]);assert.equal(Number(row.rows[0].version),2);await req('/api/entitlements','PUT',{tenant_id:ids[0],product_id:'educare',plan:'test',rights:[],active:true});});
   await t.test('membership without product is rejected',async()=>assert.equal((await req('/api/memberships','PUT',{tenant_id:ids[0],subject,active:true})).status,400));
   await t.test('membership of one product does not open another product of the same organization',async()=>{
    await pool.query('INSERT INTO app_clients(token_hash,product_id) VALUES($1,$2)',[skillerHash,'skiller']);

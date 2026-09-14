@@ -4,7 +4,7 @@
 // em que foi vinculada, mesmo que a organização contrate outros.
 // Decisão em docs/decisions/0002-vinculo-de-pessoa-por-produto.md.
 import { input, text, isUuid, isProductId, fail } from '../platform/http.mjs';
-import {findProduct} from './catalog.mjs';
+import {requireProductFor} from './catalog.mjs';
 
 export function directoryRoutes(router) {
  router.post('/api/tenants', async ({ client, body }) => {
@@ -50,7 +50,7 @@ export function directoryRoutes(router) {
   input(body, ['tenant_id', 'product_id', 'subject', 'active']);
   if (!isUuid(body.tenant_id) || typeof body.active !== 'boolean') throw fail(400, 'Vínculo inválido.');
   if (!isProductId(body.product_id)) throw fail(400, 'Produto inválido.');
-  if (!await findProduct(client, body.product_id)) throw fail(400, 'Produto não está disponível para acesso.');
+  await requireProductFor(client, body.product_id, 'access', { missing: fail(400, 'Produto não está disponível para acesso.') });
   // A FK de product_id recusa produto inexistente; o erro vira 409 em describeError.
   await client.query(
    `INSERT INTO memberships(tenant_id,subject,product_id,active) VALUES($1,$2,$3,$4)

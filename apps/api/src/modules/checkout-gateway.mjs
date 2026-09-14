@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs';
 import { fail, json, input, isProductId, onlyParams } from '../platform/http.mjs';
 import { mergeTheme, mergeCopy } from '../platform/checkout-model.mjs';
 import { createStripeCheckoutAdapter } from '../integrations/stripe-checkout.mjs';
+import { findProductFor } from './catalog.mjs';
 
 const WINDOW_MS = 5 * 60 * 1000;
 const MAX_ATTEMPTS = 20;
@@ -71,17 +72,19 @@ const temaPublico = payload =>
  mergeTheme(payload.theme ?? (payload.branding && { color: payload.branding.primary_color, radius: payload.branding.border_radius, logo_url: payload.branding.logo_url }));
 const templatePublico = row => ({ slug: row.slug, type: row.payload.type, branding: row.payload.branding, theme: temaPublico(row.payload), copy: mergeCopy(row.payload.copy) });
 
+// Item sem a capacidade de checkout (linha de serviço, interno) cai no mesmo 404
+// de oferta inexistente: rota pública não explica a classificação do portfólio.
 async function lerOfertaETemplate(pool, productId, offerSlug, templateSlug) {
  const [produto, oferta, template] = await Promise.all([
-  pool.query("SELECT id,name FROM products WHERE id=$1 AND lifecycle_status='active'", [productId]),
+  findProductFor(pool, productId, 'checkout'),
   pool.query('SELECT slug,payload FROM billing_offers WHERE product_id=$1 AND slug=$2', [productId, offerSlug]),
   templateSlug
    ? pool.query('SELECT slug,payload FROM checkout_templates WHERE product_id=$1 AND slug=$2', [productId, templateSlug])
    : pool.query(`SELECT slug,payload FROM checkout_templates WHERE product_id=$1 AND (payload->>'is_default')='true' LIMIT 1`, [productId]),
  ]);
- if (!produto.rows.length || !oferta.rows.length) throw fail(404, 'Oferta não encontrada.');
+ if (!produto || !oferta.rows.length) throw fail(404, 'Oferta não encontrada.');
  if (!template.rows.length) throw fail(404, 'Nenhum template de checkout configurado para este produto.');
- return { produto: produto.rows[0], oferta: oferta.rows[0], template: template.rows[0] };
+ return { produto, oferta: oferta.rows[0], template: template.rows[0] };
 }
 
 export function checkoutGatewayRoutes(router, { env = process.env, adapterFactory = createStripeCheckoutAdapter, throttle = createIpThrottle() } = {}) {
@@ -89,7 +92,6 @@ export function checkoutGatewayRoutes(router, { env = process.env, adapterFactor
   onlyParams(url.searchParams, ['product_id', 'offer_slug', 'template_slug']);
   const productId = url.searchParams.get('product_id'), offerSlug = url.searchParams.get('offer_slug'), templateSlug = url.searchParams.get('template_slug');
   if (!isProductId(productId) || !isProductId(offerSlug) || (templateSlug !== null && !isProductId(templateSlug))) throw fail(400, 'Identificador inválido.');
-  if (productId === 'sites') throw fail(409, 'TZOLKIN Sites não possui checkout público.');
   const { produto, oferta, template } = await lerOfertaETemplate(pool, productId, offerSlug, templateSlug);
   // A publishable key não é segredo -- é feita para ir ao navegador. Só ela
   // (nunca a secreta) viaja nesta rota pública.
@@ -105,7 +107,6 @@ export function checkoutGatewayRoutes(router, { env = process.env, adapterFactor
   const { product_id: productId, offer_slug: offerSlug } = body;
   const templateSlug = body.template_slug ?? null;
   if (!isProductId(productId) || !isProductId(offerSlug) || (templateSlug !== null && !isProductId(templateSlug))) throw fail(400, 'Identificador inválido.');
-  if (productId === 'sites') throw fail(409, 'TZOLKIN Sites não possui checkout público.');
 
   const { oferta, template } = await lerOfertaETemplate(pool, productId, offerSlug, templateSlug);
   const offer = oferta.payload, tpl = template.payload;

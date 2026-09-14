@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { digest } from '../platform/session.mjs';
 import { fail, input, isProductId, isUuid, onlyParams, text } from '../platform/http.mjs';
+import { requireProductFor } from './catalog.mjs';
 
 export async function commercialPermission(client, operator, write = false, ownerOnly = false) {
  if (operator?.subject === 'local-bootstrap') return;
@@ -11,6 +12,9 @@ export async function commercialPermission(client, operator, write = false, owne
  if (role && ((ownerOnly && role !== 'owner') || (write && role === 'viewer'))) throw fail(403, 'Sem permissão para esta operação.');
 }
 export const KEY_SCOPES = ['context:read','commercial:intake','commercial:read'];
+// Cada escopo exige uma capacidade do tipo do item (catalog.mjs): chave de
+// contexto só existe para quem dá acesso; chave comercial, para quem vende.
+export const SCOPE_CAPABILITY = Object.freeze({'context:read':'access','commercial:intake':'commercial','commercial:read':'commercial'});
 export function validateKey(body, now = Date.now()) {
  input(body, ['product_id','label','scopes','expires_at']);
  if (!isProductId(body.product_id)) throw fail(400,'Produto inválido.');
@@ -25,7 +29,8 @@ async function audit(client,key,action,operator,details={}) {
 }
 export async function issueKey(client,values,operator,rotatedFrom=null) {
  const v=validateKey(values);
- if (!(await client.query("SELECT id FROM products WHERE id=$1 AND lifecycle_status IN ('active','draft')",[v.product_id])).rowCount) throw fail(404,'Produto não encontrado.');
+ for (const capability of new Set(v.scopes.map(scope=>SCOPE_CAPABILITY[scope])))
+  await requireProductFor(client,v.product_id,capability,{draft:true,missing:fail(404,'Produto não encontrado.')});
  const token=randomBytes(32).toString('base64url');
  const key=(await client.query(`INSERT INTO app_clients(token_hash,product_id,label,scopes,expires_at,rotated_from) VALUES($1,$2,$3,$4,$5,$6)
  RETURNING id,product_id,label,scopes,expires_at,created_at`,[digest(token),v.product_id,v.label,v.scopes,v.expires_at,rotatedFrom])).rows[0];

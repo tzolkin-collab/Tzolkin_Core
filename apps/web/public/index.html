@@ -82,7 +82,6 @@
 
 <section id="view-products" class="view" hidden><div class="section-toolbar"><div><h2 class="section-title">Portfólio TZOLKIN</h2><p class="catalog-caption">Produto ativo exige oferta real; produto em draft ainda está em construção. Deploy observado e ciclo comercial são evidências separadas.</p></div><button id="products-services-link" class="secondary" type="button">Serviços de assessoria →</button></div><div id="product-catalog" class="product-grid portfolio-grid"></div><h2 class="section-title contracts-title">Projetos detectados nos provedores</h2><p class="catalog-caption">Deploys encontrados na Vercel e no EasyPanel. Um projeto sem produto vinculado precisa ser classificado antes de virar produto.</p><div id="product-deployment-list" class="list-panel"></div><h2 class="section-title contracts-title">Clientes vinculados</h2><div id="contracts" class="list-panel"></div></section>
 <section id="view-services" class="view" hidden aria-label="Serviços"><div class="section-toolbar"><div><h2 class="section-title">Serviços</h2><p class="catalog-caption">Assessoria, consultoria e trabalhos sob demanda pertencem às contratações do cliente. Eles não viram produto ativo por causa de um deploy.</p></div><span class="status">Contratações reais</span></div><div id="services-summary" class="deploy-summary" aria-label="Resumo dos serviços"></div><div id="services-list" class="service-grid"></div></section>
-<section id="view-mentorias" class="view" hidden aria-label="Mentorias"><div class="section-toolbar"><div><h2>Mentorias</h2><p class="detail">Acompanhamento educacional, turmas e alunos. Esta área ficará independente do catálogo de produtos.</p></div></div><div class="empty-state"><span class="empty-symbol" aria-hidden="true">✦</span><h3>Estrutura educacional em preparação</h3><p>Turmas, matrículas, responsáveis e cobranças serão conectados aqui.</p></div></section>
 
 <section id="view-access" class="view" hidden><h2 class="section-title">Acessos aos produtos</h2><div id="members" class="list-panel"></div></section>
 <section id="view-settings" class="view" hidden aria-label="Configurações"><div class="section-toolbar"><div><h2>Configurações</h2><p class="detail">Preferências operacionais e integrações do Core.</p></div></div><div class="empty-state"><h3>Configurações do espaço</h3><p>Em breve: preferências, integrações e regras padrão.</p></div></section>
@@ -139,7 +138,7 @@
 <section id="view-product-keys" class="view" hidden aria-label="Chaves de integração"></section>
 <section id="view-product" class="view" hidden>
 <div id="product-record" class="context-panel"></div>
-<h2 class="section-title contracts-title">Direitos contratados</h2>
+<h2 id="product-rights-title" class="section-title contracts-title">Direitos contratados</h2>
 <div id="product-rights" class="list-panel"></div>
 </section>
 
@@ -150,6 +149,7 @@
 <p id="product-orgs-search-empty" class="empty-list" hidden>Nenhuma organização encontrada.</p></div>
 <p class="catalog-caption catalog-footnote" id="scope-note">Pessoas vinculadas contam apenas este produto. Um vínculo em outro produto da mesma organização não dá acesso aqui.</p>
 </section>
+<section id="view-product-engagements" class="view" hidden aria-label="Contratações"><div class="section-toolbar"><div><h2 class="section-title">Contratações</h2><p class="catalog-caption">O que cada cliente contratou neste item. Linha de serviço não tem contrato de acesso: o vínculo com o cliente é a contratação.</p></div></div><div id="product-engagements" class="service-grid"></div></section>
 <section id="view-product-payments" class="view" hidden aria-label="Pagamentos do produto"></section>
 <section id="view-product-emails" class="view" hidden aria-label="E-mails do produto"></section>
 <section id="view-campaigns" class="view" hidden aria-label="Campanhas"></section>

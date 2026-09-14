@@ -17,6 +17,7 @@ test('Product console scoping suite', async t => {
 
  let cookie = '';
  const ids = [];
+ const engagementIds = [];
  const serviceToken = randomBytes(32).toString('base64url');
  const serviceHash = createHash('sha256').update(serviceToken).digest('hex');
  const subject = `test:${randomUUID()}`;
@@ -76,16 +77,16 @@ test('Product console scoping suite', async t => {
     ids.push((await response.json()).tenant_id);
    }
    assert.equal((await req('/api/memberships', 'PUT',
-    { tenant_id: ids[0], product_id: 'sites', subject, active: true })).status, 200);
+    { tenant_id: ids[0], product_id: 'educare', subject, active: true })).status, 200);
    assert.equal((await req('/api/entitlements', 'PUT',
-    { tenant_id: ids[0], product_id: 'sites', plan: 'console-test', rights: ['dashboard.read'], active: true })).status, 200);
+    { tenant_id: ids[0], product_id: 'educare', plan: 'console-test', rights: ['dashboard.read'], active: true })).status, 200);
    assert.equal((await req('/api/entitlements', 'PUT',
-    { tenant_id: ids[1], product_id: 'educare', plan: 'console-test', rights: [], active: true })).status, 200);
+    { tenant_id: ids[1], product_id: 'skiller', plan: 'console-test', rights: [], active: true })).status, 200);
   });
 
   await t.test('console lists only organizations contracted for that product', async () => {
-   const sites = await (await openConsole('sites')).json();
-   const rows = sites.organizations.filter(row => ids.includes(row.tenant_id));
+   const educare = await (await openConsole('educare')).json();
+   const rows = educare.organizations.filter(row => ids.includes(row.tenant_id));
    assert.equal(rows.length, 1);
    assert.equal(rows[0].tenant_id, ids[0]);
    assert.equal(rows[0].plan, 'console-test');
@@ -93,53 +94,79 @@ test('Product console scoping suite', async t => {
    assert.equal(rows[0].contract_active, true);
    assert.equal(rows[0].active_memberships, 1);
 
-   const educare = await (await openConsole('educare')).json();
-   assert.deepEqual(educare.organizations.filter(row => row.tenant_id === ids[0]), []);
-   assert.equal(educare.organizations.filter(row => row.tenant_id === ids[1]).length, 1);
-
    const skiller = await (await openConsole('skiller')).json();
-   assert.deepEqual(skiller.organizations.filter(row => ids.includes(row.tenant_id)), []);
+   assert.deepEqual(skiller.organizations.filter(row => row.tenant_id === ids[0]), []);
+   assert.equal(skiller.organizations.filter(row => row.tenant_id === ids[1]).length, 1);
+
+   const sites = await (await openConsole('sites')).json();
+   assert.deepEqual(sites.organizations.filter(row => ids.includes(row.tenant_id)), []);
   });
 
   await t.test('membership scope is declared as product-scoped', async () => {
+   const educare = await (await openConsole('educare')).json();
+   assert.equal(educare.membership_scope, 'product');
+  });
+
+  await t.test('service line refuses access, exposes capabilities and lists engagements', async () => {
+   // ADR 0007: linha de serviço não tem contrato de acesso nem vínculo de pessoa.
+   const contract = await req('/api/entitlements', 'PUT',
+    { tenant_id: ids[0], product_id: 'sites', plan: 'console-test', rights: [], active: true });
+   assert.equal(contract.status, 409);
+   assert.match((await contract.json()).message, /linha de serviço/);
+   assert.equal((await req('/api/memberships', 'PUT',
+    { tenant_id: ids[0], product_id: 'sites', subject, active: true })).status, 409);
+
+   const created = await req('/api/engagements', 'POST',
+    { tenant_id: ids[0], product_id: 'sites', service_model: 'on_demand', status: 'planned', label: 'Console engagement' });
+   assert.equal(created.status, 200);
+   engagementIds.push((await created.json()).id);
+
    const sites = await (await openConsole('sites')).json();
-   assert.equal(sites.membership_scope, 'product');
+   assert.ok(!sites.product.capabilities.includes('access'));
+   assert.ok(sites.product.capabilities.includes('commercial'));
+   const engagement = sites.engagements.find(row => row.id === engagementIds[0]);
+   assert.equal(engagement.tenant_id, ids[0]);
+   assert.equal(engagement.service_model, 'on_demand');
+
+   const educare = await (await openConsole('educare')).json();
+   assert.ok(educare.product.capabilities.includes('access'));
+   assert.deepEqual(educare.engagements.filter(row => engagementIds.includes(row.id)), []);
   });
 
   await t.test('people are counted per product, not per organization', async () => {
-   // Mesma organização, segundo contrato: a pessoa vinculada em `sites` não conta em `skiller`.
+   // Mesma organização, segundo contrato: a pessoa vinculada em `educare` não conta em `skiller`.
    assert.equal((await req('/api/entitlements', 'PUT',
     { tenant_id: ids[0], product_id: 'skiller', plan: 'console-test', rights: [], active: true })).status, 200);
    const skiller = await (await openConsole('skiller')).json();
    const row = skiller.organizations.find(entry => entry.tenant_id === ids[0]);
    assert.equal(row.active_memberships, 0);
    assert.equal(row.total_memberships, 0);
-   const sites = await (await openConsole('sites')).json();
-   assert.equal(sites.organizations.find(entry => entry.tenant_id === ids[0]).active_memberships, 1);
-   assert.equal(skiller.summary.reachable_memberships, 0);
+   const educare = await (await openConsole('educare')).json();
+   assert.equal(educare.organizations.find(entry => entry.tenant_id === ids[0]).active_memberships, 1);
+   assert.equal(skiller.organizations.filter(entry => ids.includes(entry.tenant_id)).reduce((total, entry) => total + entry.active_memberships, 0), 0);
   });
 
   await t.test('revoked contract stays visible but leaves the active count', async () => {
    await req('/api/entitlements', 'PUT',
-    { tenant_id: ids[0], product_id: 'sites', plan: 'console-test', rights: [], active: false });
-   const sites = await (await openConsole('sites')).json();
-   const row = sites.organizations.find(entry => entry.tenant_id === ids[0]);
+    { tenant_id: ids[0], product_id: 'educare', plan: 'console-test', rights: [], active: false });
+   const educare = await (await openConsole('educare')).json();
+   const row = educare.organizations.find(entry => entry.tenant_id === ids[0]);
    assert.equal(row.contract_active, false);
    assert.equal(row.contract_version, 2);
-   assert.ok(sites.summary.revoked_contracts >= 1);
-   assert.equal(sites.organizations.filter(e => ids.includes(e.tenant_id) && e.contract_active).length, 0);
+   assert.ok(educare.summary.revoked_contracts >= 1);
+   assert.equal(educare.organizations.filter(e => ids.includes(e.tenant_id) && e.contract_active).length, 0);
    await req('/api/entitlements', 'PUT',
-    { tenant_id: ids[0], product_id: 'sites', plan: 'console-test', rights: ['dashboard.read'], active: true });
+    { tenant_id: ids[0], product_id: 'educare', plan: 'console-test', rights: ['dashboard.read'], active: true });
   });
 
   await t.test('suspended organization is flagged and excluded from active contracts', async () => {
    await req('/api/tenants', 'PUT', { tenant_id: ids[0], status: 'suspended' });
-   const sites = await (await openConsole('sites')).json();
-   const row = sites.organizations.find(entry => entry.tenant_id === ids[0]);
+   const educare = await (await openConsole('educare')).json();
+   const row = educare.organizations.find(entry => entry.tenant_id === ids[0]);
    assert.equal(row.status, 'suspended');
-   assert.ok(sites.summary.suspended_organizations >= 1);
+   assert.ok(educare.summary.suspended_organizations >= 1);
    assert.equal(
-    sites.organizations.filter(e => ids.includes(e.tenant_id) && e.contract_active && e.status === 'active').length, 0);
+    educare.organizations.filter(e => ids.includes(e.tenant_id) && e.contract_active && e.status === 'active').length, 0);
    await req('/api/tenants', 'PUT', { tenant_id: ids[0], status: 'active' });
   });
 
@@ -162,7 +189,8 @@ test('Product console scoping suite', async t => {
   try {
    await client.query('BEGIN');
    await client.query('DELETE FROM app_clients WHERE token_hash=$1', [serviceHash]);
-   for (const table of ['audit_events', 'memberships', 'entitlements'])
+   await client.query("DELETE FROM portfolio_audit WHERE entity='engagement' AND entity_id=ANY($1::text[])", [engagementIds]);
+   for (const table of ['audit_events', 'memberships', 'entitlements', 'contract_billing', 'client_engagements'])
     await client.query(`DELETE FROM ${table} WHERE tenant_id=ANY($1::uuid[])`, [ids]);
    await client.query('DELETE FROM tenants WHERE id=ANY($1::uuid[])', [ids]);
    await client.query('DELETE FROM products WHERE id=$1', [uncatalogued]);

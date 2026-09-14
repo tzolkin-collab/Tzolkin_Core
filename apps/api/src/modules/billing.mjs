@@ -1,5 +1,5 @@
 import {input,text,isProductId,fail} from '../platform/http.mjs';
-import {findEditableProduct} from './catalog.mjs';
+import {requireProductFor} from './catalog.mjs';
 
 export const EMAIL_EVENTS=['welcome','charge_created','payment_confirmed','due_reminder','overdue','renewal','canceled','refunded'];
 export function validateOffer(body){
@@ -36,8 +36,8 @@ export function billingRoutes(router){
  });
  router.put('/api/billing/offers',async({client,body})=>{
  const offer=validateOffer(body);
-  if (offer.product_id === 'sites') throw fail(409, 'TZOLKIN Sites é contratado por formulário/proposta, não por checkout.');
-  if (!await findEditableProduct(client, offer.product_id)) throw fail(400, 'Produto não está disponível para cobrança.');
+  // Linha de serviço é contratada por proposta: o tipo recusa com 409 e diz o porquê.
+  await requireProductFor(client, offer.product_id, 'checkout', { draft: true, missing: fail(400, 'Produto não está disponível para cobrança.') });
   const result=await client.query(`INSERT INTO billing_offers(product_id,slug,payload)
    SELECT $1,$2,$3::jsonb WHERE $4=0
    ON CONFLICT(product_id,slug) DO NOTHING RETURNING version`,[offer.product_id,offer.slug,JSON.stringify(offer),body.version]);
