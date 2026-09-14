@@ -7,3 +7,7 @@ scripts
 docs
 db
 npm-debug.log*
+
+.tmp
+tmp
+.claude

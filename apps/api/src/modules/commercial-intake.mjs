@@ -22,7 +22,7 @@ export function validateIntake(body,productId) {
  const date=v=>{if(!v)return null;const d=Date.parse(v);if(!Number.isFinite(d)||d>Date.now()+300000)throw fail(400,'Data inválida.');return new Date(d).toISOString();};
  const privacy={notice_version:optional(p.notice_version,120),contact_allowed:p.contact_allowed===true,captured_at:date(p.captured_at),source:optional(p.source,120)||'unspecified'};
  if(privacy.contact_allowed&&(!privacy.notice_version||!privacy.captured_at))throw fail(400,'Preferência exige versão do aviso e data.');
- return {name,email,phone,message:multiline(l.message,5000),org_name:optional(o.name,160)||name.slice(0,160),org_type:orgType,
+ return {name,email,phone,message:multiline(l.message,5000),org_name:optional(o.name,200)||name,org_type:orgType,
  role:s.role||'contact',title:optional(s.title,120),product_id:productId,service_model:c.service_model,interest:optional(c.label,200)||'Contato comercial',
  source_system:optional(a.source_system,80)||'tzolkin-site',source_ref:optional(a.source_ref,200),source_created_at:date(a.created_at),privacy,
  attribution:Object.fromEntries(['channel','utm_source','utm_medium','utm_campaign','utm_content','landing_page','referrer'].map(k=>[k,optional(a[k],k==='referrer'?1000:500)]))};

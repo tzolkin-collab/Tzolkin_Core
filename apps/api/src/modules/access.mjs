@@ -5,9 +5,13 @@
 import { text, isUuid, onlyParams, fail } from '../platform/http.mjs';
 import { digest } from '../platform/session.mjs';
 
-export const authenticateApp = (pool, bearer) =>
- pool.query("SELECT a.product_id FROM app_clients a JOIN products p ON p.id=a.product_id AND p.lifecycle_status='active' WHERE a.token_hash=$1 AND a.active=true", [digest(bearer)])
-  .then(result => result.rows[0]?.product_id || null);
+export async function authenticateApp(pool, bearer, scope = 'context:read') {
+ const result = await pool.query(`UPDATE app_clients a SET last_used_at=now() FROM products p
+ WHERE p.id=a.product_id AND p.lifecycle_status='active' AND a.token_hash=$1 AND a.active
+ AND a.revoked_at IS NULL AND (a.expires_at IS NULL OR a.expires_at>now()) AND $2=ANY(a.scopes)
+ RETURNING a.product_id`, [digest(bearer),scope]);
+ return result.rows[0]?.product_id || null;
+}
 
 export function accessRoutes(router) {
  router.get('/v1/context', async ({ pool, url, reply, productId }) => {
@@ -29,5 +33,5 @@ export function accessRoutes(router) {
    tenant_id: tenant, subject, product_id: productId, membership_scope: 'product',
    ...result.rows[0], checked_at: new Date().toISOString(),
   });
- }, { auth: 'service', body: false });
+ }, { auth: 'service', scope: 'context:read', body: false });
 }

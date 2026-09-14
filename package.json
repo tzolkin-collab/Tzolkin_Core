@@ -18,7 +18,9 @@
     "finance:mock": "node --env-file=.env scripts/seed-mock-finance.mjs",
     "finance:clean-mock": "node --env-file=.env scripts/clean-mock-finance.mjs",
     "marketing:connect": "node --env-file=.env scripts/connect-meta-token.mjs",
-    "marketing:exchange": "node --env-file=.env scripts/connect-meta-token.mjs --exchange"
+    "marketing:exchange": "node --env-file=.env scripts/connect-meta-token.mjs --exchange",
+    "test:commercial": "node scripts/test-commercial.mjs",
+    "test:isolated": "node scripts/test-commercial.mjs --all"
   },
   "devDependencies": {
     "lucide-static": "^1.38.0",

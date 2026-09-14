@@ -12,6 +12,8 @@ const marcas = nomes => Object.fromEntries(nomes.map(nome => {
 }));
 
 const FILES = {
+ '/commercial.js':['commercial.js','text/javascript'],
+ '/commercial.css':['commercial.css','text/css'],
  '/': ['index.html', 'text/html'],
  // O favicon precisa de uma rota própria e estável. Não depender de
  // /logo.svg aqui: navegadores, crawlers e instaladores PWA procuram

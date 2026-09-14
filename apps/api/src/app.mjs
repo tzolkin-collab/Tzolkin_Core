@@ -1,3 +1,4 @@
+import {inboundDeliveryRoutes} from './modules/inbound-delivery.mjs';
 // Composição do Core: pipeline de requisição + registro dos módulos.
 //
 // Ordem deliberada: cabeçalhos → método → origem → estáticos → rota →
@@ -38,20 +39,22 @@ import { hostingerDnsRoutes } from './modules/hostinger-dns.mjs';
 import { productTopologyRoutes } from './modules/product-topology.mjs';
 import { productResourceBindingRoutes } from './modules/product-resource-bindings.mjs';
 import { commercialIntakeRoutes, commercialKeyRoutes } from './modules/commercial-intake.mjs';
+import { commercialWorkspaceRoutes } from './modules/commercial-workspace.mjs';
 import { marketingRoutes } from './modules/marketing.mjs';
 
 const MODULES = [
  identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes, emailTemplateRoutes, productFaviconRoutes, productDeployBindingRoutes, productResourceBindingRoutes, serviceDeployBindingRoutes, managementRoutes, productPaymentRoutes, productTopologyRoutes,
- checkoutTemplateRoutes, directoryRoutes, contractsRoutes, accessRoutes, productConsoleRoutes, commercialIntakeRoutes, commercialKeyRoutes,
+ checkoutTemplateRoutes, directoryRoutes, contractsRoutes, accessRoutes, productConsoleRoutes, commercialIntakeRoutes, commercialKeyRoutes, commercialWorkspaceRoutes,
 ];
 
 // `security` é o estado do transporte do banco medido por platform/database.mjs.
 // Ausente = não medido; os endpoints reportam 'unknown' em vez de fingir segurança.
-export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, hostingerDnsOptions, webOrigin,serveAsset, webhookEnv, catalogAdapter, checkoutOptions, marketingOptions} = {}) {
+export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, hostingerDnsOptions, webOrigin,serveAsset, webhookEnv, catalogAdapter, checkoutOptions, marketingOptions, inboundPool} = {}) {
  if (webOrigin && !(/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(webOrigin)||/^https:\/\/[a-z0-9.-]+(?::[1-9][0-9]{0,4})?$/.test(webOrigin))) throw new Error('Use an explicit HTTP loopback or HTTPS web origin.');
  const sessions = identity||createSessionStore({ adminPassword, clock });
  const router = createRouter();
  for (const register of MODULES) register(router);
+ inboundDeliveryRoutes(router,{inboundPool});
  // Integrações externas são opcionais e injetáveis: os testes passam um registro
  // apontado para um stub local, e nunca tocam num provedor de verdade.
  deploysRoutes(router, { registry: deployRegistry ?? buildRegistry(), clock });
@@ -81,7 +84,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
    // CSRF: mutação só a partir da origem exata do bootstrap.
    // Webhook é chamada servidor-a-servidor e não manda Origin: é isento aqui e,
    // em troca, prova a origem pela assinatura/token do provedor no próprio handler.
-   if (req.method !== 'GET' && !matched?.route.webhook && req.headers.origin !== origin) throw fail(403, 'Origem não permitida.');
+   if (req.method !== 'GET' && !matched?.route.webhook && matched?.route.auth !== 'service' && req.headers.origin !== origin) throw fail(403, 'Origem não permitida.');
 
    const sessionToken = readSessionCookie(req);
    const operator=await sessions.resolve(req,sessionToken);
@@ -97,7 +100,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
    if (auth === 'service') {
     const bearer = req.headers.authorization?.match(/^Bearer ([A-Za-z0-9_-]{32,200})$/)?.[1];
     if (!bearer) throw fail(401, 'Credencial do app obrigatória.');
-    productId = await authenticateApp(pool, bearer);
+    productId = await authenticateApp(pool, bearer, route.scope);
     if (!productId) throw fail(401, 'App não autorizado.');
    } else if (auth === 'admin' && !operator) {
     throw fail(401, 'Entre para continuar.');

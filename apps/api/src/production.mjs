@@ -1,3 +1,4 @@
+import {createInstitutionalWorker} from './integrations/institutional-outbox.mjs';
 import {openDatabase,transportWarning,scrubSecrets} from './platform/database.mjs';
 import {createGoogleIdentity} from './platform/google-identity.mjs';
 import {createAccountGate} from './modules/accounts.mjs';
@@ -36,9 +37,11 @@ catch(error){
 }
 const warning=transportWarning(security);if(warning){console.error(`[boot] ${warning}`);console.error('[boot] TLS verificado é obrigatório em produção.');process.exit(1);}
 const identity=createGoogleIdentity({pool,clientId:process.env.GOOGLE_CLIENT_ID,clientSecret:process.env.GOOGLE_CLIENT_SECRET,publicOrigin:origin.href,allowedEmails:process.env.CORE_ALLOWED_EMAILS,isAllowed:createAccountGate(pool)});
-const server=createCore({pool,identity,security,webOrigin:origin.origin,serveAsset});
+const inboundWorker=createInstitutionalWorker();
+const server=createCore({pool,identity,security,webOrigin:origin.origin,serveAsset,inboundPool:inboundWorker?.pool});
+inboundWorker?.start();
 // A porta vai para o log: é a única forma de o operador ver, no painel, que a
 // app subiu num lugar diferente do que o healthcheck e o proxy procuram.
 const porta=Number(process.env.PORT||3000);
 server.listen(porta,'0.0.0.0',()=>console.log(`TZOLKIN Core production ready on 0.0.0.0:${porta}`));
-const stop=()=>{server.closeAllConnections();server.close(()=>pool.end().finally(()=>process.exit(0)));};process.on('SIGTERM',stop);process.on('SIGINT',stop);
+const stop=()=>{inboundWorker?.stop();server.closeAllConnections();server.close(()=>pool.end().finally(()=>process.exit(0)));};process.on('SIGTERM',stop);process.on('SIGINT',stop);
