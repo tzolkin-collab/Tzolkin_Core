@@ -248,8 +248,10 @@ export function marketingRoutes(router, { env = process.env, clock = Date.now, a
   onlyParams(url.searchParams, ['campaign_id']);
   const [produtos, contratacoes] = await Promise.all([
    pool.query("SELECT id,name,portfolio_kind FROM products WHERE lifecycle_status IN ('active','draft') ORDER BY name"),
+   // Contratação arquivada saiu das listas de trabalho: não é alvo de campanha nova.
    pool.query(`SELECT e.id,e.label,e.service_model,e.status,t.name AS tenant_name
                  FROM client_engagements e JOIN tenants t ON t.id=e.tenant_id
+                WHERE e.archived_at IS NULL
                 ORDER BY t.name,e.label`),
   ]);
   const campanhaId = url.searchParams.get('campaign_id');

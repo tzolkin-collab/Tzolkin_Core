@@ -41,10 +41,11 @@ import { productResourceBindingRoutes } from './modules/product-resource-binding
 import { commercialIntakeRoutes, commercialKeyRoutes } from './modules/commercial-intake.mjs';
 import { commercialWorkspaceRoutes } from './modules/commercial-workspace.mjs';
 import { marketingRoutes } from './modules/marketing.mjs';
+import { portfolioRoutes } from './modules/portfolio.mjs';
 
 const MODULES = [
  identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes, emailTemplateRoutes, productFaviconRoutes, productDeployBindingRoutes, productResourceBindingRoutes, serviceDeployBindingRoutes, managementRoutes, productPaymentRoutes, productTopologyRoutes,
- checkoutTemplateRoutes, directoryRoutes, contractsRoutes, accessRoutes, productConsoleRoutes, commercialIntakeRoutes, commercialKeyRoutes, commercialWorkspaceRoutes,
+ checkoutTemplateRoutes, directoryRoutes, contractsRoutes, accessRoutes, productConsoleRoutes, commercialIntakeRoutes, commercialKeyRoutes, commercialWorkspaceRoutes, portfolioRoutes,
 ];
 
 // `security` é o estado do transporte do banco medido por platform/database.mjs.

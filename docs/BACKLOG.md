@@ -2,6 +2,10 @@
 
 O que está aberto, por ordem de risco. Cada item traz evidência em `arquivo:linha` ou consulta.
 
+**Fotografia atual:** [FEATURES.md](FEATURES.md). Em 2026-09-14 o banco está na migração 030 e a
+suíte registrou 377 aprovações, nenhuma falha e um teste isolado ignorado por ausência de banco
+dedicado. As contagens históricas abaixo permanecem como evidência das auditorias nas datas citadas.
+
 Levantado em **2026-09-03** por auditoria de sete frentes sobre o repositório — schema, rotas,
 integrações, painel, testes, documentação e uma crítica de completude. **235 itens** classificados;
 abaixo está o subconjunto acionável. O resto é o que já funciona.

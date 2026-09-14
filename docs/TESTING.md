@@ -2,10 +2,12 @@
 
 Estratégia, comandos e cobertura.
 
-Revisão: **2026-09-03**.
+Revisão: **2026-09-14**.
 
-Verificação atual em 2026-09-03: `npm run test:unit` passou com **123/123 testes** e `npm test`
-passou com **237/237 testes**, incluindo PostgreSQL real e endpoints de webhook.
+Verificação atual em 2026-09-14: `npm test` passou com **377 testes aprovados, 0 falhas e 1
+ignorado**, incluindo PostgreSQL real, endpoints de webhook, marketing e o novo CRUD de portfólio.
+O teste ignorado cria trigger e simula rollback; ele só roda quando `DATABASE_URL_TEST` aponta para
+uma base dedicada com nome `tzolkin_test_commercial_<12 hex>`.
 
 ---
 
@@ -40,7 +42,8 @@ npm run test:unit
 
 Após a entrega do inventário EasyPanel: **25/25 unitários aprovados**, incluindo 7 novos testes em `test/unit/easypanel.test.mjs`. A API HTTP do Core é exercitada em loopback com sessão real e pool que recusa consultas; o provedor é simulado. Sem banco remoto, sem credencial real e sem prova de compatibilidade com a versão do painel do usuário.
 
-As suítes abaixo são integrações separadas; `npm test` não inclui `test/unit/`. Execute ambos para uma verificação completa, usando base dedicada para integração.
+O glob atual inclui também `test/unit/`; `npm test` é a verificação completa disponível. Use base
+dedicada para habilitar a suíte comercial destrutiva.
 
 Após configurar a chave do EasyPanel: **27/27 unitários aprovados**. Dois testes novos cobrem o formato real de listas separadas, descarte de segredos, serviços órfãos e projetos duplicados. Consulta real de leitura pelo adaptador confirmada com 3 projetos e 9 serviços; nenhuma alteração remota executada.
 
@@ -48,7 +51,9 @@ Após configurar a chave do EasyPanel: **27/27 unitários aprovados**. Dois test
 npm test
 ```
 
-Roda `node --env-file=.env --test "test/**/*.test.mjs"`. Exige o banco preparado e **migrado** ([INFRASTRUCTURE.md](INFRASTRUCTURE.md#preparação-do-core-existente-e-verificado)) e o catálogo importado — a suíte principal confere as 16 migrações.
+Roda `node --env-file=.env --test "test/**/*.test.mjs"`. Exige o banco preparado e **migrado**
+([INFRASTRUCTURE.md](INFRASTRUCTURE.md#preparação-do-core-existente-e-verificado)); a verificação de
+2026-09-14 foi feita após aplicar a migração 030.
 
 Uma suíte isolada:
 

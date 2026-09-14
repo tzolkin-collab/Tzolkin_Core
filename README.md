@@ -1,6 +1,9 @@
 # TZOLKIN Core — bootstrap local
 
-Gestão transversal do ecossistema: organizações, vínculos de pessoas por identificador externo, catálogo de produtos e contratos com direitos. **Não** contém operação dos clientes, leads dos apps, cobrança nem dados de pagamento.
+Gestão transversal do ecossistema: organizações, pessoas, portfólio, contratações, projetos,
+acessos, comercial, cobrança, finanças e integrações operacionais. Consulte o
+[mapa atual de funcionalidades](docs/FEATURES.md) para distinguir jornadas completas de fundações
+ainda parciais.
 
 **Documentação técnica em [`docs/`](docs/)** — comece por [docs/CONTEXT.md](docs/CONTEXT.md) para o estado real, e [docs/README.md](docs/README.md) para o índice.
 
@@ -93,7 +96,9 @@ A importação é transacional e idempotente: `products.id` nunca muda; nome e f
 npm test
 ```
 
-69 cenários contra banco real e servidor temporário de loopback (a integração de deploys roda contra stub local, sem tocar em provedor externo): autenticação, CSRF/origem, campos extras, isolamento entre organizações e entre produtos, negação de acesso cruzado entre produtos da mesma organização, revogação, suspensão, expiração, limite de tentativas e recorte do contexto de produto. Cria e remove apenas registros sintéticos da execução. Não envia e-mail e não altera dados existentes.
+Na verificação de 2026-09-14: **377 aprovados, 0 falhas e 1 ignorado**. A suíte combina unidades,
+HTTP em loopback e integração com PostgreSQL. O teste ignorado exige uma base comercial dedicada;
+nenhuma suíte envia e-mail, gera cobrança ou altera provedor externo.
 
 Estratégia, cobertura e lacunas: [docs/TESTING.md](docs/TESTING.md).
 
