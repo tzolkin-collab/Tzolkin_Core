@@ -110,14 +110,34 @@ Regra de leitura: **transferência entre contas próprias não é receita nova**
 
 ---
 
-## 7. Contabilizei
+## 7. Contabilizei e cobrança de serviços
 
-**Não foi localizada API pública oficial nem portal de desenvolvedores da Contabilizei** (pesquisa de 2026-08-30). O que existe é:
+**Pesquisa atualizada em 2026-09-14:** não foi localizada API pública oficial, webhook ou portal de
+desenvolvedores da Contabilizei para o banco, o Cobre PJ, notas ou contabilidade. Um projeto de
+terceiros faz engenharia reversa de endpoints internos; ele não é base aceitável para o Core.
 
-- Um projeto de terceiros no GitHub que faz engenharia reversa de endpoints internos. **Não construir em cima disso**: é frágil, não suportado e provavelmente contrário aos termos de uso.
-- Integrações que a plataforma oferece **de dentro dela** — importação de extrato bancário e de nota fiscal de serviço em municípios específicos —, que são recursos do produto, não uma API para nós.
+O que existe oficialmente:
 
-**Encaminhamento `[PROPOSTO]`:** assumir **exportação assistida** (arquivo gerado pelo Core, conferido por pessoa, enviado pelo canal da Contabilizei). Antes de qualquer automação, perguntar diretamente à Contabilizei se existe integração suportada para o plano da TZOLKIN. **Não inventar API.**
+- **Contabilizei.bank**, sobre a Dock: conta PJ, Pix e extrato integrado à contabilidade.
+- **Cobre PJ**, processado pela Iugu: link de cartão, Pix e cobrança mensal automática. Não foi
+  encontrada API pública para criá-lo ou conciliá-lo pelo Core.
+- Importação de extrato e documentos dentro da plataforma, inclusive por OFX. Isso é função do
+  produto Contabilizei, não integração servidor a servidor para a TZOLKIN.
+
+Fontes: [conta e extrato](https://suporte.contabilizei.com.br/hc/pt-br/articles/7759702691996),
+[tarifas do banco](https://suporte.contabilizei.com.br/hc/pt-br/articles/7759732444828),
+[Cobre PJ](https://suporte.contabilizei.com.br/hc/pt-br/articles/17301842162588) e
+[importação de extratos](https://suporte.contabilizei.com.br/hc/pt-br/articles/360008338200).
+
+**Encaminhamento `[PROPOSTO]`:** tratar Cobre PJ como cobrança externa manual e reconciliar pelo
+extrato, até a Contabilizei confirmar por escrito uma API suportada para o plano da TZOLKIN. Para
+automação, o Asaas já possui API, webhook, Pix, boleto, cartão e Pix Automático; Stripe permanece
+para cartão e clientes internacionais. NFS-e deve ter um único emissor por operação para evitar
+duplicidade.
+
+Perguntas ainda abertas para a Contabilizei: existência de API privada suportada; tarifa efetiva do
+Pix no Cobre PJ; entrada automática do extrato Asaas; tratamento de NFS-e emitida fora da
+plataforma; e disponibilidade da conta no Open Finance.
 
 Divisão de responsabilidades em [BILLING.md](BILLING.md).
 

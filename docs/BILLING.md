@@ -26,6 +26,30 @@ Ao salvar contrato com Plano igual ao slug de uma oferta do mesmo produto, o Cor
 
 **Só fluxo 1** (Tzolkin vende, Tzolkin recebe): conta única via `STRIPE_SECRET_KEY`, sem Connect, sem split. Fluxo 2 (consumidor paga o cliente, ex.: TZOLKIN Barber) depende de D3 — ver `docs/decisions/0003`.
 
+## Linhas de serviço — cobrança nasce da proposta `[PROPOSTO]`
+
+Mentorias, Consultorias e Sites são `service_line`: o cliente contrata trabalho e mantém o que foi
+entregue. Elas não ganham `checkout` nem contrato de acesso só para reutilizar o fluxo de SaaS.
+
+Fluxo recomendado para decisão na ADR 0008:
+
+1. uma proposta aceita gera ou atualiza um `commercial_contract`;
+2. o contrato fixa escopo, valor, moeda, vencimentos e responsável;
+3. cada vencimento origina uma cobrança no Asaas, ou um registro de cobrança externa no Cobre PJ;
+4. webhook do provedor confirma **pago**, sem depender do retorno do checkout;
+5. conciliação com o saldo/extrato confirma **disponível**;
+6. emissão fiscal ocorre uma única vez pelo emissor escolhido;
+7. atraso muda a operação financeira, mas não revoga automaticamente uma entrega ou acesso sem
+   política contratual explícita.
+
+Asaas é o caminho técnico principal para Brasil. Pix Automático se aplica somente a obrigação
+periódica, como mentoria mensal; consultoria pontual usa Pix, boleto ou cartão. Stripe continua
+adequada para cartão e exterior. Contabilizei permanece registro externo/manual enquanto não houver
+API oficial confirmada. Ver [INTEGRATIONS.md §7](INTEGRATIONS.md#7-contabilizei-e-cobrança-de-serviços).
+
+Antes de implementar é preciso decidir se `commercial_contracts` será a autoridade da cobrança ou
+se haverá uma entidade de proposta aceita anterior a ele, além de escolher o emissor único de NFS-e.
+
 ## Ainda não implementado / não ativado
 
 - Criação de cobrança Asaas (Pix, boleto, cartão tokenizado) — API diferente da Stripe, ainda não desenhada aqui.
