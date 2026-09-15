@@ -41,6 +41,21 @@ const ESTADOS = {
  DISAPPROVED: ['reprovada', 'error'],
 };
 
+// Validade como ação: quem lê precisa saber se tem de voltar aqui, e quando.
+// Só variantes de .status que existem em design.css (active verde, building âmbar,
+// failed vermelho): classe sem regra cai no cinza neutro e inverte a urgência.
+export function rotuloValidade(credencial) {
+ if (!credencial?.configured) return null;
+ if (credencial.never_expires) return ['Não expira', 'status active'];
+ if (credencial.expired) return ['Expirado — reconecte', 'status failed'];
+ const n = credencial.days_remaining;
+ const quando = n == null ? 'Expira' : n === 0 ? 'Expira hoje' : `Expira em ${n} dia${n === 1 ? '' : 's'}`;
+ return [`${quando} — reconecte antes`, credencial.expiring_soon ? 'status failed' : 'status building'];
+}
+
+// O modo clássico dá token de ~60 dias. A frase diz o que resolve isso de vez.
+const DICA_SEM_EXPIRACAO = 'Configurar META_LOGIN_CONFIG_ID no servidor (Login do Facebook para Empresas, com token de usuário do sistema) elimina a expiração: o token conectado passa a não expirar.';
+
 const SERVICE_MODELS = {
  on_demand: 'Sob demanda', education: 'Mentoria', consulting: 'Consultoria',
  advisory: 'Assessoria', product: 'Produto', unclassified: 'A classificar',
@@ -104,6 +119,11 @@ export function setupCampaigns({ api, onError = () => {} }) {
    if (dados && !dados.oauth_available) {
     corpo.append(el('small', 'Para conectar com o Facebook em um clique, defina META_APP_ID e META_APP_SECRET no servidor.'));
    }
+   if (dados?.login_mode === 'business') {
+    corpo.append(el('small', 'O botão usa o Login do Facebook para Empresas: entre com o portfólio empresarial dono das contas de anúncio. Com a configuração de token de usuário do sistema, o token não expira.'));
+   } else if (dados?.login_mode === 'classic') {
+    corpo.append(el('small', 'O botão usa o Login do Facebook clássico: o token dura cerca de 60 dias. ' + DICA_SEM_EXPIRACAO));
+   }
    corpo.append(el('small', 'Também dá para conectar pelo servidor, com npm run marketing:connect.'));
    card.append(corpo);
    return card;
@@ -114,18 +134,16 @@ export function setupCampaigns({ api, onError = () => {} }) {
   const tipo = dados.token_type === 'system_user' ? 'Usuário do Sistema' : 'Token de longa duração';
   cabecalho.append(el('span', tipo, 'detail'));
 
-  // O estado que importa: quantos dias faltam.
-  let rotulo, classe;
-  if (dados.never_expires) { rotulo = 'Não expira'; classe = 'status ready'; }
-  else if (dados.expired) { rotulo = 'Expirado'; classe = 'status error'; }
-  else if (dados.expiring_soon) { rotulo = `Expira em ${dados.days_remaining} dias`; classe = 'status error'; }
-  else { rotulo = `${dados.days_remaining} dias restantes`; classe = 'status ready'; }
+  // O estado que importa: se expira, e quantos dias faltam.
+  const [rotulo, classe] = rotuloValidade(dados);
   cabecalho.append(el('span', rotulo, classe));
   card.append(cabecalho);
 
   const fatos = el('dl', undefined, 'campaign-facts');
   const fato = (chave, valor) => { fatos.append(el('dt', chave), el('dd', valor)); };
   fato('Impressão digital', dados.fingerprint);
+  fato('Validade', dados.never_expires || !dados.expires_at
+   ? 'não expira' : new Date(dados.expires_at).toLocaleDateString('pt-BR'));
   fato('Escopos', (dados.scopes || []).join(', ') || '—');
   fato('Última conferência', dados.last_verified_at ? new Date(dados.last_verified_at).toLocaleString('pt-BR') : 'nunca');
   const via = { oauth: ' (Facebook Login)', panel: ' (token colado no painel)', script: ' (servidor)' }[dados.connected_via] || '';
@@ -138,6 +156,8 @@ export function setupCampaigns({ api, onError = () => {} }) {
    card.append(aviso);
   }
   if (dados.last_error) card.append(el('p', dados.last_error, 'notice-inline'));
+  // Token que expira no modo clássico: a reconexão periódica tem saída.
+  if (dados.login_mode === 'classic' && !dados.never_expires) card.append(el('p', DICA_SEM_EXPIRACAO, 'campaign-login-hint'));
 
   const acoes = el('div', undefined, 'campaign-actions');
   const conferir = el('button', 'Conferir na Meta', 'secondary');
@@ -165,7 +185,8 @@ export function setupCampaigns({ api, onError = () => {} }) {
   substituir.type = 'button';
   substituir.onclick = () => abrirCredencial();
   // Token de usuário expira em ~60 dias e a Meta não renova sozinha: reconectar
-  // é um clique, e vira ação principal quando a contagem aperta.
+  // é um clique, e vira ação principal quando a contagem aperta. No Login para
+  // Empresas o botão serve para trocar de portfólio ou recuperar um revogado.
   if (dados.oauth_available) {
    const reconectar = el('button', 'Reconectar com Facebook', dados.expiring_soon || dados.expired ? 'primary' : 'secondary');
    reconectar.type = 'button';

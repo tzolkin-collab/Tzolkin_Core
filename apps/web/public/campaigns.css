@@ -23,6 +23,8 @@
 .campaign-facts dt{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#888894;margin-bottom:3px}
 .campaign-facts dd{margin:0;font-size:13px;color:#333;overflow-wrap:anywhere}
 .campaign-actions{display:flex;gap:8px;flex-wrap:wrap}
+/* Saída para a expiração no modo clássico: informação, não alarme. */
+.campaign-login-hint{margin:0 0 12px;color:#707078;font-size:12px;line-height:1.55;max-width:74ch}
 
 /* --- resumo --- */
 .campaign-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:22px}

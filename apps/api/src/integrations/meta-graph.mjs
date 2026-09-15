@@ -14,7 +14,16 @@
 // Ver docs/INTEGRATIONS.md
 
 const BASE = 'https://graph.facebook.com';
-const VERSION = 'v21.0';
+// v26.0 (lançada em 29/07/2026) é a estável mais recente. Conferido em
+// 15/09/2026 nos changelogs da Graph e da Marketing API de v22.0 a v26.0:
+// nenhuma mudança nos campos que este adaptador lê (contas, campanhas,
+// insights), em debug_token, oauth/access_token nem dialog/oauth.
+//
+// A v21.0 que estava aqui já tinha passado do prazo onde mais importa: na
+// Marketing API ela expirou em 09/09/2025 (lá cada versão vale ~90 dias depois
+// da seguinte, e chamada a versão expirada é promovida ou falha). Na Graph ela é
+// removida em 21/01/2027. META_GRAPH_VERSION continua sobrescrevendo.
+const VERSION = 'v26.0';
 const TIMEOUT_MS = 12000;
 
 // Objetivos publicados pela API, traduzidos sem inventar categoria.
@@ -231,13 +240,22 @@ export function createMetaGraphAdapter({ token, baseUrl = BASE, version = VERSIO
    if (!appId || !appSecret) return { checked: false, reason: 'app_credentials_missing' };
    const corpo = await get('/debug_token', { input_token: token, access_token: `${appId}|${appSecret}` });
    const d = corpo.data || {};
-   const expira = inteiro(d.expires_at);
+   // null também é ausente: Number(null) daria 0 e viraria "não expira".
+   const expira = d.expires_at == null ? null : inteiro(d.expires_at);
    return {
     checked: true,
     valid: Boolean(d.is_valid),
-    // 0 é o código da Meta para "não expira" (Usuário do Sistema).
+    // 0 é o valor observado para "não expira" (token de sistema, token de página
+    // permanente). A referência oficial do debug_token descreve expires_at só
+    // como o instante de expiração e nem lista `type`; o 0 e o SYSTEM_USER
+    // precisam ser confirmados no primeiro teste real com o app.
     expires_at: expira ? new Date(expira * 1000).toISOString() : null,
-    never_expires: expira === 0 || expira == null,
+    // Só o zero explícito comprova que não expira. Campo ausente é estado
+    // desconhecido e não pode promover uma credencial a permanente — mudança
+    // consciente em relação a `0 ou ausente`: token colado com data vinda da
+    // troca não perde a data. No callback do Login para Empresas, token de
+    // sistema sem expires_at é reconhecido por `type`, não por este campo.
+    never_expires: expira === 0,
     scopes: Array.isArray(d.scopes) ? d.scopes.filter(s => typeof s === 'string').slice(0, 60) : [],
     type: texto(d.type, 40),
     app_id: texto(d.app_id, 40),
@@ -309,19 +327,38 @@ const DIALOG_BASE = 'https://www.facebook.com';
 // Nada de `ads_management` pelo mesmo motivo: esta integração não escreve.
 export const OAUTH_SCOPES = ['ads_read'];
 
+/** ID de configuração do Login do Facebook para Empresas: numérico, como o do app. */
+export const ehConfigDeLogin = v => /^\d{5,25}$/.test(String(v ?? '').trim());
+
 /**
  * Monta o endereço do diálogo de autorização. Não carrega segredo nenhum: o
  * app secret só aparece na troca do código, que é servidor-a-servidor.
+ *
+ * Dois modos:
+ * - clássico (sem `configId`): `scope=ads_read`, token de usuário de ~60 dias;
+ * - Login do Facebook para Empresas (`configId`): permissões, ativos e tipo de
+ *   token moram na CONFIGURAÇÃO criada no painel da Meta. Com a configuração de
+ *   token de usuário do sistema, o token que volta não expira.
+ *   Pela documentação, `config_id` substitui `scope` ("recomendamos não usar")
+ *   e o token de sistema exige `response_type=code` com
+ *   `override_default_response_type=true`. `auth_type=rerequest` não aparece
+ *   nesse fluxo e fica de fora: quem decide as permissões é a configuração.
  */
-export function buildAuthorizeUrl({ appId, redirectUri, state, scopes = OAUTH_SCOPES, version = VERSION, dialogBase = DIALOG_BASE }) {
+export function buildAuthorizeUrl({ appId, redirectUri, state, scopes = OAUTH_SCOPES, configId = null, version = VERSION, dialogBase = DIALOG_BASE }) {
  if (!/^\d{5,25}$/.test(String(appId || ''))) throw new Error('ID do app da Meta inválido.');
  if (typeof state !== 'string' || state.length < 32) throw new Error('Estado OAuth inválido.');
  if (typeof redirectUri !== 'string' || !/^https?:\/\//.test(redirectUri)) throw new Error('Endereço de retorno inválido.');
+ if (configId != null && !ehConfigDeLogin(configId)) throw new Error('ID da configuração do Login para Empresas inválido.');
  const url = new URL(`/${version}/dialog/oauth`, dialogBase);
  url.searchParams.set('client_id', String(appId));
  url.searchParams.set('redirect_uri', redirectUri);
  url.searchParams.set('state', state);
  url.searchParams.set('response_type', 'code');
+ if (configId != null) {
+  url.searchParams.set('config_id', String(configId).trim());
+  url.searchParams.set('override_default_response_type', 'true');
+  return url;
+ }
  url.searchParams.set('scope', scopes.join(','));
  // Sem isto, uma permissão recusada antes não é perguntada de novo, e o token
  // volta sem `ads_read` em silêncio — a coleta falharia sem motivo aparente.
@@ -330,7 +367,10 @@ export function buildAuthorizeUrl({ appId, redirectUri, state, scopes = OAUTH_SC
 }
 
 /**
- * Troca o código do retorno por um token de usuário (curta duração).
+ * Troca o código do retorno por um token. No modo clássico é token de usuário
+ * de curta duração; no Login para Empresas com configuração de sistema, é o
+ * próprio token que não expira — a mesma chamada, só muda o que volta. Quem
+ * diz qual dos dois chegou é o debug_token, não esta resposta.
  * Server-to-server: é a única chamada, além da troca por token longo, que leva
  * o app secret — e o resultado nunca chega ao navegador.
  */

@@ -15,7 +15,7 @@
 // Ver docs/INTEGRATIONS.md e db/migrations/026_marketing_campaigns.sql
 import { fail, input, isProductId, isUuid, json, onlyParams, text } from '../platform/http.mjs';
 import { readKey, seal, open, fingerprint, scrub } from '../platform/secrets.mjs';
-import { createMetaGraphAdapter, exchangeLongLivedToken, buildAuthorizeUrl, exchangeCodeForToken } from '../integrations/meta-graph.mjs';
+import { createMetaGraphAdapter, exchangeLongLivedToken, buildAuthorizeUrl, exchangeCodeForToken, ehConfigDeLogin } from '../integrations/meta-graph.mjs';
 import { randomBytes } from 'node:crypto';
 import { digest } from '../platform/session.mjs';
 import { commercialPermission } from '../modules/commercial-keys.mjs';
@@ -84,6 +84,23 @@ export function chaveConfigurada(env) {
 export function oauthConfigurado(env) {
  return Boolean(env.META_APP_ID && env.META_APP_SECRET);
 }
+
+/**
+ * Qual login o botão abre. 'business' = Login do Facebook para Empresas, com a
+ * configuração em META_LOGIN_CONFIG_ID (o token de sistema não expira);
+ * 'classic' = Login do Facebook com `scope`, token de ~60 dias; null = sem app.
+ * O ID da configuração não é segredo, mas fica no servidor como o do app — a
+ * tela recebe só o modo.
+ */
+export function modoDeLogin(env) {
+ if (!oauthConfigurado(env)) return null;
+ return String(env.META_LOGIN_CONFIG_ID ?? '').trim() ? 'business' : 'classic';
+}
+
+// O que a tela precisa saber do servidor, igual nas duas leituras.
+const capacidades = env => ({
+ key_configured: chaveConfigurada(env), oauth_available: oauthConfigurado(env), login_mode: modoDeLogin(env),
+});
 
 /**
  * Sugere um vínculo por nome, sem gravar nada.
@@ -169,7 +186,7 @@ export function marketingRoutes(router, { env = process.env, clock = Date.now, a
 
   // Sem credencial não é erro: é estado vazio honesto, como em stripe-catalog.
   if (!cred.rowCount) return reply(200, {
-   ...credencialPublica(null), key_configured: chaveConfigurada(env), oauth_available: oauthConfigurado(env),
+   ...credencialPublica(null), ...capacidades(env),
    accounts: [], campaigns: [], summary: null,
    last_sync: null, unassigned: 0, window: { since, until },
   });
@@ -186,8 +203,7 @@ export function marketingRoutes(router, { env = process.env, clock = Date.now, a
 
   return reply(200, {
    ...credencialPublica(cred.rows[0], clock),
-   key_configured: chaveConfigurada(env),
-   oauth_available: oauthConfigurado(env),
+   ...capacidades(env),
    window: { since, until },
    accounts: contas.rows,
    campaigns: linhas,
@@ -536,6 +552,11 @@ export function marketingRoutes(router, { env = process.env, clock = Date.now, a
   await commercialPermission(client, operator, true, true);
   if (!oauthConfigurado(env))
    throw fail(503, 'Defina META_APP_ID e META_APP_SECRET no servidor para conectar com o Facebook.');
+  // Configuração malformada falha aqui, com o nome da variável, e não na Meta
+  // com uma tela genérica de erro depois do clique.
+  const business = modoDeLogin(env) === 'business';
+  if (business && !ehConfigDeLogin(env.META_LOGIN_CONFIG_ID))
+   throw fail(503, 'META_LOGIN_CONFIG_ID inválido: use só o ID numérico da configuração do Login para Empresas.');
   // Sem chave não há onde guardar o token que vai voltar: melhor falhar aqui
   // do que depois de a pessoa autorizar na Meta.
   readKey(env);
@@ -548,6 +569,7 @@ export function marketingRoutes(router, { env = process.env, clock = Date.now, a
    [digest(state), PROVIDER, retorno, operator?.subject ?? null, operator?.email ?? null]);
   const destino = buildAuthorizeUrl({
    appId: String(env.META_APP_ID).trim(), redirectUri: retorno, state,
+   ...(business ? { configId: String(env.META_LOGIN_CONFIG_ID).trim() } : {}),
    ...(env.META_GRAPH_VERSION ? { version: env.META_GRAPH_VERSION } : {}),
   });
   return { body: { url: destino.href } };
@@ -585,25 +607,47 @@ export function marketingRoutes(router, { env = process.env, clock = Date.now, a
 
   const appId = String(env.META_APP_ID).trim();
   const appSecret = String(env.META_APP_SECRET);
+  const business = modoDeLogin(env) === 'business';
+  const conferir = t => createMetaGraphAdapter({ token: t, appId, appSecret, ...extrasGraph() }).debugToken();
   let token = null;
   try {
    const curto = await exchangeCodeForToken({ appId, appSecret, code, redirectUri: fluxo.redirect_uri, ...extrasGraph() });
-   const longo = await exchangeLongLivedToken({ appId, appSecret, shortLivedToken: curto.access_token, ...extrasGraph() });
-   token = longo.access_token;
-   let tipo = longo.token_type;
-   let expiraEm = longo.expires_at;
+   token = curto.access_token;
+   let tipo = 'long_lived_user';
+   let expiraEm = null;
 
-   // Conferir antes de gravar, como nos outros dois caminhos de conexão.
-   const estado = await createMetaGraphAdapter({ token, appId, appSecret, ...extrasGraph() }).debugToken();
-   if (!estado.valid) return voltar('invalid');
-   if (estado.never_expires) { expiraEm = null; tipo = 'system_user'; }
-   else if (estado.expires_at) expiraEm = estado.expires_at;
+   // Login para Empresas: o código pode ter virado direto o token do usuário do
+   // sistema. Quem diz é o debug_token (expires_at 0 ou type SYSTEM_USER).
+   // Token de sistema NUNCA vai para fb_exchange_token: a troca por token longo
+   // é para token de usuário de curta duração, e renovar token de sistema com
+   // validade exige set_token_expires_in_60_days=true (sem ele, a Meta dá erro
+   // para empresas obrigadas a usar validade). O token que volta do código já
+   // traz a validade escolhida na configuração — nunca expira ou 60 dias —, e
+   // grava-se a data que o debug_token disser. Sem expires_at, vale o padrão
+   // documentado do token de sistema: não expira. Só token de usuário
+   // (configuração de token de usuário) segue o caminho clássico abaixo.
+   let estado = business ? await conferir(token) : null;
+   if (estado && !estado.valid) return voltar('invalid');
+   if (estado && (estado.never_expires || estado.type === 'SYSTEM_USER')) {
+    tipo = 'system_user';
+    expiraEm = estado.never_expires ? null : estado.expires_at;
+   } else {
+    const longo = await exchangeLongLivedToken({ appId, appSecret, shortLivedToken: token, ...extrasGraph() });
+    token = longo.access_token;
+    tipo = longo.token_type;
+    expiraEm = longo.expires_at;
+    // Conferir antes de gravar, como nos outros dois caminhos de conexão.
+    estado = await conferir(token);
+    if (!estado.valid) return voltar('invalid');
+    if (estado.never_expires) { expiraEm = null; tipo = 'system_user'; }
+    else if (estado.expires_at) expiraEm = estado.expires_at;
+   }
 
    const client = await pool.connect();
    try {
     await client.query('BEGIN');
     await guardarCredencial(client, {
-     token, label: 'Meta Ads (Facebook Login)', tokenType: tipo, scopes: estado.scopes,
+     token, label: business ? 'Meta Ads (Login para Empresas)' : 'Meta Ads (Facebook Login)', tokenType: tipo, scopes: estado.scopes,
      expiresAt: expiraEm, appId,
      // O autor vem do state, não do cookie — que pode nem ter vindo.
      operator: { subject: fluxo.operator_subject, email: fluxo.operator_email }, via: 'oauth',
@@ -636,10 +680,8 @@ export function marketingRoutes(router, { env = process.env, clock = Date.now, a
  router.get('/api/marketing/credential', async ({ pool, reply, url }) => {
   onlyParams(url.searchParams, ['verify']);
   const cred = await pool.query('SELECT * FROM marketing_credentials WHERE provider=$1 AND active', [PROVIDER]);
-  const chave = chaveConfigurada(env);
-  const oauth = oauthConfigurado(env);
-  if (!cred.rowCount) return reply(200, { ...credencialPublica(null), key_configured: chave, oauth_available: oauth });
-  const publico = { ...credencialPublica(cred.rows[0], clock), key_configured: chave, oauth_available: oauth };
+  if (!cred.rowCount) return reply(200, { ...credencialPublica(null), ...capacidades(env) });
+  const publico = { ...credencialPublica(cred.rows[0], clock), ...capacidades(env) };
   if (url.searchParams.get('verify') !== '1') return reply(200, publico);
 
   const aberto = await abrirAdaptador(pool);

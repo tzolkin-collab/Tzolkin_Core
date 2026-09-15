@@ -6,13 +6,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { readKey, seal, open, fingerprint, scrub } from '../../apps/api/src/platform/secrets.mjs';
 import {
  createMetaGraphAdapter, exchangeLongLivedToken,
  decimalParaCentavos, unidadeMenorParaCentavos, _internals,
  buildAuthorizeUrl, exchangeCodeForToken, OAUTH_SCOPES,
 } from '../../apps/api/src/integrations/meta-graph.mjs';
-import { credencialPublica, sugerirVinculo } from '../../apps/api/src/modules/marketing.mjs';
+import { credencialPublica, sugerirVinculo, modoDeLogin } from '../../apps/api/src/modules/marketing.mjs';
+import { rotuloValidade } from '../../apps/web/public/campaigns.js';
 
 const CHAVE = randomBytes(32).toString('base64');
 const env = { META_MARKETING_KEY: CHAVE };
@@ -193,6 +195,21 @@ test('Adaptador da Meta', async t => {
   assert.match(_internals.mensagemDeFalha(403, 200), /ads_read/);
  });
 
+ await t.test('debug_token só declara não expirar quando a Meta devolve zero', async () => {
+  const semValidade = fetchFalso(new Map([['/debug_token', { data: { is_valid: true, type: 'USER', scopes: ['ads_read'] } }]]));
+  const desconhecido = await createMetaGraphAdapter({ token: TOKEN, appId: '12345', appSecret: 'segredo', fetchImpl: semValidade }).debugToken();
+  assert.equal(desconhecido.expires_at, null);
+  assert.equal(desconhecido.never_expires, false, 'campo ausente não prova validade permanente');
+
+  const nulo = fetchFalso(new Map([['/debug_token', { data: { is_valid: true, type: 'USER', expires_at: null, scopes: ['ads_read'] } }]]));
+  const vazio = await createMetaGraphAdapter({ token: TOKEN, appId: '12345', appSecret: 'segredo', fetchImpl: nulo }).debugToken();
+  assert.equal(vazio.never_expires, false, 'null não é zero');
+
+  const permanente = fetchFalso(new Map([['/debug_token', { data: { is_valid: true, type: 'SYSTEM_USER', expires_at: 0, scopes: ['ads_read'] } }]]));
+  const sistema = await createMetaGraphAdapter({ token: TOKEN, appId: '12345', appSecret: 'segredo', fetchImpl: permanente }).debugToken();
+  assert.equal(sistema.never_expires, true);
+ });
+
  await t.test('troca de token curto por longo lê expiração e tipo', async () => {
   const fetchImpl = fetchFalso(new Map([['/oauth/access_token', { access_token: 'LONGO', expires_in: 5184000 }]]));
   const r = await exchangeLongLivedToken({ appId: '1', appSecret: 's', shortLivedToken: 'CURTO', fetchImpl });
@@ -257,6 +274,29 @@ test('A credencial exposta ao painel nunca contém o token', async t => {
  await t.test('token sem ads_read é denunciado', () => {
   assert.equal(credencialPublica({ ...linha, scopes: ['public_profile'] }).can_read_ads, false);
  });
+
+ await t.test('a tela diz se expira e quando, como ação', () => {
+  const [permanente, classePermanente] = rotuloValidade(credencialPublica({ ...linha, expires_at: null, token_type: 'system_user' }));
+  assert.equal(permanente, 'Não expira');
+  assert.equal(classePermanente, 'status active');
+  const [longe, classeLonge] = rotuloValidade(credencialPublica(linha));
+  assert.match(longe, /^Expira em (39|40) dias — reconecte antes$/);
+  assert.equal(classeLonge, 'status building');
+  const [perto, classePerto] = rotuloValidade(credencialPublica({ ...linha, expires_at: new Date(Date.now() + 1.5 * 86400000).toISOString() }));
+  assert.equal(perto, 'Expira em 1 dia — reconecte antes');
+  assert.equal(classePerto, 'status failed');
+  const [, classeVencida] = rotuloValidade(credencialPublica({ ...linha, expires_at: new Date(Date.now() - 86400000).toISOString() }));
+  assert.equal(classeVencida, 'status failed');
+  assert.equal(rotuloValidade({ configured: false }), null);
+
+  // Classe sem regra no CSS cai no cinza neutro de .status: a urgência some da tela.
+  const css = readFileSync(new URL('../../apps/web/public/design.css', import.meta.url), 'utf8');
+  for (const classe of [classePermanente, classeLonge, classePerto, classeVencida]) {
+   const variante = classe.split(' ')[1];
+   assert.match(css, new RegExp(`\\.status\\.${variante}\\s*\\{`), `.status.${variante} precisa existir em design.css`);
+  }
+  assert.notEqual(classePerto, classeLonge, 'perto de vencer não pode ter a mesma cor de faltar muito');
+ });
 });
 
 test('Sugestão de vínculo é conservadora', async t => {
@@ -308,6 +348,45 @@ test('OAuth da Meta', async t => {
   assert.equal(url.searchParams.get('scope'), 'ads_read');
   assert.equal(url.searchParams.get('auth_type'), 'rerequest', 'sem isto a Meta pula permissão recusada antes');
   assert.equal(url.searchParams.get('client_secret'), null, 'o segredo do app nunca vai para o navegador');
+  assert.equal(url.searchParams.get('config_id'), null, 'sem configuração o login é o clássico');
+  assert.equal(url.searchParams.get('override_default_response_type'), null);
+ });
+
+ await t.test('Login para Empresas: config_id no lugar de scope', () => {
+  const url = buildAuthorizeUrl({ appId: '1234567890', redirectUri: RETORNO, state: 's'.repeat(43), configId: '987654321012345' });
+  assert.equal(url.hostname, 'www.facebook.com');
+  assert.match(url.pathname, /\/dialog\/oauth$/);
+  assert.equal(url.searchParams.get('config_id'), '987654321012345');
+  assert.equal(url.searchParams.get('response_type'), 'code', 'token de sistema só sai pelo fluxo de código');
+  assert.equal(url.searchParams.get('override_default_response_type'), 'true');
+  assert.equal(url.searchParams.get('scope'), null, 'as permissões moram na configuração; scope não vai junto');
+  assert.equal(url.searchParams.get('auth_type'), null);
+  assert.equal(url.searchParams.get('redirect_uri'), RETORNO);
+  assert.equal(url.searchParams.get('client_secret'), null);
+  // Mesmo que alguém passe escopos, a configuração vence.
+  const comEscopo = buildAuthorizeUrl({ appId: '1234567890', redirectUri: RETORNO, state: 's'.repeat(43), configId: '987654321012345', scopes: ['ads_management'] });
+  assert.equal(comEscopo.searchParams.get('scope'), null);
+ });
+
+ await t.test('configuração malformada é recusada antes de montar o endereço', () => {
+  for (const ruim of ['abc', '12', '123456&scope=ads_management', '']) {
+   assert.throws(() => buildAuthorizeUrl({ appId: '1234567890', redirectUri: RETORNO, state: 's'.repeat(43), configId: ruim }), /configuração/);
+  }
+ });
+
+ await t.test('a versão padrão da Graph é a conferida no changelog', () => {
+  const url = buildAuthorizeUrl({ appId: '1234567890', redirectUri: RETORNO, state: 's'.repeat(43) });
+  assert.equal(url.pathname, '/v26.0/dialog/oauth');
+  assert.equal(buildAuthorizeUrl({ appId: '1234567890', redirectUri: RETORNO, state: 's'.repeat(43), version: 'v25.0' }).pathname,
+   '/v25.0/dialog/oauth', 'META_GRAPH_VERSION continua sobrescrevendo');
+ });
+
+ await t.test('o modo de login sai do ambiente, sem expor o ID', () => {
+  assert.equal(modoDeLogin({}), null, 'sem app não há login');
+  assert.equal(modoDeLogin({ META_APP_ID: '1234567890' }), null, 'sem segredo também não');
+  assert.equal(modoDeLogin({ META_APP_ID: '1234567890', META_APP_SECRET: 's' }), 'classic');
+  assert.equal(modoDeLogin({ META_APP_ID: '1234567890', META_APP_SECRET: 's', META_LOGIN_CONFIG_ID: '  ' }), 'classic', 'variável vazia é ausente');
+  assert.equal(modoDeLogin({ META_APP_ID: '1234567890', META_APP_SECRET: 's', META_LOGIN_CONFIG_ID: '987654321012345' }), 'business');
  });
 
  await t.test('só pede leitura: nenhuma permissão que escreve', () => {

@@ -256,8 +256,13 @@ test('Campanhas de marketing', async t => {
 
 // Graph de mentira: um servidor local. Permite exercitar troca e conferência
 // de verdade, inclusive provar que o token viaja no cabeçalho.
+//
+// `ajustes.expiraEm` muda o que o debug_token responde: 0 é o token de sistema
+// que não expira; um instante Unix no futuro é token de usuário comum; undefined
+// some com o campo. `ajustes.tipo` fixa o `type` (token de sistema com validade).
 function grafoFalso() {
  const recebidas = [];
+ const ajustes = { expiraEm: 0, tipo: undefined };
  const servidor = http.createServer((req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
   recebidas.push({ path: url.pathname, query: url.search, auth: req.headers.authorization || null });
@@ -266,11 +271,13 @@ function grafoFalso() {
    return res.end(JSON.stringify({ access_token: 'TOKEN-LONGO-' + 'y'.repeat(60), expires_in: 5184000 }));
   }
   if (url.pathname.endsWith('/debug_token')) {
-   return res.end(JSON.stringify({ data: { is_valid: true, expires_at: 0, scopes: ['ads_read'], type: 'SYSTEM_USER' } }));
+   return res.end(JSON.stringify({ data: {
+    is_valid: true, expires_at: ajustes.expiraEm, scopes: ['ads_read'], type: ajustes.tipo ?? (ajustes.expiraEm ? 'USER' : 'SYSTEM_USER'),
+   } }));
   }
   res.end(JSON.stringify({ data: [] }));
  });
- return { servidor, recebidas };
+ return { servidor, recebidas, ajustes };
 }
 
 test('Conectar credencial pelo painel', async t => {
@@ -470,8 +477,10 @@ test('Conectar com Facebook (OAuth)', async t => {
   await t.test('a tela sabe se o OAuth está disponível', async () => {
    const com = await (await fetch(origin + '/api/marketing/overview', { headers: { cookie } })).json();
    assert.equal(com.oauth_available, true);
+   assert.equal(com.login_mode, 'classic', 'sem META_LOGIN_CONFIG_ID o login é o clássico');
    const sem = await (await fetch(origemSemApp + '/api/marketing/overview', { headers: { cookie: cookieSemApp } })).json();
    assert.equal(sem.oauth_available, false);
+   assert.equal(sem.login_mode, null);
   });
 
   let state;
@@ -482,6 +491,8 @@ test('Conectar com Facebook (OAuth)', async t => {
    assert.equal(url.hostname, 'www.facebook.com');
    assert.equal(url.searchParams.get('redirect_uri'), origin + '/api/marketing/meta/callback');
    assert.equal(url.searchParams.get('client_secret'), null);
+   assert.equal(url.searchParams.get('scope'), 'ads_read');
+   assert.equal(url.searchParams.get('config_id'), null);
    state = url.searchParams.get('state');
    assert.ok(state && state.length >= 32);
    const cru = await pool.query('SELECT 1 FROM marketing_oauth_states WHERE state_hash=$1', [state]);
@@ -543,6 +554,182 @@ test('Conectar com Facebook (OAuth)', async t => {
   await pool.query(
    "DELETE FROM marketing_oauth_states WHERE operator_subject='local-bootstrap' AND created_at >= $1", [inicio]);
   for (const s2 of [server, semApp]) { s2.closeAllConnections(); await new Promise(r => s2.close(r)); }
+  await new Promise(r => servidor.close(r));
+  await pool.end();
+ }
+});
+
+// Login do Facebook para Empresas: com META_LOGIN_CONFIG_ID o diálogo pede a
+// configuração, e o token de sistema que volta não expira — por isso não passa
+// pela troca por token longo, que é coisa de token de usuário.
+test('Conectar com Facebook Login para Empresas (token que não expira)', async t => {
+ const pool = new pg.Pool({ connectionString: testConnectionString().connectionString, max: 3 });
+ if (await credencialRealAtiva(pool)) { t.skip(AVISO_BANCO_REAL); await pool.end(); return; }
+ const inicio = (await pool.query('SELECT now() AS t')).rows[0].t;
+ const adminPassword = randomBytes(32).toString('base64url');
+ const CONFIG = '987654321012345';
+ const SEGREDO_APP = 'segredo-do-app-de-teste-empresas';
+
+ const { servidor, recebidas, ajustes } = grafoFalso();
+ await new Promise(r => servidor.listen(0, '127.0.0.1', r));
+ const grafo = `http://127.0.0.1:${servidor.address().port}`;
+ const base = { META_MARKETING_KEY: CHAVE, META_GRAPH_BASE: grafo, META_APP_ID: '1234567890', META_APP_SECRET: SEGREDO_APP };
+ const server = createCore({ pool, adminPassword, marketingOptions: { env: { ...base, META_LOGIN_CONFIG_ID: CONFIG } } });
+ await new Promise(r => server.listen(0, '127.0.0.1', r));
+ const origin = `http://127.0.0.1:${server.address().port}`;
+
+ // ID de configuração colado errado: o servidor recusa antes de mandar à Meta.
+ const malformado = createCore({ pool, adminPassword, marketingOptions: { env: { ...base, META_LOGIN_CONFIG_ID: 'config-errada' } } });
+ await new Promise(r => malformado.listen(0, '127.0.0.1', r));
+ const origemMalformada = `http://127.0.0.1:${malformado.address().port}`;
+
+ const entrar = async alvo => {
+  const r = await fetch(alvo + '/api/login', {
+   method: 'POST', headers: { origin: alvo, 'Content-Type': 'application/json' },
+   body: JSON.stringify({ password: adminPassword }),
+  });
+  return r.headers.get('set-cookie').split(';')[0];
+ };
+ const cookie = await entrar(origin);
+ const cookieMalformado = await entrar(origemMalformada);
+ const get = rota => fetch(origin + rota, { headers: { cookie } });
+ const autorizar = (alvo = origin, ck = cookie) =>
+  fetch(alvo + '/api/marketing/meta/authorize', { method: 'POST', headers: { cookie: ck, origin: alvo } });
+ const retornar = qs => fetch(origin + '/api/marketing/meta/callback?' + qs, { redirect: 'manual' });
+ const iniciar = async () => new URL((await (await autorizar()).json()).url).searchParams.get('state');
+ const ativa = async () => (await pool.query(
+  "SELECT label,token_type,expires_at,connected_via,token_ciphertext FROM marketing_credentials WHERE provider='meta' AND active")).rows;
+
+ try {
+  await t.test('a tela sabe que o login é o de Empresas, sem receber o ID nem segredo', async () => {
+   for (const rota of ['/api/marketing/overview', '/api/marketing/credential']) {
+    const corpo = await (await get(rota)).json();
+    assert.equal(corpo.oauth_available, true);
+    assert.equal(corpo.login_mode, 'business', rota);
+    const texto = JSON.stringify(corpo);
+    assert.ok(!texto.includes(CONFIG), 'o painel recebe o modo, não a configuração');
+    assert.ok(!texto.includes(SEGREDO_APP));
+   }
+  });
+
+  await t.test('autorizar pede a configuração, não scope', async () => {
+   const r = await autorizar();
+   assert.equal(r.status, 200);
+   const url = new URL((await r.json()).url);
+   assert.equal(url.hostname, 'www.facebook.com');
+   assert.equal(url.searchParams.get('config_id'), CONFIG);
+   assert.equal(url.searchParams.get('response_type'), 'code');
+   assert.equal(url.searchParams.get('override_default_response_type'), 'true');
+   assert.equal(url.searchParams.get('scope'), null);
+   assert.equal(url.searchParams.get('client_secret'), null);
+  });
+
+  await t.test('configuração malformada falha no servidor, com o nome da variável', async () => {
+   const r = await autorizar(origemMalformada, cookieMalformado);
+   assert.equal(r.status, 503);
+   assert.match((await r.json()).message, /META_LOGIN_CONFIG_ID/);
+  });
+
+  await t.test('token de sistema grava credencial que não expira, sem fb_exchange_token', async () => {
+   ajustes.expiraEm = 0;
+   const state = await iniciar();
+   const antes = recebidas.length;
+   const r = await retornar(`code=codigo-empresas-12345&state=${state}`);
+   assert.equal(r.status, 302);
+   assert.equal(r.headers.get('location'), '/?view=campaigns&meta=ok');
+   const chamadas = recebidas.slice(antes);
+   assert.ok(chamadas.some(c => c.path.endsWith('/oauth/access_token') && c.query.includes('code=codigo-empresas-12345')), 'troca do código');
+   assert.ok(!chamadas.some(c => c.query.includes('fb_exchange_token')), 'token que não expira não é trocado por token longo');
+   assert.ok(chamadas.some(c => c.path.endsWith('/debug_token')), 'conferido antes de gravar');
+
+   const linhas = await ativa();
+   assert.equal(linhas.length, 1);
+   assert.equal(linhas[0].connected_via, 'oauth');
+   assert.equal(linhas[0].token_type, 'system_user');
+   assert.equal(linhas[0].expires_at, null);
+   assert.ok(!linhas[0].token_ciphertext.toString('utf8').includes('TOKEN-LONGO'), 'gravado cifrado');
+
+   const corpo = await (await get('/api/marketing/credential')).json();
+   assert.equal(corpo.configured, true);
+   assert.equal(corpo.never_expires, true);
+   assert.equal(corpo.expires_at, null);
+   assert.equal(corpo.days_remaining, null);
+   assert.equal(corpo.expiring_soon, false);
+   assert.equal(corpo.connected_via, 'oauth');
+   assert.equal(corpo.login_mode, 'business');
+   const texto = JSON.stringify(corpo);
+   assert.ok(!texto.includes('TOKEN-LONGO'), 'o token não sai pela API');
+   assert.ok(!texto.includes(SEGREDO_APP));
+  });
+
+  await t.test('token de usuário comum, mesmo no modo Empresas, segue a troca por token longo', async () => {
+   ajustes.expiraEm = Math.floor(Date.now() / 1000) + 50 * 86400;
+   const state = await iniciar();
+   const antes = recebidas.length;
+   const r = await retornar(`code=codigo-usuario-12345&state=${state}`);
+   assert.equal(r.headers.get('location'), '/?view=campaigns&meta=ok');
+   const chamadas = recebidas.slice(antes);
+   assert.ok(chamadas.some(c => c.query.includes('fb_exchange_token')), 'o caminho clássico continua valendo');
+
+   const linhas = await ativa();
+   assert.equal(linhas.length, 1, 'a anterior foi revogada: uma ativa por provedor');
+   assert.equal(linhas[0].token_type, 'long_lived_user');
+   const corpo = await (await get('/api/marketing/credential')).json();
+   assert.equal(corpo.never_expires, false);
+   assert.ok(corpo.expires_at, 'quando expira');
+   assert.ok(corpo.days_remaining >= 49 && corpo.days_remaining <= 50, `faltam ${corpo.days_remaining} dias`);
+  });
+
+  // Configuração de token de sistema com validade de 60 dias: a Meta exige
+  // set_token_expires_in_60_days na renovação, e fb_exchange_token sem ele dá
+  // erro para algumas empresas. O token do código já vem com a validade.
+  await t.test('token de sistema com validade grava a data, sem fb_exchange_token', async () => {
+   ajustes.tipo = 'SYSTEM_USER';
+   ajustes.expiraEm = Math.floor(Date.now() / 1000) + 60 * 86400;
+   try {
+    const state = await iniciar();
+    const antes = recebidas.length;
+    const r = await retornar(`code=codigo-sistema-60d-12345&state=${state}`);
+    assert.equal(r.headers.get('location'), '/?view=campaigns&meta=ok');
+    const chamadas = recebidas.slice(antes);
+    assert.ok(!chamadas.some(c => c.query.includes('fb_exchange_token')), 'token de sistema não passa pela troca de token de usuário');
+
+    const linhas = await ativa();
+    assert.equal(linhas.length, 1);
+    assert.equal(linhas[0].token_type, 'system_user');
+    assert.ok(linhas[0].expires_at, 'a data da configuração é gravada');
+    const corpo = await (await get('/api/marketing/credential')).json();
+    assert.equal(corpo.never_expires, false);
+    assert.ok(corpo.days_remaining >= 59 && corpo.days_remaining <= 60, `faltam ${corpo.days_remaining} dias`);
+   } finally { ajustes.tipo = undefined; ajustes.expiraEm = 0; }
+  });
+
+  await t.test('token de sistema sem expires_at também não vai para fb_exchange_token', async () => {
+   ajustes.tipo = 'SYSTEM_USER';
+   ajustes.expiraEm = undefined;
+   try {
+    const state = await iniciar();
+    const antes = recebidas.length;
+    const r = await retornar(`code=codigo-sistema-sem-data-12345&state=${state}`);
+    assert.equal(r.headers.get('location'), '/?view=campaigns&meta=ok');
+    const chamadas = recebidas.slice(antes);
+    assert.ok(chamadas.some(c => c.path.endsWith('/debug_token')));
+    assert.ok(!chamadas.some(c => c.query.includes('fb_exchange_token')), 'decidido pelo type, não pelo campo ausente');
+
+    const linhas = await ativa();
+    assert.equal(linhas.length, 1);
+    assert.equal(linhas[0].token_type, 'system_user');
+    assert.equal(linhas[0].expires_at, null, 'padrão documentado do token de sistema: não expira');
+   } finally { ajustes.tipo = undefined; ajustes.expiraEm = 0; }
+  });
+ } finally {
+  ajustes.expiraEm = 0;
+  ajustes.tipo = undefined;
+  await pool.query(
+   "DELETE FROM marketing_credentials WHERE connected_via='oauth' AND connected_by_subject='local-bootstrap' AND created_at >= $1", [inicio]);
+  await pool.query(
+   "DELETE FROM marketing_oauth_states WHERE operator_subject='local-bootstrap' AND created_at >= $1", [inicio]);
+  for (const s2 of [server, malformado]) { s2.closeAllConnections(); await new Promise(r => s2.close(r)); }
   await new Promise(r => servidor.close(r));
   await pool.end();
  }
