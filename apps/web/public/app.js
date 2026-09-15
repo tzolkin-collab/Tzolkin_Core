@@ -977,6 +977,8 @@ async function load() {
  if(state.view==='tracking') await tracking.load();
  if(state.view==='finance') await finance.load();
  if(state.view==='emails') await emails.load();
+ // Entrar, Atualizar e salvar um projeto passam por aqui: sem isto Deploys ficaria com os painéis do GitHub vazios.
+ if(contextKind()==='general'&&state.view==='deploys') await delivery.load();
 }
 
 // A lista de organizações só é buscada quando o operador abre um formulário que precisa dela.
@@ -1049,6 +1051,8 @@ document.querySelectorAll('[data-open]').forEach(button => { button.onclick = ()
 document.querySelectorAll('[data-close]').forEach(button => { button.onclick = () => button.closest('dialog').close(); });
 $('new-record').onclick = () => {
  const dialog=views()[state.view].action[1];
+ // Deploys não usa <dialog> simples: o assistente do cadastro técnico tem fluxo próprio.
+ if(dialog==='delivery-new'){delivery.open(null);return;}
  if(dialog==='tenant-dialog'){
   const relationship=$('tenant-form').elements.relationship_kind;
   if(state.view==='leads') relationship.value='prospect';
@@ -1083,7 +1087,9 @@ $('logout').onclick = async () => {
 };
 
 const resource = setupResource({api,activate:()=>switchView('resource'),canOpen:()=>!$('workspace').hidden && contextKind()==='general',back:()=>switchView('deploys')});
-const delivery = setupDelivery({ api,openResource:resource.open });
+// Salvar ou ativar um projeto cria ou renomeia o produto em draft: recarrega o painel
+// inteiro (deploys, catálogo e, em Deploys, o cadastro técnico), como os demais formulários.
+const delivery = setupDelivery({ api,openResource:resource.open,onSaved:()=>load().catch(reportError) });
 // Volta de fluxo externo — OAuth da Meta, clique em notificação: `?view=`
 // escolhe a tela inicial e `?meta=` traz o resultado da conexão. Os dois saem
 // da barra de endereço em seguida, para um recarregar não repetir o aviso.

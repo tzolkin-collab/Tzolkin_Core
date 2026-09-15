@@ -1,4 +1,5 @@
 import {createIcon,providerLogo} from './icons.js';
+import {summarizeProject} from './card-summary.js';
 export const deliveryIcon=createIcon;
 export function automaticSettings({snapshot,repository,isNew,bindingCount,dirty = []}) {
  if (!isNew || bindingCount !== 1 || snapshot.status !== 'ok' || !repository || repository.toLowerCase() !== snapshot.repository?.toLowerCase()) return [];
@@ -8,14 +9,22 @@ export function compareSettings(fields, current) {
  return Object.entries(fields).map(([key, remote]) => ({key,...remote,
   current:current[key] ?? '',different:remote.state === 'value' && String(current[key] ?? '') !== String(remote.value)}));
 }
-export function setupDelivery({ api,onSaved = async () => {} }) {
+// openResource(provider, target_id, environment) abre o destino na tela de recurso; sem ele o chip é só rótulo.
+// onSaved roda depois de salvar ou ativar; sem ele, recarrega a própria lista.
+export function setupDelivery({ api,openResource,onSaved }) {
  const $ = id => document.getElementById(id);
  const el = (tag, value, cls) => { const n = document.createElement(tag); if (value != null) n.textContent = value; if (cls) n.className = cls; return n; };
  const button = (label, action, cls = 'secondary', icon) => { const b = el('button', null, cls); if(icon) b.append(deliveryIcon(icon)); b.append(document.createTextNode(label)); b.type = 'button'; b.onclick = action; return b; };
  const form = $('delivery-form'), dialog = $('delivery-dialog');
  const kinds = { frontend:'Website', api:'API', worker:'Worker', library:'Biblioteca', database:'Banco', cache:'Cache' };
  const environments = { development:'Desenvolvimento', staging:'Homologação', production:'Produção' };
- let options, editing, rows = [], generation = 0, step = 0;
+ const providers = { github:'GitHub', vercel:'Vercel', easypanel:'EasyPanel' };
+ const connection = { ok:'conectado', not_configured:'não conectado no servidor', error:'consulta indisponível' };
+ const saved = () => onSaved ? onSaved() : load();
+ // Diálogo e lista têm gerações próprias: abrir o assistente não descarta a lista que
+ // está carregando, e uma recarga da lista não invalida a detecção do diálogo aberto.
+ // inventory/projects são da lista; options é o inventário que o diálogo buscou ao abrir.
+ let options, editing, rows = [], projects = [], inventory = null, generation = 0, listGeneration = 0, step = 0;
  const stepIds = ['project','components','review'];
  function showStep(index, focus = true) {
   if(index === 2 && rows.some(row => row.bindings.some(b => b.pending))) { $('delivery-error').textContent='Aguarde a detecção terminar antes de revisar.'; return; }
@@ -216,13 +225,91 @@ export function setupDelivery({ api,onSaved = async () => {} }) {
    for (const key of ['name','owner','layout']) if (project) form.elements.namedItem(key).value = project[key];
    if(repo) form.elements.namedItem('name').value=repo.name.split('/').at(-1);
    $('delivery-repo').replaceChildren(); repositories(project?.repository_id || repo?.id || ''); repoBanner();
-   const labels = { ok:'conectado', not_configured:'não conectado no servidor', error:'consulta indisponível' };
-   $('delivery-connections').textContent = ['github','vercel','easypanel'].map(p => `${p}: ${labels[options[p].status]}${options[p].truncated ? ' · lista parcial' : ''}`).join(' / ');
+   $('delivery-connections').textContent = ['github','vercel','easypanel'].map(p => `${p}: ${connection[options[p].status]}${options[p].truncated ? ' · lista parcial' : ''}`).join(' / ');
    for (const c of project?.components || components) addComponent(c);
    if(!project && !repo && components.length) form.elements.namedItem('name').value=components[0].name;
    $('delivery-message').textContent = ''; showStep(0,false); dialog.showModal();
   } catch(error) { $('delivery-message').textContent = error.message; }
   finally { $('delivery-new').disabled = false; }
+ }
+ function renderRepositories() {
+  const area=$('delivery-repositories'); area.replaceChildren();
+  if(!inventory) return;
+  const github=inventory.github;
+  $('delivery-repo-count').textContent=github.status === 'ok' ? String(github.items.length) : 'Indisponível';
+  if(github.status !== 'ok') { area.append(el('p',github.status === 'error' ? 'Não foi possível consultar o GitHub. Tente atualizar. Seus cadastros continuam abaixo.' : 'GitHub não conectado no servidor. Você pode criar um rascunho sem repositório.','empty-list')); return; }
+  const search=$('delivery-repository-search').value.toLowerCase().trim();
+  const repos=github.items.filter(r => r.name.toLowerCase().includes(search));
+  if(!repos.length) area.append(el('p',search ? 'Nenhum repositório corresponde à busca.' : 'Nenhum repositório acessível nesta conta.','empty-list'));
+  for(const repo of repos) {
+   const project=projects.find(p => p.repository_id === repo.id), row=el('article',null,'delivery-repo-row');
+   const mark=el('span',null,'delivery-mark'); mark.append(deliveryIcon('repo'));
+   const body=el('div',null,'delivery-repo-body'); body.append(el('h4',repo.name),el('p',repo.archived ? 'Arquivado · somente leitura' : repo.default_branch ? `Branch padrão · ${repo.default_branch}` : 'Branch não informada','detail'));
+   const action=button(project ? 'Abrir projeto' : 'Configurar',() => project ? open(project) : open(null,repo),project ? 'secondary' : 'primary','arrow');
+   action.disabled=repo.archived && !project;
+   row.append(mark,body,el('span',project ? 'Vinculado' : 'Não configurado','status'),action); area.append(row);
+  }
+  if(github.truncated) area.append(el('p','Lista parcial: o limite de consulta foi atingido.','detail'));
+ }
+ function renderProject(project) {
+  const card = el('article',null,'delivery-component project-card');
+  const summary=summarizeProject(project);
+  const head = el('div',null,'delivery-heading');
+  const identity=el('div',null,'card-identity'),mark=el('span',null,'card-mark');mark.append(deliveryIcon('layers'));identity.append(mark,el('h3',project.name));
+  head.append(identity,el('span',project.issues.length ? `${project.issues.length} pendências` : 'Cadastro completo','status'),button('Configurações',() => open(project),'secondary','settings'));
+  const repo=el('p',null,'card-repository');repo.append(providerLogo('github'),document.createTextNode(project.repository_name || 'Repositório não vinculado'));
+  const facts=el('dl',null,'card-facts');
+  for(const [label,value,icon] of [['Serviços',summary.services,'server'],['Destinos',summary.targets,'cloud'],['Estrutura',project.layout==='monorepo'?'Monorepo':'Aplicação única','layers'],['Responsável pelo projeto',project.owner||'Não definido','people']]){const cell=el('div'),dt=el('dt');dt.append(deliveryIcon(icon),document.createTextNode(label));cell.append(dt,el('dd',String(value)));facts.append(cell);}
+  card.append(head,repo,facts);
+  const tags=el('div',null,'card-tags');for(const stack of summary.stacks)tags.append(el('span',stack,'status'));for(const env of summary.environments)tags.append(el('span',environments[env]||env,'status'));if(tags.childNodes.length)card.append(tags);
+  const details=el('details',null,'card-services');details.append(el('summary',`Serviços e branches · ${summary.services}`));
+  for (const c of project.components) {
+   const service=el('div',null,'delivery-service-line'); service.append(deliveryIcon(c.kind),el('strong',c.name),el('span',c.stack === 'custom' ? 'Stack pendente' : c.stack,'status'),el('span',c.path,'detail'));
+   for (const b of c.bindings) {
+    // O cadastro guarda o nome do destino; se a plataforma estiver fora, a tela do recurso diz isso ao abrir.
+    const label=`${environments[b.environment] || b.environment} · ${b.target_name || b.target_id}`;
+    const target=openResource ? button(label,() => openResource(b.provider,b.target_id,b.environment),'delivery-target-chip') : el('span',label,'delivery-target-chip');
+    target.prepend(providerLogo(b.provider)); service.append(target);
+    const branch=el('span',null,'card-branch');branch.append(deliveryIcon('branch'),document.createTextNode(b.branch||'Branch não informada'));service.append(branch);
+   }
+   if(!c.bindings.length) service.append(el('span',c.kind === 'library' ? 'Sem deploy próprio' : 'Destino pendente','detail'));
+   details.append(service);
+  }
+  card.append(details);
+  if (project.issues.length) { const ul = el('ul',null,'delivery-issues'); for (const issue of project.issues) ul.append(el('li',issue)); card.append(ul); }
+  const footer=el('div',null,'card-footer');
+  footer.append(el('span',project.product_lifecycle_status === 'active' ? 'Produto ativo · publicação não verificada' : 'Cadastro técnico · produto em rascunho'));
+  // O servidor recusa ativar com checklist pendente; o botão só aparece quando a prontidão persistida permite.
+  if(project.product_lifecycle_status === 'draft' && project.readiness?.ready){
+   const activate=button('Ativar produto',async()=>{
+    activate.disabled=true;
+    try{await api(`/api/delivery/projects/${encodeURIComponent(project.id)}/activate`,'POST',{revision:project.revision});await saved();$('delivery-message').textContent='Produto ativado. A publicação continua sendo uma etapa separada.';}
+    catch(error){$('delivery-message').textContent=error.message;activate.disabled=false;}
+   },'secondary','check');
+   footer.append(activate);
+  } else if(project.product_lifecycle_status === 'draft' && project.readiness) footer.append(el('span',`Checklist de ativação · ${project.readiness.completed}/${project.readiness.total}`,'detail'));
+  if(project.updated_at){const date=new Date(project.updated_at);if(!Number.isNaN(date.getTime()))footer.append(el('time','Atualizado '+date.toLocaleDateString('pt-BR')));}
+  card.append(footer);
+  return card;
+ }
+ async function load() {
+  const token = ++listGeneration;
+  $('delivery-message').textContent = 'Carregando cadastro…';
+  let data, available;
+  try { [data,available] = await Promise.all([api('/api/delivery/projects'),api('/api/delivery/options')]); }
+  // Falha atual fica na própria seção: quem chama (entrada, login) pode escrever num aviso que já está escondido.
+  // O 401 não chega aqui como atual: signedOut limpa a tela e avança a geração antes.
+  catch(error) { if (token !== listGeneration) return; $('delivery-message').textContent = error.message; return; }
+  if (token !== listGeneration) return;
+  inventory=available; projects=data.projects; renderRepositories();
+  // Plataforma fora do ar ou sem credencial é dita como tal: nunca some da tela nem vira "conectado".
+  $('delivery-provider-status').replaceChildren(...['github','vercel','easypanel'].map(provider => {
+   const {status,truncated}=available[provider] || {status:'error'}, chip=el('span',null,'delivery-provider' + (status === 'ok' ? ' connected' : ''));
+   chip.append(providerLogo(provider),document.createTextNode(`${providers[provider]} · ${connection[status] || connection.error}${status === 'ok' && truncated ? ' · lista parcial' : ''}`)); return chip;
+  }));
+  $('delivery-list').replaceChildren(); $('delivery-message').textContent = data.truncated ? 'Mostrando os 200 projetos mais recentes.' : '';
+  if (!projects.length) { const github=available.github?.status === 'ok', empty=el('div',null,'delivery-empty'); empty.append(deliveryIcon('layers'),el('h3',github ? 'Seu próximo projeto começa acima' : 'Nenhum projeto cadastrado'),el('p',github ? 'Escolha um repositório para configurar seus serviços.' : 'Sem o GitHub disponível, use Novo projeto para criar um rascunho sem repositório.','detail')); $('delivery-list').append(empty); }
+  for (const project of projects) $('delivery-list').append(renderProject(project));
  }
  form.onsubmit = async event => {
   event.preventDefault();
@@ -238,7 +325,7 @@ export function setupDelivery({ api,onSaved = async () => {} }) {
    const payload = { name:form.elements.namedItem('name').value,owner:form.elements.namedItem('owner').value,layout:form.elements.namedItem('layout').value,
     repository_id:$('delivery-repo').value || null,components:rows.map(readComponent),...(editing ? { revision:editing.revision } : {}) };
    await api('/api/delivery/projects' + (editing ? '/' + editing.id : ''),editing ? 'PUT' : 'POST',payload);
-   dialog.close(); await onSaved(); $('delivery-message').textContent = 'Projeto salvo. Use Publicar no destino para iniciar o deploy.';
+   dialog.close(); await saved(); $('delivery-message').textContent = 'Projeto salvo. Use Publicar no destino para iniciar o deploy.';
   } catch(error) { $('delivery-error').textContent = error.message; }
   finally { $('delivery-save').disabled = false; }
  };
@@ -251,7 +338,13 @@ export function setupDelivery({ api,onSaved = async () => {} }) {
   const add=button(label,() => addComponent({kind,...(['database','cache'].includes(kind) ? {stack:kind === 'database' ? 'postgres' : 'redis',runtime:'managed',manager:'none'} : {})}),'delivery-kind-button',kind);
   add.append(el('small',hints[kind])); $('delivery-kind-picker').append(add);
  }
+ $('delivery-repository-search').oninput = renderRepositories;
  $('delivery-repo-search').oninput = () => { if (options) repositories(); };
  $('delivery-repo').onchange = () => { repoBanner(); rows.forEach(row => { for(const key of ['path','stack','runtime','build','output']) row.dirty.add(key); row.refreshComparisons(); }); };
- return { open, clear() { generation++; options = null; editing = null; rows = []; dialog.close(); for(const id of ['delivery-components','delivery-review','delivery-selected-repo']) $(id).replaceChildren(); $('delivery-message').textContent = ''; } };
+ return { open, load, clear() {
+  generation++; listGeneration++; options = null; inventory = null; editing = null; rows = []; projects = []; dialog.close();
+  for(const id of ['delivery-list','delivery-repositories','delivery-provider-status','delivery-components','delivery-review','delivery-selected-repo']) $(id).replaceChildren();
+  for(const id of ['delivery-repo-count','delivery-connections','delivery-error','delivery-message']) $(id).textContent = '';
+  $('delivery-repository-search').value = '';
+ } };
 }
