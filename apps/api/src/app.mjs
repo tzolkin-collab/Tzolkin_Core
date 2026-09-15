@@ -42,6 +42,7 @@ import { commercialIntakeRoutes, commercialKeyRoutes } from './modules/commercia
 import { commercialWorkspaceRoutes } from './modules/commercial-workspace.mjs';
 import { marketingRoutes } from './modules/marketing.mjs';
 import { portfolioRoutes } from './modules/portfolio.mjs';
+import { tenantSummaryRoutes } from './modules/tenant-summary.mjs';
 
 const MODULES = [
  identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes, emailTemplateRoutes, productFaviconRoutes, productDeployBindingRoutes, productResourceBindingRoutes, serviceDeployBindingRoutes, managementRoutes, productPaymentRoutes, productTopologyRoutes,
@@ -71,6 +72,8 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  accountRoutes(router,{...(webhookEnv?{env:webhookEnv}:{})});
  checkoutGatewayRoutes(router,{...(webhookEnv?{env:webhookEnv}:{}),...checkoutOptions});
  marketingRoutes(router,{clock,...(webhookEnv?{env:webhookEnv}:{}),...marketingOptions});
+ // Ficha da empresa: leitura transversal por tenant, com o relógio do Core para o mês corrente.
+ tenantSummaryRoutes(router,{clock});
 
  const server = http.createServer(async (req, res) => {
   securityHeaders(res);

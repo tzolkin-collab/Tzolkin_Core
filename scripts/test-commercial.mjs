@@ -15,5 +15,8 @@ try {await admin.connect();await admin.query(`CREATE DATABASE ${name}`);created=
  if(importCode)throw Error('CATALOG_IMPORT_FAILED');
  // Os arquivos de integração dividem este banco. Em paralelo, um conta as chaves ou os produtos do
  // outro; em série, cada arquivo vê só o que ele mesmo criou.
- const code=await new Promise(resolve=>{const p=spawn(process.execPath,['--test','--test-concurrency=1',...(process.argv.includes('--all')?['test/**/*.test.mjs']:['test/commercial-intake.test.mjs'])],{env:isolado,stdio:'inherit'});p.on('exit',resolve);});process.exitCode=code||0;
+ // Arquivos passados por nome (test/x.test.mjs) rodam sozinhos; --all roda tudo; sem nada, a suíte comercial.
+ const arquivos=process.argv.slice(2).filter(a=>/^test\/[\w/.-]+\.test\.mjs$/.test(a)&&!a.includes('..'));
+ const alvo=arquivos.length?arquivos:process.argv.includes('--all')?['test/**/*.test.mjs']:['test/commercial-intake.test.mjs'];
+ const code=await new Promise(resolve=>{const p=spawn(process.execPath,['--test','--test-concurrency=1',...alvo],{env:isolado,stdio:'inherit'});p.on('exit',resolve);});process.exitCode=code||0;
 } catch(e){console.error({error:e.code||e.message});process.exitCode=1;}finally{await testClient?.end();if(created&&/^tzolkin_test_commercial_[0-9a-f]{12}$/.test(name))await admin.query(`DROP DATABASE ${name} WITH (FORCE)`);await admin.end();}

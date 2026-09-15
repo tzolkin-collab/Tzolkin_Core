@@ -2,7 +2,8 @@ import {createIcon} from './icons.js';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
 const labels={mentoria:'Mentoria',consultoria:'Consultoria',software:'Software',educacional:'Educacional',outro:'Outro',sessao:'Sessão',entregavel:'Entregável',feature:'Feature',tarefa:'Tarefa',planned:'Planejado',done:'Concluído',cancelled:'Cancelado'};
 const day=v=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(v));
-export function setupTracking({api}){
+// openTenant abre a ficha da empresa; vem de app.js por callback para este módulo não importá-lo.
+export function setupTracking({api,openTenant}){
  const host=document.getElementById('view-tracking');let generation=0,month=day(Date.now()).slice(0,7),tenant='',data,tenants=[],query='',statusFilter='',mode='month';
  const mobileQuery=window.matchMedia('(max-width:700px)');
  mobileQuery.addEventListener('change',()=>{if(data&&!host.querySelector('dialog[open]'))render();});
@@ -23,6 +24,7 @@ export function setupTracking({api}){
   const error=el('p',null,'form-error');error.setAttribute('role','alert');
   const save=button('Salvar situação','check',async()=>{save.disabled=true;try{await api('/api/tracking/'+activity.id+'/status','PUT',{status:status.value,revision:activity.revision});dialog.close();await load();}catch(e){error.textContent=e.message;}finally{save.disabled=false;}});
   body.append(error,save,button('Registrar tempo','clock',()=>{dialog.close();editor(activity);}));
+  if(openTenant&&activity.tenant_id)body.append(button('Abrir ficha da empresa','building',()=>{dialog.close();openTenant(activity.tenant_id);}));
   body.append(el('h3','Apontamentos do mês'));
   const logs=data.logs.filter(l=>l.activity_id===activity.id);
   if(!logs.length)body.append(el('p','Nenhum apontamento carregado para esta atividade neste mês.','detail'));
@@ -113,5 +115,7 @@ link.replaceChildren(el('span',new Date(a.starts_at).toLocaleTimeString('pt-BR',
   if(focusKey){const target=host.querySelector('[data-tracking-focus="'+focusKey+'"]');target?.focus();if(focusKey==='search'&&selection!=null)target?.setSelectionRange(selection,selection);}
  }
  async function load(){const ticket=++generation;host.replaceChildren(el('p','Carregando acompanhamento…','empty-list'));try{const [result,directory]=await Promise.all([api('/api/tracking?'+new URLSearchParams({month,...(tenant?{tenant_id:tenant}:{})})),api('/api/overview')]);if(ticket!==generation)return;data=result;tenants=directory.tenants;render();}catch(e){if(ticket===generation)host.replaceChildren(el('p',e.message,'security-banner'),button('Tentar novamente','clock',load));}}
- return {load,clear};
+ // Chegada pela ficha da empresa: mês corrente, filtrado por ela, sem busca nem situação herdadas.
+ const focus=tenantId=>{tenant=tenantId||'';month=day(Date.now()).slice(0,7);query='';statusFilter='';};
+ return {load,clear,focus};
 }

@@ -13,19 +13,20 @@ import {setupProductPayments} from './product-payments.js';
 import {setupProductEmails} from './product-emails.js';
 import {renderDatabaseWorkspace} from './management-workspace.js';
 import {setupCampaigns} from './campaigns.js';
-const commercial=setupCommercial({api});
+// Ficha da empresa por callback: os módulos não importam app.js (evita ciclo).
+const commercial=setupCommercial({api,openTenant:id=>openClient(id)});
 const billing=setupBilling({api});
 const productPayments=setupProductPayments({api,billing});
 const emails=setupEmails({api,configure:product=>openProductModule(product,'product-emails')});
 const productEmails=setupProductEmails({api});
 const campaigns=setupCampaigns({api,onError:reportError});
 const finance=setupFinance({api});
-const tracking=setupTracking({api});
+const tracking=setupTracking({api,openTenant:id=>openClient(id)});
 const $ = id => document.getElementById(id);
 fetch('/api/auth/mode').then(r=>r.ok?r.json():null).then(auth=>{const oidc=auth?.mode==='google-oidc';$('login-form').hidden=oidc;$('google-login').hidden=!oidc;if(oidc&&new URLSearchParams(location.search).has('auth_error'))$('login-notice').textContent='Conta Google não autorizada ou login expirado.';}).catch(()=>{$('login-notice').textContent='Não foi possível verificar o modo de acesso. Atualize a página.';});
 $('plan-help').textContent='Use o slug de uma oferta deste produto. Ele identifica as condições comerciais copiadas para o contrato.';
 
-const state = { context: '', view: 'overview', overview: null, product: null, catalog: [], deploys: [], bindings: [], resourceBindings: [], serviceBindings: [], infrastructure: null, management: null, dns: null, topology: null, selectedTenant: null };
+const state = { context: '', view: 'overview', overview: null, product: null, catalog: [], deploys: [], bindings: [], resourceBindings: [], serviceBindings: [], infrastructure: null, management: null, dns: null, topology: null, selectedTenant: null, clientSummary: null, clientBack: 'clients' };
 
 // Cada contexto declara a própria navegação. Menu só existe quando há dado real por trás.
 const CONTEXTS = {
@@ -148,6 +149,8 @@ function clearRenderedData() {
  billing.clear();
  productPayments.clear();
  resource.clear();
+ // Resumo da ficha em voo não pinta dado de antes da troca de contexto ou da saída.
+ clientTicket++; clientPending = null; state.clientSummary = null;
  // Um formulário aberto carrega o contexto anterior pré-selecionado: fecha junto.
  document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
  DATA_NODES.forEach(id => $(id).replaceChildren());
@@ -404,17 +407,172 @@ function renderDirectory(kind, searchId, targetId, emptyId) {
 function renderLeads(){renderDirectory(t=>t.relationship_kind==='prospect','lead-search','leads','leads-empty');}
 function renderCompanies(){renderDirectory(t=>t.organization_type==='company','company-search','companies','companies-empty');}
 
-function openClient(id){state.selectedTenant=id;switchView('client');}
+/* ---------- ficha da empresa ---------- */
+
+// A ficha lê um resumo só (GET /api/tenants/:id/summary): empresa no centro,
+// contratações abaixo, item do portfólio como contexto. Cada seção pode vir
+// { available:false, reason } sem derrubar as outras; seção vazia some ou
+// explica em uma frase — nunca "0 contratos · 0 acessos".
+// Espelho de SERVICE_MODELS (commercial-intake.mjs) e ENGAGEMENT_STATUS
+// (portfolio.mjs) só para montar o formulário. Quem valida é o servidor.
+const SERVICE_MODELS=['on_demand','education','consulting','advisory','product','unclassified'];
+const ENGAGEMENT_STATUS=['active','planned','paused','completed','discontinued','unclassified'];
+const CONTRACT_LABELS={draft:'Rascunho',active:'Ativo',completed:'Concluído',canceled:'Cancelado'};
+const LEAD_LABELS={open:'Novo',qualified:'Qualificado',won:'Ganho',lost:'Perdido',archived:'Arquivado'};
+const ENVIRONMENT_LABELS={production:'Produção',staging:'Homologação',development:'Desenvolvimento'};
+// Kicker do cabeçalho: o relacionamento com a TZOLKIN, não o tipo jurídico.
+const tenantKicker=t=>t.relationship_kind==='prospect'?(t.lifecycle_status==='lead'?'LEAD':'PROSPECT'):({customer:'CLIENTE',partner:'PARCEIRO',internal:'ORGANIZAÇÃO INTERNA'})[t.relationship_kind]||'EMPRESA';
+const minorAmount=(cents,currency)=>{try{return new Intl.NumberFormat('pt-BR',{style:'currency',currency:currency||'BRL'}).format(Number(cents||0)/100);}catch{return (Number(cents||0)/100).toLocaleString('pt-BR',{minimumFractionDigits:2});}};
+const workedTime=minutes=>minutes<60?`${minutes} min`:`${Math.floor(minutes/60)} h${minutes%60?` ${minutes%60} min`:''}`;
+const monthTitle=month=>{const label=new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(month+'-15T12:00:00Z'));return label[0].toUpperCase()+label.slice(1);};
+const dayLabel=value=>value?String(value).slice(0,10).split('-').reverse().join('/'):'';
+const plural=(n,one,many)=>`${n} ${n===1?one:many}`;
+let clientTicket=0,clientPending=null,engagementTenant=null,engagementItems=null;
+
+function openClient(id){
+ if(!id)return;
+ // Voltar leva à tela de onde a ficha foi aberta, quando ela é do contexto geral.
+ if(state.view!=='client')state.clientBack=contextKind()==='general'&&!views()[state.view]?.hidden?state.view:'clients';
+ if(state.selectedTenant!==id)state.clientSummary=null;
+ state.selectedTenant=id;
+ // A ficha é do contexto geral. Vinda de um produto, troca de contexto sem esperar
+ // o painel inteiro: a ficha busca só o próprio resumo.
+ if(contextKind()!=='general'){$('context-select').value='';switchContext('').catch(reportError);}
+ switchView('client');
+}
+function openLead(id){switchView('leads');commercial.detail(id).catch(reportError);}
+
 function renderClientDetail(){
- const tenant=state.overview?.tenants.find(t=>t.id===state.selectedTenant);if(!tenant){switchView('clients');return;}
- const engagements=state.overview.engagements.filter(e=>e.tenant_id===tenant.id),people=state.overview.stakeholders.filter(s=>s.tenant_id===tenant.id),contracts=state.overview.entitlements.filter(e=>e.tenant_id===tenant.id),members=state.overview.memberships.filter(m=>m.tenant_id===tenant.id);
+ const id=state.selectedTenant;if(!id){switchView('clients');return;}
+ if(state.clientSummary?.tenant?.id===id)paintClientDetail(state.clientSummary);
+ else $('client-detail').replaceChildren(node('p','Carregando ficha da empresa…','empty-list'));
+ loadClientSummary(id);
+}
+
+// Uma busca por empresa por vez; resposta de outra empresa ou de antes de uma troca é descartada.
+async function loadClientSummary(id){
+ if(clientPending===id)return;
+ const ticket=++clientTicket;clientPending=id;
+ try{
+  const summary=await api(`/api/tenants/${encodeURIComponent(id)}/summary`);
+  if(ticket!==clientTicket||state.selectedTenant!==id)return;
+  state.clientSummary=summary;
+  if(state.view==='client')paintClientDetail(summary);
+ }catch(error){
+  if(ticket===clientTicket&&state.selectedTenant===id&&state.view==='client')$('client-detail').replaceChildren(node('p',error.message,'notice-inline'));
+ }finally{if(ticket===clientTicket)clientPending=null;}
+}
+
+function clientEngagement(engagement,summary){
+ const block=node('article',undefined,'client-engagement'),head=node('header'),copy=node('div');
+ copy.append(node('strong',engagement.label),node('span',clientLabel(engagement.service_model),'detail'));
+ head.append(copy,node('span',clientLabel(engagement.status),'status '+(['active','planned'].includes(engagement.status)?'active':'building')));
+ const links=node('div',undefined,'client-engagement-links'),item=engagement.product;
+ if(item){
+  const kind=PORTFOLIO_KIND_LABELS[item.portfolio_kind]||'Item';
+  // Item arquivado não abre contexto: o seletor só conhece ativos e rascunhos.
+  if(['active','draft'].includes(item.lifecycle_status)){const open=node('button',undefined,'table-action');open.type='button';open.append(createIcon('package'),document.createTextNode(`${kind}: ${item.name}`));open.onclick=()=>openProductModule(item,'product').catch(reportError);links.append(open);}
+  else links.append(node('span',`${kind}: ${item.name} · arquivado`,'detail'));
+ } else links.append(node('span','Sem item do portfólio','detail'));
+ const mine=summary.campaigns.available?summary.campaigns.items.filter(c=>c.engagement_id===engagement.id):[];
+ const ads=node('button',undefined,'table-action');ads.type='button';ads.append(createIcon('chart'),document.createTextNode(mine.length?`Campanhas · ${mine.length}`:'Campanhas'));
+ ads.onclick=()=>{switchView('serviceCampaigns');campaigns.loadService(engagement.id,engagement.label).catch(reportError);};links.append(ads);
+ if(mine.length){const spend=new Map();for(const c of mine)spend.set(c.currency||'BRL',(spend.get(c.currency||'BRL')||0)+Number(c.spend_cents||0));links.append(node('span','Investido no mês: '+[...spend].map(([currency,cents])=>minorAmount(cents,currency)).join(' + '),'detail'));}
+ block.append(head,links);
+ for(const binding of summary.deploys.available?summary.deploys.items.filter(d=>d.engagement_id===engagement.id):[]){
+  const project=projectForServiceBinding(binding),latest=project?.deployments?.[0];
+  const row=node('div',undefined,'client-engagement-deploy');row.append(providerLogo(binding.provider),node('strong',binding.external_project_name),node('span',[binding.provider==='vercel'?'Vercel':'EasyPanel',ENVIRONMENT_LABELS[binding.environment]||binding.environment,latest?.state_label||latest?.state||'sem deploy observado'].join(' · '),'detail'));
+  if(project?.project_id)row.append(resourceButton('Ver projeto',binding.provider,project.project_id,binding.environment));
+  if(latest?.url)row.append(catalogLink('Abrir ↗',latest.url,'product-live-link'));
+  block.append(row);
+ }
+ return block;
+}
+
+function paintClientDetail(summary){
+ const {tenant}=summary,root=$('client-detail');
  $('page-title').textContent=$('breadcrumb').textContent=$('mobile-page-title').textContent=tenant.name;
- const root=$('client-detail'),hero=node('section',undefined,'client-detail-hero'),identity=node('div');identity.append(node('span',tenant.name.slice(0,1),'client-avatar large'),node('div'));identity.lastChild.append(node('p','CLIENTE','overview-kicker'),node('h2',tenant.name),node('p',clientLabel(tenant.organization_type)+' · '+clientLabel(tenant.lifecycle_status),'detail'));hero.append(identity);
- const grid=node('div',undefined,'client-detail-grid'),panel=(title,caption)=>{const el=node('section',undefined,'client-detail-panel');el.append(node('h3',title),node('p',caption,'detail'));return el;};
- const commercial=panel('Ofertas e contratações','O que este cliente compra da TZOLKIN.');if(engagements.length)for(const e of engagements){const row=node('article',undefined,'detail-row');row.append(node('strong',e.label),node('span',clientLabel(e.service_model)+' · '+clientLabel(e.status),'detail'));commercial.append(row);}else commercial.append(node('p','Nenhuma contratação classificada.','empty-list'));
- const stakeholders=panel('Stakeholders','Pessoas envolvidas no relacionamento.');if(people.length)for(const p of people){const row=node('article',undefined,'detail-row');row.append(node('span',p.name.slice(0,1),'person-avatar'),node('div'));row.lastChild.append(node('strong',p.name),node('span',clientLabel(p.role)+(p.title?' · '+p.title:''),'detail'));stakeholders.append(row);}else stakeholders.append(node('p','Nenhum stakeholder vinculado.','empty-list'));
- const access=panel('Produtos e acessos','Contratos e identidades com permissão.');access.append(node('strong',contracts.length+' contratos · '+members.length+' acessos','client-access-count'));
- grid.append(commercial,stakeholders,access);root.replaceChildren(hero,grid);
+ $('client-back').textContent='← Voltar para '+(views()[state.clientBack]?.title||'Clientes').toLocaleLowerCase('pt-BR');
+ const hero=node('section',undefined,'client-detail-hero'),identity=node('div');
+ identity.append(node('span',tenant.name.slice(0,1),'client-avatar large'),node('div'));
+ identity.lastChild.append(node('p',tenantKicker(tenant),'overview-kicker'),node('h2',tenant.name),node('p',[clientLabel(tenant.organization_type),clientLabel(tenant.lifecycle_status),tenant.status==='suspended'?'Suspensa':null].filter(Boolean).join(' · '),'detail'));
+ const create=node('button',undefined,'primary');create.type='button';create.append(createIcon('plus'),document.createTextNode('Nova contratação'));create.onclick=()=>openEngagementDialog(tenant).catch(reportError);
+ hero.append(identity,create);
+ const grid=node('div',undefined,'client-detail-grid client-summary-grid');
+ const panel=(title,caption,wide)=>{const el=node('section',undefined,'client-detail-panel'+(wide?' client-detail-wide':''));el.append(node('h3',title));if(caption)el.append(node('p',caption,'detail'));grid.append(el);return el;};
+ const unavailable=(title,section)=>panel(title).append(node('p',section.reason,'notice-inline'));
+ const row=(title,detail,...extra)=>{const el=node('article',undefined,'detail-row'),copy=node('div');copy.append(node('strong',title));if(detail)copy.append(node('span',detail,'detail'));el.append(copy,...extra);return el;};
+
+ const {engagements,deploys,contracts,origin,people,hours,access}=summary;
+ const hired=panel('Contratações','O que a empresa contratou, com o item do portfólio, os deploys e as campanhas de cada uma.',true);
+ if(!engagements.available)hired.append(node('p',engagements.reason,'notice-inline'));
+ else if(!engagements.items.length)hired.append(node('p','Nenhuma contratação em curso: registre o que a empresa comprou em Nova contratação.','empty-list'));
+ else for(const engagement of engagements.items)hired.append(clientEngagement(engagement,summary));
+ for(const [label,section] of [['Deploys',deploys],['Campanhas',summary.campaigns]])if(engagements.available&&engagements.items.length&&!section.available)hired.append(node('p',`${label}: ${section.reason}`,'notice-inline'));
+
+ // Comercial: sem permissão, as duas seções dizem o mesmo motivo — uma frase basta.
+ if(!contracts.available&&!origin.available&&contracts.reason===origin.reason)unavailable('Contratos e origem',contracts);
+ else{
+  if(!contracts.available)unavailable('Contratos comerciais',contracts);
+  else if(contracts.items.length){
+   const signed=panel('Contratos comerciais','Escopo e aceite registrados. Contrato ativo não concede acesso sozinho.');
+   for(const c of contracts.items){const lead=c.lead_id?node('button','Abrir lead','table-action'):null;if(lead){lead.type='button';lead.onclick=()=>openLead(c.lead_id);}signed.append(row(c.title,[CONTRACT_LABELS[c.status]||c.status,minorAmount(c.amount_minor,c.currency),c.product_name||c.product_id,c.starts_on?`desde ${dayLabel(c.starts_on)}${c.ends_on?` até ${dayLabel(c.ends_on)}`:''}`:null].filter(Boolean).join(' · '),...(lead?[lead]:[])));}
+   if(contracts.truncated)signed.append(node('p','Mostrando os 100 contratos mais recentes.','detail'));
+  }
+  if(!origin.available)unavailable('Origem',origin);
+  else if(origin.items.length){
+   const source=panel('Origem','Leads da empresa, do primeiro ao mais recente: o primeiro diz de onde ela veio.');
+   for(const l of origin.items){const open=node('button','Abrir lead','table-action');open.type='button';open.onclick=()=>openLead(l.id);source.append(row(l.name||'Lead',[LEAD_LABELS[l.status]||l.status,l.product_name||l.product_id,l.source_system,l.channel,l.utm_source&&`origem ${l.utm_source}`,l.utm_campaign&&`campanha ${l.utm_campaign}`,dayLabel(l.source_created_at||l.created_at)].filter(Boolean).join(' · '),open));}
+   if(origin.truncated)source.append(node('p','Mostrando os 50 primeiros leads.','detail'));
+  }
+ }
+
+ if(!people.available)unavailable('Pessoas',people);
+ else{
+  const team=panel('Pessoas','Quem participa do relacionamento.');
+  if(!people.items.length)team.append(node('p','Nenhuma pessoa vinculada a esta empresa.','empty-list'));
+  for(const person of people.items){const r=row(person.name,clientLabel(person.role)+(person.title?' · '+person.title:''));r.prepend(node('span',person.name.slice(0,1),'person-avatar'));if(person.is_primary)r.append(node('span','Principal','status active'));team.append(r);}
+ }
+
+ if(!hours.available)unavailable('Horas do mês',hours);
+ else{
+  // Soma da empresa: atividade ainda não tem ligação com contratação (by_engagement:false).
+  const time=panel('Horas do mês',`${monthTitle(hours.month)} · somadas por empresa; o Acompanhamento ainda não liga atividade a contratação.`);
+  time.append(node('strong',hours.minutes?`${workedTime(hours.minutes)} em ${plural(hours.logs,'apontamento','apontamentos')} de ${plural(hours.activities,'atividade','atividades')}`:'Nenhuma hora lançada neste mês.','client-access-count'));
+  const open=node('button',undefined,'secondary');open.type='button';open.append(createIcon('calendar'),document.createTextNode('Abrir no Acompanhamento'));
+  open.onclick=()=>{tracking.focus(tenant.id);switchView('tracking');};time.append(open);
+ }
+
+ // Acesso só aparece quando existe: empresa só de serviço não ganha um painel de zeros.
+ if(!access.available)unavailable('Acessos',access);
+ else if(access.entitlements.length||access.memberships.length){
+  const granted=panel('Acessos','Contratos de produto e identidades com acesso ativo.'),byProduct=new Map();
+  for(const e of access.entitlements)byProduct.set(e.product_id,{name:e.product_name||e.product_id,plan:e.plan,rights:e.rights||[],members:0});
+  for(const m of access.memberships){const item=byProduct.get(m.product_id)||{name:m.product_name||m.product_id,plan:null,rights:[],members:0};item.members=m.active;byProduct.set(m.product_id,item);}
+  for(const item of byProduct.values())granted.append(row(item.name,[item.plan?`Plano ${item.plan}`:'Sem contrato ativo',item.members?plural(item.members,'identidade com acesso','identidades com acesso'):null,item.rights.length?item.rights.join(', '):null].filter(Boolean).join(' · ')));
+ }
+ root.replaceChildren(hero,grid);
+}
+
+// Nova contratação a partir da ficha: a empresa vem da ficha e não é campo do formulário.
+async function openEngagementDialog(tenant){
+ const dialog=$('engagement-dialog'),form=$('engagement-form');
+ form.reset();dialog.querySelector('.dialog-error').textContent='';engagementTenant=tenant;
+ form.elements.tenant_name.value=tenant.name;
+ form.elements.service_model.replaceChildren(...SERVICE_MODELS.map(value=>option(value,clientLabel(value))));
+ form.elements.status.replaceChildren(...ENGAGEMENT_STATUS.map(value=>option(value,clientLabel(value))));
+ fillEngagementProducts();dialog.showModal();
+ // Itens do portfólio: os do painel quando já carregados; senão, a lista do CRUD.
+ if(!state.overview?.products&&!engagementItems){try{engagementItems=(await api('/api/portfolio')).items||[];fillEngagementProducts();}catch(error){dialog.querySelector('.dialog-error').textContent=error.message;}}
+}
+function fillEngagementProducts(){
+ const form=$('engagement-form'),select=form.elements.product_id,previous=select.value,model=form.elements.service_model.value;
+ // Mesma regra de validarContratacao: item ativo com a capacidade do tipo. O servidor confere de novo.
+ const capability=model==='product'?'product_engagement':'commercial';
+ const items=(state.overview?.products||engagementItems||[]).filter(item=>item.lifecycle_status==='active'&&hasCapability(item,capability));
+ select.replaceChildren(option('',model==='product'?'Selecione o produto':'Sem item do portfólio'),...items.map(item=>option(item.id,`${item.name} · ${PORTFOLIO_KIND_LABELS[item.portfolio_kind]||'Item'}`)));
+ select.required=model==='product';
+ if(items.some(item=>item.id===previous))select.value=previous;
 }
 
 function renderPeople(){
@@ -446,7 +604,13 @@ const productLifecycle=(product,info)=>{
 };
 const productAppearsDraft=(product,info)=>productLifecycle(product,info).label==='Produto em draft';
 
-const serviceBindingForDeployment=project=>state.serviceBindings.find(binding=>binding.provider===project?.provider&&(String(binding.external_project_id)===String(project?.project_id)||binding.external_project_name===project?.project));
+// Vínculo de serviço ↔ projeto do provedor: o ID manda. Nome só casa quando o vínculo foi gravado com ID nominal
+// (ID igual ao nome: EasyPanel e o legado da migração 020). Sem isso, um projeto renomeado e outro que herdou o
+// nome antigo trocariam de empresa na ficha, em Serviços e no "Abrir ficha da empresa".
+const serviceBindingById=(binding,project)=>binding.provider===project?.provider&&String(binding.external_project_id)===String(project?.project_id);
+const serviceBindingByName=(binding,project)=>binding.provider===project?.provider&&binding.external_project_id===binding.external_project_name&&binding.external_project_name===project?.project;
+const projectForServiceBinding=binding=>state.deploys.find(p=>serviceBindingById(binding,p))||state.deploys.find(p=>serviceBindingByName(binding,p));
+const serviceBindingForDeployment=project=>state.serviceBindings.find(b=>serviceBindingById(b,project))||state.serviceBindings.find(b=>serviceBindingByName(b,project));
 const serviceEngagements=()=>state.overview?.engagements?.filter(e=>['advisory','consulting','on_demand'].includes(e.service_model))||[];
 
 function renderServices(){
@@ -460,7 +624,7 @@ function renderServices(){
   head.append(title,node('span',clientLabel(engagement.status),'status '+(['active','planned'].includes(engagement.status)?'active':'building')));
   const facts=node('div',undefined,'service-card-facts'),bindings=state.serviceBindings.filter(b=>b.engagement_id===engagement.id);
   facts.append(node('span',bindings.length?`${bindings.length} projeto${bindings.length===1?'':'s'} conectado${bindings.length===1?'':'s'}`:'Nenhum projeto conectado','detail'));
-  for(const binding of bindings){const project=state.deploys.find(p=>p.provider===binding.provider&&(String(p.project_id)===String(binding.external_project_id)||p.project===binding.external_project_name));const latest=project?.deployments?.[0];const row=node('div',undefined,'service-deploy-row');row.append(node('strong',binding.external_project_name),node('span',`${binding.provider==='vercel'?'Vercel':'EasyPanel'} · ${latest?.state_label||latest?.state||'sem deploy observado'}`,'detail'));if(latest?.url)row.append(catalogLink('Abrir ↗',latest.url,'product-live-link'));facts.append(row);}
+  for(const binding of bindings){const project=projectForServiceBinding(binding);const latest=project?.deployments?.[0];const row=node('div',undefined,'service-deploy-row');row.append(node('strong',binding.external_project_name),node('span',`${binding.provider==='vercel'?'Vercel':'EasyPanel'} · ${latest?.state_label||latest?.state||'sem deploy observado'}`,'detail'));if(latest?.url)row.append(catalogLink('Abrir ↗',latest.url,'product-live-link'));facts.append(row);}
   const action=node('button','Abrir cliente →','secondary');action.type='button';action.onclick=()=>openClient(engagement.tenant_id);
   // Campanhas por contratação: sob demanda, assessoria e consultoria têm
   // investimento próprio, e somá-los ao produto esconderia o custo real.
@@ -491,7 +655,11 @@ function renderProductDeployments(){
   const actions=node('div',undefined,'product-deployment-actions');
   if(latest?.url)actions.append(catalogLink('Abrir deploy ↗',latest.url,'product-live-link'));
   if(project.provider==='easypanel'&&project.services?.length)actions.append(node('span',`${project.services.length} serviços`,'detail'));
-  if(product||serviceBinding)actions.append(node('span',product?'Produto vinculado':'Serviço vinculado','status active'));
+  if(product||serviceBinding){
+   actions.append(node('span',product?'Produto vinculado':'Serviço vinculado','status active'));
+   // Projeto de serviço tem empresa por trás da contratação: um clique até a ficha.
+   if(serviceBinding?.tenant_id){const ficha=node('button','Abrir ficha da empresa','table-action');ficha.type='button';ficha.onclick=()=>openClient(serviceBinding.tenant_id);actions.append(ficha);}
+  }
   else {actions.append(node('span','Classificação pendente','status building'));const select=document.createElement('select');select.className='product-deployment-select';select.append(option('', 'Vincular a produto…'),...products.map(item=>option(item.id,`${item.name} · ${productAppearsDraft(item,catalogForProduct(item))?'draft':'ativo'}`)));select.onchange=async()=>{if(!select.value)return;select.disabled=true;try{await api('/api/product-deploy-bindings','PUT',{provider:project.provider,external_project_id:project.project_id||project.project,external_project_name:project.project,product_id:select.value,environment:'production'});state.bindings=[...state.bindings.filter(binding=>!(binding.provider===project.provider&&(String(binding.external_project_id)===String(project.project_id||project.project)||binding.external_project_name===project.project))),{provider:project.provider,external_project_id:project.project_id||project.project,external_project_name:project.project,product_id:select.value,environment:'production'}];renderGeneral();}catch(error){select.disabled=false;select.value='';$('notice').textContent=error.message;}};actions.append(select);const services=serviceEngagements();if(services.length){const serviceSelect=document.createElement('select');serviceSelect.className='product-deployment-select';serviceSelect.append(option('', 'Vincular a serviço…'),...services.map(item=>option(item.id,`${item.label} · ${item.service_model}`)));serviceSelect.onchange=async()=>{if(!serviceSelect.value)return;serviceSelect.disabled=true;try{await api('/api/service-deploy-bindings','PUT',{provider:project.provider,external_project_id:project.project_id||project.project,external_project_name:project.project,engagement_id:serviceSelect.value,environment:'production'});state.serviceBindings=(await api('/api/service-deploy-bindings')).bindings||[];renderGeneral();}catch(error){serviceSelect.disabled=false;serviceSelect.value='';$('notice').textContent=error.message;}};actions.append(serviceSelect);}}
   row.append(actions);return row;
  }));
@@ -855,7 +1023,10 @@ function renderProductEngagements(engagements) {
   const card=node('article',undefined,'service-card'),head=node('header'),title=node('div');
   title.append(node('h3',engagement.label),node('p',`${engagement.tenant_name} · ${clientLabel(engagement.service_model)}`,'detail'));
   head.append(title,node('span',clientLabel(engagement.status),'status '+(['active','planned'].includes(engagement.status)?'active':'building')));
-  card.append(head);return card;
+  // A contratação é de uma empresa: a ficha mostra o resto do que ela tem.
+  const open=node('button','Abrir ficha da empresa →','secondary');open.type='button';open.onclick=()=>openClient(engagement.tenant_id);
+  const actions=node('div',undefined,'service-card-actions');actions.append(open);
+  card.append(head,actions);return card;
  }));
 }
 
@@ -948,7 +1119,9 @@ async function load() {
   const month=currentMonth(),[financeData,salesData]=await Promise.all([api('/api/finance/board?month='+month).catch(()=>null),api('/api/finance/sales?month='+month).catch(()=>null)]);
   let deployments=null,infrastructure=null;
   renderOverviewDashboard(catalog.entries,{finance:financeData,sales:salesData});
-  await api('/api/deploys').then(data=>{deployments=data;state.deploys=data.projects||[];renderDeploys(data);renderManagement();renderGeneral();renderOverviewDashboard(catalog.entries,{finance:financeData,sales:salesData,deploys:deployments});}).catch(error => {
+  await api('/api/deploys').then(data=>{deployments=data;state.deploys=data.projects||[];renderDeploys(data);renderManagement();renderGeneral();renderOverviewDashboard(catalog.entries,{finance:financeData,sales:salesData,deploys:deployments});
+   // A ficha pinta antes do inventário chegar: sem repintar, deploy vinculado ficaria "sem deploy observado".
+   if(state.view==='client'&&state.clientSummary?.tenant?.id===state.selectedTenant)paintClientDetail(state.clientSummary);}).catch(error => {
    $('deploys-status').replaceChildren(node('p', error.message, 'security-banner'));
   });
   $('easypanel-inventory').replaceChildren(node('p', 'Consultando EasyPanel…', 'empty-list'));
@@ -1065,7 +1238,25 @@ $('client-search').addEventListener('input', renderTenants);
 $('lead-search').addEventListener('input', renderLeads);
 $('company-search').addEventListener('input', renderCompanies);
 $('people-search').addEventListener('input', renderPeople);
-$('client-back').onclick=()=>switchView('clients');
+$('client-back').onclick=()=>switchView(state.clientBack||'clients');
+$('engagement-form').elements.service_model.addEventListener('change',fillEngagementProducts);
+// Criar contratação pela ficha: grava, fecha e busca de novo só o resumo da empresa.
+// Erro de validação, permissão ou nome repetido (400/403/409) fica no próprio diálogo.
+$('engagement-form').addEventListener('submit',async event=>{
+ event.preventDefault();
+ const form=event.currentTarget,dialog=form.closest('dialog'),button=form.querySelector('button.primary'),error=dialog.querySelector('.dialog-error'),tenant=engagementTenant;
+ if(!tenant)return;
+ error.textContent='';button.disabled=true;
+ try{
+  const created=await api('/api/engagements','POST',{tenant_id:tenant.id,product_id:form.elements.product_id.value||null,service_model:form.elements.service_model.value,status:form.elements.status.value,label:form.elements.label.value});
+  // Clientes e Serviços leem state.overview: a nova contratação entra lá sem recarregar o painel.
+  if(state.overview&&created?.id&&!state.overview.engagements.some(e=>e.id===created.id))state.overview.engagements.push(created);
+  dialog.close();form.reset();
+  if(state.selectedTenant===tenant.id){clientPending=null;await loadClientSummary(tenant.id);}
+  $('notice').textContent='Contratação criada.';
+ }catch(reason){error.textContent=reason.message;}
+ finally{button.disabled=false;}
+});
 $('deploy-search').addEventListener('input',()=>{if(deployData)renderDeploys(deployData);});
 $('deploy-filter').addEventListener('change',()=>{if(deployData)renderDeploys(deployData);});
 document.querySelectorAll('[data-provider-tab]').forEach(tab=>tab.addEventListener('click',()=>{document.querySelectorAll('[data-provider-tab]').forEach(item=>item.classList.toggle('active',item===tab));document.querySelectorAll('[data-provider-panel]').forEach(panel=>{panel.hidden=panel.dataset.providerPanel!==tab.dataset.providerTab;});}));
