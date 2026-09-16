@@ -5,8 +5,8 @@ Aberto em **2026-09-14**, atualizado em **2026-09-16**. Para continuar num chat 
 
 - **Repositório:** `D:\Códigos\Tzolkin\Projetos\Outros\Site - Tzolkin\tzolkin-core`
 - **Branch:** `codex/revisao-seguranca-core`. A `main` preserva o estado antigo.
-- **Remoto:** `origin` (`tzolkin-collab/Tzolkin_Core`). **A branch local está 2 commits à frente:
-  `70e7ccf` e `82a374f` não foram enviados por push.**
+- **Remoto:** `origin` (`tzolkin-collab/Tzolkin_Core`), sincronizado em 2026-09-16 até este handoff.
+  O deploy de produção não foi feito nesta sessão.
 - **Banco compartilhado (produção):** migração `033_service_receivables.sql` aplicada.
 - **Última verificação completa:** `npm test` com 460 aprovados, 0 falhas, 0 ignorados e código de
   saída 0, num banco descartável.
@@ -27,8 +27,8 @@ estas entregas. Ele ainda cita a migração 032 e 386 testes.
 | Importador do Notion preserva a classificação | — | `7d4b4c8` | ✅ |
 | Desenho da cobrança de linha de serviço (ADR 0008) e pesquisa Contabilizei | — | `b4f7296`, `fe555b2` | ✅ ADR aceita |
 | `npm test` sempre num banco descartável | — | `7a757ae` | ✅ |
-| Harness não deixa banco descartável para trás | — | `70e7ccf` | ✅ local, sem push |
-| **Recebimentos de linha de serviço — ADR 0008, fase 1** | `033` | `82a374f` | ✅ local, sem push; migração aplicada |
+| Harness não deixa banco descartável para trás | — | `70e7ccf` | ✅ |
+| **Recebimentos de linha de serviço — ADR 0008, fase 1** | `033` | `82a374f` | ✅ migração aplicada; deploy não feito |
 
 Houve também commits de outras frentes no meio (`8c3e75a` chaves de integração, `d085831` Deploys,
 `24e240b` ficha da empresa, `92f98ba` login da Meta para empresas). Eles estão no outro handoff e
@@ -106,7 +106,7 @@ nem tipo por conta própria.
 
 ## 4. Primeiros passos no próximo chat
 
-1. **Push dos dois commits locais**, se o dono pedir. O deploy de produção segue o processo do
+1. **Deploy em produção**, se o dono pedir. O código já está no remoto; o deploy segue o processo do
    outro handoff (EasyPanel, projeto `other`, serviço `core`).
 2. **Conferir a aba Recebimentos no painel.** Hoje **não há nenhum contrato comercial ativo** no
    banco, então a tela vai mostrar "Nenhum contrato aceito aguardando plano". Para testar de verdade:
