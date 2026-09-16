@@ -122,7 +122,9 @@ test('Portfólio: editar', async t => {
   ]);
   const r = await editar({ client, operator: BOOT, params: { id: 'consultoria-dados' }, body: { name: 'Dados e BI', portfolio_kind: 'product', revision: 3 } });
   assert.equal(r.body.revision, 4);
-  assert.match(client.chamadas[1].sql, /revision=revision\+1/);
+  // Linha de serviço → produto perde contract_billing: a trava de planos vivos consulta antes de gravar.
+  assert.ok(client.chamadas.some(c => c.sql.includes('FROM service_receivable_plans')));
+  assert.match(client.chamadas.find(c => c.sql.startsWith('UPDATE products')).sql, /revision=revision\+1/);
   const trilha = client.chamadas.find(c => c.sql.includes('portfolio_audit'));
   assert.equal(trilha.params[2], 'updated');
   assert.equal(trilha.params[3].name, 'Consultoria de dados', 'antes');

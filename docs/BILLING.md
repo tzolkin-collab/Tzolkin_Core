@@ -31,8 +31,8 @@ Ao salvar contrato com Plano igual ao slug de uma oferta do mesmo produto, o Cor
 Mentorias, Consultorias e Sites são `service_line`: o cliente contrata trabalho e mantém o que foi
 entregue. Elas não ganham `checkout` nem contrato de acesso só para reutilizar o fluxo de SaaS.
 
-Fluxo decidido na [ADR 0008](decisions/0008-origem-da-cobranca-de-servicos.md) (opção B), ainda não
-implementado:
+Fluxo decidido na [ADR 0008](decisions/0008-origem-da-cobranca-de-servicos.md) (opção B). A **fase 1**
+está implementada; ver abaixo o que cada fase cobre.
 
 1. somente uma versão **aceita** de `commercial_contracts` pode gerar plano de recebimento. Não há
    entidade de proposta antes dele (a opção C pode entrar depois, sem quebrar este fluxo);
@@ -52,8 +52,54 @@ periódica, como mentoria mensal; consultoria pontual usa Pix, boleto ou cartão
 adequada para cartão e exterior. Contabilizei permanece registro externo/manual enquanto não houver
 API oficial confirmada. Ver [INTEGRATIONS.md §7](INTEGRATIONS.md#7-contabilizei-e-cobrança-de-serviços).
 
-Antes de implementar é preciso decidir se `commercial_contracts` será a autoridade da cobrança ou
-se haverá uma entidade de proposta aceita anterior a ele, além de escolher o emissor único de NFS-e.
+### Fase 1 — plano, parcelas e registro manual `[EXISTENTE E VERIFICADO]` — 2026-09-16
+
+Migração `033_service_receivables.sql` e módulo `apps/api/src/modules/service-receivables.mjs`.
+Nenhuma chamada a provedor.
+
+- **Quem cobra por contrato:** a capacidade `contract_billing` (`catalog.mjs`), que só
+  `service_line` tem. Produto e plataforma continuam cobrando por oferta e checkout.
+- **Plano de recebimento** (`service_receivable_plans`): nasce de um contrato `active`, na versão
+  que o operador viu, e guarda a fotografia dele (valor, moeda, vigência, aceite). Há um plano vivo
+  por contrato; refazer é cancelar o anterior.
+- **Parcelas** (`service_installments`): somam exatamente o valor do contrato, em inteiros. A tela
+  gera parcelas mensais iguais, com o resto dos centavos na primeira; a API também aceita a lista
+  explícita. Situações: `planned` (rascunho) → `scheduled` (aprovado) → `issued` (cobrança
+  registrada) → `paid`; ou `canceled`. `available` existe no banco, mas nenhuma rota o grava nesta
+  fase.
+- **Prévia antes de gravar:** `POST /api/service-receivables/preview` calcula e valida sem gravar.
+  `POST /plans` recalcula tudo no servidor.
+- **O dono autoriza dinheiro:** aprovar, registrar cobrança, pagamento ou NFS-e, mudar vencimento
+  e cancelar exigem papel `owner`. Membro monta e descarta rascunho.
+- **Cobrança externa (Cobre PJ ou outra):** registrada com referência e link `https`. A mesma
+  referência não quita duas parcelas.
+- **Pagamento manual:** data que não pode estar no futuro (dia de Brasília). Pago não é disponível.
+- **NFS-e:** o número e a data da nota emitida pela Contabilizei. Registro único por parcela.
+- **Travas:** vencimento só muda antes da cobrança; parcela paga não é cancelada (estorno é outro
+  registro); plano com parcela cobrada ou paga não é cancelado inteiro; reclassificar a linha de
+  serviço com plano vivo é recusado.
+- **Trilha:** cada ação grava antes e depois em `service_receivable_audit`, além de `audit_events`
+  da empresa.
+- **Tela:** contexto da linha de serviço → **Recebimentos**. Mostra contratos aceitos sem plano,
+  montagem com prévia, planos com resumo (a cobrar, cobrada, paga, disponível, vencidas, NFS-e
+  pendentes) e ações por parcela.
+- **Rotas:** `GET /api/service-receivables?product_id=`, `POST /api/service-receivables/preview`,
+  `POST /api/service-receivables/plans`, `POST /plans/:id/approve|cancel` e
+  `POST /installments/:id/issue|reschedule|payment|cancel|invoice`.
+
+### Fase 2 — emissão pelo Asaas `[PROPOSTO]`
+
+Cria cobrança real; só com autorização específica. Uma chave de idempotência por tentativa;
+estado desconhecido bloqueia nova tentativa automática; cancelamento e mudança de vencimento no
+provedor; o webhook marca `paid` (`paid_source = 'webhook'`), reaproveitando a deduplicação de
+`payment_webhook_events`. Pix Automático só para obrigação periódica, depois de confirmar
+elegibilidade e tarifa.
+
+### Fase 3 — disponível pela conciliação bancária `[PROPOSTO]`
+
+`available` só com o crédito no extrato lido pela Pluggy. Precisa de regras próprias: tarifa
+descontada pelo processador, repasse agrupado de várias cobranças (repasse não é segunda receita)
+e se a Pluggy lê o Contabilizei.bank — pergunta em aberto.
 
 ## Ainda não implementado / não ativado
 

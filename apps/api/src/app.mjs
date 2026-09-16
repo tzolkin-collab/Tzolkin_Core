@@ -34,6 +34,7 @@ import { accountRoutes } from './modules/accounts.mjs';
 import { checkoutTemplateRoutes } from './modules/checkout-templates.mjs';
 import { checkoutGatewayRoutes } from './modules/checkout-gateway.mjs';
 import { financeForecastRoutes } from './modules/finance-forecasts.mjs';
+import { serviceReceivableRoutes } from './modules/service-receivables.mjs';
 import { managementRoutes } from './modules/management.mjs';
 import { hostingerDnsRoutes } from './modules/hostinger-dns.mjs';
 import { productTopologyRoutes } from './modules/product-topology.mjs';
@@ -66,6 +67,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  platformOperationsRoutes(router,{...platformOptions,clock});
  financeRoutes(router,financeOptions);
  financeForecastRoutes(router);
+ serviceReceivableRoutes(router,{clock});
  paymentSalesRoutes(router,salesOptions);
  paymentWebhookRoutes(router,{clock,...(webhookEnv?{env:webhookEnv}:{})});
  stripeCatalogRoutes(router,{clock,...(catalogAdapter?{adapter:catalogAdapter}:{}),...(webhookEnv?{env:webhookEnv}:{})});

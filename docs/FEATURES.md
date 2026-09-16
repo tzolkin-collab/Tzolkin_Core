@@ -26,6 +26,7 @@ hoje?”. Riscos e trabalho pendente ficam no [BACKLOG.md](BACKLOG.md); sequênc
 | Projetos e entrega | Cadastro técnico, componentes, ambientes, vínculos de deploy, checklist e ativação | Provisionamento integral e rollback remoto seguem incompletos |
 | Deploy e infraestrutura | Inventários Vercel/EasyPanel, recursos, domínios, histórico e operações EasyPanel confirmadas/auditadas | Vercel permanece majoritariamente leitura; DNS não tem escrita pelo Core |
 | Cobrança e checkout | Ofertas, templates, checkout Stripe, catálogo Stripe e webhooks Stripe/Asaas idempotentes | Webhooks precisam estar cadastrados nos painéis; Asaas não usa o gateway Stripe |
+| Recebimentos de linha de serviço | Plano de parcelas a partir de contrato aceito, prévia, aprovação do dono, cobrança externa, pagamento e NFS-e registrados à mão, com trilha (ADR 0008, fase 1) | Emissão pelo Asaas (fase 2) e "disponível" pela conciliação bancária (fase 3) não existem |
 | Financeiro e bancos | Contas/transações Pluggy, snapshots, vendas Stripe/Asaas e previsões recorrentes | Itens Pluggy ainda dependem de configuração e não sincronizam por agenda própria |
 | E-mail | Templates por produto e projeção dos eventos disponíveis | Não há fila/provedor de envio completo nem métricas de entrega |
 | Marketing | Meta Ads por token ou OAuth, contas/campanhas/insights, vínculo a produto ou contratação | Renovação e coleta periódica ainda dependem da operação |

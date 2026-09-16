@@ -83,3 +83,34 @@ Continua pendente:
 
 - Confirmar elegibilidade e tarifa efetiva do Pix Automático no Asaas — pergunta ao fornecedor.
 
+
+## Implementação
+
+### Fase 1 — domínio e registro manual `[EXISTENTE E VERIFICADO]` — 2026-09-16
+
+Detalhes em [BILLING.md](../BILLING.md#fase-1--plano-parcelas-e-registro-manual-existente-e-verificado--2026-09-16).
+Como cada consequência foi atendida:
+
+1. **Tabelas** — migração `033`: `service_receivable_plans` (com a versão e a fotografia do contrato
+   aceito), `service_installments` e `service_receivable_audit`. Um plano vivo por contrato.
+2. **Prévia antes de chamada externa** — `POST /api/service-receivables/preview` não grava; criar o
+   plano recalcula no servidor. Nesta fase não há chamada externa nenhuma.
+3. **Autorização administrativa** — aprovar, registrar cobrança, pagamento ou NFS-e, mudar
+   vencimento e cancelar exigem papel `owner`.
+4. **Webhook sem virar acesso** — ainda não ligado (fase 2). A parcela já distingue
+   `paid_source` `manual` e `webhook`, e pagamento não toca em acesso nenhum.
+5. **Processador e banco como eventos distintos** — `paid` e `available` são situações diferentes;
+   nenhuma rota grava `available` antes da conciliação (fase 3).
+
+A capacidade `contract_billing` entrou na política da [ADR 0007](0007-portfolio-kind-rotulo-ou-regra.md)
+só para `service_line`. Reclassificar uma linha com plano vivo é recusado.
+
+### Fase 2 — emissão pelo Asaas `[PROPOSTO]`
+
+Cria cobrança real: só com autorização específica do dono. Idempotência por tentativa, estado
+desconhecido sem nova tentativa automática, webhook marcando `paid`.
+
+### Fase 3 — disponível pela conciliação `[PROPOSTO]`
+
+Crédito no extrato lido pela Pluggy, considerando tarifa descontada e repasse agrupado. Depende de
+confirmar se a Pluggy lê o Contabilizei.bank.

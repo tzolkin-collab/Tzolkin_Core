@@ -44,9 +44,11 @@ function bancoDoPortfolio(extra = () => null) {
 test('matriz de capacidades', () => {
  assert.deepEqual(capabilitiesOf('product'), ['access', 'checkout', 'product_engagement', 'commercial', 'operate']);
  assert.deepEqual(capabilitiesOf('platform'), capabilitiesOf('product'));
- assert.deepEqual(capabilitiesOf('service_line'), ['commercial', 'operate']);
+ assert.deepEqual(capabilitiesOf('service_line'), ['commercial', 'contract_billing', 'operate']);
  assert.deepEqual(capabilitiesOf('internal'), ['operate']);
  assert.deepEqual(capabilitiesOf('desconhecido'), []);
+ // ADR 0008: só linha de serviço cobra a partir de contrato; o resto cobra por oferta.
+ assert.deepEqual(CAPABILITIES.contract_billing, ['service_line']);
  for (const capacidade of ['access', 'checkout']) {
   assert.ok(!CAPABILITIES[capacidade].includes('service_line'), capacidade);
   assert.ok(!CAPABILITIES[capacidade].includes('internal'), capacidade);

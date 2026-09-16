@@ -109,6 +109,9 @@ const DEPENDENTES_POR_CAPACIDADE = {
   ['chaves comerciais ativas', "SELECT count(*)::int AS n FROM app_clients WHERE product_id=$1 AND active AND revoked_at IS NULL AND scopes && ARRAY['commercial:intake','commercial:read']::text[]"],
   ['contratações em curso', "SELECT count(*)::int AS n FROM client_engagements WHERE product_id=$1 AND archived_at IS NULL AND status IN ('planned','active','paused')"],
  ],
+ contract_billing: [
+  ['planos de recebimento vivos', "SELECT count(*)::int AS n FROM service_receivable_plans WHERE product_id=$1 AND status <> 'canceled'"],
+ ],
 };
 
 export async function dependentesDaReclassificacao(client, id, de, para) {

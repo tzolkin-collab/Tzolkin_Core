@@ -4,10 +4,14 @@ Estratégia, comandos e cobertura.
 
 Revisão: **2026-09-14**.
 
-Verificação atual em 2026-09-14: `npm test` passou com **398 testes aprovados, 0 falhas e 0
-ignorados**, num banco descartável criado para a execução e apagado no final. Inclui PostgreSQL real,
-endpoints de webhook, marketing, portfólio e o teste de trigger com rollback, que antes ficava
-ignorado por falta de base dedicada.
+Verificação atual em 2026-09-16: `npm test` passou com **460 testes aprovados, 0 falhas e 0
+ignorados**, código de saída 0, num banco descartável criado para a execução e apagado no final.
+Inclui PostgreSQL real, endpoints de webhook, marketing, portfólio, recebimentos de linha de serviço
+e o teste de trigger com rollback, que antes ficava ignorado por falta de base dedicada.
+
+A conexão administrativa do harness abre só para criar e para apagar o banco descartável. Antes ela
+ficava ociosa durante toda a suíte; com mais de ~4 minutos o servidor a derrubava, o erro sem ouvinte
+encerrava o processo antes do `DROP DATABASE` e o banco descartável ficava no servidor.
 
 ---
 

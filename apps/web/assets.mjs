@@ -38,6 +38,7 @@ const FILES = {
  '/finance.js': ['finance.js', 'text/javascript'],
  '/billing.js': ['billing.js', 'text/javascript'],
  '/product-payments.js': ['product-payments.js', 'text/javascript'],
+ '/service-receivables.js': ['service-receivables.js', 'text/javascript'],
  '/emails.js': ['emails.js', 'text/javascript'],
  '/emails.css': ['emails.css', 'text/css'],
  '/projects.js': ['projects.js', 'text/javascript'],

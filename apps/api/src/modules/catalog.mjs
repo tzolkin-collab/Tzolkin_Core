@@ -14,6 +14,9 @@ export const CAPABILITIES = Object.freeze({
  product_engagement: ['product', 'platform'],
  // captação comercial, chaves commercial:* e contratações do item
  commercial: ['product', 'platform', 'service_line'],
+ // cobrança nascida de contrato comercial aceito (ADR 0008): quem vende trabalho
+ // por proposta. Produto e plataforma cobram por oferta e checkout.
+ contract_billing: ['service_line'],
  // recursos, deploys, e-mails e campanhas
  operate: ['product', 'platform', 'service_line', 'internal'],
 });
@@ -26,6 +29,7 @@ const REFUSALS = {
  checkout: 'não vende por checkout',
  product_engagement: 'não recebe contratação do tipo produto',
  commercial: 'não tem ciclo comercial',
+ contract_billing: 'não cobra a partir de contrato comercial: cobra por oferta e checkout',
  operate: 'não pode ser operado',
 };
 

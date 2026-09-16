@@ -133,6 +133,7 @@ passa de classificação a regra.
 | `checkout` — oferta, template e checkout público | `billing.mjs`, `checkout-templates.mjs`, `checkout-gateway.mjs` | sim | sim | **não** | **não** |
 | `product_engagement` — contratação com `service_model = 'product'` | `portfolio.mjs` | sim | sim | **não** | **não** |
 | `commercial` — captação, chaves `commercial:*` e demais contratações | `commercial-keys.mjs`, `access.mjs`, `portfolio.mjs` | sim | sim | sim | **não** |
+| `contract_billing` — cobrança nascida de contrato comercial aceito ([ADR 0008](0008-origem-da-cobranca-de-servicos.md), acrescentada em 2026-09-16) | `service-receivables.mjs` | **não** | **não** | sim | **não** |
 | `operate` — recursos, deploys, e-mails e campanhas | `findEditableProduct` nos módulos de operação | sim | sim | sim | sim |
 
 No checkout público, um item sem a capacidade recebe o mesmo 404 de oferta

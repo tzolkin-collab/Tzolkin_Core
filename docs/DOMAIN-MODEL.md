@@ -70,7 +70,7 @@ Hoje: `skiller`, `educare`, `sites`, `mentorias`, `consultorias` e `core`. Barbe
 
 `portfolio_kind` classifica o portfólio (migração 032, [ADR 0007](decisions/0007-portfolio-kind-rotulo-ou-regra.md#classificação-decidida-aceita)): Skiller é `product`; Educare é `platform`, de assinatura de cursos e conteúdos; Sites, Mentorias e Consultorias são `service_line`; Core é `internal`, o que responde [D2](CONTEXT.md#d2--o-próprio-core-e-o-data-são-produtos-contratáveis). Cada item ativo ou em rascunho vira um contexto no seletor de espaços do painel.
 
-**O tipo governa o que o item pode fazer** (`CAPABILITIES` em `apps/api/src/modules/catalog.mjs`, ADR 0007 opção B): só `product` e `platform` dão acesso de usuários e vendem por checkout; `service_line` tem ciclo comercial por proposta (captação e contratações); `internal` só é operado. O painel monta a navegação de cada contexto pelas capacidades que a API devolve.
+**O tipo governa o que o item pode fazer** (`CAPABILITIES` em `apps/api/src/modules/catalog.mjs`, ADR 0007 opção B): só `product` e `platform` dão acesso de usuários e vendem por checkout; `service_line` tem ciclo comercial por proposta (captação e contratações) e é o único que cobra a partir de contrato comercial aceito (`contract_billing`, ADR 0008); `internal` só é operado. O painel monta a navegação de cada contexto pelas capacidades que a API devolve.
 
 `portfolio_kind` descreve o lugar do item no portfólio; não descreve como uma
 contratação é cobrada. A taxonomia de `client_engagements.service_model` é

@@ -10,6 +10,7 @@ import {setupTracking} from './tracking.js';
 import {setupFinance} from './finance.js';
 import {setupBilling} from './billing.js';
 import {setupProductPayments} from './product-payments.js';
+import {setupServiceReceivables} from './service-receivables.js';
 import {setupProductEmails} from './product-emails.js';
 import {renderDatabaseWorkspace} from './management-workspace.js';
 import {setupCampaigns} from './campaigns.js';
@@ -17,6 +18,7 @@ import {setupCampaigns} from './campaigns.js';
 const commercial=setupCommercial({api,openTenant:id=>openClient(id)});
 const billing=setupBilling({api});
 const productPayments=setupProductPayments({api,billing});
+const serviceReceivables=setupServiceReceivables({api});
 const emails=setupEmails({api,configure:product=>openProductModule(product,'product-emails')});
 const productEmails=setupProductEmails({api});
 const campaigns=setupCampaigns({api,onError:reportError});
@@ -66,13 +68,14 @@ const CONTEXTS = {
    'product-orgs': { title: 'Clientes', section: 'view-product-orgs', action: ['Vincular cliente', 'entitlement-dialog'] },
    'product-engagements': { title: 'Contratações', section: 'view-product-engagements', metrics:false },
    'product-payments': { title: 'Cobrança', section: 'view-product-payments', metrics:false },
+   'product-receivables': { title: 'Recebimentos', section: 'view-product-receivables', metrics:false },
    'product-emails': { title: 'E-mails', section: 'view-product-emails', metrics:false },
    'product-campaigns': { title: 'Campanhas', section: 'view-product-campaigns', metrics:false },
   },
  },
 };
 
-const SECTIONS = ['view-commercial','view-product-keys','view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-services', 'view-access', 'view-management', 'view-database', 'view-redis', 'view-settings', 'view-security', 'view-deploys', 'view-server-metrics', 'view-delivery', 'view-product', 'view-product-orgs', 'view-product-engagements', 'view-product-payments', 'view-product-emails', 'view-campaigns', 'view-product-campaigns', 'view-service-campaigns'];
+const SECTIONS = ['view-commercial','view-product-keys','view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-services', 'view-access', 'view-management', 'view-database', 'view-redis', 'view-settings', 'view-security', 'view-deploys', 'view-server-metrics', 'view-delivery', 'view-product', 'view-product-orgs', 'view-product-engagements', 'view-product-payments', 'view-product-receivables', 'view-product-emails', 'view-campaigns', 'view-product-campaigns', 'view-service-campaigns'];
 const DATA_NODES = ['tenants', 'leads', 'companies', 'client-summary', 'client-detail', 'stakeholder-directory', 'members', 'contracts', 'product-catalog', 'product-deployment-list', 'services-list', 'services-summary', 'management-schema', 'management-dns', 'management-redis', 'management-apis', 'overview-kpis', 'overview-alerts', 'overview-integrations', 'overview-product-list', 'overview-actions', 'product-orgs', 'product-engagements', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
 SECTIONS.push('view-finance','view-emails');
 
@@ -81,7 +84,7 @@ const views = () => CONTEXTS[contextKind()].views;
 
 // Telas de contexto que dependem de uma capacidade do tipo do item. A regra é do
 // servidor (catalog.mjs, ADR 0007); a tela só lê as capacidades que ele devolve.
-const VIEW_CAPABILITIES = {'product-inbound':['commercial'],'product-keys':['access','commercial'],'product-orgs':['access'],'product-engagements':['commercial'],'product-payments':['checkout']};
+const VIEW_CAPABILITIES = {'product-inbound':['commercial'],'product-keys':['access','commercial'],'product-orgs':['access'],'product-engagements':['commercial'],'product-payments':['checkout'],'product-receivables':['contract_billing']};
 const contextProduct = () => state.product?.product || state.overview?.products?.find(product => product.id === state.context) || null;
 const hasCapability = (product, capability) => Boolean(product?.capabilities?.includes(capability));
 const contextKindLabel = () => PORTFOLIO_KIND_LABELS[contextProduct()?.portfolio_kind] || 'Produto';
@@ -204,7 +207,7 @@ function renderNav() {
   if(groups[key]!==previous){section=node('section',undefined,'nav-section');const label=node('h2',groups[key],'nav-group');section.append(label);items.push(section);previous=groups[key];}
   const button = node('button', undefined, 'nav-item' + (key === state.view ? ' active' : ''));
   button.type = 'button'; button.dataset.view = key;
-  const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',metrics:'chart',leads:'user-plus',products:'package',services:'briefcase',projects:'repo',delivery:'cloud',access:'shield',management:'settings',database:'database',redis:'cache',settings:'sliders',security:'lock',deploys:'cloud',serverMetrics:'activity',product:'package','product-inbound':'user-plus','product-keys':'lock','product-orgs':'people','product-engagements':'briefcase','product-payments':'wallet','product-emails':'mail',campaigns:'chart','product-campaigns':'chart'})[key]);
+  const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',metrics:'chart',leads:'user-plus',products:'package',services:'briefcase',projects:'repo',delivery:'cloud',access:'shield',management:'settings',database:'database',redis:'cache',settings:'sliders',security:'lock',deploys:'cloud',serverMetrics:'activity',product:'package','product-inbound':'user-plus','product-keys':'lock','product-orgs':'people','product-engagements':'briefcase','product-payments':'wallet','product-receivables':'calendar','product-emails':'mail',campaigns:'chart','product-campaigns':'chart'})[key]);
   icon.classList.add('nav-icon'); button.append(icon, document.createTextNode(view.title));
   if (key === state.view) button.setAttribute('aria-current', 'page');
   button.onclick = () => {switchView(key);closeNavigation();};
@@ -247,6 +250,7 @@ function switchView(view) {
  if (view === 'management' && !state.dns) api('/api/dns/hostinger').then(data=>{state.dns=data;renderManagement();}).catch(error=>{$('management-dns').replaceChildren(node('p',error.message,'notice-inline'));});
  if (view === 'client') renderClientDetail();
  if (view === 'product-payments'&&state.product) productPayments.load(state.product.product).catch(reportError);
+ if (view === 'product-receivables'&&state.product) serviceReceivables.load(state.product.product).catch(reportError);
  if (view === 'product-emails'&&state.product) productEmails.load({...state.product.product,deploy_url:publishedDeployUrl(state.product.product),favicon_url:productFaviconUrl(state.product.product)}).catch(reportError);
  if (view === 'deploys') delivery.load().catch(reportError);
  if (view === 'campaigns') campaigns.load().catch(reportError);
@@ -1142,6 +1146,7 @@ async function load() {
   renderNav();
   if(!viewAllowed(state.view))switchView(Object.keys(views())[0]);
   if(state.view==='product-payments')await productPayments.load(state.product.product);
+  if(state.view==='product-receivables')await serviceReceivables.load(state.product.product);
   if(state.view==='product-emails')await productEmails.load({...state.product.product,deploy_url:publishedDeployUrl(state.product.product),favicon_url:productFaviconUrl(state.product.product)});
  }
  renderContextChrome();
