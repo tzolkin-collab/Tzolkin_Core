@@ -43,7 +43,7 @@ export function setupServiceReceivables({api}){
   head.append(copy);r.append(head);
 
   r.append(el('h3','Contratos aceitos sem plano','section-title'));
-  if(!data.contracts.length)r.append(el('p','Nenhum contrato aceito aguardando plano. Contratos são criados e aceitos no Inbound.','empty-list'));
+  if(!data.contracts.length)r.append(el('p','Nenhum contrato aceito aguardando plano. Contratos são criados e aceitos no Inbound, a partir de um lead; cliente que não veio de lead ainda não tem esse caminho.','empty-list'));
   for(const contract of data.contracts)r.append(contractCard(contract,data));
 
   r.append(el('h3','Planos de recebimento','section-title'));
@@ -86,7 +86,9 @@ export function setupServiceReceivables({api}){
   copy.append(el('h4',snap.title||'Contrato'),el('p',`${plan.organization_name} · ${money(plan.total_minor,c)} · ${METHOD[plan.method]||plan.method} · cobrança externa`,'detail'));
   titulo.append(copy,el('span',PLAN_STATUS[plan.status]||plan.status,'status '+(plan.status==='approved'?'active':plan.status==='draft'?'building':'')));
   card.append(titulo);
-  if(plan.status!=='canceled')card.append(el('p',[
+  // Rascunho não tem parcela cobrável: dizer isso, em vez de mostrar totais zerados.
+  if(plan.status==='draft')card.append(el('p',`Rascunho de ${plan.installments.length} parcela(s) somando ${money(plan.total_minor,c)}. Nada é cobrável antes da aprovação do dono.`));
+  else if(plan.status!=='canceled')card.append(el('p',[
    `A cobrar ${money(s.scheduled_minor,c)}`,`Cobrada ${money(s.issued_minor,c)}`,`Paga ${money(s.paid_minor,c)}`,`Disponível ${money(s.available_minor,c)}`,
    s.overdue_count?`Vencidas: ${s.overdue_count} (${money(s.overdue_minor,c)})`:null,s.invoices_pending?`NFS-e pendentes: ${s.invoices_pending}`:null,
   ].filter(Boolean).join(' · ')));

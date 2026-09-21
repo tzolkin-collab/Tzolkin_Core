@@ -44,7 +44,7 @@ const CONTEXTS = {
    campaigns: { title: 'Campanhas', section: 'view-campaigns', metrics:false },
    clients: { title: 'Clientes', section: 'view-clients', action: ['Novo cliente', 'tenant-dialog'], metrics:false },
    deploys: { title: 'Deploys', section: 'view-deploys', action: ['Novo projeto', 'delivery-new'], metrics: false },
-   products: { title: 'Produtos', section: 'view-products', action: ['Vincular cliente', 'entitlement-dialog'] },
+   products: { title: 'Portfólio', section: 'view-products', action: ['Vincular cliente', 'entitlement-dialog'] },
    services: { title: 'Serviços', section: 'view-services', metrics:false },
    client: { title: 'Cliente', section: 'view-client', hidden:true, metrics:false },
    emails: { title: 'E-mails', section: 'view-emails', metrics:false },
@@ -312,8 +312,8 @@ function renderOverviewDashboard(entries,{finance,sales,deploys,infrastructure}=
  const overview=state.overview,month=currentMonth(),monthLabel=new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric',timeZone:'America/Sao_Paulo'}).format(new Date(month+'-15T12:00:00-03:00'));
  $('overview-period').textContent=monthLabel[0].toUpperCase()+monthLabel.slice(1);
  const activeContracts=overview.entitlements.filter(e=>e.active),activeClients=overview.tenants.filter(t=>t.relationship_kind==='customer'&&['active','onboarding'].includes(t.lifecycle_status)).length,saleRows=Object.values(sales?.providers||{}).flatMap(p=>p.snapshot?.payload?.sales||[]),received=saleRows.filter(s=>s.status==='received'&&s.currency==='BRL'),gross=received.reduce((n,s)=>n+(Number.isFinite(s.gross)?s.gross:0),0),projects=deploys?.projects||[],ready=projects.filter(p=>deployGroup(p)==='ready').length;
- $('overview-summary').textContent=`${activeClients} ${activeClients===1?'cliente ativo':'clientes ativos'}, ${activeContracts.length} ${activeContracts.length===1?'contrato':'contratos'} e ${saleRows.length} ${saleRows.length===1?'venda importada':'vendas importadas'} neste mês.`;
- const kpis=[['Clientes ativos',activeClients,overview.tenants.filter(t=>t.relationship_kind==='customer').length+' cadastrados','clients'],['Receita recebida',brl(gross),'Vendas confirmadas em BRL','finance'],['Contratos ativos',activeContracts.length,overview.products.length+' produtos no portfólio','products']];
+ $('overview-summary').textContent=`${activeClients} ${activeClients===1?'cliente ativo':'clientes ativos'}, ${activeContracts.length} ${activeContracts.length===1?'contrato de acesso':'contratos de acesso'} e ${saleRows.length} ${saleRows.length===1?'venda importada':'vendas importadas'} neste mês.`;
+ const kpis=[['Clientes ativos',activeClients,overview.tenants.filter(t=>t.relationship_kind==='customer').length+' cadastrados','clients'],['Receita recebida',brl(gross),'Vendas confirmadas em BRL','finance'],['Contratos de acesso',activeContracts.length,overview.products.length+' itens no portfólio','products']];
  $('overview-kpis').replaceChildren(...kpis.map(([label,value,detail,view])=>{const card=node('button',undefined,'overview-kpi');card.type='button';card.onclick=()=>switchView(view);card.append(node('span',label),node('strong',String(value)),node('small',detail));return card;}));
  const alerts=[];
  if(!sales?.configured?.asaas)alerts.push(['Asaas não configurado','Adicione a chave de produção para importar as vendas.','finance','alert']);
@@ -342,8 +342,7 @@ function renderOverviewDashboard(entries,{finance,sales,deploys,infrastructure}=
   ? [...porBanco.values()].map(({identidade,contas})=>integration(identidade.name,true,`${contas} ${contas===1?'conta lida':'contas lidas'}`,identidade.logo?providerLogo(identidade.logo):null))
   : [integration('Contas bancárias',bankCount>0,bankCount?`${bankCount} ${bankCount===1?'conexão sem contas lidas':'conexões sem contas lidas'}`:'Nenhuma conexão')];
  $('overview-integrations').replaceChildren(integration('Stripe',sales?.configured?.stripe,`${saleRows.filter(s=>s.provider==='stripe').length} vendas no mês`,providerLogo('stripe')),integration('Asaas',sales?.configured?.asaas,sales?.configured?.asaas?'Leitura por API ativa':'Chave de produção ausente',providerLogo('asaas')),...linhasBanco,integration('EasyPanel',infrastructure==null?null:infrastructure.status==='ok',infrastructure==null?'Consultando inventário':`${easyCount} serviços no inventário`,providerLogo('easypanel')));
- const productEntries=new Map(entries.filter(e=>e.kind==='product').map(e=>[e.payload.name,e.payload]));
- $('overview-product-list').replaceChildren(...overview.products.map(product=>{const contracts=activeContracts.filter(e=>e.product_id===product.id).length,item=productEntries.get(product.name),row=node('button',undefined,'overview-product');row.type='button';row.onclick=()=>openProductModule(product,'product').catch(reportError);row.append(productFavicon(productFaviconUrl(product)));const text=node('span');text.append(node('strong',product.name),node('small',(productAppearsDraft(product,item)?'Draft · ':'')+(item?.description||`${contracts} ${contracts===1?'contrato ativo':'contratos ativos'}`)));row.append(text,node('span',String(contracts),'overview-product-count'),createIcon('arrow'));return row;}));
+ $('overview-product-list').replaceChildren(...overview.products.map(product=>{const count=portfolioCount(product),row=node('button',undefined,'overview-product');row.type='button';row.onclick=()=>openProductModule(product,'product').catch(reportError);row.append(productFavicon(productFaviconUrl(product)));const text=node('span');text.append(node('strong',product.name),node('small',[kindLabel(product),productLifecycle(product).label,count?.text].filter(Boolean).join(' · ')));row.append(text,node('span',count?String(count.n):'—','overview-product-count'),createIcon('arrow'));return row;}));
  $('overview-actions').replaceChildren(overviewButton('Adicionar cliente','Abrir a carteira e iniciar um relacionamento','clients','people'),overviewButton('Revisar caixa','Bancos, Stripe e Asaas em um só lugar','finance','wallet'),overviewButton('Acompanhar deploys','GitHub, projetos e ambientes de publicação','deploys','cloud'));
  document.querySelectorAll('[data-overview-view]').forEach(button=>button.onclick=()=>switchView(button.dataset.overviewView));
 }
@@ -351,7 +350,7 @@ function renderOverviewDashboard(entries,{finance,sales,deploys,infrastructure}=
 const CLIENT_LABELS={
  customer:'Cliente',prospect:'Prospect',partner:'Parceiro',internal:'Interna',company:'Empresa',person:'Pessoa física',nonprofit:'Sem fins lucrativos',
  lead:'Lead',onboarding:'Em implantação',active:'Ativo',planned:'Planejado',paused:'Pausado',completed:'Concluído',discontinued:'Descontinuado',unclassified:'A classificar',
- on_demand:'Sob demanda',education:'Educacional',consulting:'Consultoria',advisory:'Assessoria',product:'Produto TZOLKIN',
+ on_demand:'Sob demanda',education:'Mentoria',consulting:'Consultoria',advisory:'Assessoria',product:'Produto TZOLKIN',
  owner:'Proprietário',decision_maker:'Decisor',champion:'Champion',finance:'Financeiro',technical:'Técnico',operational:'Operacional',student:'Aluno',contact:'Contato'
 };
 const clientLabel=value=>CLIENT_LABELS[value]||value||'A classificar';
@@ -594,19 +593,33 @@ function record(title, detail, edit) {
  return row;
 }
 
-const productLifecycle=(product,info)=>{
+// Ficha do Notion de um item, ou null. Um lugar só: antes cada tela buscava de um
+// jeito (por id, por nome, objeto vazio) e o mesmo item mudava de estado entre telas.
+const catalogOf=product=>product?.catalog||catalogForProduct(product)||null;
+// Estado operacional de um item do portfólio. Uma função, usada por todas as telas.
+// "Rascunho" é o ciclo cadastral; "Sem deploy observado" é falta de evidência de
+// publicação. Palavras diferentes para coisas diferentes.
+const productLifecycle=product=>{
  const deployment=readyDeployment(product);
- const evidenceStatus=info?.status||'';
- // Software sem deploy e sem ficha no catálogo não tem evidência nenhuma de estar no ar.
- const isUnproven=product.lifecycle_status==='draft'||(!deployment&&['Planejamento','Disponibilidade a validar'].includes(evidenceStatus))||(!deployment&&!info&&hasCapability(product,'access'));
- if(isUnproven)return {label:'Produto em draft',tone:'building',next:'Concluir checklist do projeto antes de ativar'};
+ const evidenceStatus=catalogOf(product)?.status||'';
+ if(product.lifecycle_status==='draft')return {label:'Rascunho',tone:'building',next:'Concluir o checklist do projeto antes de ativar',unproven:true};
  if(deployment)return {label:'No ar',tone:'active',next:'Deploy READY observado no provedor'};
- if(!hasCapability(product,'checkout')&&hasCapability(product,'commercial'))return {label:'Linha de serviço',tone:'',next:'Contratada por proposta; deploy não é requisito'};
- if(evidenceStatus==='Local')return {label:'Plataforma interna',tone:'building',next:'Uso interno; ainda sem publicação externa'};
- if(evidenceStatus==='Planejamento')return {label:'Em planejamento',tone:'building',next:'Criar ou vincular um projeto de deploy'};
- return {label:'Sem deploy observado',tone:'building',next:'Vincular projeto e validar produção'};
+ if(product.portfolio_kind==='internal')return {label:'Uso interno',tone:'',next:'Não é vendido; guarda a infraestrutura da própria TZOLKIN'};
+ if(!hasCapability(product,'checkout')&&hasCapability(product,'commercial'))return {label:'Opera por contrato',tone:'',next:'Contratada por proposta; deploy não é requisito'};
+ if(evidenceStatus==='Planejamento')return {label:'Em planejamento',tone:'building',next:'Criar ou vincular um projeto de deploy',unproven:true};
+ return {label:'Sem deploy observado',tone:'building',next:'Vincular um deploy de produção para confirmar que está no ar',unproven:true};
 };
-const productAppearsDraft=(product,info)=>productLifecycle(product,info).label==='Produto em draft';
+// Sem evidência de estar no ar: a tela não oferece o endereço cadastrado como se fosse produção.
+const productUnproven=product=>Boolean(productLifecycle(product).unproven);
+// O que "cliente ligado" quer dizer depende do tipo do item: contrato de acesso para
+// quem dá acesso; contratação em curso para linha de serviço; nada para item interno.
+const portfolioCount=product=>{
+ const ov=state.overview;if(!ov)return null;
+ if(hasCapability(product,'access')){const n=ov.entitlements.filter(e=>e.product_id===product.id&&e.active).length;return {n,text:`${n} ${n===1?'contrato de acesso ativo':'contratos de acesso ativos'}`};}
+ if(hasCapability(product,'commercial')){const n=ov.engagements.filter(e=>e.product_id===product.id&&!e.archived_at&&['planned','active','paused'].includes(e.status)).length;return {n,text:`${n} ${n===1?'contratação em curso':'contratações em curso'}`};}
+ return null;
+};
+const kindLabel=product=>PORTFOLIO_KIND_LABELS[product?.portfolio_kind]||'Produto';
 
 // Vínculo de serviço ↔ projeto do provedor: o ID manda. Nome só casa quando o vínculo foi gravado com ID nominal
 // (ID igual ao nome: EasyPanel e o legado da migração 020). Sem isso, um projeto renomeado e outro que herdou o
@@ -615,7 +628,8 @@ const serviceBindingById=(binding,project)=>binding.provider===project?.provider
 const serviceBindingByName=(binding,project)=>binding.provider===project?.provider&&binding.external_project_id===binding.external_project_name&&binding.external_project_name===project?.project;
 const projectForServiceBinding=binding=>state.deploys.find(p=>serviceBindingById(binding,p))||state.deploys.find(p=>serviceBindingByName(binding,p));
 const serviceBindingForDeployment=project=>state.serviceBindings.find(b=>serviceBindingById(b,project))||state.serviceBindings.find(b=>serviceBindingByName(b,project));
-const serviceEngagements=()=>state.overview?.engagements?.filter(e=>['advisory','consulting','on_demand'].includes(e.service_model))||[];
+// Todo trabalho contratado que não é acesso a software: mentoria, consultoria, assessoria e sob demanda.
+const serviceEngagements=()=>state.overview?.engagements?.filter(e=>['advisory','consulting','on_demand','education'].includes(e.service_model))||[];
 
 function renderServices(){
  const root=$('services-list');if(!root||!state.overview)return;
@@ -686,10 +700,9 @@ function renderManagement(){
 function renderGeneral() {
  const overview = state.overview;
  const servicesLink=$('products-services-link');if(servicesLink)servicesLink.onclick=()=>switchView('services');
- const catalogById = new Map(state.catalog.filter(entry=>entry.kind==='product').map(entry=>[entry.payload.id,entry.payload]));
  renderMetrics([
   ['Clientes', overview.tenants.filter(t=>t.relationship_kind==='customer').length],
-  ['Contratos de produto', overview.entitlements.filter(e => e.active).length],
+  ['Contratos de acesso', overview.entitlements.filter(e => e.active).length],
   ['Vínculos de acesso', overview.memberships.filter(m => m.active).length],
  ]);
  fillDirectorySelects();
@@ -698,17 +711,19 @@ function renderGeneral() {
  const names = new Map(overview.tenants.map(t => [t.id, t.name]));
  const products = new Map(overview.products.map(p => [p.id, p.name]));
  $('product-catalog').replaceChildren(...overview.products.map(product => {
-  const productInfo=catalogById.get(product.id)||{};
+  const productInfo=catalogOf(product)||{};
   const card = node('article', undefined, 'product-card');
-  const count = overview.entitlements.filter(e => e.product_id === product.id && e.active).length;
+  const count = portfolioCount(product);
   const body = node('div', undefined, 'product-card-body');
-  body.append(node('h3', product.name), node('p', count + ' contrato' + (count === 1 ? ' ativo' : 's ativos') + ' · ' + product.id));
-  const published=publishedDeployUrl(product),lifecycle=productLifecycle(product,productInfo),isDraft=productAppearsDraft(product,productInfo),live=isDraft?(published||null):productLiveUrl(product),stateBadge=node('span',lifecycle.label,'status '+lifecycle.tone),lifecycleBadge=node('span',isDraft?'Produto em draft':'Produto ativo','status '+(isDraft?'building':'active'));body.append(lifecycleBadge,stateBadge,node('small',lifecycle.next,'product-next-action'));card.append(productFavicon(productFaviconUrl(product)), body);
-  const open = node('button', 'Abrir gestão do produto →', 'table-action');
+  body.append(node('h3', product.name), node('p', [count?.text, product.id].filter(Boolean).join(' · ')));
+  const published=publishedDeployUrl(product),lifecycle=productLifecycle(product),isDraft=Boolean(lifecycle.unproven),live=isDraft?(published||null):productLiveUrl(product),stateBadge=node('span',lifecycle.label,'status '+lifecycle.tone),kindBadge=node('span',kindLabel(product),'status');body.append(kindBadge,stateBadge,node('small',lifecycle.next,'product-next-action'));card.append(productFavicon(productFaviconUrl(product)), body);
+  const open = node('button', 'Abrir gestão →', 'table-action');
   open.type = 'button';
   open.onclick = () => openProductModule(product,'product').catch(reportError);
   card.append(open);
-  const configure=node('button','Cobrança e e-mails','table-action');configure.type='button';configure.onclick=()=>openProductModule(product,'product-payments').catch(reportError);card.append(configure);
+  // Atalho só para o que o tipo tem: cobrança por checkout, ou recebimentos por contrato.
+  const atalho=hasCapability(product,'checkout')?['Cobrança e e-mails','product-payments']:hasCapability(product,'contract_billing')?['Recebimentos','product-receivables']:null;
+  if(atalho){const configure=node('button',atalho[0],'table-action');configure.type='button';configure.onclick=()=>openProductModule(product,atalho[1]).catch(reportError);card.append(configure);}
   if(live)card.append(catalogLink(published?'Abrir deploy ↗':'Abrir produto ↗',live,'product-live-link'));else if(productInfo.url&&!isDraft)card.append(catalogLink('Abrir endereço ↗',productInfo.url,'product-live-link'));
   return card;
  }));
@@ -932,12 +947,12 @@ function productResourceRow(product, category, item) {
 
 function renderProductArchitecture(product) {
  const topology=state.topology?.products?.find(item=>item.id===product.id),architecture=node('section',undefined,'product-architecture');
- const heading=node('div',undefined,'product-architecture-heading'),copy=node('div');copy.append(node('div','ARQUITETURA DO PRODUTO','overview-kicker'),node('h3','Conexões e recursos'),node('p','O inventário detecta candidatos. Uma conexão confirmada é persistida, auditada e reconciliada com o provedor.','detail'));
+ const heading=node('div',undefined,'product-architecture-heading'),copy=node('div');copy.append(node('div','ARQUITETURA TÉCNICA','overview-kicker'),node('h3','Conexões e recursos'),node('p','O inventário detecta candidatos. Uma conexão confirmada é persistida, auditada e reconciliada com o provedor.','detail'));
  const add=node('button','Adicionar conexão','secondary');add.type='button';heading.append(copy,add);architecture.append(heading);
  const editor=node('div',undefined,'product-resource-editor');add.onclick=()=>{editor.replaceChildren(productResourceForm(product,{},()=>editor.replaceChildren()));};architecture.append(editor);
  if(!topology){architecture.append(node('p','A topologia ainda não foi consultada.','empty-list'));return architecture;}
  const missing=Object.values(topology.connections).flat().filter(item=>item.reconciliation==='missing').length;
- if(missing)architecture.append(node('p',`${missing} conexão${missing===1?' confirmada não foi encontrada':' confirmadas não foram encontradas'} no inventário atual. Revise antes do próximo deploy.`,'product-resource-warning'));
+ if(missing)architecture.append(node('p',`${missing} ${missing===1?'conexão confirmada não foi encontrada':'conexões confirmadas não foram encontradas'} no inventário atual. Revise antes do próximo deploy.`,'product-resource-warning'));
  const grid=node('div',undefined,'product-architecture-grid');
  for(const [category,[,label]] of Object.entries(PRODUCT_RESOURCE_TYPES)){
   const group=node('article',undefined,'product-architecture-group');group.append(node('span',label,'product-architecture-label'));const items=topology.connections[category]||[];
@@ -952,7 +967,7 @@ function renderProductRecord(product) {
  const serviceLine=!hasCapability(product,'checkout')&&hasCapability(product,'commercial');
  const kicker=(PORTFOLIO_KIND_LABELS[product.portfolio_kind]||'Produto').toUpperCase();
  const recordActions=serviceLine?[['Captação inbound','product-inbound','user-plus'],['Contratações','product-engagements','briefcase'],['Chaves de integração','product-keys','lock'],['E-mails','product-emails','mail']]:hasCapability(product,'checkout')?[['Cobrança','product-payments','wallet'],['E-mails','product-emails','mail']]:[];
- const lifecycle=productLifecycle(product,product.catalog||null),appearsDraft=productAppearsDraft(product,product.catalog||null),live=appearsDraft?(publishedDeployUrl(product)||null):productLiveUrl(product);const identity=node('div',undefined,'product-record-identity');identity.append(productFavicon(productFaviconUrl(product)),node('div'));identity.lastChild.append(node('span',kicker,'overview-kicker'),node('h2', product.name), node('p', 'Identificador: ' + product.id, 'detail'));panel.append(identity);
+ const lifecycle=productLifecycle(product),appearsDraft=productUnproven(product),live=appearsDraft?(publishedDeployUrl(product)||null):productLiveUrl(product);const identity=node('div',undefined,'product-record-identity');identity.append(productFavicon(productFaviconUrl(product)),node('div'));identity.lastChild.append(node('span',kicker,'overview-kicker'),node('h2', product.name), node('p', 'Identificador: ' + product.id, 'detail'));panel.append(identity);
  const actions=node('div',undefined,'product-record-actions');for(const [label,view,icon] of recordActions){const button=node('button',undefined,'secondary');button.type='button';button.append(createIcon(icon),document.createTextNode(label));button.onclick=()=>switchView(view);actions.append(button);}const detach=node('button','Desatrelar conexões','quiet');detach.type='button';detach.onclick=async()=>{if(!window.confirm(`Desatrelar domínios, bancos e deploys de ${product.name}? Nenhum dado externo será apagado.`))return;detach.disabled=true;try{await api(`/api/products/${encodeURIComponent(product.id)}/attachments`,'DELETE');state.resourceBindings=state.resourceBindings.filter(item=>item.product_id!==product.id);state.bindings=state.bindings.filter(item=>item.product_id!==product.id);state.topology=await api('/api/products/topology').catch(()=>null);renderProductRecord(product);}catch(error){detach.disabled=false;reportError(error);}};actions.append(detach);panel.append(actions);
  const catalog = product.catalog;
  if (catalog) {
@@ -966,7 +981,7 @@ function renderProductRecord(product) {
   panel.append(node('p', 'Sem ficha no catálogo importado do Notion. Nada foi inferido para preencher este espaço.', 'context-description'));
  }
  const facts=node('div',undefined,'product-record-facts');for(const [label,value] of (serviceLine?[['Tipo','Linha de serviço'],['Entrada','Formulário inbound ou proposta'],['Cobrança','Fora do checkout']]:[['Tipo',PORTFOLIO_KIND_LABELS[product.portfolio_kind]||'Produto'],['Estado operacional',lifecycle.label],['Família',product.brand_family||'TZOLKIN']])){const fact=node('div');fact.append(node('span',label),node('strong',String(value)));facts.append(fact);}panel.append(facts);
- const connection=node('section',undefined,'product-connection-card'),deployment=readyDeployment(product),project=state.deploys.find(item=>deploymentBelongsToProduct(item,product));connection.append(node('h3','Conexão de deploy'),node('p',deployment?`${project?.project||'Projeto'} · ${project?.provider==='vercel'?'Vercel':'EasyPanel'} · READY observado`:'Nenhum deploy READY vinculado a este produto.','detail'));const connectionActions=node('div',undefined,'product-connection-actions');if(deployment?.url)connectionActions.append(catalogLink('Abrir produção ↗',deployment.url,'product-live-link'));const openDeploys=node('button','Ver projetos e deploys →','secondary');openDeploys.type='button';openDeploys.onclick=()=>{state.context='';state.view='deploys';clearRenderedData();renderContextChrome();renderNav();load().catch(reportError);};connectionActions.append(openDeploys);connection.append(connectionActions);panel.append(connection);
+ const connection=node('section',undefined,'product-connection-card'),deployment=readyDeployment(product),project=state.deploys.find(item=>deploymentBelongsToProduct(item,product));connection.append(node('h3','Conexão de deploy'),node('p',deployment?`${project?.project||'Projeto'} · ${project?.provider==='vercel'?'Vercel':'EasyPanel'} · READY observado`:'Nenhum deploy READY vinculado a este item.','detail'));const connectionActions=node('div',undefined,'product-connection-actions');if(deployment?.url)connectionActions.append(catalogLink('Abrir produção ↗',deployment.url,'product-live-link'));const openDeploys=node('button','Ver projetos e deploys →','secondary');openDeploys.type='button';openDeploys.onclick=()=>{state.context='';state.view='deploys';clearRenderedData();renderContextChrome();renderNav();load().catch(reportError);};connectionActions.append(openDeploys);connection.append(connectionActions);panel.append(connection);
  panel.append(renderProductArchitecture(product));
  $('product-record').replaceChildren(panel);
 }
@@ -1040,7 +1055,7 @@ function renderProduct() {
  // Contrato de acesso só existe onde o tipo dá acesso; linha de serviço mede contratações.
  renderMetrics(access ? [
   ['Organizações', context.summary.organizations],
-  ['Contratos ativos', context.summary.active_contracts],
+  ['Contratos de acesso', context.summary.active_contracts],
   ['Contratos revogados', context.summary.revoked_contracts],
   ['Pessoas alcançadas', context.summary.reachable_memberships, 'com vínculo neste produto'],
  ] : hasCapability(product, 'commercial') ? [
@@ -1075,8 +1090,10 @@ function fillDirectorySelects() {
  const accessProducts = overview.products.filter(p => hasCapability(p, 'access'));
  for (const select of document.querySelectorAll('.product-select')) {
   const previous = select.value;
-  select.replaceChildren(option('', 'Selecione o produto'), ...accessProducts.map(p => option(p.id, p.name)));
-  if (accessProducts.some(p => p.id === previous)) select.value = previous;
+  // Vínculo de pessoa exige item ativo; contrato de acesso pode ser preparado em rascunho.
+  const opcoes = select.closest('#member-dialog') ? accessProducts.filter(p => p.lifecycle_status === 'active') : accessProducts;
+  select.replaceChildren(option('', 'Selecione o produto'), ...opcoes.map(p => option(p.id, p.name)));
+  if (opcoes.some(p => p.id === previous)) select.value = previous;
  }
 }
 
@@ -1096,10 +1113,11 @@ function renderContextPicker(products) {
  if(!picker||!currentIcon||!currentCopy||!options)return;
  const current=products.find(product=>product.id===state.context)||null;
  currentIcon.replaceChildren(current?productFavicon(productFaviconUrl(current)):coreSpaceIcon());
- currentCopy.replaceChildren(node('strong',current?.name||'TZOLKIN'),node('small',current?'Produto':'Gestão geral'));
+ const detalhe=product=>kindLabel(product)+(product.lifecycle_status==='draft'?' · rascunho':'');
+ currentCopy.replaceChildren(node('strong',current?.name||'TZOLKIN'),node('small',current?detalhe(current):'Gestão geral'));
  const choice=(id,label,detail,icon)=>{const button=node('button',undefined,'context-option'+(id===state.context?' active':''));button.type='button';button.setAttribute('aria-current',id===state.context?'true':'false');const mark=node('span',undefined,'context-option-icon');mark.append(icon);const copy=node('span',undefined,'context-option-copy');copy.append(node('strong',label),node('small',detail));button.append(mark,copy);button.onclick=()=>{picker.open=false;if(id!==state.context)switchContext(id).catch(reportError);};return button;};
  const general=choice('','TZOLKIN','Gestão geral',coreSpaceIcon());
- const productChoices=products.map(product=>choice(product.id,product.name,'Produto',productFavicon(productFaviconUrl(product))));
+ const productChoices=products.map(product=>choice(product.id,product.name,detalhe(product),productFavicon(productFaviconUrl(product))));
  options.replaceChildren(general,...productChoices);
 }
 
