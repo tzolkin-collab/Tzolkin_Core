@@ -45,7 +45,10 @@ export function productResourceBindingRoutes(router) {
   if (!isProductId(params.id)) throw fail(400, 'Produto inválido.');
   if (!await findEditableProduct(client, params.id)) throw fail(404, 'Produto não encontrado ou arquivado.');
   const resources = (await client.query(`${select} WHERE product_id=$1 FOR UPDATE`, [params.id])).rows;
-  for (const row of resources) await audit(client, row, 'detached', operator, row, null);
+  // 'deleted' e não 'detached': o CHECK de product_resource_audit só aceita
+  // created, updated e deleted (022). Com 'detached' a transação inteira caía,
+  // e desatrelar era impossível em qualquer item com uma conexão que fosse.
+  for (const row of resources) await audit(client, row, 'deleted', operator, row, null);
   await client.query('DELETE FROM product_deploy_bindings WHERE product_id=$1', [params.id]);
   await client.query('DELETE FROM product_resource_bindings WHERE product_id=$1', [params.id]);
   return { tenant: null, type: 'product.attachments.detached', detached_resources: resources.length };

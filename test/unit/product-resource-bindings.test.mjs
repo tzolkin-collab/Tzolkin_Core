@@ -63,6 +63,35 @@ test('remove conexão somente por id válido e preserva trilha de auditoria', as
  assert.equal(queries.at(-1).values[2], 'deleted');
 });
 
+test('desatrelar as conexões de um produto registra uma trilha por conexão', async () => {
+ const handler = routes()['DELETE /api/products/:id/attachments'];
+ const outro = { ...binding, id: '22222222-2222-4222-8222-222222222222', resource_type: 'frontend' };
+ const queries = [];
+ const client = { query: async (sql, values) => {
+  queries.push({ sql, values });
+  if (sql.startsWith('SELECT id,name FROM products')) return { rows: [{ id: 'skiller' }] };
+  if (sql.includes('FOR UPDATE')) return { rows: [binding, outro] };
+  return { rows: [] };
+ } };
+ const result = await handler({ client, params: { id: 'skiller' }, operator: { subject: 'google:ops' } });
+ assert.equal(result.detached_resources, 2);
+ assert.equal(queries.filter(item => item.sql.includes('INSERT INTO product_resource_audit')).length, 2);
+});
+
+// O CHECK da 022 recusa qualquer outra ação e derruba a transação inteira: foi assim
+// que 'detached' deixou "Desatrelar conexões" quebrado sem ninguém perceber.
+test('toda ação de auditoria do módulo existe no CHECK do banco', async () => {
+ const { readFileSync } = await import('node:fs');
+ const modulo = readFileSync('apps/api/src/modules/product-resource-bindings.mjs', 'utf8');
+ const schema = readFileSync('db/schema.sql', 'utf8');
+ const aceitas = new Set(schema.match(/action text NOT NULL CHECK\(action IN \(([^)]+)\)\)/g)
+  .flatMap(trecho => trecho.match(/'[a-z_]+'/g)).map(valor => valor.slice(1, -1)));
+ // Todo texto entre aspas dentro de uma chamada de audit() é ação: os outros argumentos são valores.
+ const usadas = [...modulo.matchAll(/\baudit\((.+?)\);/gs)].flatMap(m => (m[1].match(/'[a-z_]+'/g) || []).map(v => v.slice(1, -1)));
+ assert.ok(usadas.length >= 4, `o módulo precisa continuar gravando trilha, encontradas: ${usadas}`);
+ for (const acao of usadas) assert.ok(aceitas.has(acao), `ação "${acao}" não é aceita pelo CHECK: ${[...aceitas]}`);
+});
+
 test('recusa URL sem HTTPS', async () => {
  const handler = routes()['PUT /api/product-resource-bindings'];
  await assert.rejects(() => handler({ client: {}, body: {
