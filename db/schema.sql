@@ -59,22 +59,40 @@ CREATE TABLE IF NOT EXISTS service_deploy_bindings (
  PRIMARY KEY(provider, external_project_id)
 );
 CREATE INDEX IF NOT EXISTS service_deploy_bindings_engagement ON service_deploy_bindings(engagement_id);
+-- Conexão técnica confirmada. Desde a 034 ela tem UM dono: item do portfólio OU
+-- contratação. Desvincular é UPDATE active=false, nunca DELETE.
 CREATE TABLE IF NOT EXISTS product_resource_bindings (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(), product_id text NOT NULL REFERENCES products(id),
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), product_id text REFERENCES products(id),
+ engagement_id uuid REFERENCES client_engagements(id),
  resource_type text NOT NULL CHECK(resource_type IN ('repository','frontend','backend','domain','api','worker','database','cache','checkout','email')),
  provider text NOT NULL CHECK(provider IN ('github','vercel','easypanel','hostinger','stripe','asaas','manual')),
  external_id text NOT NULL CHECK(length(external_id) BETWEEN 1 AND 300),
+ external_id_kind text NOT NULL DEFAULT 'provider_id',
  display_name text NOT NULL CHECK(length(display_name) BETWEEN 1 AND 240),
  environment text CHECK(environment IS NULL OR environment IN ('development','staging','production','internal')),
  url text CHECK(url IS NULL OR length(url) BETWEEN 8 AND 1000),
+ active boolean NOT NULL DEFAULT true, deactivated_at timestamptz, unbind_reason text,
+ revision integer NOT NULL DEFAULT 1, actor_subject text, actor_email text,
  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
- UNIQUE(resource_type,provider,external_id)
+ UNIQUE(resource_type,provider,external_id),
+ CONSTRAINT product_resource_bindings_um_dono CHECK (NOT active OR num_nonnulls(product_id, engagement_id) = 1),
+ CONSTRAINT product_resource_bindings_desativacao CHECK (active = (deactivated_at IS NULL)),
+ CONSTRAINT product_resource_bindings_contratacao_tipo CHECK (engagement_id IS NULL OR resource_type NOT IN ('checkout','email')),
+ CONSTRAINT product_resource_bindings_external_id_kind_check CHECK (external_id_kind IN ('provider_id','name')),
+ CONSTRAINT product_resource_bindings_unbind_reason_check CHECK (unbind_reason IS NULL OR length(unbind_reason) BETWEEN 2 AND 1000),
+ CONSTRAINT product_resource_bindings_revision_check CHECK (revision >= 1)
 );
 CREATE INDEX IF NOT EXISTS product_resource_bindings_product_idx ON product_resource_bindings(product_id,resource_type);
+CREATE INDEX IF NOT EXISTS product_resource_bindings_engagement_idx ON product_resource_bindings(engagement_id,resource_type) WHERE active AND engagement_id IS NOT NULL;
 CREATE TABLE IF NOT EXISTS product_resource_audit (
- id uuid PRIMARY KEY DEFAULT gen_random_uuid(), binding_id uuid, product_id text NOT NULL REFERENCES products(id),
- action text NOT NULL CHECK(action IN ('created','updated','deleted')), actor text NOT NULL,
- before_value jsonb, after_value jsonb, created_at timestamptz NOT NULL DEFAULT now()
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), binding_id uuid, product_id text REFERENCES products(id),
+ engagement_id uuid REFERENCES client_engagements(id),
+ action text NOT NULL CHECK(action IN ('created','updated','deleted','deactivated','reactivated','reassigned','detached','migrated')), actor text NOT NULL,
+ actor_subject text, actor_email text, reason text,
+ before_value jsonb, after_value jsonb, created_at timestamptz NOT NULL DEFAULT now(),
+ CONSTRAINT product_resource_audit_reason_check CHECK (reason IS NULL OR length(reason) BETWEEN 2 AND 1000)
 );
 CREATE INDEX IF NOT EXISTS product_resource_audit_product_idx ON product_resource_audit(product_id,created_at DESC);
+CREATE INDEX IF NOT EXISTS product_resource_audit_engagement_idx ON product_resource_audit(engagement_id,created_at DESC) WHERE engagement_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS product_resource_audit_binding_idx ON product_resource_audit(binding_id,created_at DESC);
 COMMIT;
