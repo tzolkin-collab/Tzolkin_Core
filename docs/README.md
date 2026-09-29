@@ -8,6 +8,7 @@ Documentação técnica versionada junto com o código, neste repositório. **N�
 
 | Documento | Responde a |
 |---|---|
+| **[STATUS.md](STATUS.md)** | **Comece aqui.** Qual documento seguir, onde estamos e o checklist único atual |
 | [FEATURES.md](FEATURES.md) | O que funciona hoje, quais limites permanecem e quais mudanças foram consolidadas |
 | [CONTEXT.md](CONTEXT.md) | O que existe hoje, o que foi decidido, o que é proposta e o que está travado esperando decisão |
 | [BACKLOG.md](BACKLOG.md) | O que está aberto, por ordem de risco. Levantado por auditoria em 2026-09-03, com evidência por item |
