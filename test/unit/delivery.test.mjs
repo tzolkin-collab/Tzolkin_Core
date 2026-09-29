@@ -145,7 +145,7 @@ function fakePool({ items = [], engagements = [], comProjeto = new Set() } = {})
    if (sql.startsWith('INSERT INTO delivery_audit')) { if (pool.failAudit) throw Error('private'); audit.push(params); return linhas([]); }
 
    // Ativar o item do portfólio, pelas mesmas colunas e pela mesma trilha do módulo do portfólio.
-   if (sql.startsWith('SELECT id,name,portfolio_kind,brand_family,lifecycle_status')) {
+   if (sql.startsWith('SELECT id,name,portfolio_kind,brand_family,tags,lifecycle_status')) {
     const item = itens.get(params[0]);
     return linhas(item ? [{ id: params[0], ...item }] : []);
    }
@@ -242,7 +242,7 @@ test('HTTP: sessão, CSRF, dono obrigatório, revisões e transação auditada',
   assert.equal(record.repository_name, 'org/repo');
   assert.equal(record.product_lifecycle_status, 'draft');
   assert.equal(record.deployment_status, 'not_observed');
-  assert.deepEqual(record.belongs_to, { kind: 'item', id: 'educare', name: 'Educare', item_kind: 'product', item_kind_label: 'produto', lifecycle_status: 'draft' });
+  assert.deepEqual(record.belongs_to, { kind: 'item', id: 'educare', name: 'Educare', item_kind: 'product', item_kind_label: 'plataforma', lifecycle_status: 'draft' });
   assert.equal(pool.audit.length, 1);
   // A REGRA CENTRAL DA FATIA: item do portfólio não nasce nem é renomeado por aqui.
   assert.ok(!pool.calls.some(sql => /INSERT INTO products/i.test(sql)), 'projeto técnico não inventa item do portfólio');
@@ -278,7 +278,8 @@ test('HTTP: sessão, CSRF, dono obrigatório, revisões e transação auditada',
   assert.equal(pool.portfolio.at(-1)[2], 'activated');
   const jaAtivo = await request(endpoint + '/activate', 'POST', { revision: 3 }, headers);
   assert.equal(jaAtivo.status, 409);
-  assert.match(await mensagem(jaAtivo), /produto já está ativo/);
+  // Sem "Este produto/plataforma": o rótulo do tipo muda de gênero, o nome do item não.
+  assert.match(await mensagem(jaAtivo), /Educare já está ativo/);
 
   // EXCLUIR VIROU ARQUIVAR: o verbo DELETE não existe mais nesta rota.
   assert.equal((await request(endpoint, 'DELETE', null, headers)).status, 405);
@@ -415,7 +416,7 @@ const clienteDeAtivacao = ({ role = 'owner', projetoLido, item, pronto = true })
   sqls.push(sql);
   if (sql.startsWith('SELECT role FROM operator_accounts')) return linhas([{ role }]);
   if (sql.startsWith('SELECT d.id,d.product_id')) return linhas(projetoLido ? [{ ...structuredClone(projetoLido), ...Object.fromEntries(PRONTIDAO.map(c => [c, pronto])) }] : []);
-  if (sql.startsWith('SELECT id,name,portfolio_kind,brand_family,lifecycle_status')) return linhas(item ? [{ id: values[0], ...item }] : []);
+  if (sql.startsWith('SELECT id,name,portfolio_kind,brand_family,tags,lifecycle_status')) return linhas(item ? [{ id: values[0], ...item }] : []);
   if (sql.startsWith("UPDATE products SET lifecycle_status='active'")) return linhas([{ id: values[0], ...item, lifecycle_status: 'active', revision: item.revision + 1 }]);
   if (sql.startsWith('INSERT INTO portfolio_audit')) { trilha.push(values); return linhas([]); }
   throw Error('SQL inesperado: ' + sql.trim().slice(0, 80));
@@ -454,7 +455,7 @@ test('ativar pelo checklist é o mesmo ato do Portfólio: permissão de dono, ti
   clienteParcial.sqls.push(sql);
   if (sql.startsWith('SELECT role FROM operator_accounts')) return linhas([{ role: 'owner' }]);
   if (sql.startsWith('SELECT d.id,d.product_id')) return linhas([{ ...semEmail, ...parcial }]);
-  if (sql.startsWith('SELECT id,name,portfolio_kind,brand_family,lifecycle_status')) return linhas([{ id: values[0], ...item }]);
+  if (sql.startsWith('SELECT id,name,portfolio_kind,brand_family,tags,lifecycle_status')) return linhas([{ id: values[0], ...item }]);
   throw Error('SQL inesperado: ' + sql.trim().slice(0, 80));
  } };
  await assert.rejects(() => chamar(clienteParcial), e => e.status === 409 && /E-mails/.test(e.message));
@@ -466,7 +467,7 @@ test('ativar pelo checklist é o mesmo ato do Portfólio: permissão de dono, ti
 
  // Item já ativo, item arquivado e projeto arquivado: cada um com a sua recusa.
  await assert.rejects(() => chamar(clienteDeAtivacao({ projetoLido, item: { ...item, lifecycle_status: 'active' } })),
-  e => e.status === 409 && /linha de serviço já está ativ/.test(e.message));
+  e => e.status === 409 && /Skiller já está ativo/.test(e.message));
  await assert.rejects(() => chamar(clienteDeAtivacao({ projetoLido, item: { ...item, lifecycle_status: 'archived' } })),
   e => e.status === 409 && /Portfólio/.test(e.message));
  await assert.rejects(() => chamar(clienteDeAtivacao({ projetoLido: { ...projetoLido, specification: { ...projetoLido.specification, archived_at: '2026-01-01T00:00:00.000Z' } }, item })),
@@ -486,6 +487,8 @@ test('o checklist só pergunta o que o tipo do dono pode responder', () => {
  const comercial = ['identity', 'source', 'services', 'deploy', 'emails', 'checkout', 'contracts'];
  assert.deepEqual(chaves('product'), comercial);
  assert.deepEqual(chaves('platform'), comercial);
+ // Consultoria e assessoria é trabalho sob contrato, como a linha de serviço.
+ assert.deepEqual(chaves('advisory'), chaves('service_line'));
  // Linha de serviço vende por contrato, não por checkout: sem oferta e sem contrato de acesso.
  assert.deepEqual(chaves('service_line'), ['identity', 'source', 'services', 'deploy', 'emails']);
  // Item interno não fala com cliente nenhum.

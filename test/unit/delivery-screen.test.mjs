@@ -88,8 +88,10 @@ test('Conexões e as abas dos provedores leem o mesmo cadastro, e recarregam dep
 // O dono oferecido é o mesmo cadastro da tela de Conexões, com o tipo já traduzido
  // pelo dicionário que vive no app.js — delivery.js não tem uma cópia dele.
  assert.match(app, /owners:\(\)=>\(\{/);
- assert.match(app, /kind_label:PORTFOLIO_KIND_LABELS\[item\.portfolio_kind\]/);
- assert.ok(!/PORTFOLIO_KIND_LABELS/.test(delivery), 'o dicionário de tipos não pode existir em dois lugares');
+ assert.match(app, /kind_label:kindInfo\(item\.portfolio_kind\)\?\.label/);
+ // Os tipos vêm da API (registro em catalog.mjs); nem o painel nem esta tela guardam
+ // um dicionário próprio.
+ assert.ok(!/PORTFOLIO_KIND_LABELS|KIND_INFO|KIND_ORDER/.test(app + delivery), 'o dicionário de tipos não pode existir no painel');
 });
 
 test('a tela de projetos técnicos não pede mais exclusão a ninguém', () => {

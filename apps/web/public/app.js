@@ -66,7 +66,7 @@ const CONTEXTS = {
    emails: { title: 'E-mails', section: 'view-emails', metrics:false },
    client: { title: 'Cliente', section: 'view-client', hidden:true, metrics:false },
    // PORTFÓLIO — o que a TZOLKIN tem para vender.
-   products: { title: 'Portfólio', section: 'view-products', action: ['Vincular cliente', 'entitlement-dialog'] },
+   products: { title: 'Portfólio', section: 'view-products', action: ['Novo espaço', 'space-dialog'] },
    // ENTREGA — o trabalho contratado e o andamento dele.
    services: { title: 'Serviços', section: 'view-services', metrics:false },
    tracking: { title: 'Acompanhamento', section: 'view-tracking', metrics:false },
@@ -119,7 +119,7 @@ const views = () => CONTEXTS[contextKind()].views;
 const VIEW_CAPABILITIES = {'product-inbound':['commercial','operate'],'product-keys':['access','commercial'],'product-orgs':['access'],'product-engagements':['commercial'],'product-payments':['checkout'],'product-receivables':['contract_billing']};
 const contextProduct = () => state.product?.product || state.overview?.products?.find(product => product.id === state.context) || null;
 const hasCapability = (product, capability) => Boolean(product?.capabilities?.includes(capability));
-const contextKindLabel = () => PORTFOLIO_KIND_LABELS[contextProduct()?.portfolio_kind] || 'Produto';
+const contextKindLabel = () => kindLabelOf(contextProduct()?.portfolio_kind);
 // Enquanto as capacidades não chegam, só aparecem as telas que não dependem de nenhuma.
 const viewAllowed = key => {
  if (contextKind() !== 'product' || !VIEW_CAPABILITIES[key]) return true;
@@ -430,7 +430,13 @@ const CLIENT_LABELS={
 };
 const clientLabel=value=>CLIENT_LABELS[value]||value||'A classificar';
 // Separado de CLIENT_LABELS: lá `product` é modalidade de contratação e `internal` é tipo de relacionamento.
-const PORTFOLIO_KIND_LABELS={product:'Produto',platform:'Plataforma',service_line:'Linha de serviço',internal:'Interno'};
+// Os TIPOS do portfólio (rótulo, plural, ícone, texto e ordem) vêm da API, junto do
+// resto do painel (portfolio_kinds em /api/overview): o painel não guarda dicionário
+// próprio. 'kind_aliases' diz que nome antigo virou qual ('product' → 'platform').
+const kindRegistry=()=>state.overview?.portfolio_kinds||[];
+const canonKind=kind=>state.overview?.kind_aliases?.[kind]||kind;
+const kindInfo=kind=>kindRegistry().find(item=>item.kind===canonKind(kind))||null;
+const kindLabelOf=kind=>kindInfo(kind)?.label||'Item';
 
 function renderTenants() {
  const overview = state.overview;
@@ -550,7 +556,7 @@ function clientEngagement(engagement,summary){
  head.append(copy,node('span',clientLabel(engagement.status),'status '+(['active','planned'].includes(engagement.status)?'active':'building')));
  const links=node('div',undefined,'client-engagement-links'),item=engagement.product;
  if(item){
-  const kind=PORTFOLIO_KIND_LABELS[item.portfolio_kind]||'Item';
+  const kind=kindLabelOf(item.portfolio_kind);
   // Item arquivado não abre contexto: o seletor só conhece ativos e rascunhos.
   if(['active','draft'].includes(item.lifecycle_status)){const open=node('button',undefined,'table-action');open.type='button';open.append(createIcon('package'),document.createTextNode(`${kind}: ${item.name}`));open.onclick=()=>openProductModule(item,'product').catch(reportError);links.append(open);}
   else links.append(node('span',`${kind}: ${item.name} · arquivado`,'detail'));
@@ -651,7 +657,7 @@ function fillEngagementProducts(){
  // Mesma regra de validarContratacao: item ativo com a capacidade do tipo. O servidor confere de novo.
  const capability=model==='product'?'product_engagement':'commercial';
  const items=(state.overview?.products||engagementItems||[]).filter(item=>item.lifecycle_status==='active'&&hasCapability(item,capability));
- select.replaceChildren(option('',model==='product'?'Selecione o produto':'Sem item do portfólio'),...items.map(item=>option(item.id,`${item.name} · ${PORTFOLIO_KIND_LABELS[item.portfolio_kind]||'Item'}`)));
+ select.replaceChildren(option('',model==='product'?'Selecione o produto':'Sem item do portfólio'),...items.map(item=>option(item.id,`${item.name} · ${kindLabelOf(item.portfolio_kind)}`)));
  select.required=model==='product';
  if(items.some(item=>item.id===previous))select.value=previous;
 }
@@ -697,19 +703,11 @@ const portfolioCount=product=>{
  if(hasCapability(product,'commercial')){const n=ov.engagements.filter(e=>e.product_id===product.id&&!e.archived_at&&['planned','active','paused'].includes(e.status)).length;return {n,text:`${n} ${n===1?'contratação em curso':'contratações em curso'}`};}
  return null;
 };
-const kindLabel=product=>PORTFOLIO_KIND_LABELS[product?.portfolio_kind]||'Produto';
-// Como o portfólio se organiza na tela: ordem, nome no plural, ícone e o que cada tipo
-// É (vocabulário da ADR 0007). O que cada tipo PODE fazer vem das capacidades que o
-// servidor devolve em cada item, nunca desta tabela.
-const KIND_ORDER=['product','platform','service_line','internal'];
-const KIND_INFO={
- product:{plural:'Produtos',icon:'package',what:'Software que o cliente usa. Se cancelar, perde o acesso.'},
- platform:{plural:'Plataformas',icon:'layers',what:'O cliente assina o conteúdo que roda nela.'},
- service_line:{plural:'Linhas de serviço',icon:'briefcase',what:'Trabalho feito por pessoas, sob contrato. Se cancelar, o cliente fica com o que foi entregue.'},
- internal:{plural:'Interno',icon:'settings',what:'Software da própria TZOLKIN. Não se vende.'},
-};
+const kindLabel=product=>kindLabelOf(product?.portfolio_kind);
+// A ordem, o plural, o ícone e o texto de cada tipo vêm do registro da API (kindInfo).
+// O que cada tipo PODE fazer vem das capacidades que o servidor devolve em cada item.
 const CAPABILITY_LABELS={access:'Dá acesso pelo Core',checkout:'Vende por oferta e checkout',contract_billing:'Cobra por contrato (Recebimentos)',commercial:'Captação e contratações'};
-const byKind=products=>KIND_ORDER.map(kind=>({kind,items:products.filter(p=>(KIND_INFO[p.portfolio_kind]?p.portfolio_kind:'product')===kind)})).filter(group=>group.items.length);
+const byKind=products=>kindRegistry().map(info=>({kind:info.kind,items:products.filter(p=>canonKind(p.portfolio_kind)===info.kind)})).filter(group=>group.items.length);
 
 // A ficha da empresa recebe o deploy da contratação com as chaves antigas
 // (external_project_*). Traduz para a forma do registro único e usa o MESMO
@@ -807,11 +805,13 @@ function renderGeneral() {
   const count = portfolioCount(product);
   const body = node('div', undefined, 'product-card-body');
   body.append(node('h3', product.name), node('p', [count?.text, product.id].filter(Boolean).join(' · ')));
+  if (product.tags?.length) { const tags = node('div', undefined, 'card-tags'); for (const tag of product.tags) tags.append(node('span', tag, 'status')); body.append(tags); }
   const published=publishedDeployUrl(product),lifecycle=productLifecycle(product),isDraft=Boolean(lifecycle.unproven),live=isDraft?(published||null):productLiveUrl(product),stateBadge=node('span',lifecycle.label,'status '+lifecycle.tone);body.append(stateBadge,node('small',lifecycle.next,'product-next-action'));card.append(productFavicon(productFaviconUrl(product)), body);
   const open = node('button', 'Abrir gestão →', 'table-action');
   open.type = 'button';
   open.onclick = () => openProductModule(product,'product').catch(reportError);
   card.append(open);
+  const editar = node('button', 'Editar', 'table-action'); editar.type = 'button'; editar.onclick = () => abrirEspaco(product); card.append(editar);
   // Atalho só para o que o tipo tem: cobrança por checkout, ou recebimentos por contrato.
   const atalho=hasCapability(product,'checkout')?['Cobrança e e-mails','product-payments']:hasCapability(product,'contract_billing')?['Recebimentos','product-receivables']:null;
   if(atalho){const configure=node('button',atalho[0],'table-action');configure.type='button';configure.onclick=()=>openProductModule(product,atalho[1]).catch(reportError);card.append(configure);}
@@ -819,15 +819,17 @@ function renderGeneral() {
   return card;
  };
  // Agrupado por tipo: a estrutura da tela mostra o que cada item é e o que pode fazer.
- $('product-catalog').replaceChildren(...byKind(overview.products).map(({kind,items})=>{
-  const info=KIND_INFO[kind],section=node('section',undefined,'portfolio-kind'),head=node('header',undefined,'portfolio-kind-head'),icon=node('span',undefined,'portfolio-kind-icon');
+ // Todos os tipos aparecem, mesmo vazios: quem cadastra precisa ver onde o espaço novo cabe.
+ $('product-catalog').replaceChildren(...kindRegistry().map(info=>{
+  const kind=info.kind,items=overview.products.filter(p=>canonKind(p.portfolio_kind)===kind),section=node('section',undefined,'portfolio-kind'),head=node('header',undefined,'portfolio-kind-head'),icon=node('span',undefined,'portfolio-kind-icon');
   section.setAttribute('aria-label',info.plural);
   icon.append(createIcon(info.icon));
   const title=node('h3',info.plural);title.append(node('small',String(items.length)));
-  const caps=node('div',undefined,'portfolio-kind-caps'),podem=(items[0].capabilities||[]).filter(c=>CAPABILITY_LABELS[c]);
-  caps.append(...(podem.length?podem.map(c=>node('span',CAPABILITY_LABELS[c],'status')):[node('span','Só é operado','status')]));
+  const caps=node('div',undefined,'portfolio-kind-caps'),podem=(items[0]?.capabilities||[]).filter(c=>CAPABILITY_LABELS[c]);
+  if(items.length)caps.append(...(podem.length?podem.map(c=>node('span',CAPABILITY_LABELS[c],'status')):[node('span','Só é operado','status')]));
   head.append(icon,title,node('p',info.what),caps);
-  const grid=node('div',undefined,'product-grid');grid.append(...items.map(portfolioCard));
+  const grid=node('div',undefined,'product-grid');
+  if(items.length)grid.append(...items.map(portfolioCard));else grid.append(node('p','Nenhum espaço deste tipo ainda.','empty-list'));
   section.append(head,grid);return section;
  }));
 
@@ -1089,7 +1091,7 @@ function renderProductRecord(product) {
  const panel = node('div', undefined, 'context-card product-record-card');
  // Linha de serviço: vende por proposta, sem checkout nem acesso de usuários.
  const serviceLine=!hasCapability(product,'checkout')&&hasCapability(product,'commercial');
- const kicker=(PORTFOLIO_KIND_LABELS[product.portfolio_kind]||'Produto').toUpperCase();
+ const kicker=kindLabelOf(product.portfolio_kind).toUpperCase();
  const recordActions=serviceLine?[['Captação inbound','product-inbound','user-plus'],['Contratações','product-engagements','briefcase'],['Chaves de integração','product-keys','lock'],['E-mails','product-emails','mail']]:hasCapability(product,'checkout')?[['Cobrança','product-payments','wallet'],['E-mails','product-emails','mail']]:[];
  const lifecycle=productLifecycle(product),appearsDraft=productUnproven(product),live=appearsDraft?(publishedDeployUrl(product)||null):productLiveUrl(product);const identity=node('div',undefined,'product-record-identity');identity.append(productFavicon(productFaviconUrl(product)),node('div'));identity.lastChild.append(node('span',kicker,'overview-kicker'),node('h2', product.name), node('p', 'Identificador: ' + product.id, 'detail'));panel.append(identity);
  const actions=node('div',undefined,'product-record-actions');for(const [label,view,icon] of recordActions){const button=node('button',undefined,'secondary');button.type='button';button.append(createIcon(icon),document.createTextNode(label));button.onclick=()=>switchView(view);actions.append(button);}const detach=node('button','Desatrelar conexões','quiet');detach.type='button';detach.onclick=async()=>{if(!window.confirm(`Desatrelar domínios, bancos e deploys de ${product.name}? Nenhum dado externo será apagado.`))return;detach.disabled=true;try{await api(`/api/products/${encodeURIComponent(product.id)}/attachments`,'DELETE');state.resourceBindings=state.resourceBindings.filter(item=>item.product_id!==product.id);state.topology=await api('/api/products/topology').catch(()=>null);renderProductRecord(product);}catch(error){detach.disabled=false;reportError(error);}};actions.append(detach);panel.append(actions);
@@ -1104,7 +1106,7 @@ function renderProductRecord(product) {
  } else {
   panel.append(node('p', 'Sem ficha no catálogo importado do Notion. Nada foi inferido para preencher este espaço.', 'context-description'));
  }
- const facts=node('div',undefined,'product-record-facts');for(const [label,value] of (serviceLine?[['Tipo','Linha de serviço'],['Entrada','Formulário inbound ou proposta'],['Cobrança','Fora do checkout']]:[['Tipo',PORTFOLIO_KIND_LABELS[product.portfolio_kind]||'Produto'],['Estado operacional',lifecycle.label],['Família',product.brand_family||'TZOLKIN']])){const fact=node('div');fact.append(node('span',label),node('strong',String(value)));facts.append(fact);}panel.append(facts);
+ const facts=node('div',undefined,'product-record-facts');for(const [label,value] of (serviceLine?[['Tipo',kindLabelOf(product.portfolio_kind)],['Entrada','Formulário inbound ou proposta'],['Cobrança','Fora do checkout']]:[['Tipo',kindLabelOf(product.portfolio_kind)],['Estado operacional',lifecycle.label],['Família',product.brand_family||'TZOLKIN']])){const fact=node('div');fact.append(node('span',label),node('strong',String(value)));facts.append(fact);}panel.append(facts);
  const connection=node('section',undefined,'product-connection-card'),deployment=readyDeployment(product),project=state.deploys.find(item=>deploymentBelongsToProduct(item,product));connection.append(node('h3','Conexão de deploy'),node('p',deployment?`${project?.project||'Projeto'} · ${project?.provider==='vercel'?'Vercel':'EasyPanel'} · READY observado`:'Nenhum deploy READY vinculado a este item.','detail'));const connectionActions=node('div',undefined,'product-connection-actions');if(deployment?.url)connectionActions.append(catalogLink('Abrir produção ↗',deployment.url,'product-live-link'));const openDeploys=node('button','Ver projetos e deploys →','secondary');openDeploys.type='button';openDeploys.onclick=()=>{state.context='';state.view='deploys';clearRenderedData();renderContextChrome();renderNav();load().catch(reportError);};connectionActions.append(openDeploys);connection.append(connectionActions);panel.append(connection);
  panel.append(renderProductArchitecture(product));
  $('product-record').replaceChildren(panel);
@@ -1241,7 +1243,7 @@ function renderContextPicker(products) {
  currentCopy.replaceChildren(node('strong',current?.name||'TZOLKIN'),node('small',current?detalhe(current):'Gestão geral'));
  const choice=(id,label,detail,icon)=>{const button=node('button',undefined,'context-option'+(id===state.context?' active':''));button.type='button';button.setAttribute('aria-current',id===state.context?'true':'false');const mark=node('span',undefined,'context-option-icon');mark.append(icon);const copy=node('span',undefined,'context-option-copy');copy.append(node('strong',label),node('small',detail));button.append(mark,copy);button.onclick=()=>{picker.open=false;if(id!==state.context)switchContext(id).catch(reportError);};return button;};
  const general=choice('','TZOLKIN','Gestão geral',coreSpaceIcon());
- const productChoices=byKind(products).flatMap(({kind,items})=>[node('span',KIND_INFO[kind].plural,'context-group-label'),...items.map(product=>choice(product.id,product.name,productLifecycle(product).label,productFavicon(productFaviconUrl(product))))]);
+ const productChoices=byKind(products).flatMap(({kind,items})=>[node('span',kindInfo(kind).plural,'context-group-label'),...items.map(product=>choice(product.id,product.name,productLifecycle(product).label,productFavicon(productFaviconUrl(product))))]);
  options.replaceChildren(general,...productChoices);
 }
 
@@ -1315,6 +1317,24 @@ async function ensureDirectory() {
 
 /* ---------- formulários ---------- */
 
+// Abre o cadastro de um espaço do portfólio: novo (sem item) ou edição (com o item).
+// Os tipos e o texto de cada um vêm do registro da API.
+function abrirEspaco(item) {
+ const form = $('space-form'), select = form.elements.portfolio_kind;
+ select.replaceChildren(...kindRegistry().map(info => option(info.kind, info.label)));
+ const sincronizar = () => {
+  const info = kindInfo(select.value);
+  $('space-kind-help').textContent = info?.what || '';
+  $('space-tags-field').hidden = !info?.tags;
+ };
+ select.onchange = sincronizar;
+ $('space-title').textContent = item ? 'Editar espaço' : 'Novo espaço';
+ openDialog('space-dialog', item ? { id: item.id, name: item.name, portfolio_kind: canonKind(item.portfolio_kind), tags: item.tags || [], revision: item.revision } : undefined);
+ form.elements.namedItem('id').readOnly = Boolean(item);
+ ensureDirectory().then(sincronizar).catch(() => {});
+ sincronizar();
+}
+
 function openDialog(id, values) {
  const dialog = $(id);
  const form = dialog.querySelector('form');
@@ -1365,6 +1385,13 @@ function bindForm(id, handler) {
 }
 
 bindForm('login-form', body => api('/api/login', 'POST', { password: body.password }));
+// Espaço do portfólio: criar (POST) ou editar (PUT, com a revisão que a tela leu). O
+// identificador não muda depois de criado; o servidor confere tipo, tags e revisão.
+bindForm('space-form', body => {
+ const campos = { name: body.name, portfolio_kind: body.portfolio_kind, tags: body.tags || '' };
+ if (body.revision) return api('/api/portfolio/' + encodeURIComponent(body.id), 'PUT', { ...campos, revision: Number(body.revision) });
+ return api('/api/portfolio', 'POST', { id: body.id, ...campos });
+});
 bindForm('tenant-form', body => api('/api/tenants', 'POST', body));
 bindForm('stakeholder-form', body => api('/api/stakeholders', 'POST', {...body,is_primary:body.is_primary==='on',contact_allowed:body.contact_allowed==='on'}));
 bindForm('member-form', body => api('/api/memberships', 'PUT', { ...body, active: body.active === 'true' }));
@@ -1379,6 +1406,7 @@ $('new-record').onclick = () => {
  const dialog=views()[state.view].action[1];
  // Deploys não usa <dialog> simples: o assistente do cadastro técnico tem fluxo próprio.
  if(dialog==='delivery-new'){delivery.open(null);return;}
+ if(dialog==='space-dialog'){abrirEspaco(null);return;}
  if(dialog==='tenant-dialog'){
   const relationship=$('tenant-form').elements.relationship_kind;
   if(state.view==='leads') relationship.value='prospect';
@@ -1446,7 +1474,7 @@ const delivery = setupDelivery({ api,openResource:resource.open,onSaved:()=>load
  owners:()=>({
   // O tipo do item vai junto, já traduzido: o dicionário de tipos é daqui, e
   // delivery.js copiá-lo seria a segunda verdade sobre como se chama cada tipo.
-  products:(state.overview?.products||[]).map(item=>({...item,kind_label:PORTFOLIO_KIND_LABELS[item.portfolio_kind]||null})),
+  products:(state.overview?.products||[]).map(item=>({...item,kind_label:kindInfo(item.portfolio_kind)?.label||null})),
   engagements:serviceEngagements(),tenants:state.overview?.tenants||[]}) });
 // Volta de fluxo externo — OAuth da Meta, clique em notificação: `?view=`
 // escolhe a tela inicial e `?meta=` traz o resultado da conexão. Os dois saem

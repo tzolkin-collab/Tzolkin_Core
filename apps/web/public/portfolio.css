@@ -751,3 +751,6 @@
   border: 1px solid var(--line);
   color: var(--text);
 }
+
+/* campo que não muda depois de criado (identificador do espaço): parece travado */
+input[readonly] { background: #f6f7f8; color: var(--muted, #6b7280); cursor: not-allowed; }

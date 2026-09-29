@@ -58,15 +58,26 @@ test('Portfólio: criar', async t => {
   assert.equal(r.type, 'portfolio.created');
   assert.equal(r.body.lifecycle_status, 'draft', 'item novo não entra em venda sem decisão');
   assert.match(client.chamadas[0].sql, /'draft'/);
-  assert.deepEqual(client.chamadas[0].params, ['consultoria-dados', 'Consultoria de dados', 'service_line', 'tzolkin']);
+  assert.deepEqual(client.chamadas[0].params, ['consultoria-dados', 'Consultoria de dados', 'service_line', 'tzolkin', []]);
   assert.match(client.chamadas[1].sql, /INSERT INTO portfolio_audit/);
   assert.equal(client.chamadas[1].params[0], 'product');
   assert.equal(client.chamadas[1].params[2], 'created');
  });
 
- await t.test('aceita os quatro tipos, inclusive interno', async () => {
-  for (const portfolio_kind of ['product', 'platform', 'service_line', 'internal'])
+ await t.test('aceita os quatro tipos, inclusive interno, e grava o nome antigo como plataforma', async () => {
+  for (const portfolio_kind of ['platform', 'service_line', 'advisory', 'internal'])
    assert.equal(_internals.validarItem({ name: 'Item', portfolio_kind }).portfolio_kind, portfolio_kind);
+  // 'product' é o nome antigo de 'platform': continua sendo aceito, e vira 'platform'.
+  assert.equal(_internals.validarItem({ name: 'Item', portfolio_kind: 'product' }).portfolio_kind, 'platform');
+ });
+
+ await t.test('tags: lista ou texto, normalizadas, sem repetição e com limite', async () => {
+  const tags = valor => _internals.validarItem({ name: 'Item', portfolio_kind: 'advisory', tags: valor }).tags;
+  assert.deepEqual(tags(undefined), []);
+  assert.deepEqual(tags('Consultoria, assessoria, consultoria , mentoria de vendas'), ['consultoria', 'assessoria', 'mentoria-de-vendas']);
+  assert.deepEqual(tags(['A1', 'b-2']), ['a1', 'b-2']);
+  for (const invalida of [['x'], ['com acento é'], ['a'.repeat(31)], ['t1','t2','t3','t4','t5','t6','t7','t8','t9'], 42, [{}]])
+   assert.throws(() => tags(invalida), e => e.status === 400, JSON.stringify(invalida));
  });
 
  await t.test('entrada inválida é recusada antes de tocar o banco', async () => {

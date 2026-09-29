@@ -5,25 +5,50 @@ import { fail } from '../platform/http.mjs';
 // O QUE CADA TIPO DE ITEM PODE FAZER (ADR 0007, opção B). A política vive aqui e
 // só aqui: rota nenhuma testa id nem tipo por conta própria. Ciclo de vida é o
 // outro eixo, decidido por quem chama.
+// 'product' é o nome antigo de 'platform': as regras eram idênticas (ADR 0007) e o
+// tipo foi unificado. O valor antigo continua sendo aceito e lido, com as mesmas
+// regras, até o dono migrar as linhas que ainda o usam.
+const SOFTWARE = ['product', 'platform'];
+// Trabalho feito por pessoas, sob contrato ou proposta.
+const TRABALHO = ['service_line', 'advisory'];
+
 export const CAPABILITIES = Object.freeze({
  // contrato de acesso, vínculo de pessoa, chave context:read e /v1/context
- access: ['product', 'platform'],
+ access: SOFTWARE,
  // oferta, template de checkout e checkout público
- checkout: ['product', 'platform'],
+ checkout: SOFTWARE,
  // contratação com service_model = 'product'
- product_engagement: ['product', 'platform'],
+ product_engagement: SOFTWARE,
  // captação comercial, chaves commercial:* e contratações do item
- commercial: ['product', 'platform', 'service_line'],
+ commercial: [...SOFTWARE, ...TRABALHO],
  // cobrança nascida de contrato comercial aceito (ADR 0008): quem vende trabalho
  // por proposta. Produto e plataforma cobram por oferta e checkout.
- contract_billing: ['service_line'],
+ contract_billing: TRABALHO,
  // recursos, deploys, e-mails e campanhas
- operate: ['product', 'platform', 'service_line', 'internal'],
+ operate: [...SOFTWARE, ...TRABALHO, 'internal'],
 });
 
 export const capabilitiesOf = kind => Object.keys(CAPABILITIES).filter(capability => CAPABILITIES[capability].includes(kind));
 
-const KIND_NAMES = { product: 'um produto', platform: 'uma plataforma', service_line: 'uma linha de serviço', internal: 'um item interno' };
+const KIND_NAMES = { product: 'uma plataforma', platform: 'uma plataforma', service_line: 'uma linha de serviço', advisory: 'um espaço de consultoria e assessoria', internal: 'um item interno' };
+
+// O QUE CADA TIPO É, para a tela. É o único lugar com os rótulos, a ordem, o ícone e o
+// texto de cada tipo: o painel os recebe daqui (GET /api/overview e /api/portfolio) em
+// vez de repetir um dicionário próprio. `tags` diz se o tipo se organiza por tags.
+// A ordem do array é a ordem em que o portfólio se apresenta.
+export const KIND_REGISTRY = Object.freeze([
+ { kind: 'platform', label: 'Plataforma', plural: 'Plataformas', icon: 'layers',
+   what: 'Software B2B ou B2C que o cliente usa, muitas vezes por assinatura. Se cancelar, perde o acesso. Ex.: Skiller, Educare.' },
+ { kind: 'service_line', label: 'Linha de serviço', plural: 'Linhas de serviço', icon: 'briefcase',
+   what: 'Trabalho feito por pessoas, sob contrato ou proposta. Se cancelar, o cliente fica com o que foi entregue. Ex.: Sites.' },
+ { kind: 'advisory', label: 'Consultoria e assessoria', plural: 'Consultoria e assessoria', icon: 'people', tags: true,
+   what: 'Consultoria, assessoria e mentoria, organizadas por tags. Trabalho sob contrato.' },
+ { kind: 'internal', label: 'Interno', plural: 'Internos', icon: 'settings',
+   what: 'Software da própria TZOLKIN. Não se vende. Ex.: Core.' },
+]);
+// Nomes antigos que ainda podem estar gravados, e o tipo que passaram a ser.
+export const KIND_ALIASES = Object.freeze({ product: 'platform' });
+export const canonicalKind = kind => KIND_ALIASES[kind] || kind;
 
 // O mesmo tipo, sem o artigo, para rótulo de botão e de tela ("Ativar linha de
 // serviço"). KIND_NAMES carrega o artigo porque entra no meio de uma frase de
@@ -31,7 +56,7 @@ const KIND_NAMES = { product: 'um produto', platform: 'uma plataforma', service_
 // mesma chave, cada um para uma posição na frase — e nenhum deles escrito duas
 // vezes: o checklist de ativação (delivery.mjs) lê deste aqui.
 export const KIND_LABELS = Object.freeze({
- product: 'produto', platform: 'plataforma', service_line: 'linha de serviço', internal: 'item interno',
+ product: 'plataforma', platform: 'plataforma', service_line: 'linha de serviço', advisory: 'consultoria e assessoria', internal: 'item interno',
 });
 const REFUSALS = {
  access: 'não dá acesso de usuários pelo Core',

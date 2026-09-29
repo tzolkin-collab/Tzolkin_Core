@@ -1,6 +1,6 @@
 // Contexto A — gestão geral da TZOLKIN: visão transversal do Core.
 // Retorna o cadastro completo; ainda sem paginação (volume atual é cadastral).
-import { capabilitiesOf } from './catalog.mjs';
+import { KIND_ALIASES, KIND_REGISTRY, canonicalKind, capabilitiesOf } from './catalog.mjs';
 
 // Estado do transporte do banco, em forma consumível. 'unknown' quando não medido:
 // nunca reportar 'tls' sem prova. Não expõe host nem credencial.
@@ -40,7 +40,10 @@ export function workspaceRoutes(router) {
   return reply(200, {
    // A tela monta o seletor e a navegação de cada contexto pelas capacidades;
    // ela não conhece a regra, só a lê daqui (ADR 0007).
-   tenants: tenants.rows, products: products.rows.map(product => ({ ...product, capabilities: capabilitiesOf(product.portfolio_kind) })),
+   // O painel recebe os tipos (rótulo, plural, ícone, texto, ordem) daqui, e o tipo
+   // de cada item já no nome atual: nome antigo ('product') sai como 'platform'.
+   portfolio_kinds: KIND_REGISTRY, kind_aliases: KIND_ALIASES,
+   tenants: tenants.rows, products: products.rows.map(product => ({ ...product, portfolio_kind: canonicalKind(product.portfolio_kind), capabilities: capabilitiesOf(product.portfolio_kind) })),
    memberships: memberships.rows, entitlements: entitlements.rows,
    engagements: engagements.rows, stakeholders: stakeholders.rows,
    // O operador precisa ver, sem procurar, que o banco está em texto claro.

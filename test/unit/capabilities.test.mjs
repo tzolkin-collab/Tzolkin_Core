@@ -48,7 +48,11 @@ test('matriz de capacidades', () => {
  assert.deepEqual(capabilitiesOf('internal'), ['operate']);
  assert.deepEqual(capabilitiesOf('desconhecido'), []);
  // ADR 0008: só linha de serviço cobra a partir de contrato; o resto cobra por oferta.
- assert.deepEqual(CAPABILITIES.contract_billing, ['service_line']);
+ assert.deepEqual(CAPABILITIES.contract_billing, ['service_line', 'advisory']);
+ // Consultoria e assessoria tem as regras de linha de serviço (trabalho sob contrato),
+ // e o nome antigo 'product' tem as de plataforma: só o rótulo mudou.
+ assert.deepEqual(capabilitiesOf('advisory'), capabilitiesOf('service_line'));
+ assert.deepEqual(capabilitiesOf('product'), capabilitiesOf('platform'));
  for (const capacidade of ['access', 'checkout']) {
   assert.ok(!CAPABILITIES[capacidade].includes('service_line'), capacidade);
   assert.ok(!CAPABILITIES[capacidade].includes('internal'), capacidade);
