@@ -45,7 +45,7 @@ export const achatar = inventario => ['github', 'vercel', 'easypanel'].flatMap(p
 
 const mesmoRepo = (a, b) => Boolean(a) && Boolean(b) && String(a).toLowerCase() === String(b).toLowerCase();
 
-const chaveDono = dono => dono.product_id ? `product:${dono.product_id}` : `engagement:${dono.engagement_id}`;
+export const chaveDono = dono => dono.product_id ? `product:${dono.product_id}` : `engagement:${dono.engagement_id}`;
 
 /**
  * Quem já é dono de um recurso, se alguma conexão ativa o reclama.
@@ -139,4 +139,40 @@ export function sugerirDono(recurso, { itens, conexoes, donos, casa }) {
  const [{ candidato, comuns }] = achados;
  return { dono: candidato.dono, rotulo: candidato.rotulo, modelo: candidato.modelo, evidencia: 'nome',
   motivo: `o nome tem «${comuns[0]}», que também está no nome deste dono` };
+}
+
+/**
+ * As sugestões reunidas por dono sugerido: é o que a tela mostra, porque um
+ * repositório e os projetos que saem dele têm de ser vinculados juntos. Cada grupo
+ * traz os recursos com o motivo de cada um; os irmãos do mesmo repositório entram
+ * mesmo quando o nome deles não diria nada.
+ *   grupos     — um dono sugerido, N recursos
+ *   ambiguos   — o nome combina com mais de um dono: o operador escolhe
+ *   restantes  — sem pista nenhuma
+ */
+export function agruparSugestoes(semDono, contexto) {
+ const grupos = new Map(), ambiguos = [], usados = new Set();
+ const id = recurso => `${recurso.provider}:${recurso.id}`;
+ for (const recurso of semDono) {
+  const sugestao = sugerirDono(recurso, contexto);
+  if (sugestao?.dono) {
+   const chave = chaveDono(sugestao.dono);
+   const grupo = grupos.get(chave) || { chave, dono: sugestao.dono, rotulo: sugestao.rotulo, modelo: sugestao.modelo, recursos: [] };
+   grupo.recursos.push({ recurso, motivo: sugestao.motivo, evidencia: sugestao.evidencia });
+   grupos.set(chave, grupo); usados.add(id(recurso));
+  } else if (sugestao?.ambiguo) { ambiguos.push({ recurso, candidatos: sugestao.ambiguo }); usados.add(id(recurso)); }
+ }
+ for (const grupo of grupos.values()) {
+  for (const { recurso } of [...grupo.recursos]) {
+   for (const irmao of irmaosDoRepositorio(recurso, contexto)) {
+    if (usados.has(id(irmao))) continue;
+    grupo.recursos.push({ recurso: irmao, motivo: `sai do mesmo repositório que «${recurso.name}»`, evidencia: 'repositorio' });
+    usados.add(id(irmao));
+   }
+  }
+ }
+ return {
+  grupos: [...grupos.values()].sort((a, b) => b.recursos.length - a.recursos.length || a.rotulo.localeCompare(b.rotulo)),
+  ambiguos, restantes: semDono.filter(recurso => !usados.has(id(recurso))),
+ };
 }

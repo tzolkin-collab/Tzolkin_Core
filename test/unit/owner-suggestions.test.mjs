@@ -3,7 +3,7 @@
 // a heurística por nome que a migração 034 aposentou.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { achatar, termos, sugerirDono, irmaosDoRepositorio } from '../../apps/web/public/owner-suggestions.js';
+import { achatar, termos, sugerirDono, irmaosDoRepositorio, agruparSugestoes } from '../../apps/web/public/owner-suggestions.js';
 
 // O mesmo casamento do painel (connections.js), reproduzido só para o teste.
 const casa = (binding, recurso) => binding.provider === recurso.provider && String(binding.external_id) === String(recurso.id);
@@ -109,4 +109,29 @@ test('dois donos diferentes nos irmãos: ambiguidade, e nenhuma sugestão autom�
   { active: true, provider: 'vercel', external_id: 'v2', engagement_id: 'e-outra', product_id: null },
  ];
  assert.equal(sugerirDono(repo('1'), contexto(conexoes)).ambiguo.length, 2);
+});
+
+test('agruparSugestoes junta o repositório, os projetos irmãos e o que só tem o nome, sob o mesmo dono', () => {
+ const conexoes = [{ active: true, provider: 'vercel', external_id: 'v1', engagement_id: 'e-kali', product_id: null }];
+ const semDono = itens.filter(item => !conexoes.some(b => casa(b, item)));
+ const { grupos, ambiguos, restantes } = agruparSugestoes(semDono, contexto(conexoes));
+ const kali = grupos.find(g => g.dono.engagement_id === 'e-kali');
+ // O repositório, o projeto irmão (mesma origem) e os dois que só têm o nome.
+ assert.deepEqual(kali.recursos.map(r => r.recurso.name).sort(),
+  ['kalidash-admin', 'other / kalidash-api', 'tzolkin-collab/Kalidash_LandingPage_01_-evento-', 'tzolkin-collab/Kalidash_Site']);
+ assert.equal(ambiguos.length, 0);
+ // O que não tem pista nenhuma fica de fora dos grupos, para a tela só contá-lo.
+ assert.ok(restantes.every(r => !kali.recursos.some(x => x.recurso.id === r.id && x.recurso.provider === r.provider)));
+});
+
+test('agruparSugestoes não repete um recurso em dois grupos e não arrasta quem já tem dono', () => {
+ const conexoes = [
+  { active: true, provider: 'vercel', external_id: 'v1', engagement_id: 'e-kali', product_id: null },
+  { active: true, provider: 'vercel', external_id: 'v2', engagement_id: 'e-outra', product_id: null },
+ ];
+ const semDono = itens.filter(item => !conexoes.some(b => casa(b, item)));
+ const { grupos, ambiguos } = agruparSugestoes(semDono, contexto(conexoes));
+ const todos = [...grupos.flatMap(g => g.recursos.map(r => `${r.recurso.provider}:${r.recurso.id}`)), ...ambiguos.map(a => `${a.recurso.provider}:${a.recurso.id}`)];
+ assert.equal(new Set(todos).size, todos.length, 'nenhum recurso em dois lugares');
+ assert.ok(!todos.includes('vercel:v1') && !todos.includes('vercel:v2'), 'quem já tem dono não é sugerido de novo');
 });

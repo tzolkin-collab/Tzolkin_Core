@@ -101,21 +101,15 @@
      por nome. As três listas são estados diferentes da mesma pergunta: quem já tem
      dono, o que o provedor mostra e ninguém reclamou, e o que ficou para trás. -->
 <section id="view-connections" class="view" hidden aria-label="Conexões">
-<div class="section-toolbar"><div><h2 class="section-title">Conexões técnicas</h2><p class="catalog-caption">Cada repositório, deploy, domínio e banco tem um dono só: um item do portfólio ou uma contratação. Desligar guarda o último dono, a data e o motivo; trocar de dono é Reatribuir, com motivo.</p></div><button id="connections-refresh" class="secondary" type="button">Atualizar inventário</button></div>
+<div class="section-toolbar"><div><p class="catalog-caption">O que está ligado a cada cliente, contratação ou item do portfólio, e o que provavelmente deveria estar. O inventário completo de cada provedor fica nas abas Vercel, GitHub e EasyPanel.</p></div><div class="connections-tools"><label class="search-label"><span class="sr-only">Buscar cliente, item ou recurso</span><input id="connections-search" type="search" placeholder="Buscar cliente, item ou recurso…"></label><button id="connections-refresh" class="secondary" type="button">Atualizar inventário</button></div></div>
 <p id="connections-message" class="notice" role="status"></p>
-<div id="connections-summary" class="deploy-summary" aria-label="Resumo das conexões"></div>
-<div id="connections-providers" class="delivery-chips" aria-label="Inventário dos provedores"></div>
-<div id="connections-owned"></div>
-<h2 class="section-title contracts-title">Sem classificar</h2>
-<p class="catalog-caption">O provedor mostra, e nenhuma conexão reclama. Escolher o dono aqui é o que transforma observação em registro.</p>
-<div id="connections-unclassified" class="list-panel"></div>
-<h2 class="section-title contracts-title">Projetos técnicos e ativação</h2>
-<p class="catalog-caption">O cadastro técnico de cada item do portfólio ou contratação: repositório, serviços e destinos. É aqui que o checklist de ativação é conferido e que o item é ativado. Para começar por um repositório, abra a aba GitHub.</p>
 <p id="delivery-message" class="notice" role="status"></p>
-<div id="delivery-list" class="deploy-grid"></div>
-<h2 class="section-title contracts-title">Desligadas</h2>
-<p class="catalog-caption">A linha continua, sem dono ativo. É dela que Reatribuir parte quando alguém decide de quem o recurso passa a ser.</p>
-<div id="connections-inactive" class="list-panel"></div>
+<div id="connections-providers" class="delivery-chips" aria-label="Inventário dos provedores"></div>
+<div id="connections-suggestions"></div>
+<h2 class="section-title contracts-title">Conectado</h2>
+<div id="connections-owned"></div>
+<div id="connections-orphans"></div>
+<details class="connection-inactive"><summary>Desligadas (<span id="connections-inactive-count">0</span>)</summary><p class="catalog-caption">A linha continua, sem dono ativo. Reatribuir parte dela quando alguém decide de quem o recurso passa a ser.</p><div id="connections-inactive" class="list-panel"></div></details>
 <dialog id="connection-reason-dialog"><form id="connection-reason-form" novalidate>
 <div class="dialog-heading"><h2 id="connection-reason-title">Desvincular conexão</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div>
 <p id="connection-reason-subject" class="detail"></p>
@@ -133,7 +127,7 @@
 </section>
 
 <section id="view-vercel" class="view" hidden aria-label="Vercel">
-<div class="section-toolbar deploy-intro"><div><h2>Vercel</h2><p>Projetos e histórico de deploys. Abra o projeto para ver configuração e domínios aqui no Core.</p></div><span class="catalog-caption" id="deploys-caption"></span></div>
+<div class="section-toolbar deploy-intro"><div><p>Projetos e histórico de deploys. Abra o projeto para ver configuração e domínios aqui no Core.</p></div><span class="catalog-caption" id="deploys-caption"></span></div>
 <div id="deploys-summary" class="deploy-summary" aria-label="Resumo dos projetos consultados"></div>
 <div class="deploy-filters"><label class="deploy-search"><span>Buscar projeto, branch ou commit</span><input id="deploy-search" type="search" placeholder="Ex.: website, main, abc1234"></label><label><span>Último deploy do projeto</span><select id="deploy-filter"><option value="all">Todos os estados</option><option value="ready">Pronto</option><option value="progress">Em andamento</option><option value="failed">Falhou ou foi interrompido</option><option value="unknown">Sem estado confirmado</option></select></label><span id="deploy-results" class="catalog-caption" role="status"></span></div>
 <div id="deploys-status"></div>
@@ -142,18 +136,18 @@
 </section>
 
 <section id="view-easypanel" class="view" hidden aria-label="EasyPanel">
-<div class="section-toolbar deploy-intro"><div><h2>EasyPanel</h2><p>Projetos e serviços da infraestrutura. Abra um serviço para ver configuração, domínios, métricas, containers, logs, volumes e backups; operações remotas pedem confirmação.</p></div></div>
+<div class="section-toolbar deploy-intro"><div><p>Projetos e serviços da infraestrutura. Abra um serviço para ver configuração, domínios, métricas, containers, logs, volumes e backups; operações remotas pedem confirmação.</p></div></div>
 <div id="easypanel-inventory" class="deploy-grid"></div>
 </section>
 
 <section id="view-github" class="view" hidden aria-label="GitHub">
-<div class="section-toolbar"><div><h2>GitHub</h2><p class="delivery-subtitle">Repositórios que a credencial do Core alcança. Configurar um repositório abre o cadastro técnico; o dono de cada projeto e o checklist de ativação ficam em Conexões.</p></div></div>
+<div class="section-toolbar"><div><p class="delivery-subtitle">Repositórios que a credencial do Core alcança. Configurar um repositório abre o cadastro técnico; o dono de cada projeto e o checklist de ativação ficam em Conexões.</p></div></div>
 <div id="delivery-provider-status" class="delivery-chips" aria-label="Conexões"></div>
 <section class="delivery-repo-panel" aria-label="Repositórios do GitHub"><div class="section-toolbar"><h3>Seus repositórios <span id="delivery-repo-count" class="status"></span></h3><label class="delivery-search"><span class="sr-only">Buscar nos repositórios</span><input id="delivery-repository-search" type="search" placeholder="Buscar organização ou repositório"></label></div><div id="delivery-repositories"></div></section>
 </section>
 
 <section id="view-dns" class="view" hidden aria-label="DNS">
-<div class="section-toolbar"><div><h2>DNS</h2><p class="catalog-caption">Zonas de DNS por provedor. Hoje só a Hostinger está conectada; outro provedor entra como uma nova seção nesta tela, sem mudar a navegação.</p></div></div>
+<div class="section-toolbar"><div><p class="catalog-caption">Zonas de DNS por provedor. Hoje só a Hostinger está conectada; outro provedor entra como uma nova seção nesta tela, sem mudar a navegação.</p></div></div>
 <section id="management-dns" class="management-panel"></section>
 </section>
 

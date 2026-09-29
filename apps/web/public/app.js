@@ -15,7 +15,8 @@ import {setupProductEmails} from './product-emails.js';
 import {renderDatabaseWorkspace} from './management-workspace.js';
 import {setupCampaigns} from './campaigns.js';
 import {setupConnections, casaConexao} from './connections.js';
-import {achatar, sugerirDono} from './owner-suggestions.js';
+import {achatar} from './owner-suggestions.js';
+import {vinculoNaLista} from './owner-link.js';
 // Ficha da empresa por callback: os módulos não importam app.js (evita ciclo).
 const commercial=setupCommercial({api,openTenant:id=>openClient(id)});
 const billing=setupBilling({api});
@@ -28,7 +29,9 @@ const finance=setupFinance({api});
 const tracking=setupTracking({api,openTenant:id=>openClient(id)});
 // Conexões devolve a lista ativa ao painel: quem confirma um deploy aqui muda o
 // endereço público do item no portfólio, e a tela ao lado não pode ficar velha.
-const connections=setupConnections({api,openTenant:id=>openClient(id),openProduct:id=>switchContext(id).catch(reportError),onChanged:async ativas=>{
+const connections=setupConnections({api,openTenant:id=>openClient(id),openProduct:id=>switchContext(id).catch(reportError),
+ projectFor:dono=>delivery.projectFor(dono),openProject:project=>delivery.open(project),activateProject:project=>delivery.activate(project),goTo:view=>switchView(view),
+ onChanged:async ativas=>{
  state.resourceBindings=ativas;
  state.topology=await api('/api/products/topology').catch(()=>state.topology);
  if(state.overview)renderGeneral();
@@ -305,7 +308,7 @@ function switchView(view) {
  if (view === 'product-receivables'&&state.product) serviceReceivables.load(state.product.product).catch(reportError);
  if (view === 'product-emails'&&state.product) productEmails.load({...state.product.product,deploy_url:publishedDeployUrl(state.product.product),favicon_url:productFaviconUrl(state.product.product)}).catch(reportError);
  // Conexões (projetos técnicos) e GitHub (repositórios) leem o mesmo cadastro.
- if (view === 'connections' || view === 'github') delivery.load().catch(reportError);
+ if (['connections','github','vercel','easypanel'].includes(view)) delivery.load().catch(reportError);
  if (view === 'connections') loadConnections();
  if (view === 'campaigns') campaigns.load().catch(reportError);
  if (view === 'product-campaigns'&&state.product) campaigns.loadProduct(state.product.product).catch(reportError);
@@ -824,6 +827,23 @@ function renderGeneral() {
  if (!overview.memberships.length) $('members').append(node('p', 'Nenhuma pessoa vinculada a um cliente.', 'empty-list'));
 }
 
+/* ---------- vínculo de recurso a dono, nas abas dos provedores ---------- */
+
+const rotuloDoDonoDe = binding => binding.product_id ? state.overview?.products?.find(p => p.id === binding.product_id)?.name
+ : state.overview?.engagements?.find(e => e.id === binding.engagement_id)?.label;
+const contextoDeVinculo = inventario => ({
+ itens: achatar(inventario || delivery.inventory()),
+ conexoes: state.resourceBindings.filter(b => b.active !== false),
+ donos: { products: state.overview?.products || [], engagements: serviceEngagements(), tenants: state.overview?.tenants || [] },
+ casa: casaConexao,
+});
+// Vincular numa aba recarrega as conexões e redesenha tudo o que as mostra.
+async function atualizarVinculos() {
+ state.resourceBindings = (await api('/api/product-resource-bindings')).bindings || [];
+ await delivery.load();
+}
+const vinculoNoProvedor = (recurso, inventario) => vinculoNaLista({ recurso, contexto: contextoDeVinculo(inventario), api, aoVincular: atualizarVinculos, rotuloDoDono: rotuloDoDonoDe });
+
 /* ---------- deploys (leitura de provedores externos) ---------- */
 
 const ESTADO_CLASSE = { READY: ' active', ERROR: ' failed', CANCELED: ' failed', BLOCKED: ' failed' };
@@ -885,7 +905,7 @@ function renderEasypanel(data) {
   const card = node('article', undefined, 'deploy-card');
   const header=node('header'),identity=node('div',undefined,'card-identity');identity.append(providerLogo('easypanel'),node('h3',project.name));header.append(identity,node('span',`${project.services.length} serviços`,'status'));card.append(header);
   const types=node('div',undefined,'card-tags');for(const type of [...new Set(project.services.map(s=>s.type))])types.append(node('span',type,'status'));card.append(types);
-  for (const service of project.services){const row=node('div',undefined,'infra-service-row'),info=node('div',undefined,'card-identity');info.append(deliveryIcon(['postgres','mysql','mariadb','mongo'].includes(service.type)?'database':service.type==='redis'?'cache':'api'),node('strong',service.name),node('span',service.type,'status'));row.append(info,resourceButton('Detalhes','easypanel',`${project.name}/${service.name}`));card.append(row);}
+  for (const service of project.services){const row=node('div',undefined,'infra-service-row'),info=node('div',undefined,'card-identity');info.append(deliveryIcon(['postgres','mysql','mariadb','mongo'].includes(service.type)?'database':service.type==='redis'?'cache':'api'),node('strong',service.name),node('span',service.type,'status'));row.append(info,resourceButton('Detalhes','easypanel',`${project.name}/${service.name}`));card.append(row,vinculoNoProvedor({provider:'easypanel',id:`${project.name}/${service.name}`,name:`${project.name} / ${service.name}`}));}
   card.append(node('p','Inventário do EasyPanel · não comprova saúde dos serviços','card-footer'));
   if (!project.services.length) card.append(node('p', 'Nenhum serviço cadastrado.', 'empty-list'));
   target.append(card);
@@ -937,6 +957,7 @@ function renderDeploys(data) {
   if(projeto.project_id)actions.append(resourceButton('Ver projeto',projeto.provider,projeto.project_id));
   topo.append(identidade,actions);
   card.append(topo);
+  if(projeto.project_id){const item=achatar(delivery.inventory()).find(i=>i.provider==='vercel'&&i.id===projeto.project_id);card.append(vinculoNoProvedor({provider:'vercel',id:projeto.project_id,name:projeto.project,repository:item?.repository||null}));}
 
   if (!projeto.deployments.length) {
    card.append(node('p', projeto.partial
@@ -1265,7 +1286,7 @@ async function load() {
  // própria. Listar só 'deploys' aqui fazia o salvar não repintar a lista de quem
  // estava justamente na tela de projetos: o projeto nascia e a tela continuava
  // dizendo "seu primeiro projeto começa acima".
- if(contextKind()==='general'&&['connections','github'].includes(state.view)) await delivery.load();
+ if(contextKind()==='general'&&['connections','github','vercel','easypanel'].includes(state.view)) await delivery.load();
 }
 
 // A lista de organizações só é buscada quando o operador abre um formulário que precisa dela.
@@ -1399,17 +1420,11 @@ const resource = setupResource({api,activate:()=>switchView('resource'),canOpen:
 // vem do mesmo /api/overview: duas telas perguntando "de quem é isto?" têm de
 // oferecer a mesma lista, senão o nome de um item muda conforme a porta de entrada.
 const delivery = setupDelivery({ api,openResource:resource.open,onSaved:()=>load().catch(reportError),
- // Dono (ou sugestão) de cada repositório na aba GitHub: as mesmas conexões e a mesma
- // regra de sugestão da tela de Conexões, que ficam em owner-suggestions.js.
- repoInfo:(repo,inventario)=>{
-  const recurso={provider:'github',id:repo.id,name:repo.name};
-  const conexoes=state.resourceBindings.filter(b=>b.active!==false);
-  const dono=conexoes.find(b=>casaConexao(b,recurso));
-  const rotuloDe=b=>b.product_id?state.overview?.products?.find(p=>p.id===b.product_id)?.name:state.overview?.engagements?.find(e=>e.id===b.engagement_id)?.label;
-  if(dono) return {dono:rotuloDe(dono)||'registrado'};
-  const s=sugerirDono(recurso,{itens:achatar(inventario),conexoes,donos:{products:state.overview?.products||[],engagements:serviceEngagements(),tenants:state.overview?.tenants||[]},casa:casaConexao});
-  return s?.dono?{sugestao:`${s.rotulo} (${s.motivo})`}:s?.ambiguo?{sugestao:`o nome combina com mais de um dono: ${s.ambiguo.join('; ')}`}:null;
- },
+ // Cada repositório da aba GitHub mostra o dono, ou o controle para dar um: as mesmas
+ // conexões e a mesma regra de sugestão das outras telas (owner-link.js).
+ repoLink:(repo,inventario)=>vinculoNoProvedor({provider:'github',id:repo.id,name:repo.name},inventario),
+ // O cadastro técnico e o inventário chegaram: as telas que dependem deles se redesenham.
+ onLoaded:()=>{connections.redraw();if(deployData)renderDeploys(deployData);if(state.infrastructure)renderEasypanel(state.infrastructure);},
  owners:()=>({
   // O tipo do item vai junto, já traduzido: o dicionário de tipos é daqui, e
   // delivery.js copiá-lo seria a segunda verdade sobre como se chama cada tipo.
