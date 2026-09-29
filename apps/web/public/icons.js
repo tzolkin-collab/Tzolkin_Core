@@ -23,6 +23,7 @@ Object.assign(icons,{
  ,sliders:[['line',{x1:4,x2:4,y1:4,y2:20}],['line',{x1:12,x2:12,y1:4,y2:20}],['line',{x1:20,x2:20,y1:4,y2:20}],['line',{x1:2,x2:6,y1:8,y2:8}],['line',{x1:10,x2:14,y1:14,y2:14}],['line',{x1:18,x2:22,y1:9,y2:9}]]
  ,lock:[['rect',{x:4,y:10,width:16,height:11,rx:2}],['path',{d:'M8 10V7a4 4 0 0 1 8 0v3'}]]
  ,activity:[['polyline',{points:'22 12 18 12 15 21 9 3 6 12 2 12'}]]
+ ,pencil:[['path',{d:'M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z'}],['path',{d:'m15 5 4 4'}]]
  ,globe:[['circle',{cx:12,cy:12,r:10}],['path',{d:'M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20'}],['path',{d:'M2 12h20'}]]
 });
 const PLATFORM_LOGOS=['github','vercel','easypanel'];

@@ -18,6 +18,7 @@ import {setupConnections, casaConexao} from './connections.js';
 import {achatar} from './owner-suggestions.js';
 import {vinculoNaLista} from './owner-link.js';
 import {mountTabs} from './tabs.js';
+import {slugDoNome, mountTagInput} from './space-form.js';
 // Ficha da empresa por callback: os módulos não importam app.js (evita ciclo).
 const commercial=setupCommercial({api,openTenant:id=>openClient(id)});
 const billing=setupBilling({api});
@@ -817,9 +818,10 @@ function renderGeneral() {
   const acoes=node('div',undefined,'space-actions');
   const botao=(rotulo,acao,classe)=>{const b=node('button',rotulo,classe);b.type='button';b.onclick=acao;return b;};
   acoes.append(botao('Abrir gestão',()=>openProductModule(product,'product').catch(reportError),'secondary'));
+  // Editar é uma ação de primeira classe, com ícone: era um link cinza que ninguém achava.
+  const editar=botao('Editar',()=>abrirEspaco(product),'secondary');editar.prepend(createIcon('pencil'));acoes.append(editar);
   const atalho=hasCapability(product,'checkout')?['Cobrança e e-mails','product-payments']:hasCapability(product,'contract_billing')?['Recebimentos','product-receivables']:null;
   if(atalho)acoes.append(botao(atalho[0],()=>openProductModule(product,atalho[1]).catch(reportError),'ghost'));
-  acoes.append(botao('Editar',()=>abrirEspaco(product),'ghost'));
   if(live)acoes.append(catalogLink(published?'Abrir deploy ↗':'Abrir produto ↗',live,'product-live-link'));else if(productInfo.url&&!isDraft)acoes.append(catalogLink('Abrir endereço ↗',productInfo.url,'product-live-link'));
   card.append(acoes);
   return card;
@@ -1110,7 +1112,10 @@ function renderProductRecord(product) {
  const kicker=kindLabelOf(product.portfolio_kind).toUpperCase();
  const recordActions=serviceLine?[['Captação inbound','product-inbound','user-plus'],['Contratações','product-engagements','briefcase'],['Chaves de integração','product-keys','lock'],['E-mails','product-emails','mail']]:hasCapability(product,'checkout')?[['Cobrança','product-payments','wallet'],['E-mails','product-emails','mail']]:[];
  const lifecycle=productLifecycle(product),appearsDraft=productUnproven(product),live=appearsDraft?(publishedDeployUrl(product)||null):productLiveUrl(product);const identity=node('div',undefined,'product-record-identity');identity.append(productFavicon(productFaviconUrl(product)),node('div'));identity.lastChild.append(node('span',kicker,'overview-kicker'),node('h2', product.name), node('p', 'Identificador: ' + product.id, 'detail'));panel.append(identity);
- const actions=node('div',undefined,'product-record-actions');for(const [label,view,icon] of recordActions){const button=node('button',undefined,'secondary');button.type='button';button.append(createIcon(icon),document.createTextNode(label));button.onclick=()=>switchView(view);actions.append(button);}const detach=node('button','Desatrelar conexões','quiet');detach.type='button';detach.onclick=async()=>{if(!window.confirm(`Desatrelar domínios, bancos e deploys de ${product.name}? Nenhum dado externo será apagado.`))return;detach.disabled=true;try{await api(`/api/products/${encodeURIComponent(product.id)}/attachments`,'DELETE');state.resourceBindings=state.resourceBindings.filter(item=>item.product_id!==product.id);state.topology=await api('/api/products/topology').catch(()=>null);renderProductRecord(product);}catch(error){detach.disabled=false;reportError(error);}};actions.append(detach);panel.append(actions);
+ const actions=node('div',undefined,'product-record-actions');for(const [label,view,icon] of recordActions){const button=node('button',undefined,'secondary');button.type='button';button.append(createIcon(icon),document.createTextNode(label));button.onclick=()=>switchView(view);actions.append(button);}
+ // A tela do próprio espaço também edita o espaço: nome, tipo e tags (o cadastro do overview tem a revisão).
+ const editarEspaco=node('button',undefined,'secondary');editarEspaco.type='button';editarEspaco.append(createIcon('pencil'),document.createTextNode('Editar espaço'));editarEspaco.onclick=()=>abrirEspaco(state.overview?.products?.find(p=>p.id===product.id)||product);actions.append(editarEspaco);
+ const detach=node('button','Desatrelar conexões','quiet');detach.type='button';detach.onclick=async()=>{if(!window.confirm(`Desatrelar domínios, bancos e deploys de ${product.name}? Nenhum dado externo será apagado.`))return;detach.disabled=true;try{await api(`/api/products/${encodeURIComponent(product.id)}/attachments`,'DELETE');state.resourceBindings=state.resourceBindings.filter(item=>item.product_id!==product.id);state.topology=await api('/api/products/topology').catch(()=>null);renderProductRecord(product);}catch(error){detach.disabled=false;reportError(error);}};actions.append(detach);panel.append(actions);
  const catalog = product.catalog;
  if (catalog) {
   panel.append(node('p', catalog.description, 'context-description'));
@@ -1336,19 +1341,35 @@ async function ensureDirectory() {
 // Abre o cadastro de um espaço do portfólio: novo (sem item) ou edição (com o item).
 // Os tipos e o texto de cada um vêm do registro da API.
 function abrirEspaco(item, tipoInicial) {
- const form = $('space-form'), select = form.elements.portfolio_kind;
- select.replaceChildren(...kindRegistry().map(info => option(info.kind, info.label)));
- const sincronizar = () => {
-  const info = kindInfo(select.value);
-  $('space-kind-help').textContent = info?.what || '';
-  $('space-tags-field').hidden = !info?.tags;
- };
- select.onchange = sincronizar;
+ const form = $('space-form'), nome = form.elements.namedItem('name'), id = form.elements.namedItem('id');
+ const tipo = () => form.elements.namedItem('portfolio_kind');
+ const sincronizar = () => { $('space-tags-field').hidden = !kindInfo(tipo().value)?.tags; };
+ // Um cartão selecionável por tipo, do registro da API: ícone, nome e o que o tipo é.
+ $('space-kind-grid').replaceChildren(...kindRegistry().map(info => {
+  const cartao = document.createElement('label'), radio = document.createElement('input'), texto = node('span', undefined, 'kind-card-text');
+  cartao.className = 'kind-card';
+  radio.type = 'radio'; radio.name = 'portfolio_kind'; radio.value = info.kind; radio.required = true; radio.onchange = sincronizar;
+  texto.append(node('strong', info.label), node('small', info.what.split('. ')[0] + '.'));
+  cartao.append(radio, createIcon(info.icon), texto);
+  return cartao;
+ }));
+ const tags = mountTagInput({ box: $('space-tag-box'), input: $('space-tag-input'), hidden: form.elements.namedItem('tags') });
+ // O identificador nasce do nome enquanto ninguém o digitar; ao editar, é o que já existe.
+ let idManual = Boolean(item);
+ id.oninput = () => { idManual = true; };
+ nome.oninput = () => { if (!idManual) id.value = slugDoNome(nome.value); };
  $('space-title').textContent = item ? 'Editar espaço' : 'Novo espaço';
+ $('space-subtitle').textContent = item ? `${item.name} · ${item.id}` : 'Um espaço é onde a TZOLKIN organiza o que vende ou opera.';
+ $('space-submit').textContent = item ? 'Salvar alterações' : 'Criar espaço';
+ $('space-id-help').textContent = item ? 'O identificador aparece nos endereços e nas chaves e não muda.' : 'Sugerido a partir do nome. Aparece nos endereços e nas chaves e não muda depois.';
  openDialog('space-dialog', item ? { id: item.id, name: item.name, portfolio_kind: canonKind(item.portfolio_kind), tags: item.tags || [], revision: item.revision } : undefined);
- form.elements.namedItem('id').readOnly = Boolean(item);
- // Espaço novo aberto de dentro de uma aba de tipo já nasce com o tipo da aba.
- const preencher = () => { if (!item && tipoInicial && kindInfo(tipoInicial)) select.value = tipoInicial; sincronizar(); };
+ id.readOnly = Boolean(item);
+ // Depois que o diálogo aplicou os valores: o tipo (o da aba, se veio de uma), as tags em chips.
+ const preencher = () => {
+  if (!item) tipo().value = kindInfo(tipoInicial) ? canonKind(tipoInicial) : (kindRegistry()[0]?.kind || '');
+  tags.set((form.elements.namedItem('tags').value || '').split(',').map(t => t.trim()).filter(Boolean));
+  sincronizar();
+ };
  ensureDirectory().then(preencher).catch(() => {});
  preencher();
 }
