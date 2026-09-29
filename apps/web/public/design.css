@@ -719,17 +719,21 @@ tbody tr:hover {
   height: 48px;
 }
 
+/* Logo e favicon vêm dos metadados do link: a imagem é a marca inteira, arredondada só
+   para cortar as pontas. Sem fundo, sem borda e sem padding em volta. */
 .provider-logo {
   width: 20px;
   height: 20px;
   object-fit: contain;
   flex-shrink: 0;
+  border-radius: 22%;
 }
 
 .provider-logo.wide {
   width: auto;
   height: 13px;
   max-width: 64px;
+  border-radius: 3px;
 }
 
 .card-identity {
