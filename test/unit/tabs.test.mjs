@@ -77,6 +77,13 @@ test('select() muda a aba por código sem disparar onChange', () => {
  assert.deepEqual(mudancas, []);
 });
 
+test('um painel compartilhado: todas as abas apontam para o mesmo id', () => {
+ const host = new Elemento('div'); host.id = 'portfolio-tabs';
+ mountTabs({ host, tabs: [{ key: 'all', label: 'Todos' }, { key: 'x', label: 'Outra' }], active: 'all', onChange() {}, label: 'Tipos', prefix: 'portfolio', panelId: 'product-catalog' });
+ const botoes = host.children[0].children;
+ assert.deepEqual([...botoes].map(b => b.getAttribute('aria-controls')), ['product-catalog', 'product-catalog']);
+});
+
 test('contagem opcional aparece na aba', () => {
  const { botoes } = montar([{ key: 'a', label: 'Todos', count: 12 }, { key: 'b', label: 'Empresas', count: 0 }]);
  assert.equal(botoes[0].children.at(-1).textContent, '12');

@@ -694,57 +694,55 @@
 
 }
 
-/* Portfólio agrupado por tipo (ADR 0007): cada seção diz o que o tipo é e o que pode
-   fazer. Paleta neutra do design system; a diferença vem da estrutura e do ícone. */
-.portfolio-kind {
+/* Portfólio em abas por tipo (ADR 0009). Numa aba de tipo, uma nota diz o que ele é e o
+   que pode fazer; os espaços são cartões compactos, com uma ação principal só. */
+.portfolio-note { margin: -8px 0 16px; }
+.portfolio-note p { margin: 0; color: var(--muted); font-size: 13px; }
+
+.space-grid {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 14px;
-  margin-top: 28px;
 }
 
-.portfolio-kind:first-child {
-  margin-top: 4px;
-}
-
-.portfolio-kind-head {
+.space-card {
   display: grid;
-  grid-template-columns: 40px minmax(0,1fr);
-  column-gap: 14px;
-  row-gap: 4px;
-  align-items: start;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--line);
+  align-content: start;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid #eaeaea;
+  border-radius: 12px;
+  background: #fff;
 }
 
-.portfolio-kind-icon {
-  grid-row: span 3;
-  width: 40px;
-  height: 40px;
+.space-head {
   display: grid;
-  place-items: center;
-  border-radius: 10px;
-  background: var(--brand-soft);
-  color: var(--text);
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
 }
 
-.portfolio-kind-head h3 {
+.space-title { display: grid; min-width: 0; }
+.space-title h3 { margin: 0; font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.space-sub { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.space-meta, .space-next { margin: 0; color: var(--muted); font-size: 13px; }
+
+.space-actions {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-size: 16px;
-  font-weight: 600;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
 }
+.space-actions .secondary { padding: 6px 12px; font-size: 13px; }
+.space-actions .product-live-link { margin-left: auto; }
 
-.portfolio-kind-head h3 small {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-
-.portfolio-kind-head p {
-  color: var(--muted);
-  font-size: 13px;
+@media (max-width: 720px) {
+  .space-grid { grid-template-columns: 1fr; }
+  .space-head { grid-template-columns: 38px minmax(0, 1fr); }
+  .space-head > .status { grid-column: 2; justify-self: start; }
 }
 
 .portfolio-kind-caps {

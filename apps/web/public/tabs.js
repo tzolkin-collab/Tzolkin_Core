@@ -17,8 +17,10 @@
  * @param {(key:string)=>void} opcoes.onChange
  * @param {string} opcoes.label        nome da lista de abas para leitor de tela
  * @param {string} [opcoes.prefix]     prefixo dos ids (padrão: o id do host)
+ * @param {string} [opcoes.panelId]    id de UM painel compartilhado por todas as abas (quando a tela
+ *                                     repinta o mesmo painel em vez de ter um por aba)
  */
-export function mountTabs({ host, tabs, active, onChange, label, prefix = host.id || 'tabs' }) {
+export function mountTabs({ host, tabs, active, onChange, label, prefix = host.id || 'tabs', panelId }) {
  let atual = tabs.some(tab => tab.key === active) ? active : tabs[0]?.key;
  const lista = document.createElement('div');
  lista.className = 'tabs'; lista.setAttribute('role', 'tablist'); lista.setAttribute('aria-label', label);
@@ -42,7 +44,7 @@ export function mountTabs({ host, tabs, active, onChange, label, prefix = host.i
  for (const tab of tabs) {
   const botao = document.createElement('button');
   botao.type = 'button'; botao.className = 'tab'; botao.setAttribute('role', 'tab');
-  botao.id = `${prefix}-tab-${tab.key}`; botao.setAttribute('aria-controls', `${prefix}-panel-${tab.key}`);
+  botao.id = `${prefix}-tab-${tab.key}`; botao.setAttribute('aria-controls', panelId || `${prefix}-panel-${tab.key}`);
   botao.append(document.createTextNode(tab.label));
   if (Number.isFinite(tab.count)) { const contagem = document.createElement('span'); contagem.className = 'tab-count'; contagem.textContent = String(tab.count); botao.append(contagem); }
   botao.onclick = () => escolher(tab.key);

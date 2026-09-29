@@ -41,7 +41,7 @@ const $ = id => document.getElementById(id);
 fetch('/api/auth/mode').then(r=>r.ok?r.json():null).then(auth=>{const oidc=auth?.mode==='google-oidc';$('login-form').hidden=oidc;$('google-login').hidden=!oidc;if(oidc&&new URLSearchParams(location.search).has('auth_error'))$('login-notice').textContent='Conta Google não autorizada ou login expirado.';}).catch(()=>{$('login-notice').textContent='Não foi possível verificar o modo de acesso. Atualize a página.';});
 $('plan-help').textContent='Use o slug de uma oferta deste produto. Ele identifica as condições comerciais copiadas para o contrato.';
 
-const state = { context: '', view: 'overview', overview: null, product: null, catalog: [], deploys: [], resourceBindings: [], infrastructure: null, management: null, dns: null, topology: null, selectedTenant: null, clientSummary: null, clientBack: 'clients', inboundTab: 'leads' };
+const state = { context: '', view: 'overview', overview: null, product: null, catalog: [], deploys: [], resourceBindings: [], infrastructure: null, management: null, dns: null, topology: null, selectedTenant: null, clientSummary: null, clientBack: 'clients', inboundTab: 'leads', portfolioTab: 'all' };
 
 // Cada contexto declara a própria navegação. Menu só existe quando há dado real por trás.
 //
@@ -801,37 +801,53 @@ function renderGeneral() {
  const products = new Map(overview.products.map(p => [p.id, p.name]));
  const portfolioCard = product => {
   const productInfo=catalogOf(product)||{};
-  const card = node('article', undefined, 'product-card');
+  const card = node('article', undefined, 'space-card');
   const count = portfolioCount(product);
-  const body = node('div', undefined, 'product-card-body');
-  body.append(node('h3', product.name), node('p', [count?.text, product.id].filter(Boolean).join(' · ')));
-  if (product.tags?.length) { const tags = node('div', undefined, 'card-tags'); for (const tag of product.tags) tags.append(node('span', tag, 'status')); body.append(tags); }
-  const published=publishedDeployUrl(product),lifecycle=productLifecycle(product),isDraft=Boolean(lifecycle.unproven),live=isDraft?(published||null):productLiveUrl(product),stateBadge=node('span',lifecycle.label,'status '+lifecycle.tone);body.append(stateBadge,node('small',lifecycle.next,'product-next-action'));card.append(productFavicon(productFaviconUrl(product)), body);
-  const open = node('button', 'Abrir gestão →', 'table-action');
-  open.type = 'button';
-  open.onclick = () => openProductModule(product,'product').catch(reportError);
-  card.append(open);
-  const editar = node('button', 'Editar', 'table-action'); editar.type = 'button'; editar.onclick = () => abrirEspaco(product); card.append(editar);
-  // Atalho só para o que o tipo tem: cobrança por checkout, ou recebimentos por contrato.
+  const published=publishedDeployUrl(product),lifecycle=productLifecycle(product),isDraft=Boolean(lifecycle.unproven),live=isDraft?(published||null):productLiveUrl(product);
+  // Cabeçalho: a marca (favicon dos metadados do link), o nome, o tipo e o id, e o estado.
+  const head=node('div',undefined,'space-head'),mark=node('span',undefined,'product-mark');mark.append(productFavicon(productFaviconUrl(product)));
+  const title=node('div',undefined,'space-title');title.append(node('h3',product.name),node('span',[kindLabel(product),product.id].join(' · '),'space-sub'));
+  head.append(mark,title,node('span',lifecycle.label,'status '+lifecycle.tone));
+  card.append(head);
+  if(count?.text)card.append(node('p',count.text,'space-meta'));
+  if (product.tags?.length) { const tags = node('div', undefined, 'card-tags'); for (const tag of product.tags) tags.append(node('span', tag, 'status')); card.append(tags); }
+  if(lifecycle.next)card.append(node('p',lifecycle.next,'space-next'));
+  // Ações: uma principal, e o resto discreto. O atalho só existe para o que o tipo tem
+  // (cobrança por checkout, ou recebimentos por contrato).
+  const acoes=node('div',undefined,'space-actions');
+  const botao=(rotulo,acao,classe)=>{const b=node('button',rotulo,classe);b.type='button';b.onclick=acao;return b;};
+  acoes.append(botao('Abrir gestão',()=>openProductModule(product,'product').catch(reportError),'secondary'));
   const atalho=hasCapability(product,'checkout')?['Cobrança e e-mails','product-payments']:hasCapability(product,'contract_billing')?['Recebimentos','product-receivables']:null;
-  if(atalho){const configure=node('button',atalho[0],'table-action');configure.type='button';configure.onclick=()=>openProductModule(product,atalho[1]).catch(reportError);card.append(configure);}
-  if(live)card.append(catalogLink(published?'Abrir deploy ↗':'Abrir produto ↗',live,'product-live-link'));else if(productInfo.url&&!isDraft)card.append(catalogLink('Abrir endereço ↗',productInfo.url,'product-live-link'));
+  if(atalho)acoes.append(botao(atalho[0],()=>openProductModule(product,atalho[1]).catch(reportError),'ghost'));
+  acoes.append(botao('Editar',()=>abrirEspaco(product),'ghost'));
+  if(live)acoes.append(catalogLink(published?'Abrir deploy ↗':'Abrir produto ↗',live,'product-live-link'));else if(productInfo.url&&!isDraft)acoes.append(catalogLink('Abrir endereço ↗',productInfo.url,'product-live-link'));
+  card.append(acoes);
   return card;
  };
- // Agrupado por tipo: a estrutura da tela mostra o que cada item é e o que pode fazer.
- // Todos os tipos aparecem, mesmo vazios: quem cadastra precisa ver onde o espaço novo cabe.
- $('product-catalog').replaceChildren(...kindRegistry().map(info=>{
-  const kind=info.kind,items=overview.products.filter(p=>canonKind(p.portfolio_kind)===kind),section=node('section',undefined,'portfolio-kind'),head=node('header',undefined,'portfolio-kind-head'),icon=node('span',undefined,'portfolio-kind-icon');
-  section.setAttribute('aria-label',info.plural);
-  icon.append(createIcon(info.icon));
-  const title=node('h3',info.plural);title.append(node('small',String(items.length)));
-  const caps=node('div',undefined,'portfolio-kind-caps'),podem=(items[0]?.capabilities||[]).filter(c=>CAPABILITY_LABELS[c]);
-  if(items.length)caps.append(...(podem.length?podem.map(c=>node('span',CAPABILITY_LABELS[c],'status')):[node('span','Só é operado','status')]));
-  head.append(icon,title,node('p',info.what),caps);
-  const grid=node('div',undefined,'product-grid');
-  if(items.length)grid.append(...items.map(portfolioCard));else grid.append(node('p','Nenhum espaço deste tipo ainda.','empty-list'));
-  section.append(head,grid);return section;
- }));
+ // Abas por tipo, com a contagem: "Todos" e uma aba por tipo do registro. Todos os
+ // tipos aparecem, mesmo vazios: quem cadastra precisa ver onde o espaço novo cabe.
+ const tipos=kindRegistry(),doTipo=kind=>overview.products.filter(p=>canonKind(p.portfolio_kind)===kind);
+ const abas=[{key:'all',label:'Todos',count:overview.products.length},...tipos.map(info=>({key:info.kind,label:info.plural,count:doTipo(info.kind).length}))];
+ if(!abas.some(aba=>aba.key===state.portfolioTab))state.portfolioTab='all';
+ const pintarPortfolio=()=>{
+  const key=state.portfolioTab,info=key==='all'?null:kindInfo(key),grade=$('product-catalog'),nota=$('portfolio-note');
+  const itens=key==='all'?tipos.flatMap(item=>doTipo(item.kind)):doTipo(key);
+  grade.setAttribute('aria-labelledby',`portfolio-tab-${key}`);
+  // Só numa aba de tipo há o que dizer sobre ele: o que é e o que pode fazer.
+  nota.replaceChildren();
+  if(info){
+   nota.append(node('p',info.what));
+   const podem=(itens[0]?.capabilities||[]).filter(c=>CAPABILITY_LABELS[c]);
+   if(itens.length){const caps=node('div',undefined,'portfolio-kind-caps');caps.append(...(podem.length?podem.map(c=>node('span',CAPABILITY_LABELS[c],'status')):[node('span','Só é operado','status')]));nota.append(caps);}
+  }
+  if(itens.length){grade.replaceChildren(...itens.map(portfolioCard));return;}
+  const vazio=node('div',undefined,'empty-state');
+  const criar=node('button','Novo espaço','primary');criar.type='button';criar.onclick=()=>abrirEspaco(null,info?.kind);
+  vazio.append(node('h3',info?`Nenhum espaço de ${info.label.toLowerCase()} ainda.`:'Nenhum espaço cadastrado ainda.'),node('p','Um espaço é onde a TZOLKIN organiza o que vende ou opera.'),criar);
+  grade.replaceChildren(vazio);
+ };
+ mountTabs({host:$('portfolio-tabs'),tabs:abas,active:state.portfolioTab,label:'Tipos de espaço',prefix:'portfolio',panelId:'product-catalog',onChange:key=>{state.portfolioTab=key;pintarPortfolio();}});
+ pintarPortfolio();
 
  $('contracts').replaceChildren(...overview.entitlements.map(entitlement => record(
   names.get(entitlement.tenant_id) || 'Cliente',
@@ -1319,7 +1335,7 @@ async function ensureDirectory() {
 
 // Abre o cadastro de um espaço do portfólio: novo (sem item) ou edição (com o item).
 // Os tipos e o texto de cada um vêm do registro da API.
-function abrirEspaco(item) {
+function abrirEspaco(item, tipoInicial) {
  const form = $('space-form'), select = form.elements.portfolio_kind;
  select.replaceChildren(...kindRegistry().map(info => option(info.kind, info.label)));
  const sincronizar = () => {
@@ -1331,8 +1347,10 @@ function abrirEspaco(item) {
  $('space-title').textContent = item ? 'Editar espaço' : 'Novo espaço';
  openDialog('space-dialog', item ? { id: item.id, name: item.name, portfolio_kind: canonKind(item.portfolio_kind), tags: item.tags || [], revision: item.revision } : undefined);
  form.elements.namedItem('id').readOnly = Boolean(item);
- ensureDirectory().then(sincronizar).catch(() => {});
- sincronizar();
+ // Espaço novo aberto de dentro de uma aba de tipo já nasce com o tipo da aba.
+ const preencher = () => { if (!item && tipoInicial && kindInfo(tipoInicial)) select.value = tipoInicial; sincronizar(); };
+ ensureDirectory().then(preencher).catch(() => {});
+ preencher();
 }
 
 function openDialog(id, values) {
@@ -1406,7 +1424,7 @@ $('new-record').onclick = () => {
  const dialog=views()[state.view].action[1];
  // Deploys não usa <dialog> simples: o assistente do cadastro técnico tem fluxo próprio.
  if(dialog==='delivery-new'){delivery.open(null);return;}
- if(dialog==='space-dialog'){abrirEspaco(null);return;}
+ if(dialog==='space-dialog'){abrirEspaco(null,state.portfolioTab==='all'?undefined:state.portfolioTab);return;}
  if(dialog==='tenant-dialog'){
   const relationship=$('tenant-form').elements.relationship_kind;
   if(state.view==='leads') relationship.value='prospect';
