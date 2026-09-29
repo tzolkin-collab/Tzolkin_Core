@@ -118,7 +118,14 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
    // body:false é a declaração que 20+ rotas já usam. Em rota transacional ela
    // era ignorada e json() exigia Content-Type: application/json, então um
    // DELETE sem corpo — que é a forma correta de excluir por id — tomava 415.
-   context.body = route.body === false ? {} : await json(req);
+   // body:'optional' é o meio-termo que "Desvincular com motivo" exigiu. Um DELETE
+   // sem corpo continua sendo a forma correta de excluir por id, e o navegador o
+   // manda sem Content-Type — por isso ele não pode voltar a tomar 415. Mas quando
+   // a tela TEM um motivo para contar, ela precisa de onde escrevê-lo. Então:
+   // sem Content-Type não há corpo; com Content-Type, a guarda de JSON continua
+   // valendo inteira, e quem mandar outra coisa segue tomando 415.
+   const semCorpo = route.body === false || (route.body === 'optional' && !req.headers['content-type']);
+   context.body = semCorpo ? {} : await json(req);
    const client = await pool.connect();
    try {
     await client.query('BEGIN');

@@ -177,7 +177,12 @@ test('Ficha da empresa conectada', async t => {
    await client.query('DELETE FROM marketing_campaign_bindings WHERE external_campaign_id=ANY($1::text[])', [campanhas]);
    await client.query('DELETE FROM marketing_campaigns WHERE external_id=ANY($1::text[])', [campanhas]);
    await client.query('DELETE FROM marketing_accounts WHERE external_id=$1', [`act_${marca}`]);
-   await client.query('DELETE FROM service_deploy_bindings WHERE engagement_id=ANY($1::uuid[])', [contratacoes]);
+   // Os vínculos de deploy nascem no registro único desde a 034 — PUT
+   // /api/service-deploy-bindings é fachada dele —, e desvincular pela rota é
+   // UPDATE: a limpeza do banco descartável é a única que apaga linha, e precisa
+   // apagar a trilha antes da conexão e a conexão antes da contratação.
+   await client.query('DELETE FROM product_resource_audit WHERE engagement_id=ANY($1::uuid[])', [contratacoes]);
+   await client.query('DELETE FROM product_resource_bindings WHERE engagement_id=ANY($1::uuid[])', [contratacoes]);
    for (const tabela of ['service_time_logs', 'service_activity_audit']) await client.query(`DELETE FROM ${tabela} WHERE activity_id=ANY($1::uuid[])`, [atividades]);
    await client.query('DELETE FROM service_activities WHERE id=ANY($1::uuid[])', [atividades]);
    await client.query('DELETE FROM commercial_contracts WHERE tenant_id=ANY($1::uuid[])', [tenants]);

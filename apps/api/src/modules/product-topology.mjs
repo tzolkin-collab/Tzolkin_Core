@@ -26,10 +26,17 @@ const inventoryHas = (row, { github, vercel, easy, dnsRecords, zone, offers, tem
 export function productTopologyRoutes(router, { options = createDeliveryOptions(), dns = createHostingerDnsAdapter() } = {}) {
  router.get('/api/products/topology', async ({ pool, url, reply }) => {
   onlyParams(url.searchParams, []);
-  const [products, bindings, resourceBindings, offers, templates, providers, zone] = await Promise.all([
+  // Uma tabela só, e só o que está ativo. Antes eram duas — product_deploy_bindings
+  // entrava aqui e empurrava o mesmo deploy sem binding_id, o que deixava a tela
+  // sem "Editar" e sem "Remover" justamente nos projetos vindos da tela antiga.
+  // Desde a 034 o deploy mora no mesmo registro dos demais recursos, e a conexão
+  // desligada fica fora: ela guarda o último dono para a trilha, não para a tela.
+  const [products, resourceBindings, offers, templates, providers, zone] = await Promise.all([
    pool.query("SELECT id,name,lifecycle_status FROM products WHERE lifecycle_status IN ('active','draft') ORDER BY name LIMIT 201"),
-   pool.query('SELECT provider,external_project_id,external_project_name,product_id,environment,updated_at FROM product_deploy_bindings'),
-   pool.query('SELECT id,product_id,resource_type,provider,external_id,display_name,environment,url,updated_at FROM product_resource_bindings'),
+   // revision viaja junto porque editar uma conexão passou a exigir a versão lida
+   // (concorrência otimista, como no portfólio): sem ela a tela não teria o que mandar.
+   pool.query(`SELECT id,product_id,resource_type,provider,external_id,display_name,environment,url,revision,updated_at
+     FROM product_resource_bindings WHERE active AND product_id IS NOT NULL`),
    pool.query("SELECT product_id,payload->>'provider' AS provider,count(1)::int AS total FROM billing_offers GROUP BY product_id,payload->>'provider'"),
    pool.query('SELECT product_id,count(1)::int AS total FROM email_templates GROUP BY product_id'),
    options(),
@@ -53,13 +60,6 @@ export function productTopologyRoutes(router, { options = createDeliveryOptions(
    for (const item of frontends.filter(item => item.repository)) if (!product.connections.repositories.some(repository => repository.name === item.repository)) product.connections.repositories.push({ provider: 'github', id: item.repository, name: item.repository, source: 'detected', confidence: 'high', observed_by: 'vercel' });
    product.connections.domains.push(...dnsRecords.filter(item => matches(item.name, keys)).map(item => ({ provider: 'hostinger', name: `${item.name}.${zone.zone}`, record_type: item.type, verified: item.records.some(record => !record.disabled), source: 'detected', confidence: 'high' })));
   }
-  for (const row of bindings.rows) {
-   const product = byProduct.get(row.product_id); if (!product) continue;
-   const category = row.provider === 'vercel' ? 'frontend' : 'backend';
-   const existing = product.connections[category].find(item => item.provider === row.provider && item.id === row.external_project_id);
-   if (existing) { existing.source = 'confirmed'; existing.environment = row.environment; }
-   else product.connections[category].push({ provider: row.provider, id: row.external_project_id, name: row.external_project_name, environment: row.environment, source: 'confirmed', confidence: 'high' });
-  }
   const inventory = { github, vercel, easy, dnsRecords, zone, offers: offers.rows, templates: templates.rows };
   for (const row of resourceBindings.rows) {
    const product = byProduct.get(row.product_id); if (!product) continue;
@@ -68,7 +68,7 @@ export function productTopologyRoutes(router, { options = createDeliveryOptions(
    const observed = inventoryHas(row, inventory);
    const confirmed = {
     provider: row.provider, id: row.external_id, name: row.display_name, environment: row.environment,
-    url: row.url, source: 'confirmed', confidence: 'high', binding_id: row.id,
+    url: row.url, source: 'confirmed', confidence: 'high', binding_id: row.id, revision: row.revision,
     reconciliation: observed === null ? 'manual' : observed ? 'observed' : 'missing',
    };
    if (existing) Object.assign(existing, confirmed); else product.connections[category].push(confirmed);

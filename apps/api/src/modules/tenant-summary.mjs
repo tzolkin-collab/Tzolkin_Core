@@ -69,10 +69,19 @@ const SQL = {
                  WHERE e.tenant_id=$1 AND e.archived_at IS NULL
                  ORDER BY e.created_at,e.label`,
 
- deploys: `SELECT s.engagement_id,s.provider,s.external_project_id,s.external_project_name,s.environment,s.updated_at
-             FROM service_deploy_bindings s JOIN client_engagements e ON e.id=s.engagement_id
-            WHERE e.tenant_id=$1 AND e.archived_at IS NULL
-            ORDER BY s.external_project_name`,
+ // Do registro único (034), não mais de service_deploy_bindings: as chaves da
+ // resposta continuam as mesmas, a seção continua sendo só de deploy (frontend e
+ // backend) e só o vínculo ATIVO entra — conexão desligada guarda o último dono
+ // para a trilha, e a ficha mostra o que a empresa tem, não o que já teve.
+ // external_id_kind vai junto porque a ficha casa estas linhas com o inventário dos
+ // provedores, e sem ele a tela teria de adivinhar de novo quando o nome vale — que
+ // é a adivinhação que a 034 acabou.
+ deploys: `SELECT r.engagement_id,r.provider,r.external_id AS external_project_id,
+                  r.display_name AS external_project_name,r.external_id_kind,r.environment,r.updated_at
+             FROM product_resource_bindings r JOIN client_engagements e ON e.id=r.engagement_id
+            WHERE e.tenant_id=$1 AND e.archived_at IS NULL AND r.active
+              AND r.resource_type IN ('frontend','backend')
+            ORDER BY r.display_name`,
 
  // Só vínculo ativo e só pelo lado da contratação: campanha de produto não é
  // desta empresa, mesmo que ela contrate o produto (marketing_binding_um_lado_so).

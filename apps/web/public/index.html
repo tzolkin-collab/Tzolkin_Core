@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="/overview.css">
 <link rel="stylesheet" href="/relationships.css">
 <link rel="stylesheet" href="/portfolio.css">
+<link rel="stylesheet" href="/connections.css">
 <link rel="stylesheet" href="/delivery.css">
 <link rel="stylesheet" href="/management.css">
 <link rel="stylesheet" href="/database-workspace.css">
@@ -80,8 +81,8 @@
 
 <section id="view-people" class="view" hidden aria-label="Pessoas"><div class="section-toolbar"><div><h2>Stakeholders</h2><p class="detail">Pessoas do relacionamento comercial, separadas dos acessos aos produtos.</p></div><label class="search-label"><span class="sr-only">Buscar pessoa</span><input id="people-search" type="search" placeholder="Buscar pessoa ou empresa…"></label></div><div id="stakeholder-directory" class="people-grid"></div><p id="people-empty" class="empty-list" hidden>Nenhum stakeholder encontrado.</p></section>
 
-<section id="view-products" class="view" hidden><div class="section-toolbar"><div><h2 class="section-title">Portfólio TZOLKIN</h2><p class="catalog-caption">Cada item tem um tipo. Produto e plataforma vendem acesso por oferta e checkout; linha de serviço vende trabalho por contrato; interno não se vende. Rascunho ainda não opera, e deploy observado é evidência técnica, separada do ciclo comercial.</p></div><button id="products-services-link" class="secondary" type="button">Serviços contratados →</button></div><div id="product-catalog" class="product-grid portfolio-grid"></div><h2 class="section-title contracts-title">Projetos detectados nos provedores</h2><p class="catalog-caption">Deploys encontrados na Vercel e no EasyPanel. Um projeto sem produto vinculado precisa ser classificado antes de virar produto.</p><div id="product-deployment-list" class="list-panel"></div><h2 class="section-title contracts-title">Clientes vinculados</h2><div id="contracts" class="list-panel"></div></section>
-<section id="view-services" class="view" hidden aria-label="Serviços"><div class="section-toolbar"><div><h2 class="section-title">Serviços</h2><p class="catalog-caption">Mentoria, consultoria, assessoria e trabalhos sob demanda pertencem às contratações do cliente. Eles não viram produto por causa de um deploy.</p></div><span class="status">Contratações reais</span></div><div id="services-summary" class="deploy-summary" aria-label="Resumo dos serviços"></div><div id="services-list" class="service-grid"></div></section>
+<section id="view-products" class="view" hidden><div class="section-toolbar"><div><h2 class="section-title">Portfólio TZOLKIN</h2><p class="catalog-caption">Cada item tem um tipo. Produto e plataforma vendem acesso por oferta e checkout; linha de serviço vende trabalho por contrato; interno não se vende. Rascunho ainda não opera, e deploy observado é evidência técnica, separada do ciclo comercial.</p></div><button id="products-services-link" class="secondary" type="button">Serviços contratados →</button></div><div id="product-catalog" class="portfolio-grid"></div><h2 class="section-title contracts-title">Clientes vinculados</h2><div id="contracts" class="list-panel"></div></section>
+<section id="view-services" class="view" hidden aria-label="Serviços"><div class="section-toolbar"><div><h2 class="section-title">Serviços</h2><p class="catalog-caption">Toda contratação de serviço: mentoria, consultoria, assessoria, sob demanda e o que ainda não foi classificado. Elas pertencem ao cliente e não viram produto por causa de um deploy.</p></div><label class="search-label"><span class="sr-only">Filtrar por tipo de serviço</span><select id="services-filter"></select></label></div><div id="services-summary" class="deploy-summary" aria-label="Resumo dos serviços"></div><div id="services-list" class="service-grid"></div></section>
 
 <section id="view-access" class="view" hidden><h2 class="section-title">Acessos aos produtos</h2><div id="members" class="list-panel"></div></section>
 <section id="view-settings" class="view" hidden aria-label="Configurações"><div class="section-toolbar"><div><h2>Configurações</h2><p class="detail">Preferências operacionais e integrações do Core.</p></div></div><div class="empty-state"><h3>Configurações do espaço</h3><p>Em breve: preferências, integrações e regras padrão.</p></div></section>
@@ -95,8 +96,40 @@
 <section id="view-emails" class="view" hidden aria-label="E-mails"></section>
 
 <section id="view-resource" class="view" hidden aria-label="Recurso da plataforma"></section>
+
+<!-- Conexões: o registro único de "de quem é este recurso" (migração 034). Substitui
+     "Projetos detectados nos provedores", que só sabia falar de deploy e classificava
+     por nome. As três listas são estados diferentes da mesma pergunta: quem já tem
+     dono, o que o provedor mostra e ninguém reclamou, e o que ficou para trás. -->
+<section id="view-connections" class="view" hidden aria-label="Conexões">
+<div class="section-toolbar"><div><h2 class="section-title">Conexões técnicas</h2><p class="catalog-caption">Cada repositório, deploy, domínio e banco tem um dono só: um item do portfólio ou uma contratação. Desligar guarda o último dono, a data e o motivo; trocar de dono é Reatribuir, com motivo.</p></div><button id="connections-refresh" class="secondary" type="button">Atualizar inventário</button></div>
+<p id="connections-message" class="notice" role="status"></p>
+<div id="connections-summary" class="deploy-summary" aria-label="Resumo das conexões"></div>
+<div id="connections-providers" class="delivery-chips" aria-label="Inventário dos provedores"></div>
+<div id="connections-owned"></div>
+<h2 class="section-title contracts-title">Sem classificar</h2>
+<p class="catalog-caption">O provedor mostra, e nenhuma conexão reclama. Escolher o dono aqui é o que transforma observação em registro.</p>
+<div id="connections-unclassified" class="list-panel"></div>
+<h2 class="section-title contracts-title">Desligadas</h2>
+<p class="catalog-caption">A linha continua, sem dono ativo. É dela que Reatribuir parte quando alguém decide de quem o recurso passa a ser.</p>
+<div id="connections-inactive" class="list-panel"></div>
+<dialog id="connection-reason-dialog"><form id="connection-reason-form" novalidate>
+<div class="dialog-heading"><h2 id="connection-reason-title">Desvincular conexão</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div>
+<p id="connection-reason-subject" class="detail"></p>
+<label id="connection-reason-owner-field" hidden>Novo dono<select id="connection-reason-owner" name="owner"></select></label>
+<label>Motivo<textarea name="reason" required minlength="2" maxlength="1000" rows="3" placeholder="O que mudou, em uma frase."></textarea></label>
+<small>O motivo fica gravado na conexão e na trilha. É ele que, meses depois, separa uma decisão de um sumiço.</small>
+<p class="dialog-error form-error" role="alert"></p>
+<div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button type="submit" class="primary">Confirmar</button></div>
+</form></dialog>
+<dialog id="connection-history-dialog"><form method="dialog">
+<div class="dialog-heading"><h2>Histórico da conexão</h2><button type="submit" class="close" aria-label="Fechar">×</button></div>
+<p id="connection-history-subject" class="detail"></p>
+<div id="connection-history-list" class="list-panel"></div>
+</form></dialog>
+</section>
 <section id="view-delivery" class="view" hidden aria-label="GitHub e cadastro técnico">
-<div class="section-toolbar"><div><h2>GitHub e configuração de deploy</h2><p class="delivery-subtitle">Escolha o repositório, organize os serviços e conecte os destinos de publicação.</p></div><button id="delivery-new" class="secondary" type="button">Criar projeto pelo GitHub</button></div>
+<div class="section-toolbar"><div><h2>GitHub e configuração de deploy</h2><p class="delivery-subtitle">Escolha o repositório, organize os serviços e conecte os destinos de publicação.</p></div></div>
 <p id="delivery-message" class="notice" role="status"></p>
 <div id="delivery-provider-status" class="delivery-chips" aria-label="Conexões"></div>
 <section class="delivery-repo-panel" aria-label="Repositórios do GitHub"><div class="section-toolbar"><h3>Seus repositórios <span id="delivery-repo-count" class="status"></span></h3><label class="delivery-search"><span class="sr-only">Buscar nos repositórios</span><input id="delivery-repository-search" type="search" placeholder="Buscar organização ou repositório"></label></div><div id="delivery-repositories"></div></section>
@@ -105,7 +138,8 @@
 <dialog id="delivery-dialog" class="delivery-dialog" aria-labelledby="delivery-title"><form id="delivery-form" novalidate>
 <header class="delivery-heading"><div><p class="eyebrow">CATÁLOGO TÉCNICO</p><h2 id="delivery-title">Configurar projeto</h2></div><button id="delivery-close" type="button" class="quiet">Fechar</button></header>
 <nav id="delivery-steps" class="delivery-steps" aria-label="Etapas da configuração"></nav>
-<section id="delivery-step-project" class="delivery-step"><div id="delivery-selected-repo" class="delivery-repo-banner"></div><div class="delivery-fields">
+<section id="delivery-step-owner" class="delivery-step"><h3>De quem é este projeto?</h3><p class="delivery-subtitle">Um projeto técnico é o COMO de alguma coisa que já existe: um item do portfólio ou uma contratação. Item novo nasce no Portfólio, onde o tipo dele é escolhido.</p><div id="delivery-owner-picker" class="delivery-fields"></div></section>
+<section id="delivery-step-project" class="delivery-step" hidden><div id="delivery-selected-repo" class="delivery-repo-banner"></div><div class="delivery-fields">
 <label>Nome do projeto<input name="name" required minlength="2" maxlength="120"></label>
 <label>Responsável<input name="owner" maxlength="120" placeholder="Pessoa ou equipe"></label>
 <label>Estrutura<select name="layout"><option value="single">Uma aplicação</option><option value="monorepo">Monorepo · várias partes</option></select></label>

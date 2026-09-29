@@ -24,6 +24,15 @@ export const CAPABILITIES = Object.freeze({
 export const capabilitiesOf = kind => Object.keys(CAPABILITIES).filter(capability => CAPABILITIES[capability].includes(kind));
 
 const KIND_NAMES = { product: 'um produto', platform: 'uma plataforma', service_line: 'uma linha de serviço', internal: 'um item interno' };
+
+// O mesmo tipo, sem o artigo, para rótulo de botão e de tela ("Ativar linha de
+// serviço"). KIND_NAMES carrega o artigo porque entra no meio de uma frase de
+// recusa; um botão não diz "Ativar uma linha de serviço". Dois dicionários com a
+// mesma chave, cada um para uma posição na frase — e nenhum deles escrito duas
+// vezes: o checklist de ativação (delivery.mjs) lê deste aqui.
+export const KIND_LABELS = Object.freeze({
+ product: 'produto', platform: 'plataforma', service_line: 'linha de serviço', internal: 'item interno',
+});
 const REFUSALS = {
  access: 'não dá acesso de usuários pelo Core',
  checkout: 'não vende por checkout',

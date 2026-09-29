@@ -24,7 +24,12 @@ const path = value => {
 };
 
 export function validateProject(body) {
- input(body, ['name', 'owner', 'layout', 'repository_id', 'components', 'revision']);
+ // product_id e engagement_id vêm no mesmo corpo e NÃO são validados aqui: quem é
+ // o dono do projeto é decisão de delivery.mjs, que tem banco para conferir se o
+ // item existe e se a contratação está arquivada. Eles aparecem nesta lista só
+ // para não serem surpresa — input() recusa campo desconhecido, e sem isto a tela
+ // tomaria 400 ao mandar o dono que o servidor passou a exigir.
+ input(body, ['name', 'owner', 'layout', 'repository_id', 'components', 'revision', 'product_id', 'engagement_id']);
  const components = list(body.components, 20).map(component => {
   input(component, ['id', 'name', 'kind', 'path', 'stack', 'runtime', 'manager', 'build', 'start', 'output', 'port', 'depends_on', 'bindings']);
   const kind = choice(component.kind, KINDS);

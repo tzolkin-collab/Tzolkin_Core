@@ -685,3 +685,69 @@
   }
 
 }
+
+/* Portfólio agrupado por tipo (ADR 0007): cada seção diz o que o tipo é e o que pode
+   fazer. Paleta neutra do design system; a diferença vem da estrutura e do ícone. */
+.portfolio-kind {
+  display: grid;
+  gap: 14px;
+  margin-top: 28px;
+}
+
+.portfolio-kind:first-child {
+  margin-top: 4px;
+}
+
+.portfolio-kind-head {
+  display: grid;
+  grid-template-columns: 40px minmax(0,1fr);
+  column-gap: 14px;
+  row-gap: 4px;
+  align-items: start;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.portfolio-kind-icon {
+  grid-row: span 3;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--brand-soft);
+  color: var(--text);
+}
+
+.portfolio-kind-head h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.portfolio-kind-head h3 small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.portfolio-kind-head p {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.portfolio-kind-caps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.portfolio-kind-caps .status {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--text);
+}

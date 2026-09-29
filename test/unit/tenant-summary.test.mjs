@@ -56,7 +56,8 @@ const bancoCompleto = (extra = []) => poolFalso([
   { id: CONTRATACAO, label: 'Mentoria', service_model: 'education', status: 'active', revision: 1, product_id: 'mentorias', product_name: 'TZOLKIN Mentorias', portfolio_kind: 'service_line', product_lifecycle_status: 'active' },
   { id: '30000000-0000-4000-8000-000000000004', label: 'Assessoria', service_model: 'advisory', status: 'planned', revision: 2, product_id: null, product_name: null, portfolio_kind: null, product_lifecycle_status: null },
  ]],
- ['FROM service_deploy_bindings', [{ engagement_id: CONTRATACAO, provider: 'vercel', external_project_id: 'prj_1', external_project_name: 'site-a', environment: 'production' }]],
+ // A seção de deploys lê o registro único desde a 034; as chaves da resposta não mudaram.
+ ['FROM product_resource_bindings', [{ engagement_id: CONTRATACAO, provider: 'vercel', external_project_id: 'prj_1', external_project_name: 'site-a', environment: 'production' }]],
  ['FROM marketing_campaign_bindings', [{ engagement_id: CONTRATACAO, provider: 'meta', external_id: 'c1', name: 'Campanha A', spend_cents: '12837', currency: 'BRL' }]],
  ['FROM service_time_logs', [{ minutes: 150, logs: 3, activities: 2 }]],
  ['FROM entitlements', [{ product_id: 'educare', product_name: 'Educare', plan: 'anual', rights: [] }]],
@@ -182,7 +183,7 @@ test('Ficha da empresa: seções', async t => {
  });
 
  await t.test('falha inesperada numa seção não derruba a ficha nem vaza a mensagem do banco', async () => {
-  const pool = bancoCompleto([['FROM service_deploy_bindings', new Error('connection reset by peer 10.0.0.7')]]);
+  const pool = bancoCompleto([['FROM product_resource_bindings', new Error('connection reset by peer 10.0.0.7')]]);
   const { status, body } = await ficha(pool);
   assert.equal(status, 200);
   assert.deepEqual(body.deploys, { available: false, reason: _internals.MOTIVOS.falha });

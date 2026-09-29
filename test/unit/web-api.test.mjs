@@ -74,5 +74,19 @@ test('DELETE sem corpo atravessa proxy e roteador, e a guarda de JSON continua v
 
   // Permissions-Policy repassada: dev deixa de ser mais permissivo que produção.
   assert.match(remove.headers.get('permissions-policy'),/payment=\(\)/);
+
+  // DELETE COM corpo: "Desvincular" manda o motivo por aqui. O proxy não pode
+  // reenviar o corpo sem dizer o tamanho — http.request não usa chunked em DELETE,
+  // e sem Content-Length os bytes do corpo chegam à API como se fossem a próxima
+  // requisição (HPE_INVALID_METHOD). O sintoma era um 400 vazio, de dentro do Node.
+  const comMotivo=await fetch(origin+'/api/product-resource-bindings/00000000-0000-4000-8000-000000000000',
+   {method:'DELETE',headers:{origin,cookie,'Content-Type':'application/json'},body:JSON.stringify({reason:'motivo de teste'})});
+  assert.equal(comMotivo.status,404,'o corpo precisa chegar inteiro: 404 é o handler respondendo, 400 vazio é o parser desistindo');
+  assert.equal((await comMotivo.json()).message,'Conexão não encontrada.');
+
+  // E a conexão continua utilizável depois: um enquadramento errado envenena o
+  // keep-alive e só a requisição SEGUINTE falha.
+  const depois=await send('/api/product-resource-bindings/00000000-0000-4000-8000-000000000000','DELETE',{cookie});
+  assert.equal(depois.status,404,'a requisição seguinte na mesma conexão continua válida');
  } finally {await stop(web);await stop(api);}
 });

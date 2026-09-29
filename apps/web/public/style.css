@@ -138,3 +138,6 @@ body[data-view=database] .content { max-width: none; padding: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+
+/* Seletor de espaços agrupado por tipo do item do portfólio. */
+.context-group-label { display: block; padding: 10px 8px 4px; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }

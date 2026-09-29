@@ -12,9 +12,10 @@ test('topologia correlaciona evidências reais por produto sem gravar uma associ
   }),
   dns: { readZone: async () => ({ status: 'ok', zone: 'tzolkin.cloud', records: [{ name: 'skiller', type: 'CNAME', ttl: 60, records: [{ disabled: false }] }] }) },
  });
+ // Uma consulta a menos desde a 034: product_deploy_bindings saiu da topologia.
+ // A ordem é products, conexões, ofertas, templates.
  const queries = [
   { rows: [{ id: 'skiller', name: 'TZOLKIN Skiller', lifecycle_status: 'active' }] },
-  { rows: [] },
   { rows: [] },
   { rows: [{ product_id: 'skiller', provider: 'stripe', total: 1 }] },
   { rows: [] },
@@ -39,7 +40,6 @@ test('topologia avisa quando uma conexão confirmada desaparece do inventário',
  });
  const queries = [
   { rows: [{ id: 'skiller', name: 'TZOLKIN Skiller', lifecycle_status: 'active' }] },
-  { rows: [] },
   { rows: [{ id: '11111111-1111-4111-8111-111111111111', product_id: 'skiller', resource_type: 'domain', provider: 'hostinger', external_id: 'skiller.tzolkin.cloud', display_name: 'skiller.tzolkin.cloud', environment: 'production', url: 'https://skiller.tzolkin.cloud' }] },
   { rows: [] },
   { rows: [] },

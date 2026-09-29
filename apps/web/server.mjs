@@ -36,6 +36,13 @@ export function createWeb({ apiOrigin = 'http://127.0.0.1:3102' } = {}) {
    // Não encaminha Host, headers de proxy, hop-by-hop ou headers arbitrários.
    const headers={};
    for(const name of ['origin','cookie','authorization','content-type','accept']) if(req.headers[name]) headers[name]=req.headers[name];
+   // Comprimento explícito, e não o do cliente: é o tamanho do que ESTE processo
+   // vai reenviar. Sem ele, http.request não enquadra o corpo de um DELETE —
+   // useChunkedEncodingByDefault é falso nesse verbo —, e os bytes do corpo
+   // chegam à API como se fossem o começo da requisição seguinte (HPE_INVALID_METHOD).
+   // Apareceu quando "Desvincular" passou a mandar o motivo no corpo do DELETE.
+   const corpo=Buffer.concat(chunks);
+   if(corpo.length) headers['content-length']=String(corpo.length);
    const proxy=http.request(new URL(url.pathname+url.search,upstream),{method:req.method,headers},response => {
     const outgoing={};
     // permissions-policy repassada de propósito: a API a usa para desligar (e,
@@ -48,7 +55,7 @@ export function createWeb({ apiOrigin = 'http://127.0.0.1:3102' } = {}) {
    proxy.setTimeout(15000,()=>proxy.destroy());
    proxy.on('error',()=>error(502,'API indisponível. Confira se o backend está iniciado.'));
    res.on('close',()=>proxy.destroy());
-   proxy.end(Buffer.concat(chunks));
+   proxy.end(corpo);
   } catch { error(502,'Não foi possível acessar a API.'); }
  });
  server.requestTimeout=20000;server.headersTimeout=10000;

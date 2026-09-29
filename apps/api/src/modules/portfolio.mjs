@@ -352,3 +352,9 @@ export function portfolioRoutes(router) {
 }
 
 export const _internals = { PROTEGIDOS, validarItem, validarContratacao, exigirSemDependentes };
+
+// O checklist de ativação (delivery.mjs) ativa o item do portfólio por fora deste
+// módulo — é a exceção que o comentário do topo já anuncia. Ele grava a MESMA
+// trilha, com as MESMAS colunas: se cada lado escrevesse a sua, "ativado"
+// significaria uma coisa aqui e outra lá, e a trilha do item teria dois formatos.
+export { COLUNAS as COLUNAS_ITEM, registrar as registrarItem };

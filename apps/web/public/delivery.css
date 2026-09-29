@@ -1611,3 +1611,26 @@
   }
 
 }
+
+/* "Pertence a" — o dono que o projeto JÁ tem, no primeiro passo do assistente e na
+   revisão. Dois lugares, uma caixa só: é a mesma frase, dita antes e depois de o
+   operador preencher o cadastro, e vê-la com duas aparências faria pensar que são
+   duas coisas diferentes. Segue a caixa do repositório selecionado, que é o outro
+   "isto já está escolhido" do mesmo diálogo. */
+.delivery-owner-current,
+.delivery-review-owner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  border: 1px solid #e7e7e7;
+  border-radius: 10px;
+  padding: 14px 15px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.delivery-review-owner {
+  margin: 14px 0 6px;
+}

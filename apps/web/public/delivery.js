@@ -5,13 +5,36 @@ export function automaticSettings({snapshot,repository,isNew,bindingCount,dirty 
  if (!isNew || bindingCount !== 1 || snapshot.status !== 'ok' || !repository || repository.toLowerCase() !== snapshot.repository?.toLowerCase()) return [];
  return Object.entries(snapshot.fields).filter(([key,field]) => ['path','stack','runtime','build','output','branch'].includes(key) && field.state === 'value' && !dirty.includes(key));
 }
+// De quem o projeto é, em uma linha. Vive fora de setupDelivery porque é a mesma
+// frase em três lugares (o passo "Pertence a", a revisão e o cartão da lista) e
+// porque assim dá para testá-la sem DOM. `belongs_to` vem pronto do servidor
+// (delivery.mjs), inclusive com o tipo do item já em português — a tela não
+// reconstrói a classificação do portfólio por conta própria.
+export const rotuloDoDono = dono => !dono || dono.kind === 'none' ? 'Sem dono'
+ : dono.kind === 'item' ? `${dono.name} · ${dono.item_kind_label || 'item'}` : `${dono.name} · contratação`;
+
+// 'product:skiller' → { product_id:'skiller', engagement_id:null }. Um dono só é
+// regra do servidor (o CHECK um_dono da 034 e a recusa de delivery.mjs); aqui é só
+// a forma do <select>, no mesmo formato que a tela de Conexões já usa.
+export const donoEscolhido = valor => {
+ const [tipo, id] = String(valor || '').split(/:(.+)/);
+ if (tipo === 'product' && id) return { product_id: id, engagement_id: null };
+ if (tipo === 'engagement' && id) return { product_id: null, engagement_id: id };
+ return null;
+};
+
 export function compareSettings(fields, current) {
  return Object.entries(fields).map(([key, remote]) => ({key,...remote,
   current:current[key] ?? '',different:remote.state === 'value' && String(current[key] ?? '') !== String(remote.value)}));
 }
 // openResource(provider, target_id, environment) abre o destino na tela de recurso; sem ele o chip é só rótulo.
 // onSaved roda depois de salvar ou ativar; sem ele, recarrega a própria lista.
-export function setupDelivery({ api,openResource,onSaved }) {
+// owners() devolve { products, engagements } — o mesmo cadastro que /api/overview já
+// trouxe e que a tela de Conexões usa para perguntar o dono. É função, e não lista,
+// porque o assistente abre depois da carga: pedir na hora evita montar o seletor com
+// um retrato velho do portfólio. Sem ela o passo "Pertence a" fica honesto e vazio,
+// dizendo que não há cadastro para escolher, em vez de inventar um.
+export function setupDelivery({ api,openResource,onSaved,owners }) {
  const $ = id => document.getElementById(id);
  const el = (tag, value, cls) => { const n = document.createElement(tag); if (value != null) n.textContent = value; if (cls) n.className = cls; return n; };
  const button = (label, action, cls = 'secondary', icon) => { const b = el('button', null, cls); if(icon) b.append(deliveryIcon(icon)); b.append(document.createTextNode(label)); b.type = 'button'; b.onclick = action; return b; };
@@ -25,19 +48,73 @@ export function setupDelivery({ api,openResource,onSaved }) {
  // está carregando, e uma recarga da lista não invalida a detecção do diálogo aberto.
  // inventory/projects são da lista; options é o inventário que o diálogo buscou ao abrir.
  let options, editing, rows = [], projects = [], inventory = null, generation = 0, listGeneration = 0, step = 0;
- const stepIds = ['project','components','review'];
+ // "Pertence a" é o PRIMEIRO passo, e não um campo no meio do cadastro, porque é a
+ // primeira pergunta: um projeto técnico é o COMO de alguma coisa que já existe.
+ // Perguntá-la depois seria deixar o operador preencher serviços e destinos para
+ // tomar um 400 no fim.
+ const stepIds = ['owner','project','components','review'];
+ const stepLabels = ['Pertence a','Projeto','Serviços','Revisão'];
+ const stepIcons = ['package','repo','layers','check'];
+ const ultimo = stepIds.length - 1;
+ // O painel de um controle inválido não diz sozinho qual passo mostrar; a lista de
+ // passos diz. Escrito assim, acrescentar um passo não deixa um índice para trás.
+ const indiceDoPainel = painel => Math.max(0, stepIds.indexOf(String(painel?.id || '').replace('delivery-step-','')));
  function showStep(index, focus = true) {
-  if(index === 2 && rows.some(row => row.bindings.some(b => b.pending))) { $('delivery-error').textContent='Aguarde a detecção terminar antes de revisar.'; return; }
+  if(index === ultimo && rows.some(row => row.bindings.some(b => b.pending))) { $('delivery-error').textContent='Aguarde a detecção terminar antes de revisar.'; return; }
   $('delivery-error').textContent='';
   step = index;
   stepIds.forEach((id,i) => { $('delivery-step-' + id).hidden = i !== step; });
-  $('delivery-steps').replaceChildren(...['Projeto','Serviços','Revisão'].map((label,i) => {
-   const b = button(label,() => showStep(i),'delivery-step-button' + (i === step ? ' selected' : ''),['repo','layers','check'][i]);
+  $('delivery-steps').replaceChildren(...stepLabels.map((label,i) => {
+   const b = button(label,() => showStep(i),'delivery-step-button' + (i === step ? ' selected' : ''),stepIcons[i]);
    if(i === step) b.setAttribute('aria-current','step'); return b;
   }));
-  $('delivery-back').hidden = step === 0; $('delivery-next').hidden = step === 2; $('delivery-save').hidden = step !== 2;
-  if(step === 2) renderReview();
+  $('delivery-back').hidden = step === 0; $('delivery-next').hidden = step === ultimo; $('delivery-save').hidden = step !== ultimo;
+  if(step === ultimo) renderReview();
   if(focus) { const panel=$('delivery-step-' + stepIds[step]); panel.tabIndex=-1; panel.focus(); dialog.scrollTop=0; }
+ }
+
+ // O seletor do passo "Pertence a", quando ele existe. É guardado aqui, e não lido
+ // por form.elements, porque o dono não é campo de cadastro: é a decisão que
+ // precede o cadastro, e some da tela assim que o projeto já tem um.
+ let ownerSelect = null;
+ function renderOwner(project) {
+  const area = $('delivery-owner-picker'); area.replaceChildren(); ownerSelect = null;
+  const dono = project?.belongs_to;
+  // QUEM TEM DONO, MANTÉM. Trocar o dono move conexões, contratos e histórico
+  // junto — é decisão, não edição de cadastro, e o servidor responde 409.
+  if (dono && dono.kind !== 'none') {
+   const linha = el('p', null, 'delivery-owner-current');
+   linha.append(deliveryIcon(dono.kind === 'item' ? 'package' : 'briefcase'), el('strong', rotuloDoDono(dono)));
+   area.append(linha, el('p','O dono não muda por aqui. Para mover as conexões para outro dono, use Reatribuir na tela de Conexões.','detail'));
+   if (dono.kind === 'engagement' && dono.archived) area.append(el('p','A contratação dona deste projeto está arquivada.','delivery-issues'));
+   return;
+  }
+  const cadastro = owners ? owners() : null;
+  const itens = cadastro?.products || [], contratacoes = cadastro?.engagements || [];
+  const empresas = new Map((cadastro?.tenants || []).map(t => [t.id, t.name]));
+  const option = (value, label, disabled = false) => { const o = document.createElement('option'); o.value = value; o.textContent = label; o.disabled = disabled; return o; };
+  const select = document.createElement('select');
+  select.required = true; select.id = 'delivery-owner';
+  select.append(option('','Escolher dono…'));
+  const grupo = (rotulo, opcoes) => { if(!opcoes.length) return; const g = document.createElement('optgroup'); g.label = rotulo; g.append(...opcoes); select.append(g); };
+  // Item que já tem projeto aparece desabilitado, e não sumido: sumir faria o
+  // operador procurar o item que ele sabe que cadastrou. A lista carregada esconde
+  // projeto arquivado, então quem manda é o 409 do servidor; isto é só o aviso.
+  const comProjeto = new Set(projects.map(p => p.product_id).filter(Boolean));
+  // O tipo aparece na opção porque é o que distingue dois itens de nomes parecidos
+  // — e é o mesmo tipo que vai virar o rótulo do botão "Ativar …" depois.
+  grupo('Itens do portfólio', itens.map(item => option(`product:${item.id}`,
+   `${item.name}${item.kind_label ? ` · ${item.kind_label}` : ''}${comProjeto.has(item.id) ? ' · já tem projeto' : ''}`, comProjeto.has(item.id))));
+  grupo('Contratações', contratacoes.map(acordo => {
+   const cliente = empresas.get(acordo.tenant_id);
+   return option(`engagement:${acordo.id}`, cliente ? `${acordo.label} · ${cliente}` : acordo.label);
+  }));
+  const rotulo = el('label', null, 'delivery-wide'); rotulo.append(document.createTextNode('Pertence a'), select);
+  area.append(rotulo);
+  area.append(itens.length + contratacoes.length
+   ? el('p','Item novo nasce pelo Portfólio, onde o tipo dele é escolhido. Aqui se escolhe entre os que já existem.','detail')
+   : el('p','Nenhum item do portfólio nem contratação para escolher. Cadastre o item pelo Portfólio antes de configurar o projeto técnico.','delivery-issues'));
+  ownerSelect = select;
  }
  function repoBanner() {
   const repo = options.github.items.find(r => r.id === $('delivery-repo').value);
@@ -48,6 +125,16 @@ export function setupDelivery({ api,openResource,onSaved }) {
  function renderReview() {
   const area=$('delivery-review'); area.replaceChildren();
   area.append(el('h3',form.elements.namedItem('name').value || 'Projeto sem nome'),el('p',$('delivery-selected-repo').querySelector('strong')?.textContent || 'Sem repositório','detail'));
+  // O dono entra na revisão como qualquer outra escolha: quem confere antes de
+  // salvar precisa ver de quem o projeto vai ser, não só como ele é construído.
+  const escolhido = donoEscolhido(ownerSelect?.value);
+  const rotulo = ownerSelect
+   ? (escolhido ? ownerSelect.selectedOptions[0]?.textContent : null)
+   : rotuloDoDono(editing?.belongs_to);
+  const linha = el('p',null,'delivery-review-owner');
+  linha.append(deliveryIcon('package'),document.createTextNode(`Pertence a: ${rotulo || 'ainda não escolhido'}`));
+  area.append(linha);
+  if(ownerSelect && !escolhido) area.append(el('p','Escolha o dono no primeiro passo. Sem dono o projeto não é salvo.','delivery-issues'));
   if(!form.elements.namedItem('owner').value) area.append(el('p','Responsável pendente. Pode salvar como rascunho.','delivery-issues'));
   if(!rows.length) area.append(el('p','Sem serviços. Pode adicionar depois.','delivery-issues'));
   for(const row of rows) {
@@ -214,7 +301,11 @@ export function setupDelivery({ api,openResource,onSaved }) {
  }
  async function open(project, repo = null, components = []) {
   const token = ++generation;
-  $('delivery-new').disabled = true; $('delivery-message').textContent = 'Consultando repositórios e destinos…';
+  // "Novo projeto" mora na barra superior desde que Projetos técnicos virou tela
+  // própria (dentro da seção era o mesmo botão duas vezes), então não há o que
+  // desabilitar aqui: a espera aparece na mensagem, e `generation` já descarta a
+  // resposta de uma abertura que o operador abandonou.
+  $('delivery-message').textContent = 'Consultando repositórios e destinos…';
   try {
    const result = await api('/api/delivery/options');
    if (token !== generation) return;
@@ -228,9 +319,11 @@ export function setupDelivery({ api,openResource,onSaved }) {
    $('delivery-connections').textContent = ['github','vercel','easypanel'].map(p => `${p}: ${connection[options[p].status]}${options[p].truncated ? ' · lista parcial' : ''}`).join(' / ');
    for (const c of project?.components || components) addComponent(c);
    if(!project && !repo && components.length) form.elements.namedItem('name').value=components[0].name;
+   // Depois de addComponent: o seletor de dono é criado agora e some do formulário
+   // a cada abertura, então precisa ser repintado com o projeto desta abertura.
+   renderOwner(project);
    $('delivery-message').textContent = ''; showStep(0,false); dialog.showModal();
   } catch(error) { $('delivery-message').textContent = error.message; }
-  finally { $('delivery-new').disabled = false; }
  }
  function renderRepositories() {
   const area=$('delivery-repositories'); area.replaceChildren();
@@ -259,7 +352,10 @@ export function setupDelivery({ api,openResource,onSaved }) {
   head.append(identity,el('span',project.issues.length ? `${project.issues.length} pendências` : 'Cadastro completo','status'),button('Configurações',() => open(project),'secondary','settings'));
   const repo=el('p',null,'card-repository');repo.append(providerLogo('github'),document.createTextNode(project.repository_name || 'Repositório não vinculado'));
   const facts=el('dl',null,'card-facts');
-  for(const [label,value,icon] of [['Serviços',summary.services,'server'],['Destinos',summary.targets,'cloud'],['Estrutura',project.layout==='monorepo'?'Monorepo':'Aplicação única','layers'],['Responsável pelo projeto',project.owner||'Não definido','people']]){const cell=el('div'),dt=el('dt');dt.append(deliveryIcon(icon),document.createTextNode(label));cell.append(dt,el('dd',String(value)));facts.append(cell);}
+  // "Pertence a" vem primeiro entre os fatos: é o que o projeto é, e o resto é como
+  // ele é construído. "Responsável" é outra coisa — a pessoa, não o dono — e por isso
+  // os dois aparecem juntos, com nomes que não se confundem.
+  for(const [label,value,icon] of [['Pertence a',rotuloDoDono(project.belongs_to),project.belongs_to?.kind==='engagement'?'briefcase':'package'],['Serviços',summary.services,'server'],['Destinos',summary.targets,'cloud'],['Estrutura',project.layout==='monorepo'?'Monorepo':'Aplicação única','layers'],['Responsável pelo projeto',project.owner||'Não definido','people']]){const cell=el('div'),dt=el('dt');dt.append(deliveryIcon(icon),document.createTextNode(label));cell.append(dt,el('dd',String(value)));facts.append(cell);}
   card.append(head,repo,facts);
   const tags=el('div',null,'card-tags');for(const stack of summary.stacks)tags.append(el('span',stack,'status'));for(const env of summary.environments)tags.append(el('span',environments[env]||env,'status'));if(tags.childNodes.length)card.append(tags);
   const details=el('details',null,'card-services');details.append(el('summary',`Serviços e branches · ${summary.services}`));
@@ -278,16 +374,26 @@ export function setupDelivery({ api,openResource,onSaved }) {
   card.append(details);
   if (project.issues.length) { const ul = el('ul',null,'delivery-issues'); for (const issue of project.issues) ul.append(el('li',issue)); card.append(ul); }
   const footer=el('div',null,'card-footer');
-  footer.append(el('span',project.product_lifecycle_status === 'active' ? 'Produto ativo · publicação não verificada' : 'Cadastro técnico · produto em rascunho'));
-  // O servidor recusa ativar com checklist pendente; o botão só aparece quando a prontidão persistida permite.
-  if(project.product_lifecycle_status === 'draft' && project.readiness?.ready){
-   const activate=button('Ativar produto',async()=>{
+  // A frase diz o TIPO do dono, e não "produto". Chamar de produto uma linha de
+  // serviço era herança de quando todo projeto inventava um item do tipo 'product':
+  // o cadastro mudou, e a palavra na tela tinha de mudar junto.
+  const dono=project.belongs_to||{kind:'none'}, tipo=dono.item_kind_label||'item';
+  footer.append(el('span',dono.kind === 'engagement' ? 'Cadastro técnico de uma contratação · publicação não verificada'
+   : dono.kind === 'none' ? 'Cadastro técnico sem dono'
+   : project.product_lifecycle_status === 'active' ? `Cadastro técnico · ${tipo} ativo`
+   : `Cadastro técnico · ${tipo} em rascunho`));
+  // O servidor recusa ativar com checklist pendente, exige permissão de dono e
+  // recusa ativar o que não é item do portfólio. O botão só aparece onde as três
+  // coisas permitem — e a permissão, só o servidor sabe: o 403 aparece na mensagem.
+  if(dono.kind === 'item' && project.product_lifecycle_status === 'draft' && project.readiness?.ready){
+   const activate=button(`Ativar ${tipo}`,async()=>{
     activate.disabled=true;
-    try{await api(`/api/delivery/projects/${encodeURIComponent(project.id)}/activate`,'POST',{revision:project.revision});await saved();$('delivery-message').textContent='Produto ativado. A publicação continua sendo uma etapa separada.';}
+    try{await api(`/api/delivery/projects/${encodeURIComponent(project.id)}/activate`,'POST',{revision:project.revision});await saved();$('delivery-message').textContent=`Ativado no Portfólio: ${dono.name}. A publicação continua sendo uma etapa separada.`;}
     catch(error){$('delivery-message').textContent=error.message;activate.disabled=false;}
    },'secondary','check');
    footer.append(activate);
-  } else if(project.product_lifecycle_status === 'draft' && project.readiness) footer.append(el('span',`Checklist de ativação · ${project.readiness.completed}/${project.readiness.total}`,'detail'));
+  } else if(project.readiness && (dono.kind === 'engagement' || (dono.kind === 'item' && project.product_lifecycle_status === 'draft')))
+   footer.append(el('span',`${dono.kind === 'engagement' ? 'Checklist' : 'Checklist de ativação'} · ${project.readiness.completed}/${project.readiness.total}`,'detail'));
   if(project.updated_at){const date=new Date(project.updated_at);if(!Number.isNaN(date.getTime()))footer.append(el('time','Atualizado '+date.toLocaleDateString('pt-BR')));}
   card.append(footer);
   return card;
@@ -313,25 +419,29 @@ export function setupDelivery({ api,openResource,onSaved }) {
  }
  form.onsubmit = async event => {
   event.preventDefault();
-  if(step !== 2) { showStep(step+1); return; }
+  if(step !== ultimo) { showStep(step+1); return; }
   const invalid=[...form.elements].find(control => control.willValidate && !control.validity.valid);
   if(invalid) {
-   const panel=invalid.closest('.delivery-step'); showStep(panel?.id === 'delivery-step-project' ? 0 : 1);
+   const panel=invalid.closest('.delivery-step'); showStep(indiceDoPainel(panel));
    for(let parent=invalid.parentElement;parent && parent!==form;parent=parent.parentElement) if(parent.tagName === 'DETAILS') parent.open=true;
    invalid.reportValidity(); return;
   }
   $('delivery-save').disabled = true; $('delivery-error').textContent = '';
   try {
+   // O dono só vai no corpo quando há o que decidir: projeto novo, ou projeto órfão
+   // sendo adotado. Projeto que já tem dono manda o cadastro sem ele — repetir o
+   // dono atual funcionaria, mas seria a tela afirmando a cada salvar uma coisa que
+   // ela não pode mudar, e um dia divergiria do que está gravado.
+   const dono = ownerSelect ? donoEscolhido(ownerSelect.value) : null;
    const payload = { name:form.elements.namedItem('name').value,owner:form.elements.namedItem('owner').value,layout:form.elements.namedItem('layout').value,
-    repository_id:$('delivery-repo').value || null,components:rows.map(readComponent),...(editing ? { revision:editing.revision } : {}) };
+    repository_id:$('delivery-repo').value || null,components:rows.map(readComponent),...(editing ? { revision:editing.revision } : {}),...(dono || {}) };
    await api('/api/delivery/projects' + (editing ? '/' + editing.id : ''),editing ? 'PUT' : 'POST',payload);
    dialog.close(); await saved(); $('delivery-message').textContent = 'Projeto salvo. Use Publicar no destino para iniciar o deploy.';
   } catch(error) { $('delivery-error').textContent = error.message; }
   finally { $('delivery-save').disabled = false; }
  };
- $('delivery-new').onclick = () => open(null);
  $('delivery-close').onclick = () => dialog.close();
- $('delivery-next').onclick=() => showStep(Math.min(2,step+1));
+ $('delivery-next').onclick=() => showStep(Math.min(ultimo,step+1));
  $('delivery-back').onclick=() => showStep(Math.max(0,step-1));
  const hints={frontend:'Interface e site',api:'Backend e endpoints',worker:'Tarefas em segundo plano',database:'Dados persistentes',cache:'Cache e filas',library:'Código compartilhado'};
  for(const [kind,label] of Object.entries(kinds)) {
@@ -342,8 +452,8 @@ export function setupDelivery({ api,openResource,onSaved }) {
  $('delivery-repo-search').oninput = () => { if (options) repositories(); };
  $('delivery-repo').onchange = () => { repoBanner(); rows.forEach(row => { for(const key of ['path','stack','runtime','build','output']) row.dirty.add(key); row.refreshComparisons(); }); };
  return { open, load, clear() {
-  generation++; listGeneration++; options = null; inventory = null; editing = null; rows = []; projects = []; dialog.close();
-  for(const id of ['delivery-list','delivery-repositories','delivery-provider-status','delivery-components','delivery-review','delivery-selected-repo']) $(id).replaceChildren();
+  generation++; listGeneration++; options = null; inventory = null; editing = null; rows = []; projects = []; ownerSelect = null; dialog.close();
+  for(const id of ['delivery-list','delivery-repositories','delivery-provider-status','delivery-components','delivery-review','delivery-selected-repo','delivery-owner-picker']) $(id).replaceChildren();
   for(const id of ['delivery-repo-count','delivery-connections','delivery-error','delivery-message']) $(id).textContent = '';
   $('delivery-repository-search').value = '';
  } };
