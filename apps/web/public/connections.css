@@ -51,9 +51,6 @@
 .suggestion-card.ambiguous { border-left-color: #b45309; }
 .suggestion-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .suggestion-head img, .suggestion-head svg { width: 18px; height: 18px; }
-.suggestion-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.suggestion-list li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.suggestion-list img, .suggestion-list svg { width: 16px; height: 16px; flex: 0 0 16px; }
 
 .owner-card { border: 1px solid var(--line, #e3e5e8); border-radius: 8px; background: #fff; margin-bottom: 8px; }
 .owner-card[open] { box-shadow: 0 1px 0 rgba(0, 0, 0, .03); }
@@ -89,4 +86,23 @@
  .owner-summary { grid-template-columns: 14px minmax(0, 1fr) auto; }
  .owner-logos { display: none; }
  .connections-tools .search-label input { min-width: 0; width: 100%; }
+}
+
+/* --- cartão de sugestão: uma linha por recurso, etiqueta curta, ação principal --- */
+.suggestion-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.suggestion-list li { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; padding: 4px 0; border-top: 1px solid var(--line, #eceef0); }
+.suggestion-list li:first-child { border-top: 0; }
+.suggestion-list img, .suggestion-list svg { width: 16px; height: 16px; }
+.suggestion-list strong { font-weight: 500; overflow-wrap: anywhere; min-width: 0; }
+.suggestion-tag { padding: 2px 8px; border-radius: 999px; background: #f1f2f4; color: var(--muted, #6b7280); font-size: 12px; white-space: nowrap; }
+.suggestion-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.other-owner > summary { cursor: pointer; color: var(--muted, #6b7280); font-size: 13px; }
+.other-owner[open] { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.other-owner[open] > summary { flex: 0 0 100%; }
+.connection-owner-select { max-width: 100%; min-width: 0; }
+@media (max-width: 720px) {
+ .suggestion-list li { grid-template-columns: 16px minmax(0, 1fr); }
+ .suggestion-tag { grid-column: 2; justify-self: start; }
+ .suggestion-actions > .primary { width: 100%; }
+ .other-owner[open] select, .other-owner[open] button { width: 100%; }
 }

@@ -12,8 +12,8 @@
 // recusar, e a tela mostra a recusa em vez de escondê-la. Desligar e trocar de dono
 // pedem motivo porque é o motivo que, meses depois, separa uma decisão de um sumiço.
 import { providerLogo, createIcon } from './icons.js';
-import { achatar, agruparSugestoes } from './owner-suggestions.js';
-import { PROVEDORES, MODELOS, donoEscolhido, seletorDeDono as seletorBase, vincularRecursos, rotuloComModelo, valorDoDono } from './owner-link.js';
+import { achatar, agruparSugestoes, nomeDoDono } from './owner-suggestions.js';
+import { PROVEDORES, donoEscolhido, seletorDeDono as seletorBase, vincularRecursos, valorDoDono } from './owner-link.js';
 
 /**
  * Casamento entre uma conexão confirmada e um item do inventário do provedor.
@@ -252,11 +252,15 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
  const donoObjeto = binding => ({ product_id: binding.product_id || null, engagement_id: binding.engagement_id || null });
  const chaveDaConexao = binding => binding.product_id ? `product:${binding.product_id}` : binding.engagement_id ? `engagement:${binding.engagement_id}` : 'sem';
 
- /** O que o dono é, em poucas palavras: "Contratação · sob demanda" ou "Produto". */
+ /** O que o dono é, sem repetir o que o nome dele já diz ("Kalidash sob demanda" não vira "… · sob demanda"). */
  const naturezaDoDono = binding => {
-  if (binding.product_id) return produto(binding.product_id)?.kind_label ? `Item do portfólio · ${produto(binding.product_id).kind_label}` : 'Item do portfólio';
-  const acordo = contratacao(binding.engagement_id);
-  return `Contratação${acordo?.service_model ? ` · ${MODELOS[acordo.service_model] || acordo.service_model}` : ''}`;
+  if (binding.product_id) {
+   const tipo = produto(binding.product_id)?.kind_label;
+   return tipo ? `Item do portfólio · ${tipo}` : 'Item do portfólio';
+  }
+  const acordo = contratacao(binding.engagement_id), rotulo = acordo?.label || '';
+  const extras = nomeDoDono({ label: rotulo, cliente: empresa(acordo?.tenant_id)?.name, modelo: acordo?.service_model }).slice(rotulo.length).replace(/^ · /, '');
+  return extras ? `Contratação · ${extras}` : 'Contratação';
  };
 
  const logosDe = bindings => {
@@ -303,7 +307,7 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
   const cartao = node('details', undefined, 'owner-card');
   cartao.open = aberto;
   const resumo = node('summary', undefined, 'owner-summary'), nome = node('span', undefined, 'owner-name');
-  nome.append(node('strong', info.rotulo), node('small', `${naturezaDoDono(primeira)}${info.tipo === 'contratacao' && info.detalhe?.startsWith('Contratação · ') ? ` · ${info.detalhe.slice(14)}` : ''}`));
+  nome.append(node('strong', info.rotulo), node('small', naturezaDoDono(primeira)));
   const projeto = projectFor(dono), checklist = projeto?.readiness;
   resumo.append(logosDe(bindings), nome, node('span', `${bindings.length} ${bindings.length === 1 ? 'recurso' : 'recursos'}`, 'owner-count'),
    checklist ? chip(checklist.ready ? 'Checklist completo' : `Checklist ${checklist.completed}/${checklist.total}`, checklist.ready ? 'active' : 'building') : node('span'));
@@ -315,26 +319,39 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
   return cartao;
  }
 
- /** O grupo de sugestão: um dono provável, os recursos que iriam com ele e o motivo de cada um. */
+ /**
+  * O grupo de sugestão: um dono provável e os recursos que iriam com ele. A ação
+  * principal é aceitar; escolher outro dono fica recolhido, porque repetir o dono
+  * sugerido num seletor logo abaixo do título só confundia. O motivo por extenso é o
+  * tooltip de cada linha; à vista fica uma etiqueta curta.
+  */
  function cartaoDeSugestao(grupo) {
   const cartao = node('article', undefined, 'suggestion-card');
   const cabeca = node('div', undefined, 'suggestion-head');
-  cabeca.append(node('strong', rotuloComModelo(grupo.rotulo, grupo.modelo)), node('span', `${grupo.recursos.length} ${grupo.recursos.length === 1 ? 'recurso' : 'recursos'}`, 'owner-count'));
+  cabeca.append(node('strong', grupo.rotulo), node('span', `${grupo.recursos.length} ${grupo.recursos.length === 1 ? 'recurso' : 'recursos'}`, 'owner-count'));
   const lista = node('ul', undefined, 'suggestion-list');
-  for (const { recurso, motivo } of grupo.recursos) {
-   const item = node('li'); item.append(providerLogo(recurso.provider), node('strong', recurso.name), node('span', motivo, 'detail')); lista.append(item);
+  for (const { recurso, motivo, etiqueta } of grupo.recursos) {
+   const item = node('li'); item.title = motivo;
+   item.append(providerLogo(recurso.provider), node('strong', recurso.name), node('span', etiqueta, 'suggestion-tag'));
+   lista.append(item);
   }
-  const select = seletorDeDono(valorDoDono(grupo.dono)); select.className = 'connection-owner-select';
   const erro = node('p', undefined, 'notice-inline link-error');
-  const vincular = node('button', grupo.recursos.length === 1 ? 'Vincular' : `Vincular os ${grupo.recursos.length}`, 'table-action'); vincular.type = 'button';
-  vincular.onclick = async () => {
-   const dono = donoEscolhido(select.value);
+  const lote = grupo.recursos.map(item => item.recurso);
+  const gravar = async (dono, botoes) => {
    if (!dono) { erro.textContent = 'Escolha o dono antes de vincular.'; return; }
-   vincular.disabled = select.disabled = true; erro.textContent = '';
-   try { await vincularRecursos(api, grupo.recursos.map(item => item.recurso), dono); await recarregar(); }
-   catch (falha) { vincular.disabled = select.disabled = false; erro.textContent = falha.message; }
+   botoes.forEach(b => { b.disabled = true; }); erro.textContent = '';
+   try { await vincularRecursos(api, lote, dono); await recarregar(); }
+   catch (falha) { botoes.forEach(b => { b.disabled = false; }); erro.textContent = falha.message; }
   };
-  const acoes = node('div', undefined, 'connection-actions'); acoes.append(select, vincular);
+  const aceitar = node('button', grupo.recursos.length === 1 ? 'Vincular' : `Vincular os ${grupo.recursos.length}`, 'primary'); aceitar.type = 'button';
+  const outro = node('details', undefined, 'other-owner');
+  const select = seletorDeDono(''); select.className = 'connection-owner-select';
+  const escolher = node('button', 'Vincular ao escolhido', 'secondary'); escolher.type = 'button';
+  outro.append(node('summary', 'Outro dono…'), select, escolher);
+  const botoes = [aceitar, escolher];
+  aceitar.onclick = () => gravar(grupo.dono, botoes);
+  escolher.onclick = () => gravar(donoEscolhido(select.value), botoes);
+  const acoes = node('div', undefined, 'suggestion-actions'); acoes.append(aceitar, outro);
   cartao.append(cabeca, lista, acoes, erro);
   return cartao;
  }
@@ -346,7 +363,7 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
   cartao.append(cabeca, node('span', `O nome combina com mais de um dono: ${candidatos.join('; ')}. Escolha um.`, 'detail'));
   const select = seletorDeDono(''); select.className = 'connection-owner-select';
   const erro = node('p', undefined, 'notice-inline link-error');
-  const vincular = node('button', 'Vincular', 'table-action'); vincular.type = 'button';
+  const vincular = node('button', 'Vincular', 'primary'); vincular.type = 'button';
   vincular.onclick = async () => {
    const dono = donoEscolhido(select.value);
    if (!dono) { erro.textContent = 'Escolha o dono antes de vincular.'; return; }

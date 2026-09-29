@@ -5,16 +5,14 @@
 // dele (Vercel, GitHub, EasyPanel), e é lá que um recurso sem dono precisa poder
 // ganhar um. Este módulo é o controle único: a mesma sugestão, o mesmo seletor e a
 // mesma gravação, para as quatro telas não terem quatro jeitos de vincular.
-import { sugerirDono, irmaosDoRepositorio, chaveDono } from './owner-suggestions.js';
+import { sugerirDono, irmaosDoRepositorio, chaveDono, nomeDoDono, MODELOS } from './owner-suggestions.js';
+export { MODELOS };
 
 export const PROVEDORES = { github: 'GitHub', vercel: 'Vercel', easypanel: 'EasyPanel', hostinger: 'Hostinger', stripe: 'Stripe', asaas: 'Asaas', manual: 'Manual' };
 
 // O tipo que um recurso de provedor vira quando é confirmado. Mesma regra da API
 // (vinculoDeDeploy): o mesmo projeto tem o mesmo tipo em toda parte.
 export const TIPO_PADRAO = { vercel: 'frontend', easypanel: 'backend', github: 'repository' };
-
-// Como a contratação se chama, em uma palavra, na frase da sugestão.
-export const MODELOS = { on_demand: 'sob demanda', education: 'mentoria', consulting: 'consultoria', advisory: 'assessoria', product: 'produto', unclassified: 'a classificar' };
 
 const node = (tag, texto, classe) => { const el = document.createElement(tag); if (texto !== undefined) el.textContent = texto; if (classe) el.className = classe; return el; };
 
@@ -53,16 +51,12 @@ export function seletorDeDono(donos, selecionado = '') {
  select.append(opcao('', 'Escolher dono…'));
  const grupo = (rotulo, opcoes) => { if (!opcoes.length) return; const g = document.createElement('optgroup'); g.label = rotulo; g.append(...opcoes); select.append(g); };
  grupo('Contratações', (donos.engagements || []).filter(item => !item.archived_at).map(item => {
-  const cliente = empresa(item.tenant_id);
-  return opcao(`engagement:${item.id}`, cliente ? `${item.label} · ${cliente.name}` : item.label);
+  return opcao(`engagement:${item.id}`, nomeDoDono({ label: item.label, cliente: empresa(item.tenant_id)?.name, modelo: item.service_model }));
  }));
  grupo('Itens do portfólio', (donos.products || []).map(item => opcao(`product:${item.id}`, item.name)));
  select.value = selecionado;
  return select;
 }
-
-/** "Kalidash · sob demanda" — o dono e o que ele é, em uma frase. */
-export const rotuloComModelo = (rotulo, modelo) => modelo ? `${rotulo} · ${MODELOS[modelo] || modelo}` : rotulo;
 
 /**
  * O controle de um recurso sem dono: a sugestão (ou a ausência dela, dita), o
@@ -76,7 +70,7 @@ export function controleDeVinculo({ recurso, contexto, api, aoVincular }) {
  const erro = node('p', undefined, 'notice-inline link-error');
  if (sugestao?.dono) {
   select.value = valorDoDono(sugestao.dono);
-  raiz.append(node('span', `Sugestão: ${rotuloComModelo(sugestao.rotulo, sugestao.modelo)} — ${sugestao.motivo}.`, 'connection-suggestion'));
+  raiz.append(node('span', `Sugestão: ${sugestao.rotulo} — ${sugestao.motivo}.`, 'connection-suggestion'));
  } else if (sugestao?.ambiguo) {
   raiz.append(node('span', `O nome combina com mais de um dono (${sugestao.ambiguo.join('; ')}). Escolha um.`, 'connection-suggestion ambiguous'));
  } else raiz.append(node('span', 'Sem dono e sem sugestão. Escolha um.', 'detail'));
@@ -115,7 +109,7 @@ export function vinculoNaLista({ recurso, contexto, api, aoVincular, rotuloDoDon
  const conexao = contexto.conexoes.find(item => contexto.casa(item, recurso));
  if (conexao) return node('span', `Dono: ${rotuloDoDono(conexao) || 'registrado'}`, 'detail link-owner');
  const sugestao = sugerirDono(recurso, contexto);
- const resumo = sugestao?.dono ? `Sugestão: ${rotuloComModelo(sugestao.rotulo, sugestao.modelo)}`
+ const resumo = sugestao?.dono ? `Sugestão: ${sugestao.rotulo}`
   : sugestao?.ambiguo ? 'Sem dono · o nome combina com mais de um' : 'Sem dono · vincular';
  const caixa = node('details', undefined, 'link-details' + (sugestao?.dono ? ' suggested' : ''));
  caixa.append(node('summary', resumo), controleDeVinculo({ recurso, contexto, api, aoVincular }));

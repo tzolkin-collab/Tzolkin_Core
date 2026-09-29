@@ -28,6 +28,23 @@ const GENERICOS = new Set([
 
 const semAcento = texto => String(texto || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
+/** Como a contratação se chama, em uma palavra. */
+export const MODELOS = { on_demand: 'sob demanda', education: 'mentoria', consulting: 'consultoria', advisory: 'assessoria', product: 'produto', unclassified: 'a classificar' };
+
+/**
+ * O nome de um dono, sem repetir o que o próprio nome já diz. Um rótulo como
+ * "Kalidash sob demanda" não ganha outro "· sob demanda", e "Kalidash — site" não
+ * ganha o nome da empresa de novo. Só entra o que o rótulo não traz.
+ */
+export function nomeDoDono({ label, cliente, modelo }) {
+ const base = semAcento(label);
+ const partes = [];
+ if (cliente && !base.includes(semAcento(cliente))) partes.push(cliente);
+ const palavra = MODELOS[modelo];
+ if (palavra && !semAcento(palavra).split(' ').some(termo => termo.length >= 5 && base.includes(termo))) partes.push(palavra);
+ return [label, ...partes].join(' · ');
+}
+
 /** Termos distintivos de um texto: 4+ letras, não numéricos, fora da lista de genéricos. */
 export const termos = texto => [...new Set(semAcento(texto).split(/[^a-z0-9]+/)
  .filter(termo => termo.length >= 4 && !/^\d+$/.test(termo) && !GENERICOS.has(termo)))];
@@ -57,6 +74,12 @@ const donoAtivoDe = (recurso, conexoes, casa) => {
  return conexao ? { product_id: conexao.product_id || null, engagement_id: conexao.engagement_id || null } : null;
 };
 
+/** Palavras que estão em quase todo recurso da casa e nunca identificam um item ("Educare by TZOLKIN"). */
+const PALAVRAS_DA_CASA = new Set(['tzolkin', 'collab', 'other']);
+
+/** Todos os termos de 4+ letras, sem filtro de genéricos: a base do casamento exato de um item. */
+const brutos = texto => [...new Set(semAcento(texto).split(/[^a-z0-9]+/).filter(termo => termo.length >= 4 && !/^\d+$/.test(termo)))];
+
 /** Os donos possíveis, cada um com o texto pelo qual pode ser reconhecido. */
 export const candidatos = donos => {
  const empresa = id => donos.tenants?.find(item => item.id === id) || null;
@@ -65,7 +88,7 @@ export const candidatos = donos => {
    const cliente = empresa(item.tenant_id);
    return {
     dono: { product_id: null, engagement_id: item.id },
-    rotulo: cliente ? `${item.label} · ${cliente.name}` : item.label,
+    rotulo: nomeDoDono({ label: item.label, cliente: cliente?.name, modelo: item.service_model }),
     modelo: item.service_model || null,
     termos: termos(`${item.label} ${cliente?.name || ''}`),
    };
@@ -73,6 +96,9 @@ export const candidatos = donos => {
   ...(donos.products || []).map(item => ({
    dono: { product_id: item.id, engagement_id: null },
    rotulo: item.name, modelo: null, termos: termos(`${item.name} ${item.id}`),
+   // O id e o nome do item, mesmo quando são palavras comuns ("core", "sites"): um
+   // item se reconhece pelo próprio nome. Vale só para item, nunca para contratação.
+   exatos: brutos(`${item.name} ${item.id}`).filter(termo => !PALAVRAS_DA_CASA.has(termo)),
   })),
  ];
 };
@@ -119,7 +145,7 @@ export function sugerirDono(recurso, { itens, conexoes, donos, casa }) {
    const [{ dono, parente }] = porDono.values();
    const candidato = candidatos(donos).find(item => chaveDono(item.dono) === chaveDono(dono));
    return {
-    dono, rotulo: candidato?.rotulo || 'Dono já registrado', modelo: candidato?.modelo || null, evidencia: 'repositorio',
+    dono, rotulo: candidato?.rotulo || 'Dono já registrado', modelo: candidato?.modelo || null, evidencia: 'repositorio', etiqueta: 'mesmo repositório',
     motivo: recurso.provider === 'github'
      ? `o projeto «${parente.name}» da Vercel sai deste repositório e já pertence a este dono`
      : `${parente.provider === 'github' ? 'o repositório' : 'o projeto'} «${parente.name}» é da mesma origem e já pertence a este dono`,
@@ -129,15 +155,18 @@ export function sugerirDono(recurso, { itens, conexoes, donos, casa }) {
  }
 
  // 2. Nome: um termo distintivo do recurso também presente no nome de um dono.
- const meus = termos(nomeCurto(recurso));
- if (!meus.length) return null;
- const achados = candidatos(donos).map(candidato => ({ candidato, comuns: candidato.termos.filter(termo => meus.includes(termo)) })).filter(item => item.comuns.length);
+ const meus = termos(nomeCurto(recurso)), crus = brutos(nomeCurto(recurso));
+ if (!meus.length && !crus.length) return null;
+ const achados = candidatos(donos).map(candidato => ({
+  candidato,
+  comuns: [...candidato.termos.filter(termo => meus.includes(termo)), ...(candidato.exatos || []).filter(termo => crus.includes(termo) && !meus.includes(termo))],
+ })).filter(item => item.comuns.length);
  if (!achados.length) return null;
  // Uma empresa com duas contratações combina duas vezes com o mesmo termo: isso é
  // ambiguidade de verdade, e a sugestão errada custa mais do que nenhuma.
  if (achados.length > 1) return { ambiguo: achados.map(item => item.candidato.rotulo) };
  const [{ candidato, comuns }] = achados;
- return { dono: candidato.dono, rotulo: candidato.rotulo, modelo: candidato.modelo, evidencia: 'nome',
+ return { dono: candidato.dono, rotulo: candidato.rotulo, modelo: candidato.modelo, evidencia: 'nome', etiqueta: `nome «${comuns[0]}»`,
   motivo: `o nome tem «${comuns[0]}», que também está no nome deste dono` };
 }
 
@@ -158,7 +187,7 @@ export function agruparSugestoes(semDono, contexto) {
   if (sugestao?.dono) {
    const chave = chaveDono(sugestao.dono);
    const grupo = grupos.get(chave) || { chave, dono: sugestao.dono, rotulo: sugestao.rotulo, modelo: sugestao.modelo, recursos: [] };
-   grupo.recursos.push({ recurso, motivo: sugestao.motivo, evidencia: sugestao.evidencia });
+   grupo.recursos.push({ recurso, motivo: sugestao.motivo, evidencia: sugestao.evidencia, etiqueta: sugestao.etiqueta });
    grupos.set(chave, grupo); usados.add(id(recurso));
   } else if (sugestao?.ambiguo) { ambiguos.push({ recurso, candidatos: sugestao.ambiguo }); usados.add(id(recurso)); }
  }
@@ -166,7 +195,7 @@ export function agruparSugestoes(semDono, contexto) {
   for (const { recurso } of [...grupo.recursos]) {
    for (const irmao of irmaosDoRepositorio(recurso, contexto)) {
     if (usados.has(id(irmao))) continue;
-    grupo.recursos.push({ recurso: irmao, motivo: `sai do mesmo repositório que «${recurso.name}»`, evidencia: 'repositorio' });
+    grupo.recursos.push({ recurso: irmao, motivo: `sai do mesmo repositório que «${recurso.name}»`, evidencia: 'repositorio', etiqueta: 'mesmo repositório' });
     usados.add(id(irmao));
    }
   }

@@ -3,7 +3,7 @@
 // a heurística por nome que a migração 034 aposentou.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { achatar, termos, sugerirDono, irmaosDoRepositorio, agruparSugestoes } from '../../apps/web/public/owner-suggestions.js';
+import { achatar, termos, sugerirDono, irmaosDoRepositorio, agruparSugestoes, nomeDoDono } from '../../apps/web/public/owner-suggestions.js';
 
 // O mesmo casamento do painel (connections.js), reproduzido só para o teste.
 const casa = (binding, recurso) => binding.provider === recurso.provider && String(binding.external_id) === String(recurso.id);
@@ -134,4 +134,32 @@ test('agruparSugestoes não repete um recurso em dois grupos e não arrasta quem
  const todos = [...grupos.flatMap(g => g.recursos.map(r => `${r.recurso.provider}:${r.recurso.id}`)), ...ambiguos.map(a => `${a.recurso.provider}:${a.recurso.id}`)];
  assert.equal(new Set(todos).size, todos.length, 'nenhum recurso em dois lugares');
  assert.ok(!todos.includes('vercel:v1') && !todos.includes('vercel:v2'), 'quem já tem dono não é sugerido de novo');
+});
+
+test('nomeDoDono não repete a categoria nem a empresa que o rótulo já diz', () => {
+ // O rótulo já traz a categoria: nada de "· sob demanda" duas vezes.
+ assert.equal(nomeDoDono({ label: 'Kalidash sob demanda', cliente: 'Kalidash', modelo: 'on_demand' }), 'Kalidash sob demanda');
+ assert.equal(nomeDoDono({ label: 'Clínica Exemplo — assessoria', cliente: 'Clínica Exemplo', modelo: 'advisory' }), 'Clínica Exemplo — assessoria');
+ // O rótulo não traz nem a empresa nem a categoria: entram as duas, uma vez cada.
+ assert.equal(nomeDoDono({ label: 'Site e landing', cliente: 'Kalidash', modelo: 'on_demand' }), 'Site e landing · Kalidash · sob demanda');
+ // Só a categoria falta.
+ assert.equal(nomeDoDono({ label: 'Kalidash — site', cliente: 'Kalidash', modelo: 'on_demand' }), 'Kalidash — site · sob demanda');
+ // Sem empresa e sem modelo, o rótulo fica como está.
+ assert.equal(nomeDoDono({ label: 'Contratação avulsa' }), 'Contratação avulsa');
+});
+
+test('o item chamado "core" é encontrado pelo nome, embora "core" seja palavra comum', () => {
+ // Educare tem 'TZOLKIN' no nome: a palavra da casa não pode fazê-lo concorrer com o Core.
+ const comCore = { ...donos, products: [...donos.products, { id: 'core', name: 'Core' }, { id: 'educare', name: 'Educare by TZOLKIN' }] };
+ const recursos = [
+  { provider: 'github', id: '9', name: 'tzolkin-collab/Tzolkin_Core', repository: null },
+  { provider: 'easypanel', id: 'other/core', name: 'other / core' },
+  { provider: 'vercel', id: 'v9', name: 'tzolkin-core', repository: null },
+ ];
+ for (const recurso of recursos) {
+  const sugestao = sugerirDono(recurso, { itens: [...itens, ...recursos], conexoes: [], donos: comCore, casa });
+  assert.equal(sugestao?.dono?.product_id, 'core', `${recurso.name} deveria sugerir o Core`);
+ }
+ // Um nome comum sem o nome do item continua sem sugestão, e o Core não vira coringa.
+ assert.equal(sugerirDono({ provider: 'github', id: '8', name: 'tzolkin-collab/site-tzolkin' }, { itens, conexoes: [], donos: comCore, casa }), null);
 });
