@@ -67,6 +67,8 @@ const FILES = {
  '/connections.js': ['connections.js', 'text/javascript'],
  '/owner-suggestions.js': ['owner-suggestions.js', 'text/javascript'],
  '/owner-link.js': ['owner-link.js', 'text/javascript'],
+ '/tabs.js': ['tabs.js', 'text/javascript'],
+ '/tabs.css': ['tabs.css', 'text/css'],
  '/connections.css': ['connections.css', 'text/css'],
  '/management.css': ['management.css', 'text/css'],
  '/icons.js': ['icons.js', 'text/javascript'],

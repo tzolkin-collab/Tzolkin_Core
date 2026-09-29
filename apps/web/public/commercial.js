@@ -8,7 +8,7 @@ function submit(form,label,fn){const b=el('button',label,'primary');b.type='subm
 // openTenant abre a ficha da empresa; vem de app.js por callback para este módulo não importá-lo.
 export function setupCommercial({api,openTenant}) {
  let epoch=0,product='',offset=0,status='',query='';
- const root=()=>document.getElementById('view-commercial');
+ const root=()=>document.getElementById('inbound-panel-leads');
  function clear(){epoch++;root()?.replaceChildren();document.getElementById('view-product-keys')?.replaceChildren();}
  async function load(p='',reset=true){product=p;if(reset)offset=0;const ticket=++epoch,r=root();r.replaceChildren(el('p','Carregando leads…'));const data=await api('/api/commercial/leads?'+new URLSearchParams({...(p?{product_id:p}:{}),status,q:query,offset:String(offset)}));if(ticket!==epoch)return;
   r.replaceChildren(el('h2',p?'Inbound do produto':'Leads inbound'));

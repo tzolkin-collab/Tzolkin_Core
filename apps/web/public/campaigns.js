@@ -393,7 +393,7 @@ export function setupCampaigns({ api, onError = () => {} }) {
  // Render da tela geral
  // ---------------------------------------------------------------------------
  function render() {
-  const root = host('view-campaigns');
+  const root = host('inbound-panel-campaigns');
   if (!root) return;
   root.replaceChildren();
 
@@ -537,7 +537,7 @@ export function setupCampaigns({ api, onError = () => {} }) {
 
  async function loadProduct(produto) {
   const r = await api(`/api/products/${encodeURIComponent(produto.id)}/campaigns`);
-  renderContexto('view-product-campaigns', r, `Campanhas de ${produto.name || produto.id}`,
+  renderContexto('inbound-panel-campaigns', r, `Campanhas de ${produto.name || produto.id}`,
    'Investimento em anúncios atribuído a este produto.');
   return r;
  }

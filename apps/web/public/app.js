@@ -17,6 +17,7 @@ import {setupCampaigns} from './campaigns.js';
 import {setupConnections, casaConexao} from './connections.js';
 import {achatar} from './owner-suggestions.js';
 import {vinculoNaLista} from './owner-link.js';
+import {mountTabs} from './tabs.js';
 // Ficha da empresa por callback: os módulos não importam app.js (evita ciclo).
 const commercial=setupCommercial({api,openTenant:id=>openClient(id)});
 const billing=setupBilling({api});
@@ -40,7 +41,7 @@ const $ = id => document.getElementById(id);
 fetch('/api/auth/mode').then(r=>r.ok?r.json():null).then(auth=>{const oidc=auth?.mode==='google-oidc';$('login-form').hidden=oidc;$('google-login').hidden=!oidc;if(oidc&&new URLSearchParams(location.search).has('auth_error'))$('login-notice').textContent='Conta Google não autorizada ou login expirado.';}).catch(()=>{$('login-notice').textContent='Não foi possível verificar o modo de acesso. Atualize a página.';});
 $('plan-help').textContent='Use o slug de uma oferta deste produto. Ele identifica as condições comerciais copiadas para o contrato.';
 
-const state = { context: '', view: 'overview', overview: null, product: null, catalog: [], deploys: [], resourceBindings: [], infrastructure: null, management: null, dns: null, topology: null, selectedTenant: null, clientSummary: null, clientBack: 'clients' };
+const state = { context: '', view: 'overview', overview: null, product: null, catalog: [], deploys: [], resourceBindings: [], infrastructure: null, management: null, dns: null, topology: null, selectedTenant: null, clientSummary: null, clientBack: 'clients', inboundTab: 'leads' };
 
 // Cada contexto declara a própria navegação. Menu só existe quando há dado real por trás.
 //
@@ -61,7 +62,7 @@ const CONTEXTS = {
    people: { title: 'Pessoas', section: 'view-people', action: ['Nova pessoa', 'stakeholder-dialog'], metrics:false },
    clients: { title: 'Clientes', section: 'view-clients', action: ['Novo cliente', 'tenant-dialog'], metrics:false },
    leads: { title: 'Inbound', section: 'view-commercial', metrics:false },
-   campaigns: { title: 'Campanhas', section: 'view-campaigns', metrics:false },
+   // Campanhas mora dentro de Inbound, como uma aba (montarInbound).
    emails: { title: 'E-mails', section: 'view-emails', metrics:false },
    client: { title: 'Cliente', section: 'view-client', hidden:true, metrics:false },
    // PORTFÓLIO — o que a TZOLKIN tem para vender.
@@ -101,12 +102,12 @@ const CONTEXTS = {
    'product-payments': { title: 'Cobrança', section: 'view-product-payments', metrics:false },
    'product-receivables': { title: 'Recebimentos', section: 'view-product-receivables', metrics:false },
    'product-emails': { title: 'E-mails', section: 'view-product-emails', metrics:false },
-   'product-campaigns': { title: 'Campanhas', section: 'view-product-campaigns', metrics:false },
+   // Campanhas do item mora dentro de Inbound, como uma aba (montarInbound).
   },
  },
 };
 
-const SECTIONS = ['view-commercial','view-product-keys','view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-services', 'view-connections', 'view-access', 'view-database', 'view-redis', 'view-settings', 'view-security', 'view-vercel', 'view-github', 'view-easypanel', 'view-dns', 'view-server-metrics', 'view-product', 'view-product-orgs', 'view-product-engagements', 'view-product-payments', 'view-product-receivables', 'view-product-emails', 'view-campaigns', 'view-product-campaigns', 'view-service-campaigns'];
+const SECTIONS = ['view-commercial','view-product-keys','view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-services', 'view-connections', 'view-access', 'view-database', 'view-redis', 'view-settings', 'view-security', 'view-vercel', 'view-github', 'view-easypanel', 'view-dns', 'view-server-metrics', 'view-product', 'view-product-orgs', 'view-product-engagements', 'view-product-payments', 'view-product-receivables', 'view-product-emails', 'view-service-campaigns'];
 const DATA_NODES = ['tenants', 'leads', 'companies', 'client-summary', 'client-detail', 'stakeholder-directory', 'members', 'contracts', 'product-catalog', 'services-list', 'services-summary', 'management-schema', 'management-dns', 'management-redis', 'overview-kpis', 'overview-alerts', 'overview-integrations', 'overview-product-list', 'overview-actions', 'product-orgs', 'product-engagements', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
 SECTIONS.push('view-finance','view-emails');
 
@@ -115,7 +116,7 @@ const views = () => CONTEXTS[contextKind()].views;
 
 // Telas de contexto que dependem de uma capacidade do tipo do item. A regra é do
 // servidor (catalog.mjs, ADR 0007); a tela só lê as capacidades que ele devolve.
-const VIEW_CAPABILITIES = {'product-inbound':['commercial'],'product-keys':['access','commercial'],'product-orgs':['access'],'product-engagements':['commercial'],'product-payments':['checkout'],'product-receivables':['contract_billing']};
+const VIEW_CAPABILITIES = {'product-inbound':['commercial','operate'],'product-keys':['access','commercial'],'product-orgs':['access'],'product-engagements':['commercial'],'product-payments':['checkout'],'product-receivables':['contract_billing']};
 const contextProduct = () => state.product?.product || state.overview?.products?.find(product => product.id === state.context) || null;
 const hasCapability = (product, capability) => Boolean(product?.capabilities?.includes(capability));
 const contextKindLabel = () => PORTFOLIO_KIND_LABELS[contextProduct()?.portfolio_kind] || 'Produto';
@@ -249,7 +250,7 @@ function renderNav() {
  // teste de navegação pega antes de virar dois cabeçalhos "Tecnologia" na tela.
  const groups=contextKind()==='general'?{
   overview:'Hoje',finance:'Hoje',
-  companies:'Relacionamentos',people:'Relacionamentos',clients:'Relacionamentos',leads:'Relacionamentos',campaigns:'Relacionamentos',emails:'Relacionamentos',client:'Relacionamentos',
+  companies:'Relacionamentos',people:'Relacionamentos',clients:'Relacionamentos',leads:'Relacionamentos',emails:'Relacionamentos',client:'Relacionamentos',
   products:'Portfólio',
   services:'Entrega',tracking:'Entrega',serviceCampaigns:'Entrega',
   connections:'Tecnologia',vercel:'Tecnologia',github:'Tecnologia',easypanel:'Tecnologia',dns:'Tecnologia',resource:'Tecnologia',serverMetrics:'Tecnologia',
@@ -294,8 +295,7 @@ function switchView(view) {
  if (view === 'emails') emails.load().catch(reportError);
  if (view === 'people') renderPeople();
  if (view === 'clients') renderTenants();
- if (view === 'leads') commercial.load().catch(reportError);
- if(view==='product-inbound') commercial.load(state.context).catch(reportError);
+ if (view === 'leads' || view === 'product-inbound') montarInbound();
  if(view==='product-keys') commercial.keys(state.context).catch(reportError);
  if (view === 'companies') renderCompanies();
  if (view === 'products') renderGeneral();
@@ -310,8 +310,26 @@ function switchView(view) {
  // Conexões (projetos técnicos) e GitHub (repositórios) leem o mesmo cadastro.
  if (['connections','github','vercel','easypanel'].includes(view)) delivery.load().catch(reportError);
  if (view === 'connections') loadConnections();
- if (view === 'campaigns') campaigns.load().catch(reportError);
- if (view === 'product-campaigns'&&state.product) campaigns.loadProduct(state.product.product).catch(reportError);
+}
+
+// Inbound: uma tela, dois tópicos (Leads e Campanhas), como abas. No contexto de um
+// item, Leads só existe onde o item tem a capacidade comercial; Campanhas existe em
+// todo item (um item interno, como o Core, também anuncia).
+function montarInbound() {
+ const doItem = contextKind() === 'product';
+ const comLeads = !doItem || hasCapability(contextProduct(), 'commercial');
+ const abas = [...(comLeads ? [{ key: 'leads', label: 'Leads' }] : []), { key: 'campaigns', label: 'Campanhas' }];
+ if (!abas.some(aba => aba.key === state.inboundTab)) state.inboundTab = abas[0].key;
+ const mostrar = key => {
+  state.inboundTab = key;
+  $('inbound-panel-leads').hidden = key !== 'leads';
+  $('inbound-panel-campaigns').hidden = key !== 'campaigns';
+  if (key === 'leads') commercial.load(doItem ? state.context : '').catch(reportError);
+  else if (!doItem) campaigns.load().catch(reportError);
+  else if (state.product) campaigns.loadProduct(state.product.product).catch(reportError);
+ };
+ mountTabs({ host: $('inbound-tabs'), tabs: abas, active: state.inboundTab, label: 'Seções de Inbound', prefix: 'inbound', onChange: mostrar });
+ mostrar(state.inboundTab);
 }
 
 function renderContextChrome() {
@@ -1437,8 +1455,10 @@ const delivery = setupDelivery({ api,openResource:resource.open,onSaved:()=>load
  const params = new URLSearchParams(location.search);
  const pedida = params.get('view');
  if (pedida && Object.hasOwn(CONTEXTS.general.views, pedida) && !CONTEXTS.general.views[pedida].hidden) state.view = pedida;
+ // Campanhas deixou de ser tela: o endereço antigo abre a aba dentro de Inbound.
+ if (pedida === 'campaigns') { state.view = 'leads'; state.inboundTab = 'campaigns'; }
  const meta = params.get('meta');
- if (meta && /^[a-z]{2,12}$/.test(meta)) campaigns.flash(meta);
+ if (meta && /^[a-z]{2,12}$/.test(meta)) { campaigns.flash(meta); state.view = 'leads'; state.inboundTab = 'campaigns'; }
  if (params.has('view') || params.has('meta')) {
   params.delete('view'); params.delete('meta');
   const resto = params.toString();
