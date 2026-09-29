@@ -1407,11 +1407,11 @@
     flex-wrap: wrap;
   }
 
-  #view-deploys .deploy-project-actions {
+  :is(#view-vercel,#view-easypanel) .deploy-project-actions {
     white-space: normal;
   }
 
-  #view-deploys .deploy-project-actions .secondary {
+  :is(#view-vercel,#view-easypanel) .deploy-project-actions .secondary {
     min-height: 44px;
   }
 

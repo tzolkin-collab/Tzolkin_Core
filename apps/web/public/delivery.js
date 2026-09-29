@@ -414,7 +414,7 @@ export function setupDelivery({ api,openResource,onSaved,owners }) {
    chip.append(providerLogo(provider),document.createTextNode(`${providers[provider]} · ${connection[status] || connection.error}${status === 'ok' && truncated ? ' · lista parcial' : ''}`)); return chip;
   }));
   $('delivery-list').replaceChildren(); $('delivery-message').textContent = data.truncated ? 'Mostrando os 200 projetos mais recentes.' : '';
-  if (!projects.length) { const github=available.github?.status === 'ok', empty=el('div',null,'delivery-empty'); empty.append(deliveryIcon('layers'),el('h3',github ? 'Seu próximo projeto começa acima' : 'Nenhum projeto cadastrado'),el('p',github ? 'Escolha um repositório para configurar seus serviços.' : 'Sem o GitHub disponível, use Novo projeto para criar um rascunho sem repositório.','detail')); $('delivery-list').append(empty); }
+  if (!projects.length) { const github=available.github?.status === 'ok', empty=el('div',null,'delivery-empty'); empty.append(deliveryIcon('layers'),el('h3',github ? 'Nenhum projeto técnico cadastrado' : 'Nenhum projeto cadastrado'),el('p',github ? 'Abra a aba GitHub e escolha um repositório, ou use Novo projeto.' : 'Sem o GitHub disponível, use Novo projeto para criar um rascunho sem repositório.','detail')); $('delivery-list').append(empty); }
   for (const project of projects) $('delivery-list').append(renderProject(project));
  }
  form.onsubmit = async event => {

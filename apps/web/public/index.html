@@ -86,7 +86,6 @@
 
 <section id="view-access" class="view" hidden><h2 class="section-title">Acessos aos produtos</h2><div id="members" class="list-panel"></div></section>
 <section id="view-settings" class="view" hidden aria-label="Configurações"><div class="section-toolbar"><div><h2>Configurações</h2><p class="detail">Preferências operacionais e integrações do Core.</p></div></div><div class="empty-state"><h3>Configurações do espaço</h3><p>Em breve: preferências, integrações e regras padrão.</p></div></section>
-<section id="view-management" class="view" hidden aria-label="Gestão técnica"><div class="section-toolbar"><div><div class="projects-kicker">OPERAÇÃO E INTEGRAÇÕES</div><h2>Gestão técnica</h2><p class="detail">Domínios, integrações e verificações operacionais dos produtos. Banco de dados e Redis têm áreas próprias para manter a leitura objetiva.</p></div></div><div class="management-grid management-overview-grid"><section id="management-dns" class="management-panel"></section><section id="management-apis" class="management-panel"></section><section id="management-ops" class="management-panel"></section></div></section>
 <section id="view-database" class="view" hidden aria-label="Banco de dados"><section id="management-schema" class="management-panel technical-page-panel"></section></section>
 <section id="view-redis" class="view" hidden aria-label="Redis e caches"><p class="technical-intro">Instâncias de cache encontradas na infraestrutura. Métricas aparecem somente quando a integração autorizada estiver disponível.</p><section id="management-redis" class="management-panel technical-page-panel"></section></section>
 <section id="view-security" class="view" hidden aria-label="Segurança"><div class="section-toolbar"><div><h2>Segurança</h2><p class="detail">Sessões, permissões e saúde de acesso.</p></div></div><div class="empty-state"><h3>Segurança do Core</h3><p>Os controles de segurança serão reunidos nesta área.</p></div></section>
@@ -110,6 +109,10 @@
 <h2 class="section-title contracts-title">Sem classificar</h2>
 <p class="catalog-caption">O provedor mostra, e nenhuma conexão reclama. Escolher o dono aqui é o que transforma observação em registro.</p>
 <div id="connections-unclassified" class="list-panel"></div>
+<h2 class="section-title contracts-title">Projetos técnicos e ativação</h2>
+<p class="catalog-caption">O cadastro técnico de cada item do portfólio ou contratação: repositório, serviços e destinos. É aqui que o checklist de ativação é conferido e que o item é ativado. Para começar por um repositório, abra a aba GitHub.</p>
+<p id="delivery-message" class="notice" role="status"></p>
+<div id="delivery-list" class="deploy-grid"></div>
 <h2 class="section-title contracts-title">Desligadas</h2>
 <p class="catalog-caption">A linha continua, sem dono ativo. É dela que Reatribuir parte quando alguém decide de quem o recurso passa a ser.</p>
 <div id="connections-inactive" class="list-panel"></div>
@@ -128,44 +131,30 @@
 <div id="connection-history-list" class="list-panel"></div>
 </form></dialog>
 </section>
-<section id="view-delivery" class="view" hidden aria-label="GitHub e cadastro técnico">
-<div class="section-toolbar"><div><h2>GitHub e configuração de deploy</h2><p class="delivery-subtitle">Escolha o repositório, organize os serviços e conecte os destinos de publicação.</p></div></div>
-<p id="delivery-message" class="notice" role="status"></p>
-<div id="delivery-provider-status" class="delivery-chips" aria-label="Conexões"></div>
-<section class="delivery-repo-panel" aria-label="Repositórios do GitHub"><div class="section-toolbar"><h3>Seus repositórios <span id="delivery-repo-count" class="status"></span></h3><label class="delivery-search"><span class="sr-only">Buscar nos repositórios</span><input id="delivery-repository-search" type="search" placeholder="Buscar organização ou repositório"></label></div><div id="delivery-repositories"></div></section>
-<div class="section-toolbar"><h2>Repositórios e configurações</h2><span class="catalog-caption">GitHub, Vercel e EasyPanel no mesmo fluxo.</span></div>
-<div id="delivery-list" class="deploy-grid"></div>
-<dialog id="delivery-dialog" class="delivery-dialog" aria-labelledby="delivery-title"><form id="delivery-form" novalidate>
-<header class="delivery-heading"><div><p class="eyebrow">CATÁLOGO TÉCNICO</p><h2 id="delivery-title">Configurar projeto</h2></div><button id="delivery-close" type="button" class="quiet">Fechar</button></header>
-<nav id="delivery-steps" class="delivery-steps" aria-label="Etapas da configuração"></nav>
-<section id="delivery-step-owner" class="delivery-step"><h3>De quem é este projeto?</h3><p class="delivery-subtitle">Um projeto técnico é o COMO de alguma coisa que já existe: um item do portfólio ou uma contratação. Item novo nasce no Portfólio, onde o tipo dele é escolhido.</p><div id="delivery-owner-picker" class="delivery-fields"></div></section>
-<section id="delivery-step-project" class="delivery-step" hidden><div id="delivery-selected-repo" class="delivery-repo-banner"></div><div class="delivery-fields">
-<label>Nome do projeto<input name="name" required minlength="2" maxlength="120"></label>
-<label>Responsável<input name="owner" maxlength="120" placeholder="Pessoa ou equipe"></label>
-<label>Estrutura<select name="layout"><option value="single">Uma aplicação</option><option value="monorepo">Monorepo · várias partes</option></select></label>
-</div><details class="delivery-advanced"><summary>Alterar repositório</summary><div class="delivery-fields">
-<label>Buscar repositório<input id="delivery-repo-search" type="search" placeholder="Organização / repositório"></label>
-<label class="delivery-wide">Repositório GitHub<select name="repository_id" id="delivery-repo"><option value="">Ainda não vinculado · rascunho</option></select></label>
-</div></details><p id="delivery-connections" class="catalog-caption"></p></section>
-<section id="delivery-step-components" class="delivery-step" hidden><h3>Quais partes compõem seu projeto?</h3><p class="delivery-subtitle">Adicione um serviço e escolha onde ele roda. Os detalhes técnicos ficam em Avançado.</p><div id="delivery-components"></div><div id="delivery-kind-picker" class="delivery-kind-picker" aria-label="Adicionar serviço"></div></section>
-<section id="delivery-step-review" class="delivery-step" hidden><h3>Confira antes de salvar</h3><div id="delivery-review"></div></section>
-<p id="delivery-error" class="dialog-error" role="alert"></p>
-<footer class="delivery-footer"><p class="catalog-caption">Salva no Core. Não altera plataformas nem publica código.</p><div class="delivery-heading"><button id="delivery-back" type="button" class="secondary">Voltar</button><button id="delivery-next" type="button" class="primary">Continuar</button><button id="delivery-save" type="submit" class="primary" hidden>Salvar projeto</button></div></footer>
-</form></dialog>
-</section>
 
-<section id="view-deploys" class="view" hidden>
-<div class="section-toolbar deploy-intro"><div><h2>Publicações e infraestrutura</h2><p>Acompanhe seus projetos e abra os detalhes aqui no Core.</p></div><span class="catalog-caption" id="deploys-caption"></span></div>
-<nav class="provider-tabs" aria-label="Provedores de deploy"><button type="button" class="active" data-provider-tab="vercel">Vercel</button><button type="button" data-provider-tab="easypanel">EasyPanel</button></nav>
+<section id="view-vercel" class="view" hidden aria-label="Vercel">
+<div class="section-toolbar deploy-intro"><div><h2>Vercel</h2><p>Projetos e histórico de deploys. Abra o projeto para ver configuração e domínios aqui no Core.</p></div><span class="catalog-caption" id="deploys-caption"></span></div>
 <div id="deploys-summary" class="deploy-summary" aria-label="Resumo dos projetos consultados"></div>
 <div class="deploy-filters"><label class="deploy-search"><span>Buscar projeto, branch ou commit</span><input id="deploy-search" type="search" placeholder="Ex.: website, main, abc1234"></label><label><span>Último deploy do projeto</span><select id="deploy-filter"><option value="all">Todos os estados</option><option value="ready">Pronto</option><option value="progress">Em andamento</option><option value="failed">Falhou ou foi interrompido</option><option value="unknown">Sem estado confirmado</option></select></label><span id="deploy-results" class="catalog-caption" role="status"></span></div>
 <div id="deploys-status"></div>
-<div data-provider-panel="vercel"><div class="section-toolbar deploy-infra-heading"><h2>Deploys · Vercel</h2><span class="status">Projetos e histórico de deployments</span></div><div id="deploys-list" class="deploy-grid"></div></div>
-<div data-provider-panel="easypanel" hidden><div class="section-toolbar deploy-infra-heading"><h2>Deploys e serviços · EasyPanel</h2><span class="status">Projetos agrupados por projeto</span></div>
-<p class="catalog-caption">Abra um serviço para consultar configuração e domínios no Core. Saúde, logs e ações operacionais ainda não integrados.</p>
+<div id="deploys-list" class="deploy-grid"></div>
+<p class="catalog-caption catalog-footnote">Somente leitura. O Core não dispara, cancela nem promove deploy na Vercel.</p>
+</section>
+
+<section id="view-easypanel" class="view" hidden aria-label="EasyPanel">
+<div class="section-toolbar deploy-intro"><div><h2>EasyPanel</h2><p>Projetos e serviços da infraestrutura. Abra um serviço para ver configuração, domínios, métricas, containers, logs, volumes e backups; operações remotas pedem confirmação.</p></div></div>
 <div id="easypanel-inventory" class="deploy-grid"></div>
-</div>
-<p class="catalog-caption catalog-footnote">Somente leitura. O Core não dispara, cancela nem promove deploy.</p>
+</section>
+
+<section id="view-github" class="view" hidden aria-label="GitHub">
+<div class="section-toolbar"><div><h2>GitHub</h2><p class="delivery-subtitle">Repositórios que a credencial do Core alcança. Configurar um repositório abre o cadastro técnico; o dono de cada projeto e o checklist de ativação ficam em Conexões.</p></div></div>
+<div id="delivery-provider-status" class="delivery-chips" aria-label="Conexões"></div>
+<section class="delivery-repo-panel" aria-label="Repositórios do GitHub"><div class="section-toolbar"><h3>Seus repositórios <span id="delivery-repo-count" class="status"></span></h3><label class="delivery-search"><span class="sr-only">Buscar nos repositórios</span><input id="delivery-repository-search" type="search" placeholder="Buscar organização ou repositório"></label></div><div id="delivery-repositories"></div></section>
+</section>
+
+<section id="view-dns" class="view" hidden aria-label="DNS">
+<div class="section-toolbar"><div><h2>DNS</h2><p class="catalog-caption">Zonas de DNS por provedor. Hoje só a Hostinger está conectada; outro provedor entra como uma nova seção nesta tela, sem mudar a navegação.</p></div></div>
+<section id="management-dns" class="management-panel"></section>
 </section>
 
 <section id="view-commercial" class="view" hidden aria-label="Inbound comercial"></section>
@@ -192,6 +181,23 @@
 <section id="view-service-campaigns" class="view" hidden aria-label="Campanhas do serviço"></section>
 
 </main></div></div>
+<dialog id="delivery-dialog" class="delivery-dialog" aria-labelledby="delivery-title"><form id="delivery-form" novalidate>
+<header class="delivery-heading"><div><p class="eyebrow">CATÁLOGO TÉCNICO</p><h2 id="delivery-title">Configurar projeto</h2></div><button id="delivery-close" type="button" class="quiet">Fechar</button></header>
+<nav id="delivery-steps" class="delivery-steps" aria-label="Etapas da configuração"></nav>
+<section id="delivery-step-owner" class="delivery-step"><h3>De quem é este projeto?</h3><p class="delivery-subtitle">Um projeto técnico é o COMO de alguma coisa que já existe: um item do portfólio ou uma contratação. Item novo nasce no Portfólio, onde o tipo dele é escolhido.</p><div id="delivery-owner-picker" class="delivery-fields"></div></section>
+<section id="delivery-step-project" class="delivery-step" hidden><div id="delivery-selected-repo" class="delivery-repo-banner"></div><div class="delivery-fields">
+<label>Nome do projeto<input name="name" required minlength="2" maxlength="120"></label>
+<label>Responsável<input name="owner" maxlength="120" placeholder="Pessoa ou equipe"></label>
+<label>Estrutura<select name="layout"><option value="single">Uma aplicação</option><option value="monorepo">Monorepo · várias partes</option></select></label>
+</div><details class="delivery-advanced"><summary>Alterar repositório</summary><div class="delivery-fields">
+<label>Buscar repositório<input id="delivery-repo-search" type="search" placeholder="Organização / repositório"></label>
+<label class="delivery-wide">Repositório GitHub<select name="repository_id" id="delivery-repo"><option value="">Ainda não vinculado · rascunho</option></select></label>
+</div></details><p id="delivery-connections" class="catalog-caption"></p></section>
+<section id="delivery-step-components" class="delivery-step" hidden><h3>Quais partes compõem seu projeto?</h3><p class="delivery-subtitle">Adicione um serviço e escolha onde ele roda. Os detalhes técnicos ficam em Avançado.</p><div id="delivery-components"></div><div id="delivery-kind-picker" class="delivery-kind-picker" aria-label="Adicionar serviço"></div></section>
+<section id="delivery-step-review" class="delivery-step" hidden><h3>Confira antes de salvar</h3><div id="delivery-review"></div></section>
+<p id="delivery-error" class="dialog-error" role="alert"></p>
+<footer class="delivery-footer"><p class="catalog-caption">Salva no Core. Não altera plataformas nem publica código.</p><div class="delivery-heading"><button id="delivery-back" type="button" class="secondary">Voltar</button><button id="delivery-next" type="button" class="primary">Continuar</button><button id="delivery-save" type="submit" class="primary" hidden>Salvar projeto</button></div></footer>
+</form></dialog>
 <dialog id="tenant-dialog"><form id="tenant-form"><div class="dialog-heading"><h2>Nova empresa</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div><label>Nome<input name="name" required maxlength="160" autocomplete="organization"></label><label>Identificador<input name="slug" required maxlength="64" placeholder="nome-da-empresa" aria-describedby="slug-help"></label><small id="slug-help">Letras minúsculas, números e hífen.</small><label>Relacionamento<select name="relationship_kind"><option value="customer">Cliente</option><option value="prospect">Prospect</option><option value="partner">Parceiro</option><option value="internal">Organização interna</option></select></label><label>Tipo de organização<select name="organization_type"><option value="company">Empresa</option><option value="person">Pessoa física</option><option value="nonprofit">Organização sem fins lucrativos</option><option value="internal">Interna</option></select></label><label>Situação<select name="lifecycle_status"><option value="active">Ativo</option><option value="lead">Lead</option><option value="onboarding">Em implantação</option><option value="paused">Pausado</option><option value="completed">Concluído</option><option value="discontinued">Descontinuado</option><option value="unclassified">A classificar</option></select></label><p class="dialog-error form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button class="primary">Criar empresa</button></div></form></dialog>
 <dialog id="member-dialog"><form id="member-form"><div class="dialog-heading"><h2>Vincular acesso</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div><label>Cliente<select name="tenant_id" class="tenant-select" required></select></label><label>Produto<select name="product_id" class="product-select" required></select></label><label>ID do usuário<input name="subject" required maxlength="200" aria-describedby="subject-help"></label><small id="subject-help">Identificador da conta no app. Não envia convite. O vínculo vale só para o produto escolhido.</small><label>Status<select name="active"><option value="true">Ativo</option><option value="false">Revogado</option></select></label><p class="dialog-error form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button class="primary">Salvar acesso</button></div></form></dialog>
 <dialog id="entitlement-dialog"><form id="entitlement-form"><div class="dialog-heading"><h2>Contrato de produto</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div><label>Cliente<select name="tenant_id" class="tenant-select" required></select></label><label>Produto<select name="product_id" class="product-select" required></select></label><label>Plano<input name="plan" required maxlength="80" aria-describedby="plan-help"></label><small id="plan-help">Rótulo cadastral do contrato. Não define preço nem cobrança.</small><label>Status<select name="active"><option value="true">Ativo</option><option value="false">Revogado</option></select></label><details><summary>Permissões</summary><label>Direitos de acesso<input name="rights" placeholder="dashboard.read, appointments.write"></label></details><p class="dialog-error form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button class="primary">Salvar contrato</button></div></form></dialog>

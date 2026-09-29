@@ -74,14 +74,15 @@ test('o botão de ativar diz o tipo do item, e some onde não há o que ativar',
  assert.match(delivery, /dono\.kind === 'item' && project\.product_lifecycle_status === 'draft' && project\.readiness\?\.ready/);
 });
 
-test('Deploys e Projetos técnicos leem o mesmo cadastro, e as duas recarregam depois de salvar', () => {
+test('Conexões e GitHub leem o mesmo cadastro, e as duas recarregam depois de salvar', () => {
  const app = fonte('app.js');
- // Duas telas, um cadastro só: quem salva estando em Projetos técnicos precisa ver
- // o projeto aparecer. Listar só 'deploys' na recarga deixava a tela dizendo
- // "seu primeiro projeto começa acima" com o projeto já gravado.
- assert.match(app, /view === 'deploys' \|\| view === 'projects'/);
- assert.match(app, /\['deploys','projects'\]\.includes\(state\.view\)/);
- // O dono oferecido é o mesmo cadastro da tela de Conexões, com o tipo já traduzido
+ // Duas telas, um cadastro só: os projetos técnicos moram em Conexões e os
+ // repositórios em GitHub. Quem salva estando em qualquer uma delas precisa ver o
+ // projeto aparecer, e as telas antigas (Deploys, Projetos técnicos) não existem mais.
+ assert.match(app, /view === 'connections' \|\| view === 'github'/);
+ assert.match(app, /\['connections','github'\]\.includes\(state\.view\)/);
+ assert.ok(!/view-delivery|view-deploys|view-management/.test(app), 'as seções antigas de Tecnologia saíram');
+// O dono oferecido é o mesmo cadastro da tela de Conexões, com o tipo já traduzido
  // pelo dicionário que vive no app.js — delivery.js não tem uma cópia dele.
  assert.match(app, /owners:\(\)=>\(\{/);
  assert.match(app, /kind_label:PORTFOLIO_KIND_LABELS\[item\.portfolio_kind\]/);

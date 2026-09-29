@@ -68,10 +68,10 @@ export function setupResource({api,activate,canOpen,back}) {
   if(data&&old?.provider===route.provider&&old?.id===route.id&&old?.environment===route.environment){render();return;}
   easy.clear();data=null;const token=++generation;root.replaceChildren(el('p','Consultando recurso…','empty-list'));root.setAttribute('aria-busy','true');
   try{const result=await api('/api/platforms/resource?'+new URLSearchParams({provider:route.provider,target_id:route.id,environment:route.environment}));if(token!==generation)return;data=result;render();}
-  catch(error){if(token===generation)root.replaceChildren(button('Voltar','arrow',back),el('p',error.message,'notice-inline'),button('Tentar novamente','cloud',refresh));}
+  catch(error){if(token===generation)root.replaceChildren(button('Voltar','arrow',()=>back(route.provider)),el('p',error.message,'notice-inline'),button('Tentar novamente','cloud',refresh));}
   finally{if(token===generation)root.removeAttribute('aria-busy');}
  }
  function refresh(){data=null;return resume();}
- window.addEventListener('hashchange',()=>{if(resourceRoute(location.hash))resume();else if(current){clear();back();}});
+ window.addEventListener('hashchange',()=>{if(resourceRoute(location.hash))resume();else if(current){const provider=current.provider;clear();back(provider);}});
  return {open,resume,clear,refresh};
 }

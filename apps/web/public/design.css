@@ -507,7 +507,7 @@ dialog label {
   margin-top: 20px;
 }
 
-#view-deploys :is(input,select,button,summary):focus-visible {
+:is(#view-vercel,#view-easypanel) :is(input,select,button,summary):focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: -2px;
   box-shadow: none;
@@ -519,7 +519,7 @@ dialog label {
   box-shadow: none;
 }
 
-#view-deploys :is(input,select):hover:not(:focus-visible) {
+:is(#view-vercel,#view-easypanel) :is(input,select):hover:not(:focus-visible) {
   border-color: #c1c1c1;
 }
 
@@ -1033,4 +1033,4 @@ tbody tr:hover {
   }
 
 }
-#view-deploys .provider-tabs{display:flex;gap:8px;margin:18px 0}.provider-tabs button{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:999px;padding:8px 16px;font:inherit;cursor:pointer}.provider-tabs button.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+:is(#view-vercel,#view-easypanel) .provider-tabs{display:flex;gap:8px;margin:18px 0}.provider-tabs button{border:1px solid var(--line);background:var(--surface);color:var(--text);border-radius:999px;padding:8px 16px;font:inherit;cursor:pointer}.provider-tabs button.active{background:var(--brand);color:#fff;border-color:var(--brand)}
