@@ -34,7 +34,7 @@ export function compareSettings(fields, current) {
 // porque o assistente abre depois da carga: pedir na hora evita montar o seletor com
 // um retrato velho do portfólio. Sem ela o passo "Pertence a" fica honesto e vazio,
 // dizendo que não há cadastro para escolher, em vez de inventar um.
-export function setupDelivery({ api,openResource,onSaved,owners }) {
+export function setupDelivery({ api,openResource,onSaved,owners,repoInfo }) {
  const $ = id => document.getElementById(id);
  const el = (tag, value, cls) => { const n = document.createElement(tag); if (value != null) n.textContent = value; if (cls) n.className = cls; return n; };
  const button = (label, action, cls = 'secondary', icon) => { const b = el('button', null, cls); if(icon) b.append(deliveryIcon(icon)); b.append(document.createTextNode(label)); b.type = 'button'; b.onclick = action; return b; };
@@ -340,6 +340,11 @@ export function setupDelivery({ api,openResource,onSaved,owners }) {
    const body=el('div',null,'delivery-repo-body'); body.append(el('h4',repo.name),el('p',repo.archived ? 'Arquivado · somente leitura' : repo.default_branch ? `Branch padrão · ${repo.default_branch}` : 'Branch não informada','detail'));
    const action=button(project ? 'Abrir projeto' : 'Configurar',() => project ? open(project) : open(null,repo),project ? 'secondary' : 'primary','arrow');
    action.disabled=repo.archived && !project;
+   // Quem é o dono do repositório (ou quem provavelmente é), vindo de fora: o cadastro
+   // de donos e as conexões são do painel, e esta tela não guarda cópia deles.
+   const info=repoInfo?.(repo,inventory);
+   if(info?.dono) body.append(el('p','Dono: '+info.dono,'detail'));
+   else if(info?.sugestao) body.append(el('p','Sugestão: '+info.sugestao,'detail'));
    row.append(mark,body,el('span',project ? 'Vinculado' : 'Não configurado','status'),action); area.append(row);
   }
   if(github.truncated) area.append(el('p','Lista parcial: o limite de consulta foi atingido.','detail'));

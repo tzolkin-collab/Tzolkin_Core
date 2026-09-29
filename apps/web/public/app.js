@@ -15,6 +15,7 @@ import {setupProductEmails} from './product-emails.js';
 import {renderDatabaseWorkspace} from './management-workspace.js';
 import {setupCampaigns} from './campaigns.js';
 import {setupConnections, casaConexao} from './connections.js';
+import {achatar, sugerirDono} from './owner-suggestions.js';
 // Ficha da empresa por callback: os módulos não importam app.js (evita ciclo).
 const commercial=setupCommercial({api,openTenant:id=>openClient(id)});
 const billing=setupBilling({api});
@@ -1398,6 +1399,17 @@ const resource = setupResource({api,activate:()=>switchView('resource'),canOpen:
 // vem do mesmo /api/overview: duas telas perguntando "de quem é isto?" têm de
 // oferecer a mesma lista, senão o nome de um item muda conforme a porta de entrada.
 const delivery = setupDelivery({ api,openResource:resource.open,onSaved:()=>load().catch(reportError),
+ // Dono (ou sugestão) de cada repositório na aba GitHub: as mesmas conexões e a mesma
+ // regra de sugestão da tela de Conexões, que ficam em owner-suggestions.js.
+ repoInfo:(repo,inventario)=>{
+  const recurso={provider:'github',id:repo.id,name:repo.name};
+  const conexoes=state.resourceBindings.filter(b=>b.active!==false);
+  const dono=conexoes.find(b=>casaConexao(b,recurso));
+  const rotuloDe=b=>b.product_id?state.overview?.products?.find(p=>p.id===b.product_id)?.name:state.overview?.engagements?.find(e=>e.id===b.engagement_id)?.label;
+  if(dono) return {dono:rotuloDe(dono)||'registrado'};
+  const s=sugerirDono(recurso,{itens:achatar(inventario),conexoes,donos:{products:state.overview?.products||[],engagements:serviceEngagements(),tenants:state.overview?.tenants||[]},casa:casaConexao});
+  return s?.dono?{sugestao:`${s.rotulo} (${s.motivo})`}:s?.ambiguo?{sugestao:`o nome combina com mais de um dono: ${s.ambiguo.join('; ')}`}:null;
+ },
  owners:()=>({
   // O tipo do item vai junto, já traduzido: o dicionário de tipos é daqui, e
   // delivery.js copiá-lo seria a segunda verdade sobre como se chama cada tipo.

@@ -12,6 +12,7 @@
 // recusar, e a tela mostra a recusa em vez de escondê-la. Desligar e trocar de dono
 // pedem motivo porque é o motivo que, meses depois, separa uma decisão de um sumiço.
 import { providerLogo, createIcon } from './icons.js';
+import { achatar, sugerirDono, irmaosDoRepositorio } from './owner-suggestions.js';
 
 /**
  * Casamento entre uma conexão confirmada e um item do inventário do provedor.
@@ -55,6 +56,9 @@ const AMBIENTES = { production: 'Produção', staging: 'Homologação', developm
 // parte, senão a tela grava 'frontend' onde o banco já disse 'backend'.
 const TIPO_PADRAO = { vercel: 'frontend', easypanel: 'backend', github: 'repository' };
 
+// Como a contratação se chama, em uma palavra, na frase da sugestão.
+const MODELOS = { on_demand: 'sob demanda', education: 'mentoria', consulting: 'consultoria', advisory: 'assessoria', product: 'produto', unclassified: 'a classificar' };
+
 const dataHora = valor => valor ? new Date(valor).toLocaleString('pt-BR') : '';
 
 export function setupConnections({ api, openTenant, openProduct, onChanged = () => {} }) {
@@ -74,10 +78,10 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
  // com id projeto/serviço — é o formato que delivery-options.mjs já devolve e o
  // que está gravado no banco. Listar por projeto era o motivo de um serviço
  // classificado aparecer como "Classificação pendente".
- const itensDoInventario = () => INVENTARIADOS.flatMap(provider => {
-  const bloco = inventario?.[provider];
-  return bloco?.status === 'ok' ? bloco.items.map(item => ({ provider, id: item.id, name: item.name })) : [];
- });
+ const itensDoInventario = () => achatar(inventario);
+
+ // O que a sugestão de dono precisa saber, no mesmo formato para toda chamada.
+ const contextoDeSugestao = () => ({ itens: itensDoInventario(), conexoes: conexoes.filter(b => b.active), donos, casa: casaConexao });
 
  const lido = provider => inventario?.[provider]?.status === 'ok';
 
@@ -277,22 +281,45 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
   copy.append(cabeca, node('span', `${PROVEDORES[recurso.provider]} · ${TIPOS[TIPO_PADRAO[recurso.provider]]} quando confirmado`, 'detail'), node('code', recurso.id, 'connection-external-id'));
   const acoes = node('div', undefined, 'connection-actions'), select = seletorDeDono();
   select.className = 'connection-owner-select';
-  const confirmar = node('button', 'Vincular', 'table-action'); confirmar.type = 'button';
-  confirmar.onclick = async () => {
+  // Sugestão: escreve o motivo e pré-seleciona o dono, mas quem confirma é o operador.
+  const contexto = contextoDeSugestao(), sugestao = sugerirDono(recurso, contexto);
+  if (sugestao?.dono) {
+   select.value = sugestao.dono.product_id ? `product:${sugestao.dono.product_id}` : `engagement:${sugestao.dono.engagement_id}`;
+   const modelo = sugestao.modelo ? ` · ${MODELOS[sugestao.modelo] || sugestao.modelo}` : '';
+   copy.append(node('span', `Sugestão: ${sugestao.rotulo}${modelo} — ${sugestao.motivo}.`, 'connection-suggestion'));
+  } else if (sugestao?.ambiguo) {
+   copy.append(node('span', `O nome combina com mais de um dono (${sugestao.ambiguo.join('; ')}). Escolha um.`, 'connection-suggestion ambiguous'));
+  }
+  const irmaos = irmaosDoRepositorio(recurso, contexto);
+  const corpoDe = (item, dono) => ({
+   ...dono, resource_type: TIPO_PADRAO[item.provider], provider: item.provider,
+   external_id: item.id, display_name: item.name,
+   // Repositório não tem ambiente; projeto de deploy que aparece aqui é o que
+   // está no ar. Se for outro, a ficha do item edita — sem adivinhar em silêncio.
+   environment: item.provider === 'github' ? null : 'production',
+  });
+  const vincularTodos = async lote => {
    const dono = donoEscolhido(select.value);
    if (!dono) return;
-   confirmar.disabled = select.disabled = true;
+   botoes.forEach(b => { b.disabled = true; }); select.disabled = true;
    try {
-    await vincular({
-     ...dono, resource_type: TIPO_PADRAO[recurso.provider], provider: recurso.provider,
-     external_id: recurso.id, display_name: recurso.name,
-     // Repositório não tem ambiente; projeto de deploy que aparece aqui é o que
-     // está no ar. Se for outro, a ficha do item edita — sem adivinhar em silêncio.
-     environment: recurso.provider === 'github' ? null : 'production',
-    });
+    // Um a um, e parando no primeiro erro: cada vínculo é uma trilha própria, e um
+    // lote que "mais ou menos" gravou é pior do que um que parou dizendo onde.
+    for (const item of lote) await vincular(corpoDe(item, dono));
     await recarregar();
-   } catch (error) { confirmar.disabled = select.disabled = false; $('connections-message').textContent = error.message; }
+   } catch (error) { botoes.forEach(b => { b.disabled = false; }); select.disabled = false; $('connections-message').textContent = error.message; }
   };
+  const confirmar = node('button', 'Vincular', 'table-action'); confirmar.type = 'button';
+  confirmar.onclick = () => vincularTodos([recurso]);
+  const botoes = [confirmar];
+  acoes.append(select, confirmar);
+  if (irmaos.length) {
+   const todos = node('button', `Vincular com o repositório (${irmaos.length + 1})`, 'table-action'); todos.type = 'button';
+   todos.title = irmaos.map(item => `${PROVEDORES[item.provider]}: ${item.name}`).join('\n');
+   todos.onclick = () => vincularTodos([recurso, ...irmaos]);
+   botoes.push(todos); acoes.append(todos);
+   copy.append(node('span', `Sai do mesmo repositório: ${irmaos.map(item => item.name).join(', ')}.`, 'detail'));
+  }
   acoes.append(select, confirmar);
   row.append(copy, acoes);
   return row;

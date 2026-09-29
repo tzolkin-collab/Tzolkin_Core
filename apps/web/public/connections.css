@@ -12,6 +12,8 @@
 .connection-row-head strong { overflow-wrap: anywhere; }
 .connection-row-head img, .connection-row-head svg { width: 18px; height: 18px; flex: 0 0 18px; }
 .connection-row-copy > .detail { grid-column: 1; }
+.connection-suggestion { grid-column: 1 / -1; padding: 6px 10px; border-left: 3px solid var(--brand, #29292c); background: #f1f2f4; border-radius: 4px; font-size: 13px; }
+.connection-suggestion.ambiguous { border-left-color: #b45309; background: #fdf6ec; }
 
 .connection-external-id { grid-column: 1; justify-self: start; padding: 3px 7px; border-radius: 4px; background: #f1f2f4; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
 
