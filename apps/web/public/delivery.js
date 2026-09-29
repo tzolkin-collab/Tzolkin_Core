@@ -337,13 +337,13 @@ export function setupDelivery({ api,openResource,onSaved,owners,repoLink,onLoade
    const project=projects.find(p => p.repository_id === repo.id), row=el('article',null,'delivery-repo-row');
    const mark=el('span',null,'delivery-mark'); mark.append(deliveryIcon('repo'));
    const body=el('div',null,'delivery-repo-body'); body.append(el('h4',repo.name),el('p',repo.archived ? 'Arquivado · somente leitura' : repo.default_branch ? `Branch padrão · ${repo.default_branch}` : 'Branch não informada','detail'));
-   const action=button(project ? 'Abrir projeto' : 'Configurar',() => project ? open(project) : open(null,repo),project ? 'secondary' : 'primary','arrow');
+   const action=button(project ? 'Abrir projeto' : 'Configurar',() => project ? open(project) : open(null,repo),'secondary','arrow');
    action.disabled=repo.archived && !project;
    // O dono do repositório (ou o controle para dar um), vindo de fora: o cadastro de
    // donos e as conexões são do painel, e esta tela não guarda cópia deles.
    const vinculo=repoLink?.(repo,inventory);
    if(vinculo) body.append(vinculo);
-   row.append(mark,body,el('span',project ? 'Vinculado' : 'Não configurado','status'),action); area.append(row);
+   row.append(mark,body,el('span',project ? 'Com projeto técnico' : 'Sem projeto técnico','status'),action); area.append(row);
   }
   if(github.truncated) area.append(el('p','Lista parcial: o limite de consulta foi atingido.','detail'));
  }

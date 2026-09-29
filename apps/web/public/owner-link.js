@@ -59,59 +59,58 @@ export function seletorDeDono(donos, selecionado = '') {
 }
 
 /**
- * O controle de um recurso sem dono: a sugestão (ou a ausência dela, dita), o
- * seletor de dono e o botão que vincula. `contexto` é { itens, conexoes, donos, casa }.
- * `aoVincular` roda depois de gravar, para a tela se redesenhar com a verdade nova.
- */
-export function controleDeVinculo({ recurso, contexto, api, aoVincular }) {
- const raiz = node('div', undefined, 'link-control');
- const sugestao = sugerirDono(recurso, contexto), select = seletorDeDono(contexto.donos);
- select.className = 'connection-owner-select';
- const erro = node('p', undefined, 'notice-inline link-error');
- if (sugestao?.dono) {
-  select.value = valorDoDono(sugestao.dono);
-  raiz.append(node('span', `Sugestão: ${sugestao.rotulo} — ${sugestao.motivo}.`, 'connection-suggestion'));
- } else if (sugestao?.ambiguo) {
-  raiz.append(node('span', `O nome combina com mais de um dono (${sugestao.ambiguo.join('; ')}). Escolha um.`, 'connection-suggestion ambiguous'));
- } else raiz.append(node('span', 'Sem dono e sem sugestão. Escolha um.', 'detail'));
-
- const irmaos = irmaosDoRepositorio(recurso, contexto);
- const botoes = [];
- const acionar = lote => async () => {
-  const dono = donoEscolhido(select.value);
-  if (!dono) { erro.textContent = 'Escolha o dono antes de vincular.'; return; }
-  erro.textContent = '';
-  botoes.forEach(b => { b.disabled = true; }); select.disabled = true;
-  try { await vincularRecursos(api, lote, dono); await aoVincular?.(); }
-  catch (falha) { erro.textContent = falha.message; botoes.forEach(b => { b.disabled = false; }); select.disabled = false; }
- };
- const acoes = node('div', undefined, 'connection-actions');
- const vincular = node('button', 'Vincular', 'table-action'); vincular.type = 'button'; vincular.onclick = acionar([recurso]);
- botoes.push(vincular); acoes.append(select, vincular);
- if (irmaos.length) {
-  const todos = node('button', `Vincular com o repositório (${irmaos.length + 1})`, 'table-action'); todos.type = 'button';
-  todos.title = irmaos.map(item => `${PROVEDORES[item.provider]}: ${item.name}`).join('\n');
-  todos.onclick = acionar([recurso, ...irmaos]);
-  botoes.push(todos); acoes.append(todos);
- }
- raiz.append(acoes, erro);
- return raiz;
-}
-
-/**
- * O controle de vínculo para uma linha de lista (repositório, projeto da Vercel,
- * serviço do EasyPanel): quem já é o dono, ou uma linha recolhida "Sem dono" /
- * "Sugestão: X" que abre o controle. Recolhido, porque uma aba com trinta recursos
- * não pode mostrar trinta seletores.
- * `rotuloDoDono(conexao)` devolve o nome do dono de uma conexão, ou nada.
+ * A linha de dono de um recurso, nas listas dos provedores (repositório, projeto da
+ * Vercel, serviço do EasyPanel). Uma linha só, sempre no mesmo formato:
+ *   [Dono] Kalidash sob demanda
+ *   [Sugestão] Kalidash sob demanda   [Vincular] [Com o repositório (2)]  Outro dono…
+ *   [Ambíguo] o nome combina com mais de um   Escolher…
+ *   [Sem dono]   Vincular…
+ * A sugestão se aceita com um clique, sem abrir nada; o motivo por extenso é o
+ * tooltip. O seletor só aparece quando o operador quer outro dono.
+ * `contexto` é { itens, conexoes, donos, casa }; `rotuloDoDono(conexao)` devolve o
+ * nome do dono de uma conexão; `aoVincular` roda depois de gravar.
  */
 export function vinculoNaLista({ recurso, contexto, api, aoVincular, rotuloDoDono }) {
+ const linha = node('div', undefined, 'own-line');
+ const etiqueta = (texto, tom) => node('span', texto, `own-tag ${tom}`);
  const conexao = contexto.conexoes.find(item => contexto.casa(item, recurso));
- if (conexao) return node('span', `Dono: ${rotuloDoDono(conexao) || 'registrado'}`, 'detail link-owner');
+ if (conexao) {
+  linha.append(etiqueta('Dono', 'linked'), node('span', rotuloDoDono(conexao) || 'registrado', 'own-name'));
+  return linha;
+ }
  const sugestao = sugerirDono(recurso, contexto);
- const resumo = sugestao?.dono ? `Sugestão: ${sugestao.rotulo}`
-  : sugestao?.ambiguo ? 'Sem dono · o nome combina com mais de um' : 'Sem dono · vincular';
- const caixa = node('details', undefined, 'link-details' + (sugestao?.dono ? ' suggested' : ''));
- caixa.append(node('summary', resumo), controleDeVinculo({ recurso, contexto, api, aoVincular }));
- return caixa;
+ const erro = node('span', undefined, 'notice-inline link-error');
+ const botoes = [];
+ const gravar = async (lote, dono) => {
+  if (!dono) { erro.textContent = 'Escolha o dono antes de vincular.'; return; }
+  erro.textContent = ''; botoes.forEach(b => { b.disabled = true; });
+  try { await vincularRecursos(api, lote, dono); await aoVincular?.(); }
+  catch (falha) { erro.textContent = falha.message; botoes.forEach(b => { b.disabled = false; }); }
+ };
+ const botao = (rotulo, classe, acao) => { const b = node('button', rotulo, classe); b.type = 'button'; b.onclick = acao; botoes.push(b); return b; };
+
+ // Outro dono: recolhido, com o seletor e o botão dentro.
+ const outroDono = rotulo => {
+  const caixa = node('details', undefined, 'other-owner'), select = seletorDeDono(contexto.donos);
+  select.className = 'connection-owner-select';
+  caixa.append(node('summary', rotulo), select, botao('Vincular ao escolhido', 'mini', () => gravar([recurso], donoEscolhido(select.value))));
+  return caixa;
+ };
+
+ if (sugestao?.dono) {
+  linha.title = sugestao.motivo;
+  linha.append(etiqueta('Sugestão', 'suggested'), node('span', sugestao.rotulo, 'own-name'), botao('Vincular', 'mini primary', () => gravar([recurso], sugestao.dono)));
+  const irmaos = irmaosDoRepositorio(recurso, contexto);
+  if (irmaos.length) {
+   const todos = botao(`Com o repositório (${irmaos.length + 1})`, 'mini', () => gravar([recurso, ...irmaos], sugestao.dono));
+   todos.title = irmaos.map(item => `${PROVEDORES[item.provider]}: ${item.name}`).join('\n');
+   linha.append(todos);
+  }
+  linha.append(outroDono('Outro dono…'));
+ } else if (sugestao?.ambiguo) {
+  linha.title = `O nome combina com: ${sugestao.ambiguo.join('; ')}`;
+  linha.append(etiqueta('Ambíguo', 'warn'), node('span', 'o nome combina com mais de um dono', 'own-name muted'), outroDono('Escolher…'));
+ } else linha.append(etiqueta('Sem dono', 'none'), outroDono('Vincular…'));
+ linha.append(erro);
+ return linha;
 }

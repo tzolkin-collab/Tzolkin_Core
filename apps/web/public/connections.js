@@ -263,41 +263,61 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
   return extras ? `Contratação · ${extras}` : 'Contratação';
  };
 
+ /** Checklist como pílula com uma barra fina: 2/4 se lê de relance. */
+ const pilulaDeChecklist = checklist => {
+  const pronta = checklist.ready, pilula = node('span', undefined, `check-pill ${pronta ? 'ready' : 'partial'}`);
+  const barra = node('i', undefined, 'check-bar'), preenchido = node('b'); preenchido.style.width = `${Math.round(100 * checklist.completed / Math.max(checklist.total, 1))}%`;
+  barra.append(preenchido);
+  pilula.append(node('span', pronta ? 'Checklist completo' : `Checklist ${checklist.completed}/${checklist.total}`), barra);
+  return pilula;
+ };
+
  const logosDe = bindings => {
   const grupo = node('span', undefined, 'owner-logos');
   for (const provider of [...new Set(bindings.map(b => b.provider))].slice(0, 4)) grupo.append(providerLogo(provider));
   return grupo;
  };
 
-  // O cadastro técnico do dono, compacto: quanto do checklist está pronto, o que
+  /** Um recurso dentro do cartão do dono: uma linha, e só o que foge do normal ganha etiqueta. */
+ function linhaDoRecurso(binding) {
+  const row = node('div', undefined, 'resource-row');
+  row.title = `${PROVEDORES[binding.provider] || binding.provider} · ${binding.external_id}${binding.external_id_kind === 'name' ? ' (vínculo por nome)' : ''}`;
+  const texto = node('div', undefined, 'resource-text');
+  const meta = [TIPOS[binding.resource_type] || binding.resource_type, AMBIENTES[binding.environment] || binding.environment].filter(Boolean).join(' · ');
+  texto.append(node('strong', binding.display_name), node('span', meta, 'resource-meta'));
+  if (sumiuDoProvedor(binding)) texto.append(chip('Não encontrada no provedor', 'danger'));
+  const acoes = node('div', undefined, 'resource-actions');
+  const botao = (rotulo, acao, classe = 'ghost') => { const b = node('button', rotulo, classe); b.type = 'button'; b.onclick = acao; return b; };
+  acoes.append(botao('Reatribuir', () => reatribuir(binding)), botao('Desvincular', () => desvincular(binding), 'ghost danger'), botao('Histórico', () => abrirHistorico(binding)));
+  row.append(providerLogo(binding.provider), texto, acoes);
+  return row;
+ }
+
+ // O cadastro técnico do dono, compacto: quanto do checklist está pronto, o que
  // falta e os dois botões que existiam na tela de Projetos técnicos.
- function rodapeDoCadastro(dono) {
+ function rodapeDoCadastro(dono, info) {
   const rodape = node('div', undefined, 'owner-project');
-  const projeto = projectFor(dono);
+  const projeto = projectFor(dono), texto = node('div', undefined, 'owner-project-text');
+  const acoes = node('div', undefined, 'owner-project-actions');
+  const botao = (rotulo, acao, classe = 'secondary') => { const b = node('button', rotulo, classe); b.type = 'button'; b.onclick = acao; return b; };
   if (!projeto) {
-   rodape.append(node('span', 'Sem cadastro técnico.', 'detail'));
-   const novo = node('button', 'Cadastrar projeto', 'table-action'); novo.type = 'button'; novo.onclick = () => openProject(null);
-   rodape.append(novo);
-   return rodape;
+   texto.append(node('strong', 'Cadastro técnico'), node('span', 'Ainda não cadastrado.', 'resource-meta'));
+   acoes.append(botao('Cadastrar projeto', () => openProject(null)));
+  } else {
+   const checklist = projeto.readiness, faltando = (checklist?.items || []).filter(item => !item.ready).map(item => item.label);
+   texto.append(node('strong', 'Cadastro técnico'), node('span', faltando.length ? `Falta: ${faltando.join(', ')}.` : 'Checklist completo.', 'resource-meta'));
+   acoes.append(botao('Configurações', () => openProject(projeto)));
+   if (projeto.belongs_to?.kind === 'item' && projeto.product_lifecycle_status === 'draft' && checklist?.ready) {
+    const ativar = botao(`Ativar ${projeto.belongs_to.item_kind_label || 'item'}`, async () => {
+     ativar.disabled = true;
+     try { await activateProject(projeto); await recarregar(); }
+     catch (error) { ativar.disabled = false; $('connections-message').textContent = error.message; }
+    }, 'primary');
+    acoes.append(ativar);
+   }
   }
-  const checklist = projeto.readiness;
-  rodape.append(chip(checklist ? (checklist.ready ? 'Checklist completo' : `Checklist ${checklist.completed}/${checklist.total}`) : 'Cadastro técnico', checklist?.ready ? 'active' : 'building'));
-  const faltando = (checklist?.items || []).filter(item => !item.ready).map(item => item.label);
-  if (faltando.length) rodape.append(node('span', `Falta: ${faltando.join('; ')}.`, 'detail'));
-  const acoes = node('div', undefined, 'connection-actions');
-  const configurar = node('button', 'Configurações', 'table-action'); configurar.type = 'button'; configurar.onclick = () => openProject(projeto);
-  acoes.append(configurar);
-  if (projeto.belongs_to?.kind === 'item' && projeto.product_lifecycle_status === 'draft' && checklist?.ready) {
-   const ativar = node('button', `Ativar ${projeto.belongs_to.item_kind_label || 'item'}`, 'table-action');
-   ativar.type = 'button';
-   ativar.onclick = async () => {
-    ativar.disabled = true;
-    try { await activateProject(projeto); await recarregar(); }
-    catch (error) { ativar.disabled = false; $('connections-message').textContent = error.message; }
-   };
-   acoes.append(ativar);
-  }
-  rodape.append(acoes);
+  if (info?.abrir) acoes.append(botao(info.tipo === 'item' ? 'Abrir o item' : 'Abrir a ficha', info.abrir, 'ghost'));
+  rodape.append(texto, acoes);
   return rodape;
  }
 
@@ -310,11 +330,10 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
   nome.append(node('strong', info.rotulo), node('small', naturezaDoDono(primeira)));
   const projeto = projectFor(dono), checklist = projeto?.readiness;
   resumo.append(logosDe(bindings), nome, node('span', `${bindings.length} ${bindings.length === 1 ? 'recurso' : 'recursos'}`, 'owner-count'),
-   checklist ? chip(checklist.ready ? 'Checklist completo' : `Checklist ${checklist.completed}/${checklist.total}`, checklist.ready ? 'active' : 'building') : node('span'));
+   checklist ? pilulaDeChecklist(checklist) : node('span'));
   const corpo = node('div', undefined, 'owner-body'), lista = node('div', undefined, 'list-panel');
-  lista.append(...bindings.map(b => linhaDeConexao(b, { mostrarDono: false })));
-  corpo.append(lista, rodapeDoCadastro(dono));
-  if (info.abrir) { const ficha = node('button', info.tipo === 'item' ? 'Abrir o item' : 'Abrir a ficha da empresa', 'table-action'); ficha.type = 'button'; ficha.onclick = info.abrir; corpo.append(ficha); }
+  lista.append(...bindings.map(linhaDoRecurso));
+  corpo.append(lista, rodapeDoCadastro(dono, info));
   cartao.append(resumo, corpo);
   return cartao;
  }
