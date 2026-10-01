@@ -12,8 +12,9 @@ Registro de decisões de arquitetura. **Só o que é relevante e caro reverter**
 | [0006](0006-checkout-transparente-e-escopo-pci.md) | Checkout transparente com Elements; escopo PCI do cartão Asaas | `[ACEITA]` para o transparente · `[PENDENTE DE DECISÃO]` para cartão Asaas |
 | [0007](0007-portfolio-kind-rotulo-ou-regra.md) | O que `portfolio_kind` governa: rótulo cadastral ou regra do sistema | `[ACEITA]` — classificação (032) e opção B, implementada |
 | [0008](0008-origem-da-cobranca-de-servicos.md) | De qual registro nasce a cobrança de Mentorias, Consultorias e Sites | `[ACEITA]` — opção B: nasce do contrato comercial aceito; NFS-e pela Contabilizei; disponível só no extrato |
-| [0009](0009-tipos-de-espaco-do-portfolio.md) | Tipos de espaço do portfólio | `[ACEITA]` — código pronto; migração 036 ainda não aplicada |
+| [0009](0009-tipos-de-espaco-do-portfolio.md) | Tipos de espaço do portfólio | `[ACEITA]` — código pronto; migração 036 aplicada |
 | [0010](0010-go-mysql-somente-apos-gates.md) | Go + MySQL somente após gates de paridade e desempenho | `[PROPOSTO]` — spike isolado, sem corte de produção |
+| [0011](0011-leads-centralizados-no-core.md) | Leads centralizados no Core; regra de negócio nos produtos | `[ACEITA]` — o produto chama o intake direto; sem fila nem banco de produto |
 
 ## Regras
 

@@ -22,10 +22,12 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 ## 1. Leads e funil — a frente atual
 
 - [ ] **P1** O site manda o lead **direto** ao intake do Core (decisão: tudo centralizado, sem banco por produto).
-- [ ] **P1** Remover do Core o worker/fila do site: `integrations/institutional-outbox.mjs`, `modules/inbound-delivery.mjs`,
+- [x] **P1** Remover do Core o worker/fila do site: `integrations/institutional-outbox.mjs`, `modules/inbound-delivery.mjs`,
   linha "Entrega do site" em `commercial.js`, variáveis `INBOUND_SITE_*`, e os trechos de teste que leem o SQL do site
   (`scripts/test-commercial.mjs:10`, `test/commercial-intake.test.mjs`).
-- [ ] **P1** Corrigir `DATA-OWNERSHIP.md` (lead só no Site) e registrar a decisão em ADR 0011.
+  *(feito em 01/10: worker, rota, tela e variáveis `INBOUND_*` saíram; testes verdes.)*
+- [x] **P1** Corrigir `DATA-OWNERSHIP.md` (lead só no Site) e registrar a decisão em ADR 0011.
+  *(feito em 01/10: ADR 0011 e `DATA-OWNERSHIP.md`.)*
 - [ ] **P1** **Rede de segurança do envio** sem banco: o site tenta o intake 2 a 3 vezes (idempotente) e, se falhar,
   manda e-mail interno com o lead. *(proposta, [D])*
 - [ ] **P1** Dedupe de pessoa e empresa no intake (e-mail, CPF por hash, CNPJ alfanumérico). Hoje cada lead cria uma
@@ -214,7 +216,7 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | Bloco | Abertos |
 |---|---:|
 | 0. Lembretes que você pediu | 1 |
-| 1. Leads e funil | 18 |
+| 1. Leads e funil | 16 |
 | 2. Risco sem volta | 8 |
 | 3. Dinheiro, cobrança e fiscal | 15 |
 | 4. Conexões, infraestrutura e deploy | 11 |
@@ -225,6 +227,6 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | 9. Documentação a corrigir | 5 |
 | 10. Fora do Core | 2 |
 | 11. Substituir o Notion pelo Core | 11 |
-| **Total** | **102** |
+| **Total** | **100** |
 
-Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 1. Dos 102 abertos: **P0: 7**, **[VOCÊ]: 8**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
+Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 3. Dos 100 abertos: **P0: 7**, **[VOCÊ]: 8**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.

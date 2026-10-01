@@ -17,22 +17,22 @@ Cada dado tem **um** dono. O dono decide o schema, guarda o registro e responde 
 | Catálogo de produtos | **Core** (espelho do Notion) | `products`, `ecosystem_entries` | `[EXISTENTE E VERIFICADO]` |
 | Contrato e direitos | **Core** | `tzolkin_core.entitlements` | `[EXISTENTE E VERIFICADO]` |
 | Credencial de app | **Core** | `app_clients` (só hash) | `[EXISTENTE E VERIFICADO]` |
-| **Lead comercial da TZOLKIN** | **`tzolkin-site`** | banco institucional, schema `institucional.leads` | `[EXISTENTE E VERIFICADO]` — banco **separado** do Core |
+| **Lead comercial da TZOLKIN** | **Core** | `commercial_leads`, `commercial_attributions` | `[DECIDIDO]` — [ADR 0011](decisions/0011-leads-centralizados-no-core.md); o produto envia direto ao intake |
 | Fila de e-mail do institucional | **`tzolkin-site`** | `institucional.email_outbox` | `[EXISTENTE E VERIFICADO]` |
 | Sessão de chat do consultor | **`chatbot-api`** | Redis | `[EXISTENTE E VERIFICADO]` |
-| **Lead de uma organização cliente** | **Backend do produto** | banco do produto | Fora do Core, por decisão |
+| **Lead de uma organização cliente** | **Backend do produto** | banco do produto | Fora do Core por enquanto — `[PENDENTE DE DECISÃO]` na [ADR 0011](decisions/0011-leads-centralizados-no-core.md) |
 | **Consumidor final** | **Backend do produto** | banco do produto | Fora do Core, por decisão |
 | Agenda, pedido, estoque, matrícula, progresso | **Backend do produto** | banco do produto | Fora do Core, por decisão |
 | Documentos, calendários, financeiro executivo | **Notion** | workspace | Fonte de verdade; o Core não sincroniza |
 | Contabilidade fiscal | **Contabilizei** | plataforma deles | [BILLING.md](BILLING.md) |
 | Dado de cartão | **Provedor** (Stripe/Asaas) | tokenização/checkout | Nunca no Core — [BILLING.md](BILLING.md) |
 
-### Os dois tipos de lead não se misturam `[DECIDIDO]`
+### Leads: centralizados no Core `[DECIDIDO]` — [ADR 0011](decisions/0011-leads-centralizados-no-core.md)
 
-- **Lead da TZOLKIN**: alguém interessado no que a TZOLKIN vende. Captado em `tzolkin.cloud`, gravado no banco institucional. É insumo do comercial próprio.
-- **Lead de uma organização cliente**: alguém interessado no que o *cliente* vende, captado dentro de um produto. Pertence ao cliente.
+- **Lead da TZOLKIN** (dos espaços da TZOLKIN): vive no Core. O produto chama o intake direto; não há banco de produto para lead.
+- **Lead de uma organização cliente**: continua fora do Core por enquanto. Entrar exige papel de operador de dado pessoal definido em contrato.
 
-**O Core não recebe leads operacionais de clientes.** Se um resumo de gestão for necessário algum dia, ele é definido explicitamente, minimizado e documentado — não é subproduto de nada.
+*Substitui a regra anterior, que mandava o lead da TZOLKIN para o banco institucional do `tzolkin-site`.*
 
 ---
 

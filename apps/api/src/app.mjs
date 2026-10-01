@@ -1,4 +1,3 @@
-import {inboundDeliveryRoutes} from './modules/inbound-delivery.mjs';
 // Composição do Core: pipeline de requisição + registro dos módulos.
 //
 // Ordem deliberada: cabeçalhos → método → origem → estáticos → rota →
@@ -54,12 +53,11 @@ const MODULES = [
 
 // `security` é o estado do transporte do banco medido por platform/database.mjs.
 // Ausente = não medido; os endpoints reportam 'unknown' em vez de fingir segurança.
-export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, hostingerDnsOptions, webOrigin,serveAsset, mediaOptions, webhookEnv, catalogAdapter, checkoutOptions, marketingOptions, inboundPool, pushOptions} = {}) {
+export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, hostingerDnsOptions, webOrigin,serveAsset, mediaOptions, webhookEnv, catalogAdapter, checkoutOptions, marketingOptions, pushOptions} = {}) {
  if (webOrigin && !(/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(webOrigin)||/^https:\/\/[a-z0-9.-]+(?::[1-9][0-9]{0,4})?$/.test(webOrigin))) throw new Error('Use an explicit HTTP loopback or HTTPS web origin.');
  const sessions = identity||createSessionStore({ adminPassword, clock });
  const router = createRouter();
  for (const register of MODULES) register(router);
- inboundDeliveryRoutes(router,{inboundPool});
  // Integrações externas são opcionais e injetáveis: os testes passam um registro
  // apontado para um stub local, e nunca tocam num provedor de verdade.
  deploysRoutes(router, { registry: deployRegistry ?? buildRegistry(), clock });
