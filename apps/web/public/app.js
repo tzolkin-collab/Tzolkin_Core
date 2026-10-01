@@ -42,7 +42,8 @@ const $ = id => document.getElementById(id);
 fetch('/api/auth/mode').then(r=>r.ok?r.json():null).then(auth=>{const oidc=auth?.mode==='google-oidc';$('login-form').hidden=oidc;$('google-login').hidden=!oidc;if(oidc&&new URLSearchParams(location.search).has('auth_error'))$('login-notice').textContent='Conta Google não autorizada ou login expirado.';}).catch(()=>{$('login-notice').textContent='Não foi possível verificar o modo de acesso. Atualize a página.';});
 $('plan-help').textContent='Use o slug de uma oferta deste produto. Ele identifica as condições comerciais copiadas para o contrato.';
 
-const state = { context: '', view: 'overview', overview: null, product: null, catalog: [], deploys: [], resourceBindings: [], infrastructure: null, management: null, dns: null, topology: null, selectedTenant: null, clientSummary: null, clientBack: 'clients', inboundTab: 'leads', portfolioTab: 'all' };
+const state = { context: '', view: 'overview', overview: null, product: null, catalog: [], deploys: [], resourceBindings: [], infrastructure: null, management: null, dns: null, topology: null, security: null, selectedTenant: null, clientSummary: null, clientBack: 'clients', inboundTab: 'leads', portfolioTab: 'all' };
+let loadGeneration = 0;
 
 // Cada contexto declara a própria navegação. Menu só existe quando há dado real por trás.
 //
@@ -64,13 +65,15 @@ const CONTEXTS = {
    clients: { title: 'Clientes', section: 'view-clients', action: ['Novo cliente', 'tenant-dialog'], metrics:false },
    leads: { title: 'Inbound', section: 'view-commercial', metrics:false },
    // Campanhas mora dentro de Inbound, como uma aba (montarInbound).
-   emails: { title: 'E-mails', section: 'view-emails', metrics:false },
+   // Oculta até enviar e receber de verdade: a própria tela diz que ainda são rascunhos.
+   emails: { title: 'E-mails', section: 'view-emails', metrics:false, hidden:true },
    client: { title: 'Cliente', section: 'view-client', hidden:true, metrics:false },
    // PORTFÓLIO — o que a TZOLKIN tem para vender.
-   products: { title: 'Portfólio', section: 'view-products', action: ['Novo espaço', 'space-dialog'] },
+   products: { title: 'Portfólio', section: 'view-products', action: ['Novo espaço', 'space-dialog'], metrics:false },
    // ENTREGA — o trabalho contratado e o andamento dele.
    services: { title: 'Serviços', section: 'view-services', metrics:false },
-   tracking: { title: 'Acompanhamento', section: 'view-tracking', metrics:false },
+   // Oculta até ligar a atividade a uma contratação (a ficha do cliente admite que não liga).
+   tracking: { title: 'Acompanhamento', section: 'view-tracking', metrics:false, hidden:true },
    serviceCampaigns: { title: 'Campanhas do serviço', section: 'view-service-campaigns', metrics: false, hidden:true },
    // TECNOLOGIA — Conexões diz de quem é cada recurso; uma tela por provedor diz onde ele está.
    connections: { title: 'Conexões', section: 'view-connections', action: ['Novo projeto', 'delivery-new'], metrics:false },
@@ -82,9 +85,11 @@ const CONTEXTS = {
    serverMetrics: { title: 'Métricas de servidor', section: 'view-server-metrics', metrics:false, hidden:true },
    // BASES DE DADOS
    database: { title: 'Banco de dados', section: 'view-database', metrics:false },
-   redis: { title: 'Redis e caches', section: 'view-redis', metrics:false },
+   // Oculta: todo número da tela é "Não exposto"; volta com métricas de verdade.
+   redis: { title: 'Redis e caches', section: 'view-redis', metrics:false, hidden:true },
    // ADMINISTRAÇÃO
-   access: { title: 'Acessos', section: 'view-access', action: ['Vincular acesso', 'member-dialog'] },
+   // Acesso a produto é assunto do contexto de produto; no geral a tela só mostrava vazio.
+   access: { title: 'Acessos', section: 'view-access', action: ['Vincular acesso', 'member-dialog'], hidden:true },
    settings: { title: 'Configurações', section: 'view-settings', metrics:false, hidden:true },
    security: { title: 'Segurança', section: 'view-security', metrics:false, hidden:true },
   },
@@ -172,16 +177,13 @@ function option(value, label) { const el = node('option', label); el.value = val
 
 // O transporte do banco é medido no servidor; aqui só se exibe o veredito.
 // Sem hostname, sem credencial — só o estado.
-async function renderSecurityBanner() {
+function renderSecurityBanner() {
  const banner = $('security-banner');
- try {
-  const health = await (await fetch('/health')).json();
-  const claro = health.database_transport === 'plaintext';
-  banner.hidden = !claro;
-  if (claro) banner.textContent =
-   'O banco está em host remoto e a conexão não é criptografada: senha e dados trafegam em texto claro. '
-   + 'Não cadastre cliente real até isto ser corrigido.';
- } catch { banner.hidden = true; }
+ const claro = state.security?.transport === 'plaintext';
+ banner.hidden = !claro;
+ if (claro) banner.textContent =
+  'O banco está em host remoto e a conexão não é criptografada: senha e dados trafegam em texto claro. '
+  + 'Não cadastre cliente real até isto ser corrigido.';
 }
 
 // Limpa tudo que veio do servidor. Chamado ao trocar de contexto e ao sair:
@@ -211,7 +213,8 @@ function clearRenderedData() {
 }
 
 function signedOut() {
- state.overview = null; state.catalog = []; state.deploys = []; state.resourceBindings = []; state.infrastructure = null; state.management = null; state.dns = null; state.topology = null; state.product = null; state.context = '';
+ loadGeneration++;
+ state.overview = null; state.catalog = []; state.deploys = []; state.resourceBindings = []; state.infrastructure = null; state.management = null; state.dns = null; state.topology = null; state.security = null; state.product = null; state.context = '';
  clearRenderedData();
  $('context-select').replaceChildren(option('', 'TZOLKIN · Geral'));
  $('workspace').hidden = true; $('login').hidden = false;
@@ -439,6 +442,18 @@ const canonKind=kind=>state.overview?.kind_aliases?.[kind]||kind;
 const kindInfo=kind=>kindRegistry().find(item=>item.kind===canonKind(kind))||null;
 const kindLabelOf=kind=>kindInfo(kind)?.label||'Item';
 
+// O cartão é o alvo do clique: sem um "Abrir X →" repetido em cada linha. Botões e
+// links dentro do cartão continuam com a ação própria.
+function cardLink(card, open, label) {
+ card.classList.add('is-clickable');card.tabIndex=0;card.setAttribute('role','link');card.setAttribute('aria-label',label);
+ card.onclick=event=>{if(event.target.closest('button,a'))return;open();};
+ card.onkeydown=event=>{if(event.key==='Enter'&&event.target===card)open();};
+ return card;
+}
+// Papel e cargo que dizem a mesma coisa ("Aluno · Aluno") viram um rótulo só.
+const roleLine=person=>[clientLabel(person.role),person.title].filter((v,i,a)=>v&&a.findIndex(x=>x&&String(x).toLocaleLowerCase('pt-BR')===String(v).toLocaleLowerCase('pt-BR'))===i).join(' · ');
+const plural2=(n,um,varios)=>`${n} ${n===1?um:varios}`;
+
 function renderTenants() {
  const overview = state.overview;
  if (!overview) return;
@@ -461,9 +476,11 @@ function renderTenants() {
   head.append(identity,node('span',clientLabel(tenant.lifecycle_status),'status '+(['active','onboarding'].includes(tenant.lifecycle_status)?'active':tenant.lifecycle_status==='unclassified'?'building':'')));
   const facts=node('div',undefined,'client-card-facts');
   const fact=(label,value)=>{const item=node('div');item.append(node('span',label),node('strong',value));return item;};
-  facts.append(fact('Contratação',engagements.length?engagements.map(e=>clientLabel(e.service_model)).join(', '):'A classificar'),fact('Oferta / marca',engagements.length?engagements.map(e=>e.label).join(', '):'Sem oferta'),fact('Stakeholders',String(stakeholders.length)));
-  const open=node('button','Abrir cliente →','secondary');open.type='button';open.onclick=()=>openClient(tenant.id);
-  card.append(head,facts,open);$('tenants').append(card);
+  // A oferta só aparece quando acrescenta algo ao tipo ("Assessoria / Assessoria" não acrescenta).
+  const norm=t=>String(t||'').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/\p{M}/gu,'').trim();
+  const ofertas=[...new Set(engagements.filter(e=>e.label&&norm(e.label)!==norm(clientLabel(e.service_model))).map(e=>e.label))];
+  facts.append(fact('Contratação',engagements.length?[...new Set(engagements.map(e=>clientLabel(e.service_model)))].join(', '):'A classificar'),...(ofertas.length?[fact('Oferta',ofertas.join(', '))]:[]),fact('Pessoas',String(stakeholders.length)));
+  card.append(head,facts);cardLink(card,()=>openClient(tenant.id),`Abrir ${tenant.name}`);$('tenants').append(card);
  }
 }
 
@@ -483,10 +500,10 @@ function renderDirectory(kind, searchId, targetId, emptyId) {
  for(const tenant of rows){
   const engagements=overview.engagements.filter(e=>e.tenant_id===tenant.id), people=overview.stakeholders.filter(s=>s.tenant_id===tenant.id);
   const card=node('article',undefined,'client-card'),head=node('header'),identity=node('div');
-  identity.append(node('span',tenant.name.slice(0,1),'client-avatar'),node('span'));identity.lastChild.append(node('h3',tenant.name),node('small',clientLabel(tenant.organization_type)));
+  identity.append(node('span',tenant.name.slice(0,1),'client-avatar'),node('span'));identity.lastChild.append(node('h3',tenant.name),...(tenant.organization_type==='company'?[]:[node('small',clientLabel(tenant.organization_type))]));
   head.append(identity,node('span',clientLabel(tenant.relationship_kind),'status'));const facts=node('div',undefined,'client-card-facts');
-  const fact=(l,v)=>{const i=node('div');i.append(node('span',l),node('strong',v));return i;};facts.append(fact('Contratação',engagements.length?engagements.length+' vínculo(s)':'Sem vínculo'),fact('Stakeholders',String(people.length)),fact('Situação',clientLabel(tenant.lifecycle_status)));
-  const open=node('button','Abrir organização →','secondary');open.type='button';open.onclick=()=>openClient(tenant.id);card.append(head,facts,open);target.append(card);
+  const fact=(l,v)=>{const i=node('div');i.append(node('span',l),node('strong',v));return i;};facts.append(fact('Contratação',engagements.length?plural2(engagements.length,'contratação','contratações'):'Sem contratação'),fact('Pessoas',String(people.length)),fact('Situação',clientLabel(tenant.lifecycle_status)));
+  card.append(head,facts);cardLink(card,()=>openClient(tenant.id),`Abrir ${tenant.name}`);target.append(card);
  }
 }
 function renderLeads(){renderDirectory(t=>t.relationship_kind==='prospect','lead-search','leads','leads-empty');}
@@ -619,11 +636,11 @@ function paintClientDetail(summary){
  else{
   const team=panel('Pessoas','Quem participa do relacionamento.');
   if(!people.items.length)team.append(node('p','Nenhuma pessoa vinculada a esta empresa.','empty-list'));
-  for(const person of people.items){const r=row(person.name,clientLabel(person.role)+(person.title?' · '+person.title:''));r.prepend(node('span',person.name.slice(0,1),'person-avatar'));if(person.is_primary)r.append(node('span','Principal','status active'));team.append(r);}
+  for(const person of people.items){const r=row(person.name,roleLine(person));r.prepend(node('span',person.name.slice(0,1),'person-avatar'));if(person.is_primary)r.append(node('span','Principal','status active'));team.append(r);}
  }
 
  if(!hours.available)unavailable('Horas do mês',hours);
- else{
+ else if(hours.minutes){
   // Soma da empresa: atividade ainda não tem ligação com contratação (by_engagement:false).
   const time=panel('Horas do mês',`${monthTitle(hours.month)} · somadas por empresa; o Acompanhamento ainda não liga atividade a contratação.`);
   time.append(node('strong',hours.minutes?`${workedTime(hours.minutes)} em ${plural(hours.logs,'apontamento','apontamentos')} de ${plural(hours.activities,'atividade','atividades')}`:'Nenhuma hora lançada neste mês.','client-access-count'));
@@ -666,7 +683,7 @@ function fillEngagementProducts(){
 function renderPeople(){
  if(!state.overview)return;const names=new Map(state.overview.tenants.map(t=>[t.id,t.name])),query=$('people-search').value.trim().toLocaleLowerCase('pt-BR');
  const people=state.overview.stakeholders.filter(p=>(p.name+' '+(p.title||'')+' '+(names.get(p.tenant_id)||'')).toLocaleLowerCase('pt-BR').includes(query));$('stakeholder-directory').replaceChildren();$('people-empty').hidden=people.length>0;
- for(const p of people){const card=node('article',undefined,'person-card');card.append(node('span',p.name.slice(0,1),'person-avatar'),node('div'));card.lastChild.append(node('h3',p.name),node('p',clientLabel(p.role)+(p.title?' · '+p.title:''),'detail'),node('button',names.get(p.tenant_id)||'Cliente','person-company'));card.lastChild.lastChild.type='button';card.lastChild.lastChild.onclick=()=>openClient(p.tenant_id);if(p.is_primary)card.append(node('span','Principal','status active'));$('stakeholder-directory').append(card);}
+ for(const p of people){const card=node('article',undefined,'person-card');card.append(node('span',p.name.slice(0,1),'person-avatar'),node('div'));card.lastChild.append(node('h3',p.name),node('p',roleLine(p),'detail'),node('button',names.get(p.tenant_id)||'Cliente','person-company'));card.lastChild.lastChild.type='button';card.lastChild.lastChild.onclick=()=>openClient(p.tenant_id);if(p.is_primary)card.append(node('span','Principal','status active'));$('stakeholder-directory').append(card);}
 }
 
 function record(title, detail, edit) {
@@ -688,7 +705,7 @@ const productLifecycle=product=>{
  const deployment=readyDeployment(product);
  const evidenceStatus=catalogOf(product)?.status||'';
  if(product.lifecycle_status==='draft')return {label:'Rascunho',tone:'building',next:'Concluir o checklist do projeto antes de ativar',unproven:true};
- if(deployment)return {label:'No ar',tone:'active',next:'Deploy READY observado no provedor'};
+ if(deployment)return {label:'No ar',tone:'active',next:'Publicado e conferido no provedor'};
  if(product.portfolio_kind==='internal')return {label:'Uso interno',tone:'',next:'Não é vendido; guarda a infraestrutura da própria TZOLKIN'};
  if(!hasCapability(product,'checkout')&&hasCapability(product,'commercial'))return {label:'Opera por contrato',tone:'',next:'Contratada por proposta; deploy não é requisito'};
  if(evidenceStatus==='Planejamento')return {label:'Em planejamento',tone:'building',next:'Criar ou vincular um projeto de deploy',unproven:true};
@@ -747,13 +764,13 @@ function renderServices(){
  // Uma conexão de contratação é de um serviço; contar as linhas do registro único
  // é contar a mesma coisa que a tela mostra, e não o tamanho de uma tabela.
  const conectadas=state.resourceBindings.filter(b=>b.engagement_id&&todos.some(e=>e.id===b.engagement_id));
- $('services-summary').replaceChildren(...[['Contratações de serviço',todos.length],[serviceFilter?clientLabel(serviceFilter):'Nesta lista',engagements.length],['Com projeto conectado',new Set(conectadas.map(b=>b.engagement_id)).size]].map(([label,value])=>{const card=node('article');card.append(node('span',label),node('strong',String(value)));return card;}));
+ $('services-summary').replaceChildren(...[['Contratações de serviço',todos.length],...(serviceFilter?[[clientLabel(serviceFilter),engagements.length]]:[]),['Com projeto conectado',new Set(conectadas.map(b=>b.engagement_id)).size]].map(([label,value])=>{const card=node('article');card.append(node('span',label),node('strong',String(value)));return card;}));
  // O filtro é montado a partir dos tipos que EXISTEM: uma opção que não traz nada
  // só ensina o operador a desconfiar da tela.
  const filtro=$('services-filter');
  if(filtro){
   const tipos=MODELOS_DE_SERVICO.filter(model=>todos.some(e=>e.service_model===model));
-  filtro.replaceChildren(option('',`Todos os tipos · ${todos.length}`),...tipos.map(model=>option(model,`${clientLabel(model)} · ${todos.filter(e=>e.service_model===model).length}`)));
+  filtro.replaceChildren(option('','Todos os tipos'),...tipos.map(model=>option(model,`${clientLabel(model)} · ${todos.filter(e=>e.service_model===model).length}`)));
   filtro.value=tipos.includes(serviceFilter)?serviceFilter:(serviceFilter='');
   filtro.onchange=()=>{serviceFilter=filtro.value;renderServices();};
  }
@@ -765,12 +782,12 @@ function renderServices(){
   const facts=node('div',undefined,'service-card-facts'),bindings=state.resourceBindings.filter(b=>b.engagement_id===engagement.id);
   facts.append(node('span',bindings.length?`${bindings.length} projeto${bindings.length===1?'':'s'} conectado${bindings.length===1?'':'s'}`:'Nenhum projeto conectado','detail'));
   for(const binding of bindings){const project=state.deploys.find(p=>casaConexao(binding,recursoDoDeploy(p)));const latest=project?.deployments?.[0];const row=node('div',undefined,'service-deploy-row');row.append(node('strong',binding.display_name),node('span',`${PROVIDER_LABELS[binding.provider]||binding.provider} · ${latest?.state_label||latest?.state||'sem deploy observado'}`,'detail'));if(latest?.url)row.append(catalogLink('Abrir ↗',latest.url,'product-live-link'));facts.append(row);}
-  const action=node('button','Abrir cliente →','secondary');action.type='button';action.onclick=()=>openClient(engagement.tenant_id);
+  cardLink(card,()=>openClient(engagement.tenant_id),`Abrir ${names.get(engagement.tenant_id)||'cliente'}`);
   // Campanhas por contratação: sob demanda, assessoria e consultoria têm
   // investimento próprio, e somá-los ao produto esconderia o custo real.
   const campanhas=node('button','Campanhas','secondary');campanhas.type='button';
   campanhas.onclick=()=>{switchView('serviceCampaigns');campaigns.loadService(engagement.id,engagement.label).catch(reportError);};
-  const acoes=node('div',undefined,'service-card-actions');acoes.append(action,campanhas);
+  const acoes=node('div',undefined,'service-card-actions');acoes.append(campanhas);
   card.append(head,facts,acoes);return card;
  }));
 }
@@ -1075,8 +1092,8 @@ function productResourceRow(product, category, item) {
  const wrapper=node('div',undefined,'product-architecture-entry'),row=node('div',undefined,'product-architecture-row');
  const title=item.name||item.provider||'Configuração',meta=[item.provider,item.repository||item.branch||item.record_type||item.kind,item.environment].filter(Boolean).join(' · ')||(item.offers?`${item.offers} oferta${item.offers===1?'':'s'}`:'');
  row.append(node('strong',title),node('span',meta,'detail'));
- const statusText=item.source==='confirmed'?(item.reconciliation==='missing'?'Não encontrado no provedor':item.reconciliation==='manual'?'Manual':'Confirmado e observado'):item.source==='detected'?'Detectado':'Configurado';
- row.append(node('span',statusText,`status ${item.reconciliation==='missing'?'danger':item.source==='detected'?'building':'active'}`));
+ const statusText=item.source==='confirmed'?(item.reconciliation==='missing'?'Não encontrado no provedor':item.reconciliation==='manual'?'Manual':item.reconciliation==='unverified'?'Provedor sem resposta agora':'Confirmado e observado'):item.source==='detected'?'Detectado':'Configurado';
+ row.append(node('span',statusText,`status ${item.reconciliation==='missing'?'danger':item.source==='detected'||item.reconciliation==='unverified'?'building':'active'}`));
  const actions=node('div',undefined,'product-resource-actions');
  if(item.source==='detected'){
   const confirm=node('button','Confirmar','table-action');confirm.type='button';confirm.onclick=async()=>{confirm.disabled=true;try{await api('/api/product-resource-bindings','PUT',{...resourcePayload(product,category,item),id:undefined,revision:undefined});await reloadProductConnections(product);}catch(error){confirm.disabled=false;reportError(error);}};actions.append(confirm);
@@ -1094,15 +1111,20 @@ function renderProductArchitecture(product) {
  const heading=node('div',undefined,'product-architecture-heading'),copy=node('div');copy.append(node('div','ARQUITETURA TÉCNICA','overview-kicker'),node('h3','Conexões e recursos'),node('p','O inventário detecta candidatos. Uma conexão confirmada é persistida, auditada e reconciliada com o provedor.','detail'));
  const add=node('button','Adicionar conexão','secondary');add.type='button';heading.append(copy,add);architecture.append(heading);
  const editor=node('div',undefined,'product-resource-editor');add.onclick=()=>{editor.replaceChildren(productResourceForm(product,{},()=>editor.replaceChildren()));};architecture.append(editor);
- if(!topology){architecture.append(node('p','A topologia ainda não foi consultada.','empty-list'));return architecture;}
+ if(!topology){architecture.append(node('p','Consultando as conexões nos provedores…','empty-list'));return architecture;}
  const missing=Object.values(topology.connections).flat().filter(item=>item.reconciliation==='missing').length;
  if(missing)architecture.append(node('p',`${missing} ${missing===1?'conexão confirmada não foi encontrada':'conexões confirmadas não foram encontradas'} no inventário atual. Revise antes do próximo deploy.`,'product-resource-warning'));
- const grid=node('div',undefined,'product-architecture-grid');
+ const grid=node('div',undefined,'product-architecture-grid'),vazias=[];
  for(const [category,[,label]] of Object.entries(PRODUCT_RESOURCE_TYPES)){
-  const group=node('article',undefined,'product-architecture-group');group.append(node('span',label,'product-architecture-label'));const items=topology.connections[category]||[];
-  if(!items.length)group.append(node('p','Ainda não identificado.','detail'));else items.forEach(item=>group.append(productResourceRow(product,category,item)));grid.append(group);
+  const items=topology.connections[category]||[];
+  if(!items.length){vazias.push(label);continue;}
+  const group=node('article',undefined,'product-architecture-group');group.append(node('span',label,'product-architecture-label'));
+  items.forEach(item=>group.append(productResourceRow(product,category,item)));grid.append(group);
  }
- architecture.append(grid);return architecture;
+ if(grid.children.length)architecture.append(grid);
+ // Nove "Ainda não identificado." em fila ensinam a ignorar a tela: uma linha só.
+ if(vazias.length)architecture.append(node('p',`Ainda sem: ${vazias.join(', ')}.`,'detail'));
+ return architecture;
 }
 
 function renderProductRecord(product) {
@@ -1270,44 +1292,67 @@ function renderContextPicker(products) {
 
 // O contexto geral é o único que carrega o cadastro completo.
 // O contexto de produto pede apenas o recorte daquele produto ao servidor.
+const loadIsCurrent = (ticket, context) => ticket === loadGeneration && context === state.context;
+
+// Integrações remotas enriquecem o painel depois que o cadastro já está usável.
+// Cada resposta confere a geração/contexto para nunca repintar uma tela posterior.
+async function hydrateGeneral(ticket, context, entries) {
+ let financeData=null,salesData=null,deployments=null,infrastructure=null;
+ const current=()=>loadIsCurrent(ticket,context);
+ const redraw=()=>{if(current())renderOverviewDashboard(entries,{finance:financeData,sales:salesData,deploys:deployments,infrastructure});};
+ const month=currentMonth();
+ const financial=Promise.all([
+  api('/api/finance/board?month='+month).catch(()=>null),
+  api('/api/finance/sales?month='+month).catch(()=>null),
+ ]).then(([finance,sales])=>{if(!current())return;financeData=finance;salesData=sales;redraw();});
+ const deployInventory=api('/api/deploys').then(data=>{
+  if(!current())return;
+  deployments=data;state.deploys=data.projects||[];renderDeploys(data);renderManagement();renderGeneral();redraw();
+  // A ficha pinta antes do inventário chegar: sem repintar, deploy vinculado ficaria "sem deploy observado".
+  if(state.view==='client'&&state.clientSummary?.tenant?.id===state.selectedTenant)paintClientDetail(state.clientSummary);
+ }).catch(error=>{if(current())$('deploys-status').replaceChildren(node('p',error.message,'security-banner'));});
+ $('easypanel-inventory').replaceChildren(node('p','Consultando EasyPanel…','empty-list'));
+ const easyPanelInventory=api('/api/infrastructure/easypanel').then(data=>{
+  if(!current())return;
+  infrastructure=data;state.infrastructure=data;renderEasypanel(data);renderManagement();redraw();
+ }).catch(()=>{if(current())$('easypanel-inventory').replaceChildren(node('p','Não foi possível consultar o EasyPanel.','empty-list'));});
+ await Promise.allSettled([financial,deployInventory,easyPanelInventory]);
+ redraw();
+}
+
+async function hydrateProduct(ticket, context) {
+ const current=()=>loadIsCurrent(ticket,context);
+ const tasks=[api('/api/products/topology').then(topology=>{if(!current())return;state.topology=topology;renderProduct();}).catch(()=>{})];
+ if(!state.deploys.length)tasks.push(api('/api/deploys').then(data=>{if(!current())return;state.deploys=data.projects||[];renderProduct();}).catch(()=>{}));
+ await Promise.allSettled(tasks);
+}
+
 async function load() {
+ const ticket=++loadGeneration,context=state.context;
  if (contextKind() === 'general') {
- // Uma leitura só de vínculo. As fachadas legadas (/api/product-deploy-bindings e
- // /api/service-deploy-bindings) devolvem recortes do MESMO registro desde a 034:
- // buscar as três era pedir a mesma verdade três vezes e arriscar exibi-la em três
- // formas diferentes. Continuam na API para quem ainda as chame; a tela, não.
- const [overview, catalog, resourceBindings, topology] = await Promise.all([api('/api/overview'), api('/api/ecosystem'), api('/api/product-resource-bindings'), api('/api/products/topology').catch(()=>null)]);
- state.overview = overview;
-  state.catalog = catalog.entries || [];
-  state.resourceBindings = resourceBindings.bindings || [];
-  state.topology = topology;
-  $('login').hidden = true; $('workspace').hidden = false;
-  fillContextSelect(overview.products);
-  renderGeneral();
-  renderPeople();
-  if(state.view==='client')renderClientDetail();
-  // Provedor externo pode estar fora do ar: o painel não pode cair junto.
-  const month=currentMonth(),[financeData,salesData]=await Promise.all([api('/api/finance/board?month='+month).catch(()=>null),api('/api/finance/sales?month='+month).catch(()=>null)]);
-  let deployments=null,infrastructure=null;
-  renderOverviewDashboard(catalog.entries,{finance:financeData,sales:salesData});
-  await api('/api/deploys').then(data=>{deployments=data;state.deploys=data.projects||[];renderDeploys(data);renderManagement();renderGeneral();renderOverviewDashboard(catalog.entries,{finance:financeData,sales:salesData,deploys:deployments});
-   // A ficha pinta antes do inventário chegar: sem repintar, deploy vinculado ficaria "sem deploy observado".
-   if(state.view==='client'&&state.clientSummary?.tenant?.id===state.selectedTenant)paintClientDetail(state.clientSummary);}).catch(error => {
-   $('deploys-status').replaceChildren(node('p', error.message, 'security-banner'));
-  });
-  $('easypanel-inventory').replaceChildren(node('p', 'Consultando EasyPanel…', 'empty-list'));
- await api('/api/infrastructure/easypanel').then(data=>{infrastructure=data;state.infrastructure=data;renderEasypanel(data);renderManagement();renderOverviewDashboard(catalog.entries,{finance:financeData,sales:salesData,deploys:deployments,infrastructure});}).catch(() => {
-   $('easypanel-inventory').replaceChildren(node('p', 'Não foi possível consultar o EasyPanel.', 'empty-list'));
-  });
-  renderOverviewDashboard(catalog.entries,{finance:financeData,sales:salesData,deploys:deployments,infrastructure});
- } else {
- const [productContext,topology,resourceBindings]=await Promise.all([api(`/api/products/${encodeURIComponent(state.context)}/console`),api('/api/products/topology').catch(()=>null),api(`/api/product-resource-bindings?product_id=${encodeURIComponent(state.context)}`).catch(()=>({bindings:[]}))]);state.product=productContext;state.topology=topology;state.resourceBindings=resourceBindings.bindings||[];
-  // Se o operador entrou direto em um produto, ainda não há motivo para ter
-  // carregado o inventário geral. Busca a evidência técnica sob demanda para
-  // o cartão de conexão continuar correto neste contexto.
-  if(!state.deploys.length) await api('/api/deploys').then(data=>{state.deploys=data.projects||[];}).catch(()=>{});
-  $('login').hidden = true; $('workspace').hidden = false;
- renderProduct();
+  // Uma viagem ao Postgres traz o cadastro, catálogo e vínculos necessários para
+  // o primeiro quadro. Topologia e provedores externos ficam fora do caminho crítico.
+  const bootstrap=await api('/api/bootstrap');
+  if(!loadIsCurrent(ticket,context))return;
+  const {overview,catalog,resource_bindings:resourceBindings}=bootstrap;
+  state.overview=overview;
+  state.catalog=catalog.entries||[];
+  state.resourceBindings=resourceBindings.bindings||[];
+  state.security=overview.security||null;
+  state.topology=null;
+   $('login').hidden = true; $('workspace').hidden = false;
+   fillContextSelect(overview.products);
+   renderGeneral();
+   renderPeople();
+   if(state.view==='client')renderClientDetail();
+   hydrateGeneral(ticket,context,state.catalog).catch(reportError);
+  } else {
+  const [productContext,resourceBindings]=await Promise.all([api(`/api/products/${encodeURIComponent(state.context)}/console`),api(`/api/product-resource-bindings?product_id=${encodeURIComponent(state.context)}`).catch(()=>({bindings:[]}))]);
+  if(!loadIsCurrent(ticket,context))return;
+  state.product=productContext;state.topology=null;state.resourceBindings=resourceBindings.bindings||[];
+   $('login').hidden = true; $('workspace').hidden = false;
+  renderProduct();
+  hydrateProduct(ticket,context).catch(reportError);
   // As capacidades do item acabaram de chegar: a navegação passa a ser a do tipo,
   // e uma tela que o tipo não tem volta para a visão geral.
   renderNav();
@@ -1317,7 +1362,7 @@ async function load() {
   if(state.view==='product-emails')await productEmails.load({...state.product.product,deploy_url:publishedDeployUrl(state.product.product),favicon_url:productFaviconUrl(state.product.product)});
  }
  renderContextChrome();
- await renderSecurityBanner();
+ renderSecurityBanner();
  if(contextKind()==='general') await resource.resume();
  if(state.view==='tracking') await tracking.load();
  if(state.view==='finance') await finance.load();

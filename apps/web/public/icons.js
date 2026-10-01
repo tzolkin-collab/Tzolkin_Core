@@ -41,13 +41,18 @@ export function providerLogo(name){
 // Identidade visual do produto. O Core resolve o favicon via um endpoint
 // protegido e allowlisted; se o deploy não expõe um ícone, usamos o pictograma
 // neutro em vez de atribuir a marca da plataforma de deploy.
+// A hidratação repinta os cartões várias vezes; sem este mapa cada repintura refazia a
+// mesma consulta ao endpoint. O resultado (inclusive a falha) vale pela sessão da página.
+const faviconLookups=new Map();
+const lookupFavicon=url=>{if(!faviconLookups.has(url))faviconLookups.set(url,fetch('/api/product-favicon?'+new URLSearchParams({url})).then(response=>response.ok?response.json():null).then(result=>result?.href||null).catch(()=>null));return faviconLookups.get(url);};
+
 export function productFavicon(url){
  if(!url)return createIcon('package');
  if(typeof url==='string'&&url.startsWith('/product-favicons/')){const img=document.createElement('img');img.src=url;img.alt='';img.width=24;img.height=24;img.className='product-favicon';img.setAttribute('aria-hidden','true');return img;}
  try{const parsed=new URL(url);if(parsed.protocol!=='https:')return createIcon('package');
  }catch{return createIcon('package');}
  const img=document.createElement('img');img.src='data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';img.alt='';img.width=24;img.height=24;img.className='product-favicon';img.setAttribute('aria-hidden','true');
- fetch('/api/product-favicon?'+new URLSearchParams({url})).then(response=>response.ok?response.json():null).then(result=>{if(result?.href)img.src=result.href;else img.replaceWith(createIcon('package'));}).catch(()=>img.replaceWith(createIcon('package')));return img;
+ lookupFavicon(url).then(href=>{if(href)img.src=href;else img.replaceWith(createIcon('package'));});return img;
 }
 
 // Original neutral institution pictogram, not a substitute for an official brand mark.

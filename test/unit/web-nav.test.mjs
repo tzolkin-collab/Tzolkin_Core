@@ -19,12 +19,11 @@ const fonte = nome => readFileSync(new URL(nome, PUBLIC), 'utf8');
 // A navegação do contexto geral, como foi decidida: grupo e, dentro dele, ordem.
 const NAVEGACAO = [
  ['Hoje', ['Visão geral', 'Financeiro']],
- ['Relacionamentos', ['Empresas', 'Pessoas', 'Clientes', 'Inbound', 'E-mails']],
+ ['Relacionamentos', ['Empresas', 'Pessoas', 'Clientes', 'Inbound']],
  ['Portfólio', ['Portfólio']],
- ['Entrega', ['Serviços', 'Acompanhamento']],
+ ['Entrega', ['Serviços']],
  ['Tecnologia', ['Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS']],
- ['Bases de dados', ['Banco de dados', 'Redis e caches']],
- ['Administração', ['Acessos']],
+ ['Bases de dados', ['Banco de dados']],
 ];
 
 // Esvazia o conteúdo das aspas simples preservando o tamanho: os blocos lidos aqui

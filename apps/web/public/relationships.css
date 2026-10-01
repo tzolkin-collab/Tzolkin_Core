@@ -571,3 +571,7 @@
   }
 
 }
+
+.is-clickable{cursor:pointer}
+.is-clickable:hover{border-color:var(--line-strong,#c9ccd1)}
+.is-clickable:focus-visible{outline:2px solid currentColor;outline-offset:2px}
