@@ -10,6 +10,11 @@ const matches = (value, keys) => {
 };
 const detect = (items, keys, map) => items.filter(item => matches(item.name, keys)).map(item => ({ ...map(item), source: 'detected', confidence: 'high' }));
 const connectionKey = type => ({ repository: 'repositories', domain: 'domains', email: 'emails' }[type] || type);
+const providerAnswered = (row, providers, zone) => {
+ if (row.provider === 'hostinger') return zone.status === 'ok';
+ if (['github', 'vercel', 'easypanel'].includes(row.provider)) return providers[row.provider]?.status === 'ok';
+ return true;
+};
 const inventoryHas = (row, { github, vercel, easy, dnsRecords, zone, offers, templates }) => {
  if (row.provider === 'manual') return null;
  if (row.provider === 'github') return github.some(item => String(item.id) === row.external_id || item.name === row.external_id || item.name === row.display_name);
@@ -64,12 +69,16 @@ export function productTopologyRoutes(router, { options = createDeliveryOptions(
   for (const row of resourceBindings.rows) {
    const product = byProduct.get(row.product_id); if (!product) continue;
    const category = connectionKey(row.resource_type); if (!product.connections[category]) continue;
-   const existing = product.connections[category].find(item => item.provider === row.provider && String(item.id || item.name) === row.external_id);
-   const observed = inventoryHas(row, inventory);
+   // O vínculo guarda o id do provedor (GitHub: número), e a detecção por Vercel traz o
+   // nome "dono/repo". Sem casar também pelo nome, o mesmo repositório aparecia duas vezes.
+   const existing = product.connections[category].find(item => item.provider === row.provider && (String(item.id || item.name) === row.external_id || (row.display_name && item.name === row.display_name)));
+   // Provedor que não respondeu não prova ausência: o inventário vazio dele não pode
+   // virar "não encontrado". Só o que foi de fato consultado reconcilia.
+   const observed = providerAnswered(row, providers, zone) ? inventoryHas(row, inventory) : undefined;
    const confirmed = {
     provider: row.provider, id: row.external_id, name: row.display_name, environment: row.environment,
     url: row.url, source: 'confirmed', confidence: 'high', binding_id: row.id, revision: row.revision,
-    reconciliation: observed === null ? 'manual' : observed ? 'observed' : 'missing',
+    reconciliation: observed === undefined ? 'unverified' : observed === null ? 'manual' : observed ? 'observed' : 'missing',
    };
    if (existing) Object.assign(existing, confirmed); else product.connections[category].push(confirmed);
   }
