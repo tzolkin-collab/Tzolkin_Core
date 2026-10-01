@@ -44,6 +44,7 @@ import { commercialWorkspaceRoutes } from './modules/commercial-workspace.mjs';
 import { marketingRoutes } from './modules/marketing.mjs';
 import { portfolioRoutes } from './modules/portfolio.mjs';
 import { tenantSummaryRoutes } from './modules/tenant-summary.mjs';
+import { pushRoutes } from './modules/push.mjs';
 
 const MODULES = [
  identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes, emailTemplateRoutes, productFaviconRoutes, productDeployBindingRoutes, productResourceBindingRoutes, serviceDeployBindingRoutes, managementRoutes, productPaymentRoutes, productTopologyRoutes,
@@ -52,7 +53,7 @@ const MODULES = [
 
 // `security` é o estado do transporte do banco medido por platform/database.mjs.
 // Ausente = não medido; os endpoints reportam 'unknown' em vez de fingir segurança.
-export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, hostingerDnsOptions, webOrigin,serveAsset, webhookEnv, catalogAdapter, checkoutOptions, marketingOptions, inboundPool} = {}) {
+export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, hostingerDnsOptions, webOrigin,serveAsset, webhookEnv, catalogAdapter, checkoutOptions, marketingOptions, inboundPool, pushOptions} = {}) {
  if (webOrigin && !(/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(webOrigin)||/^https:\/\/[a-z0-9.-]+(?::[1-9][0-9]{0,4})?$/.test(webOrigin))) throw new Error('Use an explicit HTTP loopback or HTTPS web origin.');
  const sessions = identity||createSessionStore({ adminPassword, clock });
  const router = createRouter();
@@ -74,6 +75,9 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  accountRoutes(router,{...(webhookEnv?{env:webhookEnv}:{})});
  checkoutGatewayRoutes(router,{...(webhookEnv?{env:webhookEnv}:{}),...checkoutOptions});
  marketingRoutes(router,{clock,...(webhookEnv?{env:webhookEnv}:{}),...marketingOptions});
+ // Push do painel (assinatura do aparelho e aviso de lead novo). Sem VAPID no ambiente
+ // fica desligado: as rotas respondem "não configurado" e o resto do Core não muda.
+ pushRoutes(router,pushOptions);
  // Ficha da empresa: leitura transversal por tenant, com o relógio do Core para o mês corrente.
  tenantSummaryRoutes(router,{clock});
 
@@ -133,6 +137,15 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
     const { tenant, type } = result || {};
     if(route.audit!==false)await client.query('INSERT INTO audit_events(type,tenant_id,actor_subject,actor_email) VALUES($1,$2,$3,$4)', [type, tenant,operator?.subject,operator?.email]);
     await client.query('COMMIT');
+    // `afterCommit`: efeito colateral que só faz sentido com a gravação já confirmada
+    // (hoje, o push de lead novo). Roda FORA da transação e da resposta: a rota não
+    // espera por ele e a falha dele nunca vira erro para quem chamou, porque a
+    // gravação já está feita. Se rodasse antes do COMMIT, um ROLLBACK deixaria um
+    // aviso de um lead que não existe.
+    if (typeof result?.afterCommit === 'function') {
+     setImmediate(() => Promise.resolve().then(result.afterCommit)
+      .catch(erro => console.error('[afterCommit] falhou:', erro?.message)));
+    }
     return reply(200, result?.response || result?.body || { ok: true, tenant_id: tenant });
    } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
   } catch (error) {
