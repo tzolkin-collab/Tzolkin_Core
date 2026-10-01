@@ -114,7 +114,7 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 - [ ] **P1 [D]** Responsável é do cliente ou da contratação? *(PENDENCIAS §5.)* `acquisition_mode` e `billing_mode` não existem.
 - [ ] **P1** `PUT /api/tenants` só troca `status`; reclassificar organização continua sem rota. *(STATUS §3.F.)*
 - [ ] **P2** Modelo educacional inteiro: turma, aluno, matrícula, responsável financeiro. *(TODO etapa 7.)*
-- [ ] **P2 [D]** Vocabulário de tags e marcas; regra de sincronização do Notion para clientes e contatos; importação sem log
+- [ ] **P2 [D]** Vocabulário de tags e marcas; regra de sincronização do Notion para clientes e contatos (**superada pelo bloco 11**); importação sem log
   nem prévia. *(STATUS §3.E.)*
 - [ ] **P2** Fotos: pessoa (stakeholder), avatar nas listas, validar remover/tornar principal na tela, backup do bucket,
   limites por espaço. *(desta sessão.)*
@@ -178,22 +178,53 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 
 ---
 
+## 11. Substituir o Notion pelo Core (decisão do dono em 01/10)
+
+> **Conflito de registro:** o único texto escrito sobre isso diz o **contrário**. O ADR do Notion "Ecossistema TZOLKIN"
+> (30/08, aprovado por Gustavo) afirma: "Notion continua sendo a base de conhecimento atual. A visão Core não autoriza
+> substituir ou migrar Notion agora". `DATA-OWNERSHIP.md`, `INTEGRATIONS.md` e `UX-RELATION-MAP.md` repetem que
+> documentos, calendários e financeiro seguem no Notion e o Core não sincroniza. Isto aqui é uma decisão **nova e ainda não
+> registrada**. O mesmo ADR já lista CRM, operação, financeiro operacional e dados como escopo candidato do Core.
+
+- [ ] **P1 [D]** Registrar a decisão em ADR (substituindo o trecho acima) e fechar o que "100%" inclui: o que migra, o que
+  só arquiva e o que fica de fora.
+- [ ] **P1** Inventário completo do Notion (bancos, páginas, contagens, anexos, links, responsáveis). Cobertura de hoje: só
+  busca por palavra; o banco das ~900 tarefas **não foi localizado**.
+- [ ] **P1 [D]** Tarefas e calendário ("Tasks — Gustavo", "Tasks — Lucas", "Minhas Tarefas"): módulo de tarefas por operador.
+  O Acompanhamento existe, mas está oculto e sem ligação a contratação. As tarefas do Projeto Assinatura vivem no **Asana**,
+  não no Notion: decidir se o Core as substitui também.
+- [ ] **P1** Documentos e Wiki (Central de documentos INTERNOS, ADRs, handoffs, scripts, base de conhecimento): módulo de
+  documentos com editor, versões, busca, tags e vínculo a cliente e espaço. Hoje só existe `docs/*.md` no repositório.
+- [ ] **P1** Financeiro executivo (Ganhos mensais, parcelas por projeto): levar para Financeiro e Recebimentos.
+- [ ] **P1** Clientes, contatos e produtos: importação do Notion com prévia, dedupe e log (hoje só o catálogo de produtos, manual).
+- [ ] **P1** Páginas que os clientes veem (Projeto Assinatura: Frente Marcelle, Gabi; timeline e status por cliente): exige o
+  portal do cliente (E8), que **não existe**.
+- [ ] **P1** Credenciais em texto aberto no Notion: **não migrar segredo nenhum**; rotacionar e guardar só no servidor (liga
+  ao P0 da seção 2).
+- [ ] **P2** Skills do plugin Tzolkin (cobrar, status-geral, registrar, notion-wiki, memória) apontam para o Notion: repontar
+  para o Core ou aposentar.
+- [ ] **P2** Corte: congelar o Notion em somente leitura, arquivar e ter plano de volta.
+- [ ] **P2** Corrigir "o Notion é a fonte de verdade" em `DATA-OWNERSHIP.md`, `INTEGRATIONS.md`, `UX-RELATION-MAP.md`,
+  `README.md` e no ADR do ecossistema.
+
+---
+
 ## Contagem
 
 | Bloco | Itens |
 |---|---:|
-| 0 Lembretes | 1 |
-| 1 Leads e funil | 18 |
-| 2 Risco sem volta | 8 |
-| 3 Dinheiro e fiscal | 15 |
-| 4 Conexões e infraestrutura | 11 |
-| 5 Clientes e portfólio | 13 |
-| 6 Integrações | 6 |
-| 7 Identidade e auditoria | 6 |
-| 8 Qualidade e publicação | 7 |
-| 9 Documentação | 5 |
-| 10 Fora do Core | 2 |
-| **Total** | **92** |
+| 0. Lembretes que você pediu | 1 |
+| 1. Leads e funil | 18 |
+| 2. Risco sem volta | 8 |
+| 3. Dinheiro, cobrança e fiscal | 15 |
+| 4. Conexões, infraestrutura e deploy | 11 |
+| 5. Clientes, pessoas, empresas e portfólio | 13 |
+| 6. Integrações | 6 |
+| 7. Identidade, papéis, auditoria | 6 |
+| 8. Qualidade, testes e publicação | 7 |
+| 9. Documentação a corrigir | 5 |
+| 10. Fora do Core | 2 |
+| 11. Substituir o Notion pelo Core | 11 |
+| **Total** | **103** |
 
-Dos 92 (contados por script nas linhas de cada item): **P0: 7**, **[VOCÊ]: 8**, **[D] (decisão sua): 15**. Os 900 itens que você citou não estão neste repositório (devem estar
-no Notion); esta lista é o que o código, os documentos e as sessões mostram.
+Dos 103 (contados por script nas linhas de cada item): **P0: 7**, **[VOCÊ]: 8**, **[D] (decisão sua): 17**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
