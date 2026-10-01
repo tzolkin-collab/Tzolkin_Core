@@ -467,7 +467,13 @@ function renderTenants() {
  $('tenants').replaceChildren();
  $('clients-empty').hidden = customers.length > 0;
  $('search-empty').hidden = !customers.length || tenants.length > 0;
- for (const tenant of tenants) {
+ // Quem está em andamento vem primeiro; encerrados ficam no fim, rotulados, em vez de
+ // dividir o mesmo grupo com os ativos sob o subtítulo "quem a TZOLKIN atende".
+ const GRUPOS=[['Ativos e em implantação',t=>['active','onboarding'].includes(t.lifecycle_status)],['A classificar',t=>t.lifecycle_status==='unclassified'],['Encerrados',()=>true]];
+ const lista=[],vistos=new Set();
+ for(const [groupLabel,pertence] of GRUPOS){const itens=tenants.filter(t=>!vistos.has(t.id)&&pertence(t));itens.forEach(t=>vistos.add(t.id));if(itens.length)lista.push({groupLabel:`${groupLabel} · ${itens.length}`},...itens);}
+ for (const tenant of lista) {
+  if(tenant.groupLabel){$('tenants').append(node('p',tenant.groupLabel,'client-group-label'));continue;}
   const engagements=overview.engagements.filter(e=>e.tenant_id===tenant.id);
   const stakeholders=overview.stakeholders.filter(s=>s.tenant_id===tenant.id);
   const card=node('article',undefined,'client-card'),head=node('header'),identity=node('div');
@@ -827,7 +833,7 @@ function renderGeneral() {
   const title=node('div',undefined,'space-title');title.append(node('h3',product.name),node('span',[kindLabel(product),product.id].join(' · '),'space-sub'));
   head.append(mark,title,node('span',lifecycle.label,'status '+lifecycle.tone));
   card.append(head);
-  if(count?.text)card.append(node('p',count.text,'space-meta'));
+  if(count?.text&&count.n>0)card.append(node('p',count.text,'space-meta'));
   if (product.tags?.length) { const tags = node('div', undefined, 'card-tags'); for (const tag of product.tags) tags.append(node('span', tag, 'status')); card.append(tags); }
   if(lifecycle.next)card.append(node('p',lifecycle.next,'space-next'));
   // Ações: uma principal, e o resto discreto. O atalho só existe para o que o tipo tem

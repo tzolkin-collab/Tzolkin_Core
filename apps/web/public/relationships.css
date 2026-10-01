@@ -575,3 +575,6 @@
 .is-clickable{cursor:pointer}
 .is-clickable:hover{border-color:var(--line-strong,#c9ccd1)}
 .is-clickable:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+
+.client-group-label{grid-column:1/-1;margin:12px 0 0;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted,#6b7280)}
+.client-group-label:first-child{margin-top:0}
