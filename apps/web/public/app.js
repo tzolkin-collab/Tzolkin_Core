@@ -1,4 +1,5 @@
 import {setupCommercial} from './commercial.js';
+import {photoPanel} from './media.js';
 // Apresentação e serialização de formulários. Autorização, recorte por produto
 // e regras de negócio ficam no servidor: nada aqui decide o que o operador pode ver.
 import { setupDelivery, deliveryIcon } from './delivery.js';
@@ -653,6 +654,9 @@ function paintClientDetail(summary){
   const open=node('button',undefined,'secondary');open.type='button';open.append(createIcon('calendar'),document.createTextNode('Abrir no Acompanhamento'));
   open.onclick=()=>{tracking.focus(tenant.id);switchView('tracking');};time.append(open);
  }
+
+ // Fotos da empresa, no R2 privado: o painel monta a própria listagem e o próprio colar/arrastar.
+ panel('Fotos').append(photoPanel({type:'tenant',id:tenant.id}));
 
  // Acesso só aparece quando existe: empresa só de serviço não ganha um painel de zeros.
  if(!access.available)unavailable('Acessos',access);

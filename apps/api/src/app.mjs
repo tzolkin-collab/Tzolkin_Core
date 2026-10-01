@@ -45,6 +45,7 @@ import { marketingRoutes } from './modules/marketing.mjs';
 import { portfolioRoutes } from './modules/portfolio.mjs';
 import { tenantSummaryRoutes } from './modules/tenant-summary.mjs';
 import { pushRoutes } from './modules/push.mjs';
+import { mediaRoutes } from './modules/media.mjs';
 
 const MODULES = [
  identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes, emailTemplateRoutes, productFaviconRoutes, productDeployBindingRoutes, productResourceBindingRoutes, serviceDeployBindingRoutes, managementRoutes, productPaymentRoutes, productTopologyRoutes,
@@ -53,7 +54,7 @@ const MODULES = [
 
 // `security` é o estado do transporte do banco medido por platform/database.mjs.
 // Ausente = não medido; os endpoints reportam 'unknown' em vez de fingir segurança.
-export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, hostingerDnsOptions, webOrigin,serveAsset, webhookEnv, catalogAdapter, checkoutOptions, marketingOptions, inboundPool, pushOptions} = {}) {
+export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, hostingerDnsOptions, webOrigin,serveAsset, mediaOptions, webhookEnv, catalogAdapter, checkoutOptions, marketingOptions, inboundPool, pushOptions} = {}) {
  if (webOrigin && !(/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(webOrigin)||/^https:\/\/[a-z0-9.-]+(?::[1-9][0-9]{0,4})?$/.test(webOrigin))) throw new Error('Use an explicit HTTP loopback or HTTPS web origin.');
  const sessions = identity||createSessionStore({ adminPassword, clock });
  const router = createRouter();
@@ -78,6 +79,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  // Push do painel (assinatura do aparelho e aviso de lead novo). Sem VAPID no ambiente
  // fica desligado: as rotas respondem "não configurado" e o resto do Core não muda.
  pushRoutes(router,pushOptions);
+ mediaRoutes(router,{clock,...mediaOptions});
  // Ficha da empresa: leitura transversal por tenant, com o relógio do Core para o mês corrente.
  tenantSummaryRoutes(router,{clock});
 
