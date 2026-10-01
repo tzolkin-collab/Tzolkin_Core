@@ -19,8 +19,9 @@ const fonte = nome => readFileSync(new URL(nome, PUBLIC), 'utf8');
 // A navegação do contexto geral, como foi decidida: grupo e, dentro dele, ordem.
 const NAVEGACAO = [
  ['Hoje', ['Visão geral', 'Financeiro']],
- ['Relacionamentos', ['Clientes', 'Inbound']],
+ ['Relacionamentos', ['Empresas', 'Pessoas', 'Clientes', 'Inbound']],
  ['Portfólio', ['Portfólio']],
+ ['Entrega', ['Serviços']],
  ['Tecnologia', ['Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS']],
  ['Bases de dados', ['Banco de dados']],
 ];

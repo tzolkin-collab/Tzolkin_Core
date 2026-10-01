@@ -61,11 +61,8 @@ const CONTEXTS = {
    overview: { title: 'Visão geral', section: 'view-overview', metrics: false },
    finance: { title: 'Financeiro', section: 'view-finance', metrics:false },
    // RELACIONAMENTOS — com quem a TZOLKIN fala.
-   // Empresas, Pessoas e Contratações são recortes do MESMO cadastro de Clientes: viram abas
-   // dentro dele (RELATION_TABS) em vez de três itens de menu. Mantêm a própria seção e a
-   // própria ação; só deixam de aparecer na barra e passam a se chamar Clientes.
-   companies: { title: 'Clientes', section: 'view-companies', action: ['Nova empresa', 'tenant-dialog'], metrics:false, hidden:true },
-   people: { title: 'Clientes', section: 'view-people', action: ['Nova pessoa', 'stakeholder-dialog'], metrics:false, hidden:true },
+   companies: { title: 'Empresas', section: 'view-companies', action: ['Nova empresa', 'tenant-dialog'], metrics:false },
+   people: { title: 'Pessoas', section: 'view-people', action: ['Nova pessoa', 'stakeholder-dialog'], metrics:false },
    clients: { title: 'Clientes', section: 'view-clients', action: ['Novo cliente', 'tenant-dialog'], metrics:false },
    leads: { title: 'Inbound', section: 'view-commercial', metrics:false },
    // Campanhas mora dentro de Inbound, como uma aba (montarInbound).
@@ -75,7 +72,7 @@ const CONTEXTS = {
    // PORTFÓLIO — o que a TZOLKIN tem para vender.
    products: { title: 'Portfólio', section: 'view-products', action: ['Novo espaço', 'space-dialog'], metrics:false },
    // ENTREGA — o trabalho contratado e o andamento dele.
-   services: { title: 'Clientes', section: 'view-services', metrics:false, hidden:true },
+   services: { title: 'Serviços', section: 'view-services', metrics:false },
    // Oculta até ligar a atividade a uma contratação (a ficha do cliente admite que não liga).
    tracking: { title: 'Acompanhamento', section: 'view-tracking', metrics:false, hidden:true },
    serviceCampaigns: { title: 'Campanhas do serviço', section: 'view-service-campaigns', metrics: false, hidden:true },
@@ -116,12 +113,6 @@ const CONTEXTS = {
   },
  },
 };
-
-// As quatro telas que dividem o cadastro de Clientes. A barra lateral mostra uma só (Clientes);
-// estas abas levam às outras.
-const RELATION_TABS=[{key:'clients',label:'Todos'},{key:'companies',label:'Empresas'},{key:'people',label:'Pessoas'},{key:'services',label:'Contratações'}];
-const RELATION_VIEWS=new Set(RELATION_TABS.map(tab=>tab.key));
-const navKey=view=>contextKind()==='general'&&RELATION_VIEWS.has(view)?'clients':view;
 
 const SECTIONS = ['view-commercial','view-product-keys','view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-services', 'view-connections', 'view-access', 'view-database', 'view-redis', 'view-settings', 'view-security', 'view-vercel', 'view-github', 'view-easypanel', 'view-dns', 'view-server-metrics', 'view-product', 'view-product-orgs', 'view-product-engagements', 'view-product-payments', 'view-product-receivables', 'view-product-emails', 'view-service-campaigns'];
 const DATA_NODES = ['tenants', 'leads', 'companies', 'client-summary', 'client-detail', 'stakeholder-directory', 'members', 'contracts', 'product-catalog', 'services-list', 'services-summary', 'management-schema', 'management-dns', 'management-redis', 'overview-kpis', 'overview-alerts', 'overview-integrations', 'overview-product-list', 'overview-actions', 'product-orgs', 'product-engagements', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
@@ -274,22 +265,15 @@ function renderNav() {
  const items=[];let previous,section;
  for(const [key,view]of Object.entries(context.views).filter(([key,view])=>!view.hidden&&viewAllowed(key))){
   if(groups[key]!==previous){section=node('section',undefined,'nav-section');const label=node('h2',groups[key],'nav-group');section.append(label);items.push(section);previous=groups[key];}
-  const button = node('button', undefined, 'nav-item' + (key === navKey(state.view) ? ' active' : ''));
+  const button = node('button', undefined, 'nav-item' + (key === state.view ? ' active' : ''));
   button.type = 'button'; button.dataset.view = key;
   const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',metrics:'chart',leads:'user-plus',products:'package',services:'briefcase',connections:'branch',vercel:'cloud',github:'repo',easypanel:'server',dns:'globe',access:'shield',database:'database',redis:'cache',settings:'sliders',security:'lock',serverMetrics:'activity',product:'package','product-inbound':'user-plus','product-keys':'lock','product-orgs':'people','product-engagements':'briefcase','product-payments':'wallet','product-receivables':'calendar','product-emails':'mail',campaigns:'chart','product-campaigns':'chart'})[key]);
   icon.classList.add('nav-icon'); button.append(icon, document.createTextNode(view.title));
-  if (key === navKey(state.view)) button.setAttribute('aria-current', 'page');
+  if (key === state.view) button.setAttribute('aria-current', 'page');
   button.onclick = () => {switchView(key);closeNavigation();};
   section.append(button);
  }
  $('nav').replaceChildren(...items);
-}
-
-function renderRelationTabs(view) {
- const host=$('relation-tabs');if(!host)return;
- const show=contextKind()==='general'&&RELATION_VIEWS.has(view);
- host.hidden=!show;if(!show){host.replaceChildren();return;}
- mountTabs({host,tabs:RELATION_TABS,active:view,label:'Recortes dos clientes',prefix:'relation',onChange:key=>switchView(key)});
 }
 
 function switchView(view) {
@@ -311,7 +295,6 @@ function switchView(view) {
  if (active.action) $('new-record-label').textContent = active.action[0];
  $('notice').textContent = '';
  renderNav();
- renderRelationTabs(view);
  if (view === 'tracking') tracking.load().catch(reportError);
  if (view === 'finance') finance.load().catch(reportError);
  if (view === 'emails') emails.load().catch(reportError);
