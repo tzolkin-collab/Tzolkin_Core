@@ -17,7 +17,7 @@ import { SENHA, EMPRESA, PNG_1X1, bancoFalso, r2Falso } from './fixtures.mjs';
 const PULAR = acharNavegador() ? false : 'Chrome/Edge não encontrado (defina CHROME_PATH)';
 const ARTEFATOS = fileURLToPath(new URL('./artifacts/', import.meta.url));
 
-const MENU_ESPERADO = ['Visão geral', 'Financeiro', 'Clientes', 'Inbound', 'Portfólio', 'Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS', 'Banco de dados'];
+const MENU_ESPERADO = ['Visão geral', 'Financeiro', 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Portfólio', 'Serviços', 'Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS', 'Banco de dados'];
 const SECAO = `[...document.querySelectorAll('main section')].find(s => !s.hidden && s.offsetParent)`;
 /**
  * Lê, de dentro da página, os defeitos de uma tela: título, estouro de largura, texto com valor
@@ -118,25 +118,25 @@ for (const [largura, altura] of [[1280, 800], [390, 844]]) {
  });
 }
 
-test('Clientes: abas, ação de cada aba, menu ativo e cartão clicável', { skip: PULAR }, async () => {
+test('Clientes: grupos por situação, ação própria e cartão clicável (Empresas e Pessoas seguem telas irmãs)', { skip: PULAR }, async () => {
  await pagina.tela(1280, 800);
  await pagina.avaliar(CLICAR_NO_MENU('Clientes'));
- await pagina.esperar(`document.querySelectorAll('#relation-tabs [role=tab]').length === 4`, { descricao: 'quatro abas' });
- const abas = () => pagina.avaliar(`[...document.querySelectorAll('#relation-tabs [role=tab]')].map(t => t.textContent.trim() + (t.getAttribute('aria-selected') === 'true' ? '*' : ''))`);
- assert.deepEqual(await abas(), ['Todos*', 'Empresas', 'Pessoas', 'Contratações']);
- const esperadas = { Empresas: 'Nova empresa', Pessoas: 'Nova pessoa', Contratações: null, Todos: 'Novo cliente' };
- for (const [aba, acao] of Object.entries(esperadas)) {
-  await pagina.avaliar(`[...document.querySelectorAll('#relation-tabs [role=tab]')].find(t => t.textContent.trim() === ${JSON.stringify(aba)}).click()`);
-  await pagina.esperar(`document.querySelector('#relation-tabs [aria-selected=true]').textContent.trim() === ${JSON.stringify(aba)}`);
-  assert.equal(await pagina.avaliar(`document.querySelector('nav .nav-item.active')?.textContent.trim()`), 'Clientes', `o menu perdeu o destaque na aba ${aba}`);
-  assert.equal(await pagina.avaliar(`document.getElementById('new-record').hidden ? null : document.getElementById('new-record-label').textContent.trim()`), acao);
-  assert.equal(await pagina.avaliar(`document.getElementById('page-title').textContent.trim()`), 'Clientes');
- }
+ await pagina.esperar(`document.querySelectorAll('#tenants .client-card').length === 3`, { descricao: 'três clientes' });
+ assert.equal(await pagina.avaliar(`document.getElementById('page-title').textContent.trim()`), 'Clientes');
+ assert.equal(await pagina.avaliar(`document.getElementById('new-record-label').textContent.trim()`), 'Novo cliente');
  // os encerrados ficam rotulados e depois dos ativos
  const grupos = await pagina.avaliar(`[...document.querySelectorAll('#tenants .client-group-label')].map(g => g.textContent.trim())`);
  assert.deepEqual(grupos, ['Ativos e em implantação · 2', 'Encerrados · 1']);
- // sem botão "Abrir cliente →" repetido
+ // sem botão "Abrir cliente →" repetido: o cartão inteiro é o alvo
  assert.equal(await pagina.avaliar(`[...document.querySelectorAll('#view-clients button')].filter(b => /Abrir (cliente|organização)/.test(b.textContent)).length`), 0);
+ // Empresas e Pessoas continuam sendo telas próprias, com a ação de cada uma
+ for (const [tela, acao] of [['Empresas', 'Nova empresa'], ['Pessoas', 'Nova pessoa']]) {
+  await pagina.avaliar(CLICAR_NO_MENU(tela));
+  await pagina.esperar(`document.getElementById('page-title').textContent.trim() === ${JSON.stringify(tela)}`);
+  assert.equal(await pagina.avaliar(`document.getElementById('new-record-label').textContent.trim()`), acao);
+ }
+ await pagina.avaliar(CLICAR_NO_MENU('Clientes'));
+ await pagina.esperar(`document.querySelectorAll('#tenants .client-card').length === 3`);
  semExcecoes();
 });
 

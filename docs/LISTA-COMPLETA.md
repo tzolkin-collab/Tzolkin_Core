@@ -105,8 +105,8 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 
 ## 5. Clientes, pessoas, empresas e portfólio (domínio e tela)
 
-- [ ] **P1 [D]** **A fusão de Empresas/Pessoas/Contratações em abas de Clientes (`a7a56ea`) contradiz
-  `UX-RELATION-MAP.md` e o E10 ("Empresas e Pessoas passam a ser irmãs").** Reverter? Recomendo reverter. *(desta sessão.)*
+- [x] **A fusão de Empresas/Pessoas/Contratações em abas de Clientes foi revertida** (`ecdf52d`, 01/10). Contradizia
+  `UX-RELATION-MAP.md` e o E10 ("Empresas e Pessoas passam a ser irmãs"). O menu voltou a ter 14 itens.
 - [ ] **P1 [D]** Menu: confirmar a saída de E-mails, Acompanhamento, Redis e Acessos (ocultos por mim em 01/10).
 - [ ] **P1** Pessoas sem e-mail nem telefone na lista. *(STATUS §4.)*
 - [ ] **P1** Ficha da empresa em grade, sem abas, pagamentos nem documentos. *(STATUS §4; `DESIGN-360.md`.)*
@@ -192,13 +192,13 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
   busca por palavra; o banco das ~900 tarefas **não foi localizado**.
 - [ ] **P1 [D]** Tarefas e calendário ("Tasks — Gustavo", "Tasks — Lucas", "Minhas Tarefas"): módulo de tarefas por operador.
   O Acompanhamento existe, mas está oculto e sem ligação a contratação. As tarefas do Projeto Assinatura vivem no **Asana**,
-  não no Notion: decidir se o Core as substitui também.
+  não no Notion, e são do cliente: ficam fora por enquanto (🟡 suposição a partir de "nada que meus clientes veem"; confirmar).
 - [ ] **P1** Documentos e Wiki (Central de documentos INTERNOS, ADRs, handoffs, scripts, base de conhecimento): módulo de
   documentos com editor, versões, busca, tags e vínculo a cliente e espaço. Hoje só existe `docs/*.md` no repositório.
 - [ ] **P1** Financeiro executivo (Ganhos mensais, parcelas por projeto): levar para Financeiro e Recebimentos.
 - [ ] **P1** Clientes, contatos e produtos: importação do Notion com prévia, dedupe e log (hoje só o catálogo de produtos, manual).
-- [ ] **P1** Páginas que os clientes veem (Projeto Assinatura: Frente Marcelle, Gabi; timeline e status por cliente): exige o
-  portal do cliente (E8), que **não existe**.
+- [ ] **P2** Páginas que os clientes veem (Projeto Assinatura: Frente Marcelle, Gabi; timeline e status por cliente).
+  **Fora do escopo por enquanto** (decisão de 01/10: "nada que meus clientes veem"). Reavaliar junto com o portal do cliente (E8).
 - [ ] **P1** Credenciais em texto aberto no Notion: **não migrar segredo nenhum**; rotacionar e guardar só no servidor (liga
   ao P0 da seção 2).
 - [ ] **P2** Skills do plugin Tzolkin (cobrar, status-geral, registrar, notion-wiki, memória) apontam para o Notion: repontar
@@ -209,22 +209,22 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 
 ---
 
-## Contagem
+## Contagem (itens abertos)
 
-| Bloco | Itens |
+| Bloco | Abertos |
 |---|---:|
 | 0. Lembretes que você pediu | 1 |
 | 1. Leads e funil | 18 |
 | 2. Risco sem volta | 8 |
 | 3. Dinheiro, cobrança e fiscal | 15 |
 | 4. Conexões, infraestrutura e deploy | 11 |
-| 5. Clientes, pessoas, empresas e portfólio | 13 |
+| 5. Clientes, pessoas, empresas e portfólio | 12 |
 | 6. Integrações | 6 |
 | 7. Identidade, papéis, auditoria | 6 |
 | 8. Qualidade, testes e publicação | 7 |
 | 9. Documentação a corrigir | 5 |
 | 10. Fora do Core | 2 |
 | 11. Substituir o Notion pelo Core | 11 |
-| **Total** | **103** |
+| **Total** | **102** |
 
-Dos 103 (contados por script nas linhas de cada item): **P0: 7**, **[VOCÊ]: 8**, **[D] (decisão sua): 17**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
+Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 1. Dos 102 abertos: **P0: 7**, **[VOCÊ]: 8**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
