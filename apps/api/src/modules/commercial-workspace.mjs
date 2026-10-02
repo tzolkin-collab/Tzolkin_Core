@@ -6,14 +6,15 @@ const note=v=>{if(typeof v!=='string'||v.trim().length<2||v.length>10000||/[\u00
 const uuid=v=>{if(!isUuid(v))throw fail(400,'Identificador inválido.');return v;};
 async function owner(client,id){if(id!==null&&!(await client.query("SELECT id FROM operator_accounts WHERE id=$1 AND status='active' AND role IN ('owner','member')",[uuid(id)])).rowCount)throw fail(400,'Responsável não está ativo.');return id;}
 async function list({pool,url,reply,productId,operator}) {
- if(operator)await commercialPermission(pool,operator);onlyParams(url.searchParams,['product_id','status','q','offset','limit']);
+ if(operator)await commercialPermission(pool,operator);onlyParams(url.searchParams,['product_id','status','q','offset','limit','pipeline_id','stage_id']);
  const product=productId||url.searchParams.get('product_id');if(product&&!isProductId(product))throw fail(400,'Produto inválido.');
  const status=url.searchParams.get('status')||null;if(status&&!STAGES.includes(status))throw fail(400,'Estágio inválido.');
+ const pipelineId=url.searchParams.get('pipeline_id')||null,stageId=url.searchParams.get('stage_id')||null;if((pipelineId&&!isUuid(pipelineId))||(stageId&&!isUuid(stageId)))throw fail(400,'Funil ou etapa inválidos.');
  const limit=Number(url.searchParams.get('limit')||25),offset=Number(url.searchParams.get('offset')||0),q=url.searchParams.get('q')?.trim()||null;
  if(!Number.isInteger(limit)||limit<1||limit>100||!Number.isInteger(offset)||offset<0||offset>100000||q?.length>200)throw fail(400,'Paginação inválida.');
- const r=await pool.query(`SELECT l.id,l.product_id,l.name,l.email,l.whatsapp,l.status,l.interest,l.source_system,l.source_created_at,l.created_at,l.owner_id,a.name AS owner_name,a.email AS owner_email,t.name AS organization_name
+ const r=await pool.query(`SELECT l.id,l.product_id,l.name,l.email,l.whatsapp,l.status,l.interest,l.source_system,l.source_created_at,l.created_at,l.owner_id,a.name AS owner_name,a.email AS owner_email,l.pipeline_id,l.stage_id,t.name AS organization_name
  FROM commercial_leads l JOIN tenants t ON t.id=l.tenant_id LEFT JOIN operator_accounts a ON a.id=l.owner_id
- WHERE ($1::text IS NULL OR l.product_id=$1) AND ($2::text IS NULL OR l.status=$2) AND ($3::text IS NULL OR concat_ws(' ',l.name,l.email,t.name,l.interest) ILIKE '%'||$3||'%') ORDER BY l.created_at DESC,l.id DESC LIMIT $4 OFFSET $5`,[product,status,q,limit+1,offset]);
+ WHERE ($1::text IS NULL OR l.product_id=$1) AND ($2::text IS NULL OR l.status=$2) AND ($3::text IS NULL OR concat_ws(' ',l.name,l.email,t.name,l.interest) ILIKE '%'||$3||'%') AND ($6::uuid IS NULL OR l.pipeline_id=$6) AND ($7::uuid IS NULL OR l.stage_id=$7) ORDER BY l.created_at DESC,l.id DESC LIMIT $4 OFFSET $5`,[product,status,q,limit+1,offset,pipelineId,stageId]);
  return reply(200,{leads:r.rows.slice(0,limit),has_more:r.rows.length>limit,offset,limit});
 }
 async function detail({pool,params,reply,productId,operator}) {

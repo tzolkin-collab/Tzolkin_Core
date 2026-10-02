@@ -140,6 +140,22 @@ test('Clientes: grupos por situação, ação própria e cartão clicável (Empr
  semExcecoes();
 });
 
+test('Inbound: o funil do espaço mostra as etapas com a contagem e filtra por etapa', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 800);
+ await pagina.avaliar(CLICAR_NO_MENU('Inbound'));
+ await pagina.esperar(`document.querySelectorAll('#inbound-panel-leads .funnel-chip').length === 8`, { descricao: 'oito etapas do funil' });
+ const chips = () => pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .funnel-chip')].map(c => c.textContent.trim().replace(/\\s+/g, ' ') + (c.getAttribute('aria-pressed') === 'true' ? '*' : ''))`);
+ assert.deepEqual(await chips(), ['Novos2', 'Em contato0', 'Qualificação0', 'Proposta0', 'Negociação0', 'Assinatura do contrato0', 'Ganho0', 'Perdido0']);
+ // só um funil: sem seletor. Clicar numa etapa filtra e marca; clicar de novo limpa.
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#inbound-panel-leads .funnel-bar select').length`), 0);
+ await pagina.avaliar(`document.querySelector('#inbound-panel-leads .funnel-chip').click()`);
+ await pagina.esperar(`document.querySelector('#inbound-panel-leads .funnel-chip')?.getAttribute('aria-pressed') === 'true'`, { descricao: 'etapa marcada' });
+ assert.equal((await chips())[0], 'Novos2*');
+ await pagina.avaliar(`document.querySelector('#inbound-panel-leads .funnel-chip').click()`);
+ await pagina.esperar(`document.querySelector('#inbound-panel-leads .funnel-chip')?.getAttribute('aria-pressed') === 'false'`, { descricao: 'etapa desmarcada' });
+ semExcecoes();
+});
+
 test('ficha da empresa abre pelo cartão e traz o painel de fotos', { skip: PULAR }, async () => {
  await pagina.avaliar(`[...document.querySelectorAll('#view-clients .client-card')].find(c => c.textContent.includes('Empresa Alfa')).click()`);
  await pagina.esperar(`document.querySelector('#view-client .photo-panel .photo-zone') && !document.querySelector('#view-client .photo-panel .photo-zone').hidden`, { descricao: 'painel de fotos na ficha' });

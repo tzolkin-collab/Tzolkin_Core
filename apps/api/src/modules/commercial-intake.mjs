@@ -1,6 +1,7 @@
 import { digest } from '../platform/session.mjs';
 import { fail, input, isProductId, isUuid, text } from '../platform/http.mjs';
 import { notificarLeadNovo } from './push.mjs';
+import { placeLead } from './commercial-pipelines.mjs';
 import { CHAVES_ATRIBUICAO, atribuicaoEstendida } from '../platform/attribution.mjs';
 export { commercialKeyRoutes } from './commercial-keys.mjs';
 
@@ -63,7 +64,9 @@ export function commercialIntakeRoutes(router,{avisarLeadNovo=notificarLeadNovo}
    const tenant=(await client.query(`INSERT INTO tenants(name,slug,relationship_kind,lifecycle_status,organization_type,source_system,source_ref) VALUES($1,$2,'prospect','lead',$3,$4,$5) RETURNING id`,[v.org_name,slug,v.org_type,source,v.source_ref])).rows[0].id;
    const person=(await client.query('INSERT INTO stakeholders(name,email,phone,source_system,source_ref) VALUES($1,$2,$3,$4,$5) RETURNING id',[v.name,v.email,v.phone,source,v.source_ref])).rows[0].id;
    await client.query('INSERT INTO organization_stakeholders(tenant_id,stakeholder_id,role,title,is_primary,contact_allowed) VALUES($1,$2,$3,$4,true,$5)',[tenant,person,v.role,v.title,v.privacy.contact_allowed]);
-   const lead=(await client.query(`INSERT INTO commercial_leads(tenant_id,stakeholder_id,product_id,name,email,whatsapp,message,source_system,source_ref,service_model,interest,privacy,source_created_at,request_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,[tenant,person,productId,v.name,v.email,v.phone,v.message,v.source_system,v.source_ref,v.service_model,v.interest,v.privacy,v.source_created_at,hash])).rows[0].id;
+   // Funil do espaço: o nicho do utm_tzolkin escolhe o funil; sem casamento, o padrão. Espaço sem funil = lead sem funil.
+   const place=await placeLead(client,productId,v.attribution?.utm_tzolkin);
+   const lead=(await client.query(`INSERT INTO commercial_leads(tenant_id,stakeholder_id,product_id,name,email,whatsapp,message,source_system,source_ref,service_model,interest,privacy,source_created_at,request_hash,pipeline_id,stage_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,[tenant,person,productId,v.name,v.email,v.phone,v.message,v.source_system,v.source_ref,v.service_model,v.interest,v.privacy,v.source_created_at,hash,place?.pipelineId??null,place?.stageId??null])).rows[0].id;
    const a=v.attribution;
    await client.query(`INSERT INTO commercial_attributions(lead_id,source_system,source_ref,channel,utm_source,utm_medium,utm_campaign,utm_content,landing_page,referrer,
      utm_term,utm_tzolkin,meta_campaign_id,meta_adset_id,meta_ad_id,fbclid,gclid,fbc,fbp,session_key,first_touch_at,last_touch,session,geo)

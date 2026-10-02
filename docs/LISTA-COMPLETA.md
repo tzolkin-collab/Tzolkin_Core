@@ -34,11 +34,17 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
   *(feito em 02/10: 3 tentativas e e-mail interno; só vale com `RESEND_API_KEY`, `EMAIL_FROM` e `EMAIL_INTERNAL_TO` no site.)*
 - [ ] **P1** Dedupe de pessoa e empresa no intake (e-mail, CPF por hash, CNPJ alfanumérico). Hoje cada lead cria uma
   empresa e uma pessoa novas. *(achado desta sessão; STATUS §3.D G3.)*
-- [ ] **P1** Funil por espaço: pipeline, etapas, fontes, oportunidade (copiar o desenho da Kalidash).
+- [x] **P1** Funil por espaço: pipeline, etapas, fontes, oportunidade (copiar o desenho da Kalidash).
   *(`design/2026-10-01-pipeline-por-espaco-e-atribuicao.md`.)* **[D]** 4 decisões nesse documento.
+  *(fase 1 feita em 02/10: migração 040, funis por espaço com funil padrão, etapas, oportunidades e o lead entrando no funil pelo `utm_tzolkin`. **Migração 040 ainda não aplicada no banco compartilhado.** Faltam: fontes, qualificar/descartar/mover o lead pela tela, ganhar → contratação.)*
+- [ ] **P0 [VOCÊ]** Aplicar a migração **040** (funil por espaço) no banco compartilhado, antes do deploy do Core. Só adiciona tabelas e colunas; o banco tem 0 leads.
+- [ ] **P1** Fase 3 do funil: qualificar, descartar e mover o lead pela tela; ganhar a oportunidade cria a contratação (decisão 3).
+- [ ] **P1** Fase 2 do plano da Kalidash: dedupe de pessoa e empresa (e-mail, CPF por hash, CNPJ alfanumérico) no intake.
 - [ ] **P1** Campos próprios por espaço (`space_fields` + `custom_data`) e bloco `space_data` no intake. **[D]**
-- [ ] **P1** `utm_tzolkin`: conferir no servidor que o prefixo é o espaço da chave.
-- [ ] **P1** Convenção de URL de anúncio (parâmetros dinâmicos da Meta) escrita em `ATTRIBUTION.md`.
+- [x] **P1** `utm_tzolkin`: conferir no servidor que o prefixo é o espaço da chave.
+  *(feito em 02/10: o prefixo errado é ignorado para escolher o funil; o site também descarta `utm_tzolkin` que não comece por `sites.`.)*
+- [x] **P1** Convenção de URL de anúncio (parâmetros dinâmicos da Meta) escrita em `ATTRIBUTION.md`.
+  *(feito em 02/10 em `ATTRIBUTION.md`.)*
 - [ ] **P1** Tarefas e requisitos de etapa; eventos `objeto.ação` e automações gerenciadas (fases 4 e 5 do plano).
 - [ ] **P1** Lead sem "próximo passo" nem conversão em cliente: marcar `won` não muda o `tenant`. *(STATUS §4.)*
 - [ ] **P1** Contrato comercial para cliente que não veio de lead: `POST /api/commercial/contracts` exige `lead_id`
@@ -241,4 +247,4 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | 11. Substituir o Notion pelo Core | 11 |
 | **Total** | **102** |
 
-Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 6. Dos 102 abertos: **P0: 8**, **[VOCÊ]: 9**, **[D] (decisão sua): 17**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
+Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 9. Dos 102 abertos: **P0: 9**, **[VOCÊ]: 10**, **[D] (decisão sua): 17**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.

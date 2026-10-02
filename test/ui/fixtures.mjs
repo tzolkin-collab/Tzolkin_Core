@@ -35,6 +35,9 @@ export const DADOS = {
  ],
 };
 
+export const FUNIL = '44444444-4444-4444-8444-444444444444';
+const ETAPAS = [['Novos', 'LEAD', 2], ['Em contato', 'LEAD', 0], ['Qualificação', 'OPEN', 0], ['Proposta', 'OPEN', 0], ['Negociação', 'OPEN', 0], ['Assinatura do contrato', 'OPEN', 0], ['Ganho', 'WON', 0], ['Perdido', 'LOST', 0]];
+
 // 1x1 PNG válido: o navegador consegue decodificar, e o servidor reconhece pelos primeiros bytes.
 export const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 
@@ -49,6 +52,11 @@ export function bancoFalso() {
    // /api/bootstrap: uma linha, uma coluna por coleção
    if (/AS resource_bindings/.test(sql) && /jsonb_agg/.test(sql))
     return { rows: [{ tenants: DADOS.tenants, products: DADOS.products, memberships: [], entitlements: [], engagements: DADOS.engagements, stakeholders: DADOS.stakeholders, entries: [], resource_bindings: [] }] };
+   // funil do espaço (Inbound): um funil padrão com as 8 etapas e 2 leads em "Novos"
+   if (/FROM pipelines p JOIN products pr/.test(sql))
+    return { rows: [{ id: FUNIL, space_id: 'mentorias', space_name: 'Mentorias', slug: 'padrao', name: 'Funil padrão', offer_name: null, is_default: true, is_active: true, position: 0, version: 1 }] };
+   if (/FROM pipeline_stages s WHERE s.pipeline_id=ANY/.test(sql))
+    return { rows: ETAPAS.map(([name, kind, leads], i) => ({ id: `55555555-5555-4555-8555-55555555550${i}`, pipeline_id: FUNIL, name, kind, position: i, color: null, probability: null, stale_days: null, leads, opportunities: 0, value_minor: '0' })) };
    // ficha da empresa
    if (/FROM tenants WHERE id=\$1/.test(sql) && !/AS tenant_id/.test(sql)) {
     const t = DADOS.tenants.find(x => x.id === params[0]);

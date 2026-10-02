@@ -8,14 +8,39 @@ function button(label,fn){const b=el('button',label,'secondary');b.type='button'
 function submit(form,label,fn){const b=el('button',label,'primary');b.type='submit';form.append(b);form.onsubmit=async e=>{e.preventDefault();b.disabled=true;form.querySelector('[role=alert]')?.remove();try{await fn();}catch(err){const p=el('p',err.message,'notice-inline');p.setAttribute('role','alert');form.append(p);}finally{b.disabled=false;}};}
 // openTenant abre a ficha da empresa; vem de app.js por callback para este módulo não importá-lo.
 export function setupCommercial({api,openTenant}) {
- let epoch=0,product='',offset=0,status='',query='';
+ let epoch=0,product='',offset=0,status='',query='',pipelineId='',stageId='';
  const root=()=>document.getElementById('inbound-panel-leads');
  function clear(){epoch++;root()?.replaceChildren();document.getElementById('view-product-keys')?.replaceChildren();}
- async function load(p='',reset=true){product=p;if(reset)offset=0;const ticket=++epoch,r=root();r.replaceChildren(el('p','Carregando leads…'));const data=await api('/api/commercial/leads?'+new URLSearchParams({...(p?{product_id:p}:{}),status,q:query,offset:String(offset)}));if(ticket!==epoch)return;
+// Funil por espaço: seletor (quando há mais de um funil) e as etapas com a contagem de leads e oportunidades.
+ // Clicar numa etapa filtra a lista; clicar de novo limpa. Sem funil ativo, a barra não aparece.
+ function funnelBar(r,pipelines,p){
+  const ativos=pipelines.filter(x=>x.is_active);
+  if(!ativos.length)return;
+  if(pipelineId&&!ativos.some(x=>x.id===pipelineId)){pipelineId='';stageId='';}
+  const funil=ativos.find(x=>x.id===pipelineId)||(ativos.length===1?ativos[0]:null);
+  const bar=el('div',null,'funnel-bar');
+  if(ativos.length>1){
+   const sel=select('Funil',[['','Todos os funis'],...ativos.map(x=>[x.id,p?x.name:`${x.space_name} · ${x.name}`])],pipelineId);
+   sel.input.onchange=()=>{pipelineId=sel.input.value;stageId='';offset=0;load(product,false);};
+   bar.append(sel.wrap);
+  }
+  if(funil){
+   const chips=el('div',null,'funnel-stages');chips.setAttribute('role','group');chips.setAttribute('aria-label','Etapas do funil');
+   for(const s of funil.stages){
+    const chip=el('button',null,'funnel-chip'+(stageId===s.id?' active':''));chip.type='button';chip.setAttribute('aria-pressed',String(stageId===s.id));
+    chip.append(el('span',s.name),el('small',String(s.leads+s.opportunities)));
+    chip.onclick=()=>{stageId=stageId===s.id?'':s.id;offset=0;load(product,false);};
+    chips.append(chip);
+   }
+   bar.append(chips);
+  }
+  r.append(bar);
+ }
+ async function load(p='',reset=true){product=p;if(reset)offset=0;const ticket=++epoch,r=root();r.replaceChildren(el('p','Carregando leads…'));const [data,funis]=await Promise.all([api('/api/commercial/leads?'+new URLSearchParams({...(p?{product_id:p}:{}),status:status||(stageId?'open':''),q:query,offset:String(offset),...(pipelineId?{pipeline_id:pipelineId}:{}),...(stageId?{stage_id:stageId}:{})})),api('/api/commercial/pipelines'+(p?'?space_id='+encodeURIComponent(p):'')).catch(()=>({pipelines:[]}))]);if(ticket!==epoch)return;
   r.replaceChildren();
-
+  funnelBar(r,funis.pipelines||[],p);
   const filters=el('form',null,'commercial-form'),search=field('Buscar por nome, e-mail ou empresa','search',query),stage=select('Estágio',[['','Todos'],...Object.entries(labels)],status);filters.append(search.wrap,stage.wrap);submit(filters,'Filtrar',async()=>{query=search.input.value;status=stage.input.value;await load(product);});
-  const filtered=Boolean(query||status);if(data.leads.length||filtered)r.append(filters);
+  const filtered=Boolean(query||status||stageId||pipelineId);if(data.leads.length||filtered)r.append(filters);
   if(!data.leads.length)r.append(el('p',filtered?'Nada com estes filtros.':'Ainda não chegou nenhum.','empty-list'));
   const list=el('div',null,'commercial-list');for(const l of data.leads){const row=el('article',null,'context-card');row.append(el('h3',l.name||l.organization_name),el('p',`${labels[l.status]} · ${l.product_id||'Sem produto'} · ${l.interest||'Contato'}`),el('p',`${l.email||l.whatsapp||''} · Responsável: ${l.owner_name||l.owner_email||'Não atribuído'}`),el('small',`${l.source_system||'Origem desconhecida'} · ${date(l.source_created_at||l.created_at)}`),button('Abrir detalhe',()=>detail(l.id)));list.append(row);}r.append(list);
   const nav=el('div',null,'commercial-actions');if(offset)nav.append(button('Anterior',async()=>{offset=Math.max(0,offset-25);await load(product,false);}));if(data.has_more)nav.append(button('Próxima',async()=>{offset+=25;await load(product,false);}));r.append(nav);

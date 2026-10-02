@@ -45,6 +45,7 @@ import { portfolioRoutes } from './modules/portfolio.mjs';
 import { tenantSummaryRoutes } from './modules/tenant-summary.mjs';
 import { pushRoutes } from './modules/push.mjs';
 import { mediaRoutes } from './modules/media.mjs';
+import { commercialPipelineRoutes } from './modules/commercial-pipelines.mjs';
 
 const MODULES = [
  identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes, emailTemplateRoutes, productFaviconRoutes, productDeployBindingRoutes, productResourceBindingRoutes, serviceDeployBindingRoutes, managementRoutes, productPaymentRoutes, productTopologyRoutes,
@@ -78,6 +79,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  // fica desligado: as rotas respondem "não configurado" e o resto do Core não muda.
  pushRoutes(router,pushOptions);
  mediaRoutes(router,{clock,...mediaOptions});
+ commercialPipelineRoutes(router);
  // Ficha da empresa: leitura transversal por tenant, com o relógio do Core para o mês corrente.
  tenantSummaryRoutes(router,{clock});
 

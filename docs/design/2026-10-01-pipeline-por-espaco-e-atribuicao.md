@@ -1,6 +1,8 @@
 # Pipeline por espaço, clientes por espaço e padrão de atribuição — avaliação
 
-Status: **`[AVALIAÇÃO]`** em 2026-10-01. **Nada implementado.** Serve para decidir antes de escrever código.
+Status: **`[AVALIAÇÃO]`** em 2026-10-01. **Fase 1 implementada em 2026-10-02** (migração 040, `commercial-pipelines.mjs`, barra do funil no Inbound),
+com as 4 recomendações do §6 aceitas pelo dono ("pode"): vários funis por espaço, campos próprios por espaço (fase 4), nasce a contratação
+ao ganhar (fase 3), só espaços da TZOLKIN. As fases 2 a 5 seguem abertas.
 Base de cópia: o desenho de leads da Kalidash (`Projetos/Carol/Kalidash/docs/plano-schema.md`,
 `apps/admin/src/lib/leadFlow.ts`, `lifecycle.ts`, `documents.ts`), só trocando o contexto de aplicação.
 
