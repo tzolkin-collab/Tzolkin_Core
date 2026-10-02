@@ -36,27 +36,27 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
   quando o formulário pedir. *(STATUS §3.D G3.)*
 - [x] **P1** Funil por espaço: pipeline, etapas, fontes, oportunidade (copiar o desenho da Kalidash).
   *(`design/2026-10-01-pipeline-por-espaco-e-atribuicao.md`.)* **[D]** 4 decisões nesse documento.
-  *(fase 1 feita em 02/10: migração 040, funis por espaço com funil padrão, etapas, oportunidades e o lead entrando no funil pelo `utm_tzolkin`. **Migração 040 ainda não aplicada no banco compartilhado.** Faltam: fontes, qualificar/descartar/mover o lead pela tela, ganhar → contratação.)*
-- [ ] **P0 [VOCÊ]** Aplicar a migração **040** (funil por espaço) no banco compartilhado, antes do deploy do Core. Só adiciona tabelas e colunas; o banco tem 0 leads.
-- [ ] **P0 [VOCÊ]** Aplicar a migração **041** (acompanhamento por contratação) no banco compartilhado, junto com a 040. Só adiciona uma coluna, uma chave e um índice; o banco tem 0 atividades.
-- [ ] **P0 [VOCÊ]** Aplicar a migração **042** (oportunidade guarda a contratação que criou) junto com a 040 e a 041. Só adiciona uma coluna e um índice; o banco tem 0 oportunidades.
-- [ ] **P0 [VOCÊ]** Aplicar a migração **046** (requisitos de etapa) junto com as outras. Cria uma tabela, uma coluna opcional e dois índices; a lista de origens da tarefa só ganha o valor `requisito`.
-- [ ] **P0 [VOCÊ]** Aplicar a migração **045** (a trilha de auditoria ganha a coluna `details`) junto com as outras. Só adiciona uma coluna opcional.
-- [ ] **P0 [VOCÊ]** Aplicar a migração **044** (eventos, automações e tarefas) junto com as outras. Só cria três tabelas; o banco tem 0 leads.
-- [ ] **P0 [VOCÊ]** Aplicar a migração **043** (campos próprios por espaço) junto com as outras. Cria uma tabela, duas colunas com padrão e semeia os 4 campos do site; o banco tem 0 leads.
+  *(fase 1 feita em 02/10: migração 040, funis por espaço com funil padrão, etapas, oportunidades e o lead entrando no funil pelo `utm_tzolkin`. Migração 040 aplicada no banco compartilhado em 02/10. Faltam: fontes, qualificar/descartar/mover o lead pela tela, ganhar → contratação.)*
+- [x] **P0 [VOCÊ]** Aplicar a migração **040** (funil por espaço) no banco compartilhado, antes do deploy do Core. Só adiciona tabelas e colunas; o banco tem 0 leads. *(aplicada em 02/10 no banco compartilhado, com saída 0; conferido: tabelas, colunas e funis semeados existem e os dados antigos não mudaram.)*
+- [x] **P0 [VOCÊ]** Aplicar a migração **041** (acompanhamento por contratação) no banco compartilhado, junto com a 040. Só adiciona uma coluna, uma chave e um índice; o banco tem 0 atividades. *(aplicada em 02/10 no banco compartilhado, com saída 0; conferido: tabelas, colunas e funis semeados existem e os dados antigos não mudaram.)*
+- [x] **P0 [VOCÊ]** Aplicar a migração **042** (oportunidade guarda a contratação que criou) junto com a 040 e a 041. Só adiciona uma coluna e um índice; o banco tem 0 oportunidades. *(aplicada em 02/10 no banco compartilhado, com saída 0; conferido: tabelas, colunas e funis semeados existem e os dados antigos não mudaram.)*
+- [x] **P0 [VOCÊ]** Aplicar a migração **046** (requisitos de etapa) junto com as outras. Cria uma tabela, uma coluna opcional e dois índices; a lista de origens da tarefa só ganha o valor `requisito`. *(aplicada em 02/10 no banco compartilhado, com saída 0; conferido: tabelas, colunas e funis semeados existem e os dados antigos não mudaram.)*
+- [x] **P0 [VOCÊ]** Aplicar a migração **045** (a trilha de auditoria ganha a coluna `details`) junto com as outras. Só adiciona uma coluna opcional. *(aplicada em 02/10 no banco compartilhado, com saída 0; conferido: tabelas, colunas e funis semeados existem e os dados antigos não mudaram.)*
+- [x] **P0 [VOCÊ]** Aplicar a migração **044** (eventos, automações e tarefas) junto com as outras. Só cria três tabelas; o banco tem 0 leads. *(aplicada em 02/10 no banco compartilhado, com saída 0; conferido: tabelas, colunas e funis semeados existem e os dados antigos não mudaram.)*
+- [x] **P0 [VOCÊ]** Aplicar a migração **043** (campos próprios por espaço) junto com as outras. Cria uma tabela, duas colunas com padrão e semeia os 4 campos do site; o banco tem 0 leads. *(aplicada em 02/10 no banco compartilhado, com saída 0; conferido: tabelas, colunas e funis semeados existem e os dados antigos não mudaram.)*
 - [ ] **P2** Campos próprios: "obrigatório" vale só no intake; a edição não força preencher os que já existiam. Edição de valor na lista e filtro por campo ficam para depois (os valores moram em `jsonb`; se virar gargalo, tabela própria, como a Kalidash prevê).
 - [x] **P1** Funil: requisitos de etapa (bloquear entrar ou sair; tarefa a concluir ou campo a preencher).
-  *(feito em 02/10: migração 046, `commercial-gates.mjs` (gate.ts da Kalidash), bloqueio ao mover o lead e a oportunidade com a lista do que falta, e gerenciador no Inbound. Perder, descartar e qualificar nunca ficam presos. **Migração 046 ainda não aplicada no banco compartilhado.**)*
+  *(feito em 02/10: migração 046, `commercial-gates.mjs` (gate.ts da Kalidash), bloqueio ao mover o lead e a oportunidade com a lista do que falta, e gerenciador no Inbound. Perder, descartar e qualificar nunca ficam presos. Migração 046 aplicada no banco compartilhado em 02/10.)*
 - [x] **P1** Funil, fase 5: eventos e automações (e as tarefas mínimas que a ação "criar tarefa" pede).
-  *(feito em 02/10: migração 044, `platform/automations.mjs`, `commercial-automations.mjs`, tarefas no lead e gerenciador de automações no Inbound. **Migração 044 ainda não aplicada no banco compartilhado.** Ações de hoje: criar tarefa e atribuir responsável.)*
+  *(feito em 02/10: migração 044, `platform/automations.mjs`, `commercial-automations.mjs`, tarefas no lead e gerenciador de automações no Inbound. Migração 044 aplicada no banco compartilhado em 02/10. Ações de hoje: criar tarefa e atribuir responsável.)*
 - [ ] **P1** Funil, o que as fases 3 a 5 deixaram: fontes do lead ("Conectar fonte"), automação com atraso (precisa de agendador; ADR 0011 diz sem worker), ações de e-mail e de push na automação, gatilho por webhook de entrada (pagamento confirmado move a oportunidade para Ganho: o Core já recebe Stripe e Asaas), lead criado pela tela (outbound) e mover o lead em lote. **[D]**
 - [ ] **P1** Acompanhamento: responsável por operador (depende da decisão: do cliente ou da contratação), orçamento de horas, participantes e anexos.
 - [x] **P1** Fase 3 do funil: qualificar, descartar e mover o lead pela tela; ganhar a oportunidade cria a contratação (decisão 3).
-  *(feito em 02/10: `commercial-leadflow.mjs`, migração 042 e a tela. **Migração 042 ainda não aplicada no banco compartilhado.** Falta uso com lead real.)*
+  *(feito em 02/10: `commercial-leadflow.mjs`, migração 042 e a tela. Migração 042 aplicada no banco compartilhado em 02/10. Falta uso com lead real.)*
 - [x] **P1** Fase 2 do plano da Kalidash: dedupe de pessoa e empresa (e-mail, CPF por hash, CNPJ alfanumérico) no intake.
   *(feito em 02/10 por e-mail: o mesmo e-mail, em qualquer caixa e em qualquer espaço, reaproveita a pessoa; a empresa é reaproveitada se for da pessoa e tiver o mesmo nome; cliente que volta sai com `returning_client`. Sem migração. Falta CPF por hash e CNPJ: o site não envia documento, então entram quando o formulário pedir.)*
 - [x] **P1** Campos próprios por espaço (`space_fields` + `custom_data`) e bloco `space_data` no intake. **[D]**
-  *(feito em 02/10: migração 043, `commercial-fields.mjs`, `platform/space-fields.mjs`, gerenciador no Inbound e painel "Dados do espaço" no lead. **Migração 043 ainda não aplicada no banco compartilhado.** Decisão tomada pela recomendação (opção A, só os espaços da Tzolkin); mude se quiser outra.)*
+  *(feito em 02/10: migração 043, `commercial-fields.mjs`, `platform/space-fields.mjs`, gerenciador no Inbound e painel "Dados do espaço" no lead. Migração 043 aplicada no banco compartilhado em 02/10. Decisão tomada pela recomendação (opção A, só os espaços da Tzolkin); mude se quiser outra.)*
 - [x] **P1** `utm_tzolkin`: conferir no servidor que o prefixo é o espaço da chave.
   *(feito em 02/10: o prefixo errado é ignorado para escolher o funil; o site também descarta `utm_tzolkin` que não comece por `sites.`.)*
 - [x] **P1** Convenção de URL de anúncio (parâmetros dinâmicos da Meta) escrita em `ATTRIBUTION.md`.
@@ -147,10 +147,10 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 - [x] **P1** Pessoas sem e-mail nem telefone na lista. *(STATUS §4.)* *(feito em 02/10: o cartão mostra e-mail e telefone, ou "Sem e-mail nem telefone"; a busca acha por eles; o cadastro pede os dois, opcionais, e recusa e-mail repetido. Sem migração.)*
 - [ ] **P1** Ficha da empresa em grade, sem abas, pagamentos nem documentos. *(STATUS §4; `DESIGN-360.md`.)*
 - [x] **P1** Acompanhamento não liga atividade a contratação (a própria ficha admite). Decidir religar ou remover. **[D]**
-  *(decidido por você em 02/10: religar. Migração 041, rota, formulário, ficha da empresa por contratação e menu de volta. **Migração 041 ainda não aplicada no banco compartilhado.** Falta uso com dado real: hoje há 0 atividades.)*
+  *(decidido por você em 02/10: religar. Migração 041, rota, formulário, ficha da empresa por contratação e menu de volta. Migração 041 aplicada no banco compartilhado em 02/10. Falta uso com dado real: hoje há 0 atividades.)*
 - [ ] **P1 [D]** Responsável é do cliente ou da contratação? *(PENDENCIAS §5.)* `acquisition_mode` e `billing_mode` não existem.
 - [x] **P1** `PUT /api/tenants` só troca `status`; reclassificar organização continua sem rota. *(STATUS §3.F.)*
-  *(feito em 02/10: a rota troca nome, relacionamento, tipo e ciclo de vida, com o antes e o depois na trilha (migração 045), e a ficha ganhou "Editar empresa". O identificador não muda; a organização interna não se reclassifica. **Migração 045 ainda não aplicada no banco compartilhado.**)*
+  *(feito em 02/10: a rota troca nome, relacionamento, tipo e ciclo de vida, com o antes e o depois na trilha (migração 045), e a ficha ganhou "Editar empresa". O identificador não muda; a organização interna não se reclassifica. Migração 045 aplicada no banco compartilhado em 02/10.)*
 - [ ] **P2** Modelo educacional inteiro: turma, aluno, matrícula, responsável financeiro. *(TODO etapa 7.)*
 - [ ] **P2 [D]** Vocabulário de tags e marcas; regra de sincronização do Notion para clientes e contatos (**superada pelo bloco 11**); importação sem log
   nem prévia. *(STATUS §3.E.)*
@@ -254,7 +254,7 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | Bloco | Abertos |
 |---|---:|
 | 0. Lembretes que você pediu | 1 |
-| 1. Leads e funil | 21 |
+| 1. Leads e funil | 14 |
 | 2. Risco sem volta | 8 |
 | 3. Dinheiro, cobrança e fiscal | 15 |
 | 4. Conexões, infraestrutura e deploy | 11 |
@@ -265,6 +265,6 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | 9. Documentação a corrigir | 5 |
 | 10. Fora do Core | 2 |
 | 11. Substituir o Notion pelo Core | 11 |
-| **Total** | **102** |
+| **Total** | **95** |
 
-Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 21. Dos 102 abertos: **P0: 15**, **[VOCÊ]: 16**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
+Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 28. Dos 95 abertos: **P0: 8**, **[VOCÊ]: 9**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
