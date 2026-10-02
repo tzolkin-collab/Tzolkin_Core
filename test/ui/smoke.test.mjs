@@ -12,12 +12,12 @@ import { fileURLToPath } from 'node:url';
 import { createCore } from '../../apps/api/src/app.mjs';
 import { serveAsset } from '../../apps/web/assets.mjs';
 import { abrirNavegador, acharNavegador } from './browser.mjs';
-import { SENHA, EMPRESA, PNG_1X1, bancoFalso, r2Falso } from './fixtures.mjs';
+import { SENHA, EMPRESA, PESSOA_FISICA, PNG_1X1, bancoFalso, r2Falso } from './fixtures.mjs';
 
 const PULAR = acharNavegador() ? false : 'Chrome/Edge não encontrado (defina CHROME_PATH)';
 const ARTEFATOS = fileURLToPath(new URL('./artifacts/', import.meta.url));
 
-const MENU_ESPERADO = ['Visão geral', 'Financeiro', 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Portfólio', 'Serviços', 'Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS', 'Banco de dados'];
+const MENU_ESPERADO = ['Visão geral', 'Financeiro', 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Portfólio', 'Serviços', 'Acompanhamento', 'Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS', 'Banco de dados'];
 const SECAO = `[...document.querySelectorAll('main section')].find(s => !s.hidden && s.offsetParent)`;
 /**
  * Lê, de dentro da página, os defeitos de uma tela: título, estouro de largura, texto com valor
@@ -153,6 +153,25 @@ test('Inbound: o funil do espaço mostra as etapas com a contagem e filtra por e
  assert.equal((await chips())[0], 'Novos2*');
  await pagina.avaliar(`document.querySelector('#inbound-panel-leads .funnel-chip').click()`);
  await pagina.esperar(`document.querySelector('#inbound-panel-leads .funnel-chip')?.getAttribute('aria-pressed') === 'false'`, { descricao: 'etapa desmarcada' });
+ semExcecoes();
+});
+
+test('Acompanhamento: a atividade escolhe a contratação da empresa selecionada', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 800);
+ await pagina.avaliar(CLICAR_NO_MENU('Acompanhamento'));
+ await pagina.esperar(`[...document.querySelectorAll('#view-tracking button')].some(b => b.textContent.trim() === 'Nova atividade')`, { descricao: 'botão Nova atividade' });
+ await pagina.avaliar(`[...document.querySelectorAll('#view-tracking button')].find(b => b.textContent.trim() === 'Nova atividade').click()`);
+ await pagina.esperar(`document.querySelector('dialog.tracking-editor[open]')`, { descricao: 'formulário aberto' });
+ const campo = nome => `[...document.querySelectorAll('dialog.tracking-editor label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)}).querySelector('select')`;
+ const opcoes = nome => pagina.avaliar(`[...(${campo(nome)}).options].map(o => o.textContent)`);
+ const escolher = async (nome, valor) => pagina.avaliar(`(() => { const s = ${campo(nome)}; s.value = ${JSON.stringify(valor)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+ // Sem empresa escolhida, só a opção geral.
+ assert.deepEqual(await opcoes('Contratação (opcional)'), ['Geral da empresa (sem contratação)']);
+ await escolher('Cliente', EMPRESA);
+ assert.deepEqual(await opcoes('Contratação (opcional)'), ['Geral da empresa (sem contratação)', 'Mentoria Alfa']);
+ // Outra empresa: a contratação da primeira não pode ser escolhida.
+ await escolher('Cliente', PESSOA_FISICA);
+ assert.deepEqual(await opcoes('Contratação (opcional)'), ['Geral da empresa (sem contratação)']);
  semExcecoes();
 });
 

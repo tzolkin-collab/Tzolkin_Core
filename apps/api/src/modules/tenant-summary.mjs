@@ -99,11 +99,16 @@ const SQL = {
               WHERE e.tenant_id=$1 AND b.active AND e.archived_at IS NULL
               ORDER BY c.name`,
 
- // A atividade tem tenant_id; ligação com contratação ainda não existe. As horas
- // são da empresa, e a resposta diz isso em by_engagement.
+ // A atividade pode ter contratação (engagement_id, migração 041). O total é da empresa;
+ // `items` separa por contratação, e id nulo é a hora sem contratação.
  horas: `SELECT COALESCE(SUM(l.minutes),0)::int AS minutes,count(l.id)::int AS logs,count(DISTINCT a.id)::int AS activities
            FROM service_time_logs l JOIN service_activities a ON a.id=l.activity_id
           WHERE a.tenant_id=$1 AND l.worked_on >= $2::date AND l.worked_on < $2::date + interval '1 month'`,
+
+ horasPorContratacao: `SELECT a.engagement_id AS id,e.label,COALESCE(SUM(l.minutes),0)::int AS minutes,count(l.id)::int AS logs
+           FROM service_time_logs l JOIN service_activities a ON a.id=l.activity_id LEFT JOIN client_engagements e ON e.id=a.engagement_id
+          WHERE a.tenant_id=$1 AND l.worked_on >= $2::date AND l.worked_on < $2::date + interval '1 month'
+          GROUP BY a.engagement_id,e.label ORDER BY (a.engagement_id IS NULL),minutes DESC,e.label`,
 
  contratosDeAcesso: `SELECT e.product_id,p.name AS product_name,e.plan,e.rights,e.updated_at
                        FROM entitlements e LEFT JOIN products p ON p.id=e.product_id
@@ -161,7 +166,8 @@ export function tenantSummaryRoutes(router, { clock = Date.now } = {}) {
   }));
 
   const hours = await secao(async () => ({
-   month: mes, by_engagement: false, ...(await pool.query(SQL.horas, [id, inicioDoMes])).rows[0],
+   month: mes, by_engagement: true, ...(await pool.query(SQL.horas, [id, inicioDoMes])).rows[0],
+   items: (await pool.query(SQL.horasPorContratacao, [id, inicioDoMes])).rows,
   }));
 
   const access = await secao(async () => ({

@@ -21,7 +21,7 @@ const NAVEGACAO = [
  ['Hoje', ['Visão geral', 'Financeiro']],
  ['Relacionamentos', ['Empresas', 'Pessoas', 'Clientes', 'Inbound']],
  ['Portfólio', ['Portfólio']],
- ['Entrega', ['Serviços']],
+ ['Entrega', ['Serviços', 'Acompanhamento']],
  ['Tecnologia', ['Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS']],
  ['Bases de dados', ['Banco de dados']],
 ];

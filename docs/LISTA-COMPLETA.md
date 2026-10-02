@@ -38,6 +38,8 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
   *(`design/2026-10-01-pipeline-por-espaco-e-atribuicao.md`.)* **[D]** 4 decisões nesse documento.
   *(fase 1 feita em 02/10: migração 040, funis por espaço com funil padrão, etapas, oportunidades e o lead entrando no funil pelo `utm_tzolkin`. **Migração 040 ainda não aplicada no banco compartilhado.** Faltam: fontes, qualificar/descartar/mover o lead pela tela, ganhar → contratação.)*
 - [ ] **P0 [VOCÊ]** Aplicar a migração **040** (funil por espaço) no banco compartilhado, antes do deploy do Core. Só adiciona tabelas e colunas; o banco tem 0 leads.
+- [ ] **P0 [VOCÊ]** Aplicar a migração **041** (acompanhamento por contratação) no banco compartilhado, junto com a 040. Só adiciona uma coluna, uma chave e um índice; o banco tem 0 atividades.
+- [ ] **P1** Acompanhamento: responsável por operador (depende da decisão: do cliente ou da contratação), orçamento de horas, participantes e anexos.
 - [ ] **P1** Fase 3 do funil: qualificar, descartar e mover o lead pela tela; ganhar a oportunidade cria a contratação (decisão 3).
 - [x] **P1** Fase 2 do plano da Kalidash: dedupe de pessoa e empresa (e-mail, CPF por hash, CNPJ alfanumérico) no intake.
   *(feito em 02/10 por e-mail: o mesmo e-mail, em qualquer caixa e em qualquer espaço, reaproveita a pessoa; a empresa é reaproveitada se for da pessoa e tiver o mesmo nome; cliente que volta sai com `returning_client`. Sem migração. Falta CPF por hash e CNPJ: o site não envia documento, então entram quando o formulário pedir.)*
@@ -128,10 +130,11 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 
 - [x] **A fusão de Empresas/Pessoas/Contratações em abas de Clientes foi revertida** (`ecdf52d`, 01/10). Contradizia
   `UX-RELATION-MAP.md` e o E10 ("Empresas e Pessoas passam a ser irmãs"). O menu voltou a ter 14 itens.
-- [ ] **P1 [D]** Menu: confirmar a saída de E-mails, Acompanhamento, Redis e Acessos (ocultos por mim em 01/10).
+- [ ] **P1 [D]** Menu: confirmar a saída de E-mails, Redis e Acessos (ocultos por mim em 01/10). O Acompanhamento voltou em 02/10.
 - [ ] **P1** Pessoas sem e-mail nem telefone na lista. *(STATUS §4.)*
 - [ ] **P1** Ficha da empresa em grade, sem abas, pagamentos nem documentos. *(STATUS §4; `DESIGN-360.md`.)*
-- [ ] **P1** Acompanhamento não liga atividade a contratação (a própria ficha admite). Decidir religar ou remover. **[D]**
+- [x] **P1** Acompanhamento não liga atividade a contratação (a própria ficha admite). Decidir religar ou remover. **[D]**
+  *(decidido por você em 02/10: religar. Migração 041, rota, formulário, ficha da empresa por contratação e menu de volta. **Migração 041 ainda não aplicada no banco compartilhado.** Falta uso com dado real: hoje há 0 atividades.)*
 - [ ] **P1 [D]** Responsável é do cliente ou da contratação? *(PENDENCIAS §5.)* `acquisition_mode` e `billing_mode` não existem.
 - [ ] **P1** `PUT /api/tenants` só troca `status`; reclassificar organização continua sem rota. *(STATUS §3.F.)*
 - [ ] **P2** Modelo educacional inteiro: turma, aluno, matrícula, responsável financeiro. *(TODO etapa 7.)*
@@ -235,17 +238,17 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | Bloco | Abertos |
 |---|---:|
 | 0. Lembretes que você pediu | 1 |
-| 1. Leads e funil | 17 |
+| 1. Leads e funil | 19 |
 | 2. Risco sem volta | 8 |
 | 3. Dinheiro, cobrança e fiscal | 15 |
 | 4. Conexões, infraestrutura e deploy | 11 |
-| 5. Clientes, pessoas, empresas e portfólio | 12 |
+| 5. Clientes, pessoas, empresas e portfólio | 11 |
 | 6. Integrações | 6 |
 | 7. Identidade, papéis, auditoria | 6 |
 | 8. Qualidade, testes e publicação | 7 |
 | 9. Documentação a corrigir | 5 |
 | 10. Fora do Core | 2 |
 | 11. Substituir o Notion pelo Core | 11 |
-| **Total** | **101** |
+| **Total** | **102** |
 
-Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 10. Dos 101 abertos: **P0: 9**, **[VOCÊ]: 10**, **[D] (decisão sua): 17**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
+Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 11. Dos 102 abertos: **P0: 10**, **[VOCÊ]: 11**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.

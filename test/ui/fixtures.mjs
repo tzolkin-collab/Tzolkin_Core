@@ -52,6 +52,11 @@ export function bancoFalso() {
    // /api/bootstrap: uma linha, uma coluna por coleção
    if (/AS resource_bindings/.test(sql) && /jsonb_agg/.test(sql))
     return { rows: [{ tenants: DADOS.tenants, products: DADOS.products, memberships: [], entitlements: [], engagements: DADOS.engagements, stakeholders: DADOS.stakeholders, entries: [], resource_bindings: [] }] };
+   // /api/overview (o Acompanhamento lê as empresas dele)
+   if (sql === 'SELECT * FROM tenants ORDER BY created_at DESC') return { rows: DADOS.tenants };
+   // Acompanhamento: contratações em curso oferecidas ao formulário de atividade
+   if (/FROM client_engagements WHERE archived_at IS NULL ORDER BY label/.test(sql))
+    return { rows: DADOS.engagements.filter(e => e.status === 'active').map(e => ({ id: e.id, tenant_id: e.tenant_id, label: e.label, service_model: e.service_model, status: e.status, product_id: e.product_id })) };
    // funil do espaço (Inbound): um funil padrão com as 8 etapas e 2 leads em "Novos"
    if (/FROM pipelines p JOIN products pr/.test(sql))
     return { rows: [{ id: FUNIL, space_id: 'mentorias', space_name: 'Mentorias', slug: 'padrao', name: 'Funil padrão', offer_name: null, is_default: true, is_active: true, position: 0, version: 1 }] };

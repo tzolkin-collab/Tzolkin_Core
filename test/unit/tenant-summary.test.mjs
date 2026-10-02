@@ -59,6 +59,7 @@ const bancoCompleto = (extra = []) => poolFalso([
  // A seção de deploys lê o registro único desde a 034; as chaves da resposta não mudaram.
  ['FROM product_resource_bindings', [{ engagement_id: CONTRATACAO, provider: 'vercel', external_project_id: 'prj_1', external_project_name: 'site-a', environment: 'production' }]],
  ['FROM marketing_campaign_bindings', [{ engagement_id: CONTRATACAO, provider: 'meta', external_id: 'c1', name: 'Campanha A', spend_cents: '12837', currency: 'BRL' }]],
+ ['GROUP BY a.engagement_id', [{ id: CONTRATACAO, label: 'Mentoria', minutes: 100, logs: 2 }, { id: null, label: null, minutes: 50, logs: 1 }]],
  ['FROM service_time_logs', [{ minutes: 150, logs: 3, activities: 2 }]],
  ['FROM entitlements', [{ product_id: 'educare', product_name: 'Educare', plan: 'anual', rights: [] }]],
  ['FROM memberships', [{ product_id: 'educare', product_name: 'Educare', active: 4 }]],
@@ -136,7 +137,8 @@ test('Ficha da empresa: seções', async t => {
   assert.equal(body.engagements.items[1].product, null, 'serviço sem item continua na ficha');
   assert.equal(body.contracts.items[0].amount_minor, 1500000);
   assert.equal(body.campaigns.items[0].spend_cents, 12837);
-  assert.deepEqual({ minutes: body.hours.minutes, by_engagement: body.hours.by_engagement }, { minutes: 150, by_engagement: false });
+  assert.deepEqual({ minutes: body.hours.minutes, by_engagement: body.hours.by_engagement }, { minutes: 150, by_engagement: true });
+  assert.deepEqual(body.hours.items.map(i => [i.id, i.minutes]), [[CONTRATACAO, 100], [null, 50]], 'horas por contratação; id nulo é a hora sem contratação');
  });
 
  await t.test('mês corrente é o de Brasília, e é ele que vai para horas e campanhas', async () => {
@@ -144,7 +146,7 @@ test('Ficha da empresa: seções', async t => {
   const pool = bancoCompleto();
   const { body } = await ficha(pool);
   assert.equal(body.hours.month, '2026-09');
-  for (const trecho of ['FROM service_time_logs', 'FROM marketing_campaign_bindings'])
+  for (const trecho of ['FROM service_time_logs', 'GROUP BY a.engagement_id', 'FROM marketing_campaign_bindings'])
    assert.deepEqual(pool.chamadas.find(c => c.sql.includes(trecho)).params, [TENANT, '2026-09-01']);
  });
 

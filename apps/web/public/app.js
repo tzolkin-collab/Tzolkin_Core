@@ -73,8 +73,8 @@ const CONTEXTS = {
    products: { title: 'Portfólio', section: 'view-products', action: ['Novo espaço', 'space-dialog'], metrics:false },
    // ENTREGA — o trabalho contratado e o andamento dele.
    services: { title: 'Serviços', section: 'view-services', metrics:false },
-   // Oculta até ligar a atividade a uma contratação (a ficha do cliente admite que não liga).
-   tracking: { title: 'Acompanhamento', section: 'view-tracking', metrics:false, hidden:true },
+   // A atividade e as horas pertencem a uma contratação (migração 041).
+   tracking: { title: 'Acompanhamento', section: 'view-tracking', metrics:false },
    serviceCampaigns: { title: 'Campanhas do serviço', section: 'view-service-campaigns', metrics: false, hidden:true },
    // TECNOLOGIA — Conexões diz de quem é cada recurso; uma tela por provedor diz onde ele está.
    connections: { title: 'Conexões', section: 'view-connections', action: ['Novo projeto', 'delivery-new'], metrics:false },
@@ -648,9 +648,10 @@ function paintClientDetail(summary){
 
  if(!hours.available)unavailable('Horas do mês',hours);
  else if(hours.minutes){
-  // Soma da empresa: atividade ainda não tem ligação com contratação (by_engagement:false).
-  const time=panel('Horas do mês',`${monthTitle(hours.month)} · somadas por empresa; o Acompanhamento ainda não liga atividade a contratação.`);
+  // Total da empresa e, abaixo, o que é de cada contratação (id nulo = atividade geral, sem contratação).
+  const time=panel('Horas do mês',`${monthTitle(hours.month)} · separadas por contratação.`);
   time.append(node('strong',hours.minutes?`${workedTime(hours.minutes)} em ${plural(hours.logs,'apontamento','apontamentos')} de ${plural(hours.activities,'atividade','atividades')}`:'Nenhuma hora lançada neste mês.','client-access-count'));
+  for(const item of hours.items||[])time.append(node('p',`${item.label||'Sem contratação'} · ${workedTime(item.minutes)}`,'detail'));
   const open=node('button',undefined,'secondary');open.type='button';open.append(createIcon('calendar'),document.createTextNode('Abrir no Acompanhamento'));
   open.onclick=()=>{tracking.focus(tenant.id);switchView('tracking');};time.append(open);
  }

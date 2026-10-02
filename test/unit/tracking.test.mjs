@@ -7,14 +7,17 @@ const id='00000000-0000-4000-8000-000000000001';
 const activity={id,tenant_id:id,category:'mentoria',kind:'sessao',title:'Sessão inicial',starts_at:'2026-08-31T10:00:00-03:00',ends_at:'2026-08-31T11:00:00-03:00'};
 test('agenda normaliza horário e rejeita intervalos inválidos',()=>{
  assert.equal(activityInput(activity).starts_at,'2026-08-31T13:00:00.000Z');
- for(const override of [{ends_at:activity.starts_at},{starts_at:'2026-08-31T10:00:00'},{category:'fake'},{tenant_id:'bad'},{extra:true}])assert.throws(()=>activityInput({...activity,...override}));
+ assert.equal(activityInput(activity).engagement_id,null);assert.equal(activityInput({...activity,engagement_id:id}).engagement_id,id);
+ for(const override of [{engagement_id:'bad'},{ends_at:activity.starts_at},{starts_at:'2026-08-31T10:00:00'},{category:'fake'},{tenant_id:'bad'},{extra:true}])assert.throws(()=>activityInput({...activity,...override}));
 });
 test('apontamento exige duração inteira, data válida e descrição',()=>{
  const b={id,minutes:60,worked_on:'2026-08-31',note:'Planejamento'};assert.equal(timeInput(b).minutes,60);
  for(const override of [{minutes:0},{minutes:1.5},{minutes:1441},{worked_on:'2026-02-30'},{worked_on:'2099-01-01'},{note:''}])assert.throws(()=>timeInput({...b,...override}));
 });
 test('filtro valida tenant e virada do ano',()=>{
- assert.deepEqual(trackingRange(new URLSearchParams('month=2026-12')),{start:'2026-12-01',end:'2027-01-01',tenant:null});
+ assert.deepEqual(trackingRange(new URLSearchParams('month=2026-12')),{start:'2026-12-01',end:'2027-01-01',tenant:null,engagement:null});
+ assert.equal(trackingRange(new URLSearchParams('month=2026-12&engagement_id='+id)).engagement,id);
+ assert.throws(()=>trackingRange(new URLSearchParams('month=2026-12&engagement_id=bad')));
  for(const q of ['month=2026-13','month=2026-08&month=2026-09','month=2026-08&tenant_id=bad','month=2026-08&sql=x'])assert.throws(()=>trackingRange(new URLSearchParams(q)));
 });
 test('falha de auditoria reverte a transação e libera conexão',async()=>{
@@ -26,7 +29,7 @@ test('falha de auditoria reverte a transação e libera conexão',async()=>{
  assert.equal(replied,false);assert.deepEqual(statements.slice(-2),['ROLLBACK','release']);assert.ok(!statements.includes('COMMIT'));
 });
 test('status concorrente falha sem confirmar gravação',async()=>{
- let handler;trackingRoutes({get(){},post(){},put(p,h){handler=h;}});const statements=[];
+ let handler;trackingRoutes({get(){},post(){},put(p,h){if(p.endsWith('/status'))handler=h;}});const statements=[];
  const pool={async connect(){return{async query(sql){statements.push(sql);return{rows:[]};},release(){}};}};
  const req={headers:{'content-type':'application/json'},async *[Symbol.asyncIterator](){yield Buffer.from(JSON.stringify({revision:1,status:'done'}));}};
  await assert.rejects(handler({pool,params:{id},req,reply(){assert.fail();}}),e=>e.status===409);assert.ok(statements.includes('ROLLBACK'));
