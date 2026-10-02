@@ -1,5 +1,6 @@
 import {setupCommercial} from './commercial.js';
 import {editTenantDialog} from './client-edit.js';
+import {describe as describeHistory} from './client-history.js';
 import {photoPanel} from './media.js';
 // Apresentação e serialização de formulários. Autorização, recorte por produto
 // e regras de negócio ficam no servidor: nada aqui decide o que o operador pode ver.
@@ -668,6 +669,14 @@ function paintClientDetail(summary){
   for(const e of access.entitlements)byProduct.set(e.product_id,{name:e.product_name||e.product_id,plan:e.plan,rights:e.rights||[],members:0});
   for(const m of access.memberships){const item=byProduct.get(m.product_id)||{name:m.product_name||m.product_id,plan:null,rights:[],members:0};item.members=m.active;byProduct.set(m.product_id,item);}
   for(const item of byProduct.values())granted.append(row(item.name,[item.plan?`Plano ${item.plan}`:'Sem contrato ativo',item.members?plural(item.members,'identidade com acesso','identidades com acesso'):null,item.rights.length?item.rights.join(', '):null].filter(Boolean).join(' · ')));
+ }
+ // Histórico: o que mudou na empresa, do mais recente para o mais antigo (a trilha de auditoria).
+ const history=summary.history;
+ if(history&&!history.available)unavailable('Histórico',history);
+ else if(history?.items.length){
+  const log=panel('Histórico','O que mudou nesta empresa, do mais recente para o mais antigo.',true);
+  for(const h of history.items){const d=describeHistory(h),r=row(d.title,[d.detail,new Date(h.at).toLocaleString('pt-BR'),h.actor].filter(Boolean).join(' · '));r.classList.add('history-row');log.append(r);}
+  if(history.truncated)log.append(node('p','Mostrando os 30 mais recentes.','detail'));
  }
  root.replaceChildren(hero,grid);
 }

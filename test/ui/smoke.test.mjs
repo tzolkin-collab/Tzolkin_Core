@@ -296,6 +296,15 @@ test('ficha da empresa abre pelo cartão e traz o painel de fotos', { skip: PULA
  semExcecoes();
 });
 
+test('ficha da empresa: o histórico mostra a alteração com o antes e o depois, em português', { skip: PULAR }, async () => {
+ const linhas = await pagina.avaliar(`[...document.querySelectorAll('#view-client .history-row')].map(r => r.innerText.replace(/\\s+/g, ' ').trim())`);
+ assert.equal(linhas.length, 2);
+ assert.match(linhas[0], /^Empresa alterada Relacionamento: Prospect → Cliente · .* · dono@exemplo.test$/);
+ assert.match(linhas[1], /^Tempo registrado .* · dono@exemplo.test$/);
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('#view-client .client-detail-panel h3')].some(h => h.textContent === 'Histórico')`), true);
+ semExcecoes();
+});
+
 test('ficha da empresa: Editar empresa abre o diálogo com a classificação atual e sem a opção "interna"', { skip: PULAR }, async () => {
  await pagina.avaliar(`[...document.querySelectorAll('#view-client button')].find(b => b.textContent.trim() === 'Editar empresa').click()`);
  await pagina.esperar(`document.querySelector('dialog.tenant-edit-dialog[open]')`, { descricao: 'diálogo de edição aberto' });

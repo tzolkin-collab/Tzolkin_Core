@@ -173,7 +173,9 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 
 - [ ] **P1 [D]** D3 (quem vende e quem recebe no fluxo consumidor → cliente), D4 (IdP: produção usa Google OIDC; fechar
   ou reescrever), D5 (RLS ou isolamento por query). *(STATUS §3.E.)*
-- [ ] **P1** Leitores de `audit_events`, `delivery_audit`, `service_activity_audit`: nenhuma rota lê. *(STATUS §3.F.)*
+- [x] **P1** Leitores de `audit_events`, `delivery_audit`, `service_activity_audit`: nenhuma rota lê. *(STATUS §3.F.)*
+  *(feito em 02/10 para `audit_events` e `service_activity_audit`: o painel "Histórico" da ficha da empresa mostra a trilha, com o antes e o depois quando a rota guardou (migração 045). A ficha abre mesmo sem a coluna `details`.)*
+- [ ] **P2** Leitor de `delivery_audit` (trilha por projeto de entrega, sem empresa): precisa de uma tela do projeto; não entra na ficha da empresa.
 - [ ] **P2** E3 papéis e acesso temporário; E6 auditoria completa (antes/depois, retenção); `audit_events.tenant_id NOT NULL`
   impede evento sem cliente. *(ROADMAP, PENDENCIAS §6.)*
 - [ ] **P2** E8 contexto de organização cliente (portal). Interface de contas e times (a API existe).
@@ -262,4 +264,4 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | 11. Substituir o Notion pelo Core | 11 |
 | **Total** | **101** |
 
-Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 19. Dos 101 abertos: **P0: 14**, **[VOCÊ]: 15**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
+Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 20. Dos 101 abertos: **P0: 14**, **[VOCÊ]: 15**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.

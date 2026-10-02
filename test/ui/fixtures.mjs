@@ -87,6 +87,12 @@ export function bancoFalso() {
    if (/SELECT id,name,kind,position FROM pipeline_stages WHERE pipeline_id=\$1 ORDER BY position/.test(sql))
     return { rows: ETAPAS.map(([name, kind], i) => ({ id: ETAPA(i), name, kind, position: i })) };
    if (/FROM lost_reasons WHERE is_active/.test(sql)) return { rows: [{ id: '88888888-8888-4888-8888-888888888888', name: 'Sem orçamento' }, { id: '99999999-9999-4999-8999-999999999999', name: 'Sem resposta' }] };
+   // Histórico da empresa (trilha de auditoria)
+   if (/FROM audit_events e WHERE e\.tenant_id=\$1/.test(sql))
+    return { rows: [
+     { at: '2026-09-02T12:00:00.000Z', source: 'empresa', type: 'tenant.updated', actor: 'dono@exemplo.test', details: { before: { relationship_kind: 'prospect' }, after: { relationship_kind: 'customer' } } },
+     { at: '2026-09-01T12:00:00.000Z', source: 'atividade', type: 'time_logged', actor: 'dono@exemplo.test', details: null },
+    ] };
    // Fase 5: responsáveis, tarefas do lead e automações do espaço
    if (/SELECT id,name,email FROM operator_accounts WHERE status='active'/.test(sql)) return { rows: [DONO] };
    if (/FROM commercial_tasks t LEFT JOIN operator_accounts a ON a\.id=t\.owner_id WHERE t\.lead_id=\$1/.test(sql)) return { rows: TAREFAS };

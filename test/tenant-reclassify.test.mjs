@@ -79,6 +79,26 @@ test('reclassificar a organização, contra PostgreSQL isolado', async t => {
    assert.equal((await linha(id)).relationship_kind, 'customer');
   });
 
+  await t.test('o histórico da ficha mostra a reclassificação com o antes e o depois, e os eventos mais recentes primeiro', async () => {
+   const ficha = (await chamar('GET', `/api/tenants/${id}/summary`)).body;
+   assert.equal(ficha.history.available, true);
+   const itens = ficha.history.items;
+   const alterada = itens.find(i => i.type === 'tenant.updated');
+   assert.ok(alterada, 'a alteração aparece');
+   assert.equal(alterada.source, 'empresa');
+   assert.deepEqual(alterada.details.after, { name: `Reclass Novo ${marca}`, relationship_kind: 'customer', lifecycle_status: 'onboarding' });
+   assert.ok(itens.some(i => i.type === 'tenant.status_changed') && itens.some(i => i.type === 'tenant.created'));
+   const datas = itens.map(i => Date.parse(i.at));
+   assert.deepEqual([...datas].sort((a, b) => b - a), datas, 'do mais recente para o mais antigo');
+   assert.ok(itens.every(i => typeof i.actor === 'string' || i.actor === null));
+  });
+
+  await t.test('uma empresa não vê o histórico de outra', async () => {
+   const outra = (await chamar('POST', '/api/tenants', { name: `Outra ${marca}`, slug: `outra-${marca}`, relationship_kind: 'customer' })).body.tenant_id;
+   const itens = (await chamar('GET', `/api/tenants/${outra}/summary`)).body.history.items;
+   assert.deepEqual(itens.map(i => i.type), ['tenant.created']);
+  });
+
   await t.test('sem sessão é 401', async () => {
    const r = await fetch(origin + '/api/tenants', { method: 'PUT', headers: { origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ tenant_id: id, name: 'Sem sessão' }) });
    assert.equal(r.status, 401);

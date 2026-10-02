@@ -133,9 +133,19 @@ const SQL = {
             FROM commercial_leads l LEFT JOIN products p ON p.id=l.product_id
             LEFT JOIN commercial_attributions a ON a.lead_id=l.id
            WHERE l.tenant_id=$1 ORDER BY COALESCE(l.source_created_at,l.created_at),l.id LIMIT 51`,
+ // Histórico: a trilha da empresa (audit_events) e a das atividades do Acompanhamento. `to_jsonb(e)->'details'` em vez de
+ // `e.details`: a coluna é da migração 045, e assim a ficha continua abrindo num banco que ainda não a tem. A trilha de
+ // entrega (delivery_audit) é por projeto, sem empresa, então não entra aqui.
+ historico: `SELECT at,source,type,actor,details FROM (
+              SELECT e.created_at AS at,'empresa' AS source,e.type,COALESCE(e.actor_email,e.actor_subject) AS actor,to_jsonb(e)->'details' AS details
+                FROM audit_events e WHERE e.tenant_id=$1
+              UNION ALL
+              SELECT a.created_at,'atividade',a.action,a.actor,NULL::jsonb
+                FROM service_activity_audit a JOIN service_activities s ON s.id=a.activity_id WHERE s.tenant_id=$1
+            ) h ORDER BY at DESC LIMIT 31`,
 };
 
-const LIMITE_CONTRATOS = 100, LIMITE_LEADS = 50;
+const LIMITE_CONTRATOS = 100, LIMITE_LEADS = 50, LIMITE_HISTORICO = 30;
 
 export function tenantSummaryRoutes(router, { clock = Date.now } = {}) {
  router.get('/api/tenants/:id/summary', async ({ pool, params, url, reply, operator }) => {
@@ -193,9 +203,14 @@ export function tenantSummaryRoutes(router, { clock = Date.now } = {}) {
    return { truncated: linhas.length > LIMITE_LEADS, items: linhas.slice(0, LIMITE_LEADS) };
   });
 
+  const history = await secao(async () => {
+   const linhas = (await pool.query(SQL.historico, [id])).rows;
+   return { truncated: linhas.length > LIMITE_HISTORICO, items: linhas.slice(0, LIMITE_HISTORICO) };
+  });
+
   return reply(200, {
    tenant: empresa,
-   people, engagements, deploys, campaigns, hours, access, contracts, origin,
+   people, engagements, deploys, campaigns, hours, access, contracts, origin, history,
    generated_at: new Date(clock()).toISOString(),
   });
  }, { body: false });
