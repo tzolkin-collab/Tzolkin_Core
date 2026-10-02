@@ -1,30 +1,120 @@
+import {photoPanel} from './media.js';
+import {dataPanel,fieldsManager} from './space-fields.js';
+import {tasksPanel,automationsManager} from './automations.js';
+import {blockersNotice,requirementsManager} from './stage-requirements.js';
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;if(cls)e.className=cls;return e;};
 const labels={open:'Novo',qualified:'Qualificado',won:'Ganho',lost:'Perdido',archived:'Arquivado'};
 const date=v=>v?new Date(v).toLocaleString('pt-BR'):'—';
 function field(label,type='text',value=''){const wrap=el('label',label),input=el(type==='textarea'?'textarea':'input');if(type!=='textarea')input.type=type;input.value=value??'';wrap.append(input);return{wrap,input};}
-function select(label,options,value=''){const wrap=el('label',label),input=el('select');for(const [v,t]of options){const o=el('option',t);o.value=v;input.append(o);}input.value=value;wrap.append(input);return{wrap,input};}
+function select(label,options,value=''){const wrap=el('label',label),input=el('select');for(const [v,t]of options){const o=el('option',t);o.value=v;input.append(o);}input.value=value;if(input.selectedIndex<0&&input.options.length)input.selectedIndex=0;wrap.append(input);return{wrap,input};}
 function button(label,fn){const b=el('button',label,'secondary');b.type='button';b.onclick=async()=>{b.disabled=true;try{await fn();}catch(e){const msg=el('p',e.message,'notice-inline');msg.setAttribute('role','alert');b.parentElement?.append(msg);}finally{b.disabled=false;}};return b;}
 function submit(form,label,fn){const b=el('button',label,'primary');b.type='submit';form.append(b);form.onsubmit=async e=>{e.preventDefault();b.disabled=true;form.querySelector('[role=alert]')?.remove();try{await fn();}catch(err){const p=el('p',err.message,'notice-inline');p.setAttribute('role','alert');form.append(p);}finally{b.disabled=false;}};}
 // openTenant abre a ficha da empresa; vem de app.js por callback para este módulo não importá-lo.
 export function setupCommercial({api,openTenant}) {
- let epoch=0,product='',offset=0,status='',query='';
+ let epoch=0,product='',offset=0,status='',query='',pipelineId='',stageId='',notice=null,detailNotice=null;
+ const stageInfo=new Map();
+ const brl=minor=>(Number(minor||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
  const root=()=>document.getElementById('inbound-panel-leads');
  function clear(){epoch++;root()?.replaceChildren();document.getElementById('view-product-keys')?.replaceChildren();}
- async function load(p='',reset=true){product=p;if(reset)offset=0;const ticket=++epoch,r=root();r.replaceChildren(el('p','Carregando leads…'));const data=await api('/api/commercial/leads?'+new URLSearchParams({...(p?{product_id:p}:{}),status,q:query,offset:String(offset)}));if(ticket!==epoch)return;
-  r.replaceChildren(el('h2',p?'Inbound do produto':'Leads inbound'));
-  if(!p||p==='sites'){const delivery=el('div',null,'context-card');r.append(delivery);try{const q=await api('/api/commercial/delivery');if(ticket!==epoch)return;delivery.append(el('h3','Fila de leads do site'),el('p',q.configured?q.counts.map(x=>`${({pending:'Na fila',processing:'Processando',delivered:'Recebidos no Core',failed:'Em falha'})[x.status]}: ${x.count}`).join(' · ')||'Fila vazia.':'Consumidor ainda não configurado.'));for(const f of q.failed){const row=el('p',`${date(f.created_at)} · ${f.attempts} tentativas · ${f.last_error}`);row.append(button('Reprocessar',async()=>{await api('/api/commercial/delivery/'+f.id+'/retry','POST',{});await load(product,false);}));delivery.append(row);}}catch(e){delivery.append(el('p','Não foi possível consultar a fila: '+e.message));}}
-
-  const filters=el('form',null,'commercial-form'),search=field('Buscar por nome, e-mail ou empresa','search',query),stage=select('Estágio',[['','Todos'],...Object.entries(labels)],status);filters.append(search.wrap,stage.wrap);submit(filters,'Filtrar',async()=>{query=search.input.value;status=stage.input.value;await load(product);});r.append(filters);
-  if(!data.leads.length)r.append(el('p','Nenhum lead encontrado para estes filtros.','empty-list'));
-  const list=el('div',null,'commercial-list');for(const l of data.leads){const row=el('article',null,'context-card');row.append(el('h3',l.name||l.organization_name),el('p',`${labels[l.status]} · ${l.product_id||'Sem produto'} · ${l.interest||'Contato'}`),el('p',`${l.email||l.whatsapp||''} · Responsável: ${l.owner_name||l.owner_email||'Não atribuído'}`),el('small',`${l.source_system||'Origem desconhecida'} · ${date(l.source_created_at||l.created_at)}`),button('Abrir detalhe',()=>detail(l.id)));list.append(row);}r.append(list);
+// Funil por espaço: seletor (quando há mais de um funil) e as etapas com a contagem de leads e oportunidades.
+ // Clicar numa etapa filtra a lista; clicar de novo limpa. Sem funil ativo, a barra não aparece.
+ function funnelBar(r,pipelines,p){
+  const ativos=pipelines.filter(x=>x.is_active);
+  if(!ativos.length)return;
+  for(const x of ativos)for(const s of x.stages)stageInfo.set(s.id,{kind:s.kind,name:s.name,pipeline:x});
+  if(pipelineId&&!ativos.some(x=>x.id===pipelineId)){pipelineId='';stageId='';}
+  const funil=ativos.find(x=>x.id===pipelineId)||(ativos.length===1?ativos[0]:null);
+  const bar=el('div',null,'funnel-bar');
+  if(ativos.length>1){
+   const sel=select('Funil',[['','Todos os funis'],...ativos.map(x=>[x.id,p?x.name:`${x.space_name} · ${x.name}`])],pipelineId);
+   sel.input.onchange=()=>{pipelineId=sel.input.value;stageId='';offset=0;load(product,false);};
+   bar.append(sel.wrap);
+  }
+  if(funil){
+   const chips=el('div',null,'funnel-stages');chips.setAttribute('role','group');chips.setAttribute('aria-label','Etapas do funil');
+   for(const s of funil.stages){
+    const chip=el('button',null,'funnel-chip'+(stageId===s.id?' active':''));chip.type='button';chip.setAttribute('aria-pressed',String(stageId===s.id));
+    chip.append(el('span',s.name),el('small',String(s.leads+s.opportunities)));
+    chip.onclick=()=>{stageId=stageId===s.id?'':s.id;offset=0;load(product,false);};
+    chips.append(chip);
+   }
+   bar.append(chips);
+  }
+  r.append(bar);
+ }
+ async function load(p='',reset=true){product=p;if(reset)offset=0;const ticket=++epoch,r=root();r.replaceChildren(el('p','Carregando leads…'));const [data,funis]=await Promise.all([api('/api/commercial/leads?'+new URLSearchParams({...(p?{product_id:p}:{}),status:status||(stageId?'open':''),q:query,offset:String(offset),...(pipelineId?{pipeline_id:pipelineId}:{}),...(stageId?{stage_id:stageId}:{})})),api('/api/commercial/pipelines'+(p?'?space_id='+encodeURIComponent(p):'')).catch(()=>({pipelines:[]}))]);if(ticket!==epoch)return;
+  r.replaceChildren();
+  if(notice){if(notice.blockers)r.append(blockersNotice(notice.blockers));else{const n=el('p',notice.text,'notice-inline');n.setAttribute('role','status');if(notice.tenant&&openTenant){const b=el('button','Abrir ficha da empresa →','secondary');b.type='button';b.onclick=()=>openTenant(notice.tenant);n.append(' ',b);}r.append(n);}notice=null;}
+  funnelBar(r,funis.pipelines||[],p);
+  // Etapa aberta, ganha ou perdida: o que está nela são oportunidades, não leads.
+  if(stageId&&stageInfo.get(stageId)&&stageInfo.get(stageId).kind!=='LEAD'){await opportunityList(r,ticket);return;}
+  const filters=el('form',null,'commercial-form'),search=field('Buscar por nome, e-mail ou empresa','search',query),stage=select('Estágio',[['','Todos'],...Object.entries(labels)],status);filters.append(search.wrap,stage.wrap);submit(filters,'Filtrar',async()=>{query=search.input.value;status=stage.input.value;await load(product);});
+  const filtered=Boolean(query||status||stageId||pipelineId);if(data.leads.length||filtered)r.append(filters);
+  if(!data.leads.length)r.append(el('p',filtered?'Nada com estes filtros.':'Ainda não chegou nenhum.','empty-list'));
+  const list=el('div',null,'commercial-list');for(const l of data.leads){const row=el('article',null,'context-card');row.append(el('h3',l.name||l.organization_name),el('p',`${l.stage_name&&l.status==='open'?l.stage_name:labels[l.status]} · ${l.product_id||'Sem produto'} · ${l.interest||'Contato'}`),el('p',`${l.email||l.whatsapp||''} · Responsável: ${l.owner_name||l.owner_email||'Não atribuído'}`),el('small',`${l.source_system||'Origem desconhecida'} · ${date(l.source_created_at||l.created_at)}`),button('Abrir detalhe',()=>detail(l.id)));list.append(row);}r.append(list);
+  const nav=el('div',null,'commercial-actions');if(offset)nav.append(button('Anterior',async()=>{offset=Math.max(0,offset-25);await load(product,false);}));if(data.has_more)nav.append(button('Próxima',async()=>{offset+=25;await load(product,false);}));r.append(nav);
+  // Campos próprios do espaço: definir o que cada espaço guarda do lead, da oportunidade e da contratação.
+  const espacos=[...new Map((funis.pipelines||[]).filter(x=>x.is_active).map(x=>[x.space_id,{id:x.space_id,name:x.space_name}])).values()];
+  if(espacos.length){r.append(fieldsManager({api,spaces:espacos,initialSpace:p}));r.append(automationsManager({api,spaces:espacos,pipelines:funis.pipelines||[],initialSpace:p}));r.append(requirementsManager({api,pipelines:funis.pipelines||[],initialSpace:p}));}
+ }
+ // Oportunidades da etapa escolhida. Mover pede o motivo quando o destino é "Perdido"; ao ganhar, o Core cria a contratação.
+ async function opportunityList(r,ticket){
+  const info=stageInfo.get(stageId);
+  const [data,reasons]=await Promise.all([api('/api/commercial/opportunities?'+new URLSearchParams({stage_id:stageId,offset:String(offset)})),api('/api/commercial/lost-reasons')]);
+  if(ticket!==epoch)return;
+  if(!data.opportunities.length)r.append(el('p','Nenhuma oportunidade nesta etapa.','empty-list'));
+  const list=el('div',null,'commercial-list');
+  for(const o of data.opportunities){
+   const row=el('article',null,'context-card');
+   row.append(el('h3',o.title),el('p',`${o.organization_name} · ${brl(o.value_minor)} · ${info.name}`),el('p',`Responsável: ${o.owner_name||'Não atribuído'}${o.expected_close_at?' · Previsão '+date(o.expected_close_at).slice(0,10):''}`));
+   if(o.lead_id)row.append(button('Abrir lead',()=>detail(o.lead_id)));
+   const alvos=info.pipeline.stages.filter(s=>s.kind!=='LEAD'&&s.id!==o.stage_id);
+   if(alvos.length){
+    const form=el('form',null,'commercial-form'),destino=select('Mover para',alvos.map(s=>[s.id,s.name]),alvos[0].id),motivo=select('Motivo da perda',reasons.lost_reasons.map(x=>[x.id,x.name]));
+    const kindOf=()=>info.pipeline.stages.find(s=>s.id===destino.input.value)?.kind;
+    const sync=()=>{motivo.wrap.hidden=kindOf()!=='LOST';};destino.input.onchange=sync;sync();
+    form.append(destino.wrap,motivo.wrap);
+    submit(form,'Mover',async()=>{const kind=kindOf();const res=await api('/api/commercial/opportunities/'+o.id+'/move','PUT',{version:o.version,stage_id:destino.input.value,...(kind==='LOST'?{lost_reason_id:motivo.input.value}:{})});if(res.blocked)notice={blockers:res.blockers};else if(kind==='WON'&&res.engagement_id)notice={text:`Ganho. A contratação "${o.title}" foi criada e a empresa passou a cliente.`,tenant:o.tenant_id};await load(product,false);});
+    row.append(form);
+   }
+   list.append(row);
+  }
+  r.append(list);
   const nav=el('div',null,'commercial-actions');if(offset)nav.append(button('Anterior',async()=>{offset=Math.max(0,offset-25);await load(product,false);}));if(data.has_more)nav.append(button('Próxima',async()=>{offset+=25;await load(product,false);}));r.append(nav);
  }
- async function detail(id){const ticket=++epoch,r=root();r.replaceChildren(el('p','Carregando detalhe…'));const [d,o]=await Promise.all([api('/api/commercial/leads/'+id),api('/api/commercial/owners')]);if(ticket!==epoch)return;const l=d.lead;
+ // Funil do lead, no detalhe: onde ele está e o que dá para fazer a partir daí.
+ function funnelPanel(id,l,d,reasons){
+  const box=el('section',null,'context-card funnel-panel');box.append(el('h3','Funil'));
+  const stages=d.stages||[],opp=d.opportunity,currentId=opp?.stage_id||l.stage_id;
+  const track=el('div',null,'funnel-stages funnel-track');for(const s of stages)track.append(el('span',s.name,'funnel-chip'+(s.id===currentId?' active':'')));box.append(track);
+  const reload=async()=>{await detail(id);};
+  if(opp){
+   box.append(el('p',`Oportunidade em ${opp.stage_name} · ${brl(opp.value_minor)}.`));
+   if(opp.engagement_label)box.append(el('p',`Contratação criada: ${opp.engagement_label}.`));
+   box.append(el('p','Para mover a oportunidade, escolha a etapa dela na barra do funil, em Inbound.','detail'));
+  }else if(l.status==='open'){
+   const outras=stages.filter(s=>s.kind==='LEAD'&&s.id!==l.stage_id);
+   if(outras.length){const move=el('form',null,'commercial-form'),to=select('Mover para',outras.map(s=>[s.id,s.name]),outras[0].id);move.append(to.wrap);submit(move,'Mover',async()=>{const res=await api('/api/commercial/leads/'+id+'/stage','PUT',{version:l.version,stage_id:to.input.value});if(res.blocked)detailNotice=res.blockers;await reload();});box.append(move);}
+   const q=el('form',null,'commercial-form'),value=field('Valor estimado (R$)','number',l.estimated_value_minor?String(Number(l.estimated_value_minor)/100):'0'),close=field('Previsão de fechamento','date',l.expected_close_at?String(l.expected_close_at).slice(0,10):'');value.input.min='0';value.input.step='0.01';q.append(value.wrap,close.wrap);
+   submit(q,'Qualificar (vira oportunidade)',async()=>{await api('/api/commercial/leads/'+id+'/qualify','POST',{version:l.version,value_minor:Math.round(Number(value.input.value||0)*100),...(close.input.value?{expected_close_at:close.input.value+'T12:00:00Z'}:{})});await reload();});box.append(q);
+   const x=el('form',null,'commercial-form'),why=select('Motivo do descarte',reasons.map(r=>[r.id,r.name])),note=field('Observação (opcional)','text');x.append(why.wrap,note.wrap);
+   submit(x,'Descartar',async()=>{if(!confirm('Descartar este lead? Dá para restaurar depois.'))return;await api('/api/commercial/leads/'+id+'/discard','POST',{version:l.version,lost_reason_id:why.input.value,...(note.input.value.trim()?{note:note.input.value}:{})});await reload();});box.append(x);
+  }else if(l.status==='lost'){
+   box.append(el('p',`Descartado: ${l.loss_reason||'sem motivo registrado'}.`),button('Restaurar',async()=>{await api('/api/commercial/leads/'+id+'/restore','POST',{version:l.version});await reload();}));
+  }
+  return box;
+ }
+ async function detail(id){const ticket=++epoch,r=root();r.replaceChildren(el('p','Carregando detalhe…'));const [d,o,rs]=await Promise.all([api('/api/commercial/leads/'+id),api('/api/commercial/owners'),api('/api/commercial/lost-reasons')]);if(ticket!==epoch)return;const l=d.lead;
   r.replaceChildren(button('← Voltar à lista',()=>load(product,false)),el('h2',l.name||'Lead'));
-  const facts=el('div',null,'context-card');facts.append(el('p',`${l.organization_name} · ${l.email||''} · ${l.whatsapp||''}`),el('p',l.message||'Sem mensagem.'),el('p',`${l.interest||''} · ${l.service_model}`),el('p',`Origem: ${l.source_system} / ${l.source_ref} · ${date(l.source_created_at||l.created_at)}`),el('p',`Preferência de contato registrada: ${l.privacy?.contact_allowed?'Sim':'Não informada ou não autorizada'}`));if(d.attribution)facts.append(el('p',`Campanha: ${d.attribution.utm_campaign||'—'} · Canal: ${d.attribution.channel||'—'}`));if(openTenant&&l.tenant_id){const company=el('button',`Abrir ficha de ${l.organization_name||'empresa'} →`,'secondary');company.type='button';company.onclick=()=>openTenant(l.tenant_id);facts.append(company);}r.append(facts);
-  const form=el('form',null,'commercial-form'),stage=select('Estágio',Object.entries(labels),l.status),responsible=select('Responsável comercial',[['','Não atribuído'],...o.owners.map(x=>[x.id,x.name||x.email])],l.owner_id||''),loss=field('Motivo de perda','text',l.loss_reason||'');form.append(stage.wrap,responsible.wrap,loss.wrap);submit(form,'Salvar acompanhamento',async()=>{await api('/api/commercial/leads/'+id,'PUT',{version:l.version,status:stage.input.value,owner_id:responsible.input.value||null,loss_reason:loss.input.value});await detail(id);});r.append(form);
+  if(detailNotice){r.append(blockersNotice(detailNotice));detailNotice=null;}
+  const facts=el('div',null,'context-card');facts.append(el('p',`${l.organization_name} · ${l.email||''} · ${l.whatsapp||''}`),el('p',l.message||'Sem mensagem.'),el('p',`${l.interest||''} · ${l.service_model}`),el('p',`Origem: ${l.source_system} / ${l.source_ref} · ${date(l.source_created_at||l.created_at)}`),el('p',`Preferência de contato registrada: ${l.privacy?.contact_allowed?'Sim':'Não informada ou não autorizada'}`));if(d.attribution)facts.append(el('p',`Campanha: ${d.attribution.utm_campaign||'—'} · Canal: ${d.attribution.channel||'—'}`));if(openTenant&&l.tenant_id){const company=el('button',`Abrir ficha de ${l.organization_name||'empresa'} →`,'secondary');company.type='button';company.onclick=()=>openTenant(l.tenant_id);facts.append(company);}r.append(facts);r.append(el('h3','Fotos'),photoPanel({type:'lead',id}));
+  if(l.pipeline_id)r.append(funnelPanel(id,l,d,rs.lost_reasons));
+  const dados=dataPanel({api,lead:l,detail:d,onSaved:()=>detail(id)});if(dados)r.append(dados);
+  r.append(tasksPanel({api,lead:l,detail:d,owners:o.owners,onChange:()=>detail(id)}));
+  const funnel=Boolean(l.pipeline_id);
+  const form=el('form',null,'commercial-form'),stage=select('Estágio',Object.entries(labels),l.status),responsible=select('Responsável comercial',[['','Não atribuído'],...o.owners.map(x=>[x.id,x.name||x.email])],l.owner_id||''),loss=field('Motivo de perda','text',l.loss_reason||'');form.append(...(funnel?[responsible.wrap]:[stage.wrap,responsible.wrap,loss.wrap]));submit(form,'Salvar acompanhamento',async()=>{await api('/api/commercial/leads/'+id,'PUT',funnel?{version:l.version,owner_id:responsible.input.value||null}:{version:l.version,status:stage.input.value,owner_id:responsible.input.value||null,loss_reason:loss.input.value});await detail(id);});r.append(form);
   r.append(el('h3','Timeline'));const activityForm=el('form',null,'commercial-form'),kind=select('Tipo',[['note','Nota'],['call','Ligação'],['meeting','Reunião'],['email','E-mail registrado']]),content=field('Atividade','textarea');content.input.required=true;activityForm.append(kind.wrap,content.wrap);submit(activityForm,'Registrar atividade',async()=>{await api('/api/commercial/leads/'+id+'/activities','POST',{kind:kind.input.value,note:content.input.value});await detail(id);});r.append(activityForm);
-  const timeline=el('ol',null,'commercial-timeline');function appendActivities(items){for(const a of items){const li=el('li');li.append(el('strong',({received:'Lead recebido',updated:'Acompanhamento atualizado',contract_created:'Contrato criado',contract_status:'Status do contrato alterado',note:'Nota',call:'Ligação',meeting:'Reunião',email:'E-mail registrado'})[a.kind]||a.kind),el('small',`${date(a.created_at)} · ${a.actor_email||a.actor_subject}`));if(a.note)li.append(el('p',a.note));if(a.details?.after)li.append(el('p',`Estágio: ${labels[a.details.after.status]}${a.details.after.loss_reason?' · '+a.details.after.loss_reason:''} · Responsável: ${o.owners.find(x=>x.id===a.details.after.owner_id)?.email||'Não atribuído'}`));timeline.append(li);}}appendActivities(d.activities);r.append(timeline);let activityOffset=d.activities.length;if(d.activities.length===100)r.append(button('Mais atividades',async()=>{const more=await api('/api/commercial/leads/'+id+'/activities?offset='+activityOffset);appendActivities(more.activities);activityOffset+=more.activities.length;}));
+  const timeline=el('ol',null,'commercial-timeline');function appendActivities(items){for(const a of items){const li=el('li');li.append(el('strong',({received:'Lead recebido',updated:'Acompanhamento atualizado',stage_changed:'Mudou de etapa',custom_data_changed:'Dados do espaço alterados',qualified:'Qualificado',discarded:'Descartado',restored:'Restaurado',opportunity_moved:'Oportunidade mudou de etapa',engagement_created:'Contratação criada',contract_created:'Contrato criado',contract_status:'Status do contrato alterado',note:'Nota',call:'Ligação',meeting:'Reunião',email:'E-mail registrado'})[a.kind]||a.kind),el('small',`${date(a.created_at)} · ${a.actor_email||a.actor_subject}`));if(a.note)li.append(el('p',a.note));if(a.kind==='stage_changed')li.append(el('p',`${a.details.from?.name||'—'} → ${a.details.to?.name||'—'}`));if(a.kind==='opportunity_moved')li.append(el('p',`Agora em ${a.details.stage_name}`));if(a.kind==='engagement_created')li.append(el('p',a.details.label));if(a.details?.after)li.append(el('p',`Estágio: ${labels[a.details.after.status]}${a.details.after.loss_reason?' · '+a.details.after.loss_reason:''} · Responsável: ${o.owners.find(x=>x.id===a.details.after.owner_id)?.email||'Não atribuído'}`));timeline.append(li);}}appendActivities(d.activities);r.append(timeline);let activityOffset=d.activities.length;if(d.activities.length===100)r.append(button('Mais atividades',async()=>{const more=await api('/api/commercial/leads/'+id+'/activities?offset='+activityOffset);appendActivities(more.activities);activityOffset+=more.activities.length;}));
   r.append(el('h3','Contratos comerciais'),el('p','O contrato registra o escopo e o aceite. Sua ativação não concede acesso automaticamente.'));
   for(const c of d.contracts){const card=el('article',null,'context-card');card.append(el('h4',c.title),el('p',c.scope),el('p',`${c.status} · ${(Number(c.amount_minor)/100).toLocaleString('pt-BR',{style:'currency',currency:c.currency})} · ${c.starts_on?.slice(0,10)||'Sem início'} até ${c.ends_on?.slice(0,10)||'Sem término'}`));if(c.acceptance_reference)card.append(el('p','Aceite: '+c.acceptance_reference));if(c.status==='draft'){const accept=field('Referência do aceite (documento ou registro)');card.append(accept.wrap,button('Ativar com aceite registrado',async()=>{await api('/api/commercial/contracts/'+c.id+'/status','PUT',{version:c.version,status:'active',acceptance_reference:accept.input.value});await detail(id);}));}if(c.status==='active')card.append(button('Concluir contrato',async()=>{await api('/api/commercial/contracts/'+c.id+'/status','PUT',{version:c.version,status:'completed'});await detail(id);}));if(['draft','active'].includes(c.status))card.append(button('Cancelar contrato',async()=>{if(!confirm('Cancelar este contrato? O histórico será preservado.'))return;await api('/api/commercial/contracts/'+c.id+'/status','PUT',{version:c.version,status:'canceled'});await detail(id);}));r.append(card);}
   const contractForm=el('form',null,'commercial-form'),title=field('Título do contrato'),scope=field('Escopo e entregas','textarea'),amount=field('Valor total (R$)','number','0'),start=field('Início','date'),end=field('Término','date');amount.input.min='0';amount.input.step='0.01';title.input.required=scope.input.required=true;contractForm.append(title.wrap,scope.wrap,amount.wrap,start.wrap,end.wrap);submit(contractForm,'Criar contrato em rascunho',async()=>{await api('/api/commercial/contracts','POST',{lead_id:id,title:title.input.value,scope:scope.input.value,amount_minor:Math.round(Number(amount.input.value)*100),currency:'BRL',starts_on:start.input.value||null,ends_on:end.input.value||null,owner_id:l.owner_id});await detail(id);});r.append(contractForm);

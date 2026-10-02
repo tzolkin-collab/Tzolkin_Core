@@ -19,11 +19,22 @@ estão pendentes. As horas do mês usam worked_on, não a data prevista da sess�
 Resumos de atividades incluem intervalos que cruzam o mês e não medem presença.
 Resultados limitados a 500 atividades e 500 apontamentos com aviso de truncamento.
 
+## Contratação — 2026-10-02 (migração 041)
+
+A atividade pode pertencer a uma contratação (`service_activities.engagement_id`, opcional). O banco garante,
+com chave composta `(engagement_id, tenant_id)`, que a contratação é da mesma empresa; a rota confere antes
+e responde 400, e recusa contratação arquivada para atividade nova. Atividade antiga ou geral da empresa
+continua válida (sem contratação). `PUT /api/tracking/:id/engagement` troca ou tira a contratação, com
+revisão otimista e auditoria (`engagement_changed`). `GET /api/tracking` aceita `engagement_id` e devolve as
+contratações em curso para o formulário. A ficha da empresa separa as horas do mês por contratação, e a hora
+sem contratação aparece por último. O item de menu Acompanhamento voltou.
+Continua pendente: responsável por operador (decisão sua: do cliente ou da contratação), orçamento de horas,
+participantes, objetivos e anexos. Categoria da atividade não substitui a categoria canônica do produto.
+
 ## Próximas camadas, ainda não implementadas
 
-1. Contratação: ligar atividade a produto/oferta e contratação, responsáveis,
-   participantes, orçamento de horas, objetivos, critérios de aceite e anexos.
-   Categoria da atividade não substitui a categoria canônica do produto.
+1. Contratação (restante): responsáveis, participantes, orçamento de horas, objetivos, critérios de aceite
+   e anexos.
 2. Métricas: definições versionadas com slug, nome, unidade, fonte, dimensões,
    numerador/denominador, período, metas e visibilidade. Mentoria: presença por
    participante elegível, progresso de objetivos e avaliação antes/depois.

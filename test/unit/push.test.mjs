@@ -229,6 +229,7 @@ function clienteFalso({ anterior = null, existente = null } = {}) {
   query: async (sql, args = []) => {
    consultas.push([sql, args]);
    if (sql.includes('FROM commercial_intake_requests')) return { rows: anterior ? [anterior] : [] };
+   if (sql.includes('count(*) FROM commercial_leads')) return { rows: [{ count: '0' }] };
    if (sql.includes('FROM commercial_leads')) return { rows: existente ? [existente] : [] };
    if (/INSERT INTO (tenants|stakeholders|commercial_leads)/.test(sql)) return { rows: [{ id: randomUUID() }] };
    return { rows: [], rowCount: 0 };

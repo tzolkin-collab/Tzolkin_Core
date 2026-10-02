@@ -157,6 +157,8 @@ function clienteFalso() {
   consultas,
   query: async (sql, args = []) => {
    consultas.push([sql, args]);
+   // limite de 5 leads por e-mail por hora: o banco devolve sempre uma linha de contagem
+   if (sql.includes('count(*) FROM commercial_leads')) return { rows: [{ count: '0' }] };
    if (sql.includes('FROM commercial_intake_requests') || sql.includes('FROM commercial_leads')) return { rows: [] };
    if (/INSERT INTO (tenants|stakeholders|commercial_leads)/.test(sql)) return { rows: [{ id: randomUUID() }] };
    return { rows: [], rowCount: 0 };

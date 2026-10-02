@@ -99,11 +99,16 @@ const SQL = {
               WHERE e.tenant_id=$1 AND b.active AND e.archived_at IS NULL
               ORDER BY c.name`,
 
- // A atividade tem tenant_id; ligação com contratação ainda não existe. As horas
- // são da empresa, e a resposta diz isso em by_engagement.
+ // A atividade pode ter contratação (engagement_id, migração 041). O total é da empresa;
+ // `items` separa por contratação, e id nulo é a hora sem contratação.
  horas: `SELECT COALESCE(SUM(l.minutes),0)::int AS minutes,count(l.id)::int AS logs,count(DISTINCT a.id)::int AS activities
            FROM service_time_logs l JOIN service_activities a ON a.id=l.activity_id
           WHERE a.tenant_id=$1 AND l.worked_on >= $2::date AND l.worked_on < $2::date + interval '1 month'`,
+
+ horasPorContratacao: `SELECT a.engagement_id AS id,e.label,COALESCE(SUM(l.minutes),0)::int AS minutes,count(l.id)::int AS logs
+           FROM service_time_logs l JOIN service_activities a ON a.id=l.activity_id LEFT JOIN client_engagements e ON e.id=a.engagement_id
+          WHERE a.tenant_id=$1 AND l.worked_on >= $2::date AND l.worked_on < $2::date + interval '1 month'
+          GROUP BY a.engagement_id,e.label ORDER BY (a.engagement_id IS NULL),minutes DESC,e.label`,
 
  contratosDeAcesso: `SELECT e.product_id,p.name AS product_name,e.plan,e.rights,e.updated_at
                        FROM entitlements e LEFT JOIN products p ON p.id=e.product_id
@@ -128,9 +133,19 @@ const SQL = {
             FROM commercial_leads l LEFT JOIN products p ON p.id=l.product_id
             LEFT JOIN commercial_attributions a ON a.lead_id=l.id
            WHERE l.tenant_id=$1 ORDER BY COALESCE(l.source_created_at,l.created_at),l.id LIMIT 51`,
+ // Histórico: a trilha da empresa (audit_events) e a das atividades do Acompanhamento. `to_jsonb(e)->'details'` em vez de
+ // `e.details`: a coluna é da migração 045, e assim a ficha continua abrindo num banco que ainda não a tem. A trilha de
+ // entrega (delivery_audit) é por projeto, sem empresa, então não entra aqui.
+ historico: `SELECT at,source,type,actor,details FROM (
+              SELECT e.created_at AS at,'empresa' AS source,e.type,COALESCE(e.actor_email,e.actor_subject) AS actor,to_jsonb(e)->'details' AS details
+                FROM audit_events e WHERE e.tenant_id=$1
+              UNION ALL
+              SELECT a.created_at,'atividade',a.action,a.actor,NULL::jsonb
+                FROM service_activity_audit a JOIN service_activities s ON s.id=a.activity_id WHERE s.tenant_id=$1
+            ) h ORDER BY at DESC LIMIT 31`,
 };
 
-const LIMITE_CONTRATOS = 100, LIMITE_LEADS = 50;
+const LIMITE_CONTRATOS = 100, LIMITE_LEADS = 50, LIMITE_HISTORICO = 30;
 
 export function tenantSummaryRoutes(router, { clock = Date.now } = {}) {
  router.get('/api/tenants/:id/summary', async ({ pool, params, url, reply, operator }) => {
@@ -161,7 +176,8 @@ export function tenantSummaryRoutes(router, { clock = Date.now } = {}) {
   }));
 
   const hours = await secao(async () => ({
-   month: mes, by_engagement: false, ...(await pool.query(SQL.horas, [id, inicioDoMes])).rows[0],
+   month: mes, by_engagement: true, ...(await pool.query(SQL.horas, [id, inicioDoMes])).rows[0],
+   items: (await pool.query(SQL.horasPorContratacao, [id, inicioDoMes])).rows,
   }));
 
   const access = await secao(async () => ({
@@ -187,9 +203,14 @@ export function tenantSummaryRoutes(router, { clock = Date.now } = {}) {
    return { truncated: linhas.length > LIMITE_LEADS, items: linhas.slice(0, LIMITE_LEADS) };
   });
 
+  const history = await secao(async () => {
+   const linhas = (await pool.query(SQL.historico, [id])).rows;
+   return { truncated: linhas.length > LIMITE_HISTORICO, items: linhas.slice(0, LIMITE_HISTORICO) };
+  });
+
   return reply(200, {
    tenant: empresa,
-   people, engagements, deploys, campaigns, hours, access, contracts, origin,
+   people, engagements, deploys, campaigns, hours, access, contracts, origin, history,
    generated_at: new Date(clock()).toISOString(),
   });
  }, { body: false });

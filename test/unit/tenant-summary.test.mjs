@@ -59,6 +59,11 @@ const bancoCompleto = (extra = []) => poolFalso([
  // A seção de deploys lê o registro único desde a 034; as chaves da resposta não mudaram.
  ['FROM product_resource_bindings', [{ engagement_id: CONTRATACAO, provider: 'vercel', external_project_id: 'prj_1', external_project_name: 'site-a', environment: 'production' }]],
  ['FROM marketing_campaign_bindings', [{ engagement_id: CONTRATACAO, provider: 'meta', external_id: 'c1', name: 'Campanha A', spend_cents: '12837', currency: 'BRL' }]],
+ ['FROM audit_events', [
+  { at: '2026-09-02T10:00:00.000Z', source: 'empresa', type: 'tenant.updated', actor: 'dono@tzolkin.test', details: { before: { relationship_kind: 'prospect' }, after: { relationship_kind: 'customer' } } },
+  { at: '2026-09-01T10:00:00.000Z', source: 'atividade', type: 'created', actor: 'dono@tzolkin.test', details: null },
+ ]],
+ ['GROUP BY a.engagement_id', [{ id: CONTRATACAO, label: 'Mentoria', minutes: 100, logs: 2 }, { id: null, label: null, minutes: 50, logs: 1 }]],
  ['FROM service_time_logs', [{ minutes: 150, logs: 3, activities: 2 }]],
  ['FROM entitlements', [{ product_id: 'educare', product_name: 'Educare', plan: 'anual', rights: [] }]],
  ['FROM memberships', [{ product_id: 'educare', product_name: 'Educare', active: 4 }]],
@@ -136,7 +141,8 @@ test('Ficha da empresa: seções', async t => {
   assert.equal(body.engagements.items[1].product, null, 'serviço sem item continua na ficha');
   assert.equal(body.contracts.items[0].amount_minor, 1500000);
   assert.equal(body.campaigns.items[0].spend_cents, 12837);
-  assert.deepEqual({ minutes: body.hours.minutes, by_engagement: body.hours.by_engagement }, { minutes: 150, by_engagement: false });
+  assert.deepEqual({ minutes: body.hours.minutes, by_engagement: body.hours.by_engagement }, { minutes: 150, by_engagement: true });
+  assert.deepEqual(body.hours.items.map(i => [i.id, i.minutes]), [[CONTRATACAO, 100], [null, 50]], 'horas por contratação; id nulo é a hora sem contratação');
  });
 
  await t.test('mês corrente é o de Brasília, e é ele que vai para horas e campanhas', async () => {
@@ -144,7 +150,7 @@ test('Ficha da empresa: seções', async t => {
   const pool = bancoCompleto();
   const { body } = await ficha(pool);
   assert.equal(body.hours.month, '2026-09');
-  for (const trecho of ['FROM service_time_logs', 'FROM marketing_campaign_bindings'])
+  for (const trecho of ['FROM service_time_logs', 'GROUP BY a.engagement_id', 'FROM marketing_campaign_bindings'])
    assert.deepEqual(pool.chamadas.find(c => c.sql.includes(trecho)).params, [TENANT, '2026-09-01']);
  });
 
@@ -170,6 +176,25 @@ test('Ficha da empresa: seções', async t => {
   assert.equal(body.contracts.available, false);
   assert.equal(body.origin.available, false);
   assert.equal(body.people.available, true);
+ });
+
+ await t.test('histórico: a trilha da empresa e a das atividades, mais recente primeiro, só com o que a trilha guardou', async () => {
+  const pool = bancoCompleto();
+  const { body } = await ficha(pool);
+  assert.equal(body.history.available, true);
+  assert.deepEqual(body.history.items.map(i => [i.source, i.type]), [['empresa', 'tenant.updated'], ['atividade', 'created']]);
+  assert.deepEqual(body.history.items[0].details, { before: { relationship_kind: 'prospect' }, after: { relationship_kind: 'customer' } });
+  assert.equal(body.history.truncated, false);
+  assert.deepEqual(pool.chamadas.find(c => c.sql.includes('FROM audit_events')).params, [TENANT]);
+ });
+
+ await t.test('histórico: mais de 30 linhas viram 30 e o aviso de corte; sem a coluna 045 ou sem tabela a ficha abre', async () => {
+  const muitas = Array.from({ length: 31 }, (_, i) => ({ at: `2026-08-${String((i % 28) + 1).padStart(2, '0')}T10:00:00.000Z`, source: 'empresa', type: 'tenant.created', actor: 'x', details: null }));
+  const { body } = await ficha(bancoCompleto([['FROM audit_events', muitas]]));
+  assert.equal(body.history.items.length, 30); assert.equal(body.history.truncated, true);
+  const sem = await ficha(bancoCompleto([['FROM audit_events', erroPg('42P01')]]));
+  assert.equal(sem.status, 200); assert.deepEqual(sem.body.history, { available: false, reason: _internals.MOTIVOS.ausente });
+  assert.equal(sem.body.people.available, true);
  });
 
  await t.test('tabela ausente vira seção indisponível, não erro 500', async () => {

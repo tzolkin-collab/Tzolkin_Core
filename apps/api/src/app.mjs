@@ -1,4 +1,3 @@
-import {inboundDeliveryRoutes} from './modules/inbound-delivery.mjs';
 // Composição do Core: pipeline de requisição + registro dos módulos.
 //
 // Ordem deliberada: cabeçalhos → método → origem → estáticos → rota →
@@ -45,6 +44,12 @@ import { marketingRoutes } from './modules/marketing.mjs';
 import { portfolioRoutes } from './modules/portfolio.mjs';
 import { tenantSummaryRoutes } from './modules/tenant-summary.mjs';
 import { pushRoutes } from './modules/push.mjs';
+import { mediaRoutes } from './modules/media.mjs';
+import { commercialPipelineRoutes } from './modules/commercial-pipelines.mjs';
+import { commercialLeadflowRoutes } from './modules/commercial-leadflow.mjs';
+import { commercialFieldRoutes } from './modules/commercial-fields.mjs';
+import { commercialAutomationRoutes } from './modules/commercial-automations.mjs';
+import { commercialGateRoutes } from './modules/commercial-gates.mjs';
 
 const MODULES = [
  identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes, emailTemplateRoutes, productFaviconRoutes, productDeployBindingRoutes, productResourceBindingRoutes, serviceDeployBindingRoutes, managementRoutes, productPaymentRoutes, productTopologyRoutes,
@@ -53,12 +58,11 @@ const MODULES = [
 
 // `security` é o estado do transporte do banco medido por platform/database.mjs.
 // Ausente = não medido; os endpoints reportam 'unknown' em vez de fingir segurança.
-export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, hostingerDnsOptions, webOrigin,serveAsset, webhookEnv, catalogAdapter, checkoutOptions, marketingOptions, inboundPool, pushOptions} = {}) {
+export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, hostingerDnsOptions, webOrigin,serveAsset, mediaOptions, webhookEnv, catalogAdapter, checkoutOptions, marketingOptions, pushOptions} = {}) {
  if (webOrigin && !(/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(webOrigin)||/^https:\/\/[a-z0-9.-]+(?::[1-9][0-9]{0,4})?$/.test(webOrigin))) throw new Error('Use an explicit HTTP loopback or HTTPS web origin.');
  const sessions = identity||createSessionStore({ adminPassword, clock });
  const router = createRouter();
  for (const register of MODULES) register(router);
- inboundDeliveryRoutes(router,{inboundPool});
  // Integrações externas são opcionais e injetáveis: os testes passam um registro
  // apontado para um stub local, e nunca tocam num provedor de verdade.
  deploysRoutes(router, { registry: deployRegistry ?? buildRegistry(), clock });
@@ -78,6 +82,12 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  // Push do painel (assinatura do aparelho e aviso de lead novo). Sem VAPID no ambiente
  // fica desligado: as rotas respondem "não configurado" e o resto do Core não muda.
  pushRoutes(router,pushOptions);
+ mediaRoutes(router,{clock,...mediaOptions});
+ commercialPipelineRoutes(router);
+ commercialLeadflowRoutes(router);
+ commercialFieldRoutes(router);
+ commercialAutomationRoutes(router);
+ commercialGateRoutes(router);
  // Ficha da empresa: leitura transversal por tenant, com o relógio do Core para o mês corrente.
  tenantSummaryRoutes(router,{clock});
 
@@ -134,8 +144,11 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
    try {
     await client.query('BEGIN');
     const result = await route.handler({ ...context, client });
-    const { tenant, type } = result || {};
-    if(route.audit!==false)await client.query('INSERT INTO audit_events(type,tenant_id,actor_subject,actor_email) VALUES($1,$2,$3,$4)', [type, tenant,operator?.subject,operator?.email]);
+    const { tenant, type, details } = result || {};
+    // `details` (migração 045) só existe para a rota que tem o que contar; sem ele o insert é o de sempre.
+    if(route.audit!==false)await (details
+     ? client.query('INSERT INTO audit_events(type,tenant_id,actor_subject,actor_email,details) VALUES($1,$2,$3,$4,$5)', [type, tenant,operator?.subject,operator?.email,details])
+     : client.query('INSERT INTO audit_events(type,tenant_id,actor_subject,actor_email) VALUES($1,$2,$3,$4)', [type, tenant,operator?.subject,operator?.email]));
     await client.query('COMMIT');
     // `afterCommit`: efeito colateral que só faz sentido com a gravação já confirmada
     // (hoje, o push de lead novo). Roda FORA da transação e da resposta: a rota não

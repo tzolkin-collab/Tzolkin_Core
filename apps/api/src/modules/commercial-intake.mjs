@@ -1,7 +1,10 @@
 import { digest } from '../platform/session.mjs';
 import { fail, input, isProductId, isUuid, text } from '../platform/http.mjs';
 import { notificarLeadNovo } from './push.mjs';
+import { placeLead } from './commercial-pipelines.mjs';
 import { CHAVES_ATRIBUICAO, atribuicaoEstendida } from '../platform/attribution.mjs';
+import { fieldsOf, validateSpaceData } from '../platform/space-fields.mjs';
+import { emitEvent } from '../platform/automations.mjs';
 export { commercialKeyRoutes } from './commercial-keys.mjs';
 
 const optional=(v,max=500)=>v==null||v===''?null:text(v,1,max);
@@ -9,12 +12,13 @@ const multiline=(v,max)=>{if(v==null||v==='')return null;if(typeof v!=='string'|
 export const SERVICE_MODELS=['on_demand','education','consulting','advisory','product','unclassified'];
 export const canonical=v=>JSON.stringify(v,(_,value)=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b))):value);
 export function validateIntake(body,productId) {
- input(body,['lead','organization','stakeholder','commercial','attribution','privacy']);
+ input(body,['lead','organization','stakeholder','commercial','attribution','privacy','space_data']);
  const l=body.lead??{},o=body.organization??{},s=body.stakeholder??{},c=body.commercial??{},a=body.attribution??{},p=body.privacy??{};
  input(l,['name','email','whatsapp','message']);input(o,['name','slug','organization_type']);input(s,['role','title']);input(c,['product_id','service_model','label']);
  input(a,CHAVES_ATRIBUICAO);
  input(p,['notice_version','contact_allowed','captured_at','source']);
  if(c.product_id!==productId||!isProductId(productId))throw fail(403,'Produto inválido para esta chave.');
+ if(body.space_data!=null&&(typeof body.space_data!=='object'||Array.isArray(body.space_data)))throw fail(400,'Dados do espaço inválidos.');
  if(!SERVICE_MODELS.includes(c.service_model))throw fail(400,'Modelo comercial inválido.');
  const name=text(l.name,2,200),email=optional(l.email,320)?.toLowerCase()??null,phone=optional(l.whatsapp,40)?.replace(/[\s()+.-]/g,'')??null;
  if((!email&&!phone)||(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))||(phone&&!/^\d{10,15}$/.test(phone)))throw fail(400,'Contato inválido.');
@@ -30,10 +34,28 @@ export function validateIntake(body,productId) {
  // Os 7 campos de sempre entram sempre (null quando ausentes), como antes. A parte estendida
  // (ids do anúncio, sessão, localização) só entra se foi enviada, para o hash de um pedido
  // antigo não mudar (ver platform/attribution.mjs).
+ // Dados próprios do espaço (fase 4): só entram no objeto, e portanto no hash, quando foram enviados.
+ ...(body.space_data&&Object.keys(body.space_data).length?{space_data:body.space_data}:{}),
  attribution:{...Object.fromEntries(['channel','utm_source','utm_medium','utm_campaign','utm_content','landing_page','referrer'].map(k=>[k,optional(a[k],k==='referrer'?1000:500)])),...atribuicaoEstendida(a,date)}};
 }
 export async function recordActivity(client,lead,kind,operator,note=null,details={}) {
  await client.query('INSERT INTO commercial_activities(lead_id,kind,note,details,actor_subject,actor_email) VALUES($1,$2,$3,$4,$5,$6)',[lead,kind,note,details,operator.subject,operator.email]);
+}
+// Acha a pessoa pelo e-mail (sem diferenciar maiúsculas) e a empresa entre as dela, ou deixa criar o que faltar,
+// sem duplicar (regra do resolveParties da Kalidash). Só o e-mail identifica a pessoa: o telefone sozinho não, porque
+// é compartilhado (recepção, família). A empresa só é reaproveitada se for da própria pessoa e tiver o mesmo nome;
+// nome igual em outra pessoa vira outra empresa. Cliente que volta (empresa deixou de ser lead) sai com a marca.
+// Lock por e-mail, entre espaços, para dois envios simultâneos não criarem a mesma pessoa duas vezes.
+async function resolveParties(client,v){
+ if(!v.email)return {person:null,tenant:null,returning:false};
+ await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,28))',[v.email]);
+ const person=(await client.query('SELECT id FROM stakeholders WHERE lower(email)=$1 ORDER BY created_at,id LIMIT 1',[v.email])).rows[0]?.id??null;
+ if(!person)return {person:null,tenant:null,returning:false};
+ const orgs=(await client.query(`SELECT t.id,t.name,t.relationship_kind,t.lifecycle_status FROM organization_stakeholders os JOIN tenants t ON t.id=os.tenant_id
+  WHERE os.stakeholder_id=$1 AND t.relationship_kind<>'internal' ORDER BY os.is_primary DESC,t.created_at,t.id`,[person])).rows;
+ const same=orgs.find(o=>o.name.trim().toLowerCase()===v.org_name.trim().toLowerCase());
+ const returning=orgs.some(o=>o.relationship_kind==='customer'&&['onboarding','active','paused','completed'].includes(o.lifecycle_status));
+ return {person,tenant:same?.id??null,returning};
 }
 // `avisarLeadNovo` é injetável para o teste conferir QUANDO e com QUÊ o aviso sai, sem push de verdade.
 export function commercialIntakeRoutes(router,{avisarLeadNovo=notificarLeadNovo}={}) {
@@ -50,12 +72,26 @@ export function commercialIntakeRoutes(router,{avisarLeadNovo=notificarLeadNovo}
   let result;
   if(existing){if(existing.request_hash!==hash)throw fail(409,'Origem já importada com outro conteúdo.');result={lead_id:existing.id,tenant_id:existing.tenant_id,stakeholder_id:existing.stakeholder_id,engagement_id:null,contract_id:null,created:false};}
   else {
+   // Limite por e-mail e por espaço: 5 leads novos por hora. Era do site (contava no banco institucional,
+   // que saiu com a ADR 0011); sem ele, um formulário público ficaria aberto a enxurrada. Lock por e-mail
+   // para dois envios simultâneos não passarem juntos do limite.
+   if(v.email){
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,27))',[`${productId}:${v.email}`]);
+    const recentes=Number((await client.query("SELECT count(*) FROM commercial_leads WHERE product_id=$1 AND lower(email)=$2 AND created_at>now()-interval '1 hour'",[productId,v.email])).rows[0].count);
+    if(recentes>=5)throw fail(429,'Muitos envios com este e-mail. Aguarde antes de tentar novamente.');
+   }
+   // Campos próprios do espaço (fase 4): chave que o espaço não define é 400; obrigatório que falta também.
+   const customData=validateSpaceData(await fieldsOf(client,productId,'lead'),v.space_data);
    const source=`inbound:${productId}:${v.source_system}`;
    const slug='lead-'+digest(`${source}:${v.source_ref}`).slice(0,40);
-   const tenant=(await client.query(`INSERT INTO tenants(name,slug,relationship_kind,lifecycle_status,organization_type,source_system,source_ref) VALUES($1,$2,'prospect','lead',$3,$4,$5) RETURNING id`,[v.org_name,slug,v.org_type,source,v.source_ref])).rows[0].id;
-   const person=(await client.query('INSERT INTO stakeholders(name,email,phone,source_system,source_ref) VALUES($1,$2,$3,$4,$5) RETURNING id',[v.name,v.email,v.phone,source,v.source_ref])).rows[0].id;
-   await client.query('INSERT INTO organization_stakeholders(tenant_id,stakeholder_id,role,title,is_primary,contact_allowed) VALUES($1,$2,$3,$4,true,$5)',[tenant,person,v.role,v.title,v.privacy.contact_allowed]);
-   const lead=(await client.query(`INSERT INTO commercial_leads(tenant_id,stakeholder_id,product_id,name,email,whatsapp,message,source_system,source_ref,service_model,interest,privacy,source_created_at,request_hash) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,[tenant,person,productId,v.name,v.email,v.phone,v.message,v.source_system,v.source_ref,v.service_model,v.interest,v.privacy,v.source_created_at,hash])).rows[0].id;
+   const found=await resolveParties(client,v);
+   const tenant=found.tenant??(await client.query(`INSERT INTO tenants(name,slug,relationship_kind,lifecycle_status,organization_type,source_system,source_ref) VALUES($1,$2,'prospect','lead',$3,$4,$5) RETURNING id`,[v.org_name,slug,v.org_type,source,v.source_ref])).rows[0].id;
+   const person=found.person??(await client.query('INSERT INTO stakeholders(name,email,phone,source_system,source_ref) VALUES($1,$2,$3,$4,$5) RETURNING id',[v.name,v.email,v.phone,source,v.source_ref])).rows[0].id;
+   if(found.person&&v.phone)await client.query('UPDATE stakeholders SET phone=$2 WHERE id=$1 AND phone IS NULL',[person,v.phone]);
+   await client.query('INSERT INTO organization_stakeholders(tenant_id,stakeholder_id,role,title,is_primary,contact_allowed) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(tenant_id,stakeholder_id) DO NOTHING',[tenant,person,v.role,v.title,!found.tenant,v.privacy.contact_allowed]);
+   // Funil do espaço: o nicho do utm_tzolkin escolhe o funil; sem casamento, o padrão. Espaço sem funil = lead sem funil.
+   const place=await placeLead(client,productId,v.attribution?.utm_tzolkin);
+   const lead=(await client.query(`INSERT INTO commercial_leads(tenant_id,stakeholder_id,product_id,name,email,whatsapp,message,source_system,source_ref,service_model,interest,privacy,source_created_at,request_hash,pipeline_id,stage_id,custom_data) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,[tenant,person,productId,v.name,v.email,v.phone,v.message,v.source_system,v.source_ref,v.service_model,v.interest,v.privacy,v.source_created_at,hash,place?.pipelineId??null,place?.stageId??null,customData])).rows[0].id;
    const a=v.attribution;
    await client.query(`INSERT INTO commercial_attributions(lead_id,source_system,source_ref,channel,utm_source,utm_medium,utm_campaign,utm_content,landing_page,referrer,
      utm_term,utm_tzolkin,meta_campaign_id,meta_adset_id,meta_ad_id,fbclid,gclid,fbc,fbp,session_key,first_touch_at,last_touch,session,geo)
@@ -63,8 +99,10 @@ export function commercialIntakeRoutes(router,{avisarLeadNovo=notificarLeadNovo}
     [lead,v.source_system,v.source_ref,a.channel,a.utm_source,a.utm_medium,a.utm_campaign,a.utm_content,a.landing_page,a.referrer,
      a.utm_term??null,a.utm_tzolkin??null,a.meta_campaign_id??null,a.meta_adset_id??null,a.meta_ad_id??null,a.fbclid??null,a.gclid??null,a.fbc??null,a.fbp??null,a.session_key??null,a.first_touch_at??null,
      a.last_touch?JSON.stringify(a.last_touch):null,a.session?JSON.stringify(a.session):null,a.geo?JSON.stringify(a.geo):null]);
-   await recordActivity(client,lead,'received',{subject:`app:${productId}`,email:null},null,{source_system:v.source_system,source_ref:v.source_ref});
-   result={lead_id:lead,tenant_id:tenant,stakeholder_id:person,engagement_id:null,contract_id:null,created:true};
+   await recordActivity(client,lead,'received',{subject:`app:${productId}`,email:null},null,{source_system:v.source_system,source_ref:v.source_ref,matched_person:Boolean(found.person),matched_organization:Boolean(found.tenant),returning_client:found.returning});
+   result={lead_id:lead,tenant_id:tenant,stakeholder_id:person,engagement_id:null,contract_id:null,created:true,returning_client:found.returning};
+   // Automações do espaço ligadas a "lead criado" (fase 5). Falha de automação não derruba o lead: o motor se isola num savepoint.
+   await emitEvent(client,'lead.criado',{spaceId:productId,tenantId:tenant,leadId:lead,pipelineId:place?.pipelineId,stageId:place?.stageId});
   }
   await client.query('INSERT INTO commercial_intake_requests(product_id,idempotency_key,request_hash,response) VALUES($1,$2,$3,$4)',[productId,key,hash,result]);
   // Aviso de lead novo no aparelho da equipe. Só quando o lead foi CRIADO agora: um

@@ -27,7 +27,8 @@
 .tracking-disclosure>div{padding:16px}
 .tracking-header-top .tracking-disclosure>summary{padding:8px 10px;border-radius:5px;white-space:nowrap}
 .tracking-header-top .tracking-disclosure>summary:hover{background:#f5f5f5}
-.tracking-period-menu>summary{font-size:15px;font-weight:600;text-transform:capitalize}
+.tracking-period-menu>summary{font-size:15px;font-weight:600}
+.tracking-period-menu>summary::first-letter{text-transform:uppercase}
 .tracking-header-top .tracking-disclosure>div,.tracking-header-top .tracking-disclosure>label{position:absolute;right:0;top:calc(100% + 8px);z-index:20;display:grid;gap:12px;width:250px;padding:16px;background:#fff;border:1px solid var(--agenda-line);border-radius:8px;box-shadow:0 6px 20px #00000012}
 .tracking-header-top .tracking-period-menu>label{left:0;right:auto}
 .tracking-filter-panel label,.tracking-header-top .tracking-disclosure>label{font-size:13px}

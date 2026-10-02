@@ -49,3 +49,50 @@ test('topologia avisa quando uma conexão confirmada desaparece do inventário',
  assert.equal(output.products[0].connections.domains[0].source, 'confirmed');
  assert.equal(output.products[0].connections.domains[0].reconciliation, 'missing');
 });
+
+test('provedor que não respondeu não transforma conexão confirmada em "não encontrada"', async () => {
+ let handler;
+ productTopologyRoutes({ get(_path, fn) { handler = fn; } }, {
+  options: async () => ({ github: { status: 'unavailable', items: [] }, vercel: { status: 'ok', items: [] }, easypanel: { status: 'ok', items: [] } }),
+  dns: { readZone: async () => ({ status: 'ok', zone: 'tzolkin.cloud', records: [] }) },
+ });
+ const queries = [
+  { rows: [{ id: 'skiller', name: 'TZOLKIN Skiller', lifecycle_status: 'active' }] },
+  { rows: [
+   { id: '11111111-1111-4111-8111-111111111111', product_id: 'skiller', resource_type: 'repository', provider: 'github', external_id: '1', display_name: 'tzolkin/skiller', environment: null, url: null },
+   { id: '22222222-2222-4222-8222-222222222222', product_id: 'skiller', resource_type: 'frontend', provider: 'vercel', external_id: 'prj_x', display_name: 'skiller', environment: 'production', url: null },
+  ] },
+  { rows: [] },
+  { rows: [] },
+ ];
+ let output;
+ await handler({ pool: { query: async () => queries.shift() }, url: { searchParams: new URLSearchParams() }, reply: (_status, body) => { output = body; } });
+ const { repositories, frontend } = output.products[0].connections;
+ assert.equal(repositories[0].reconciliation, 'unverified');
+ // Provedor que respondeu continua apontando a ausência de verdade.
+ assert.equal(frontend[0].reconciliation, 'missing');
+});
+
+test('repositório detectado pela Vercel e confirmado pelo id do GitHub aparece uma vez só', async () => {
+ let handler;
+ productTopologyRoutes({ get(_path, fn) { handler = fn; } }, {
+  options: async () => ({
+   github: { status: 'unavailable', items: [] },
+   vercel: { status: 'ok', items: [{ id: 'prj_1', name: 'skiller-frontend', type: 'app', repository: 'tzolkin/skiller' }] },
+   easypanel: { status: 'ok', items: [] },
+  }),
+  dns: { readZone: async () => ({ status: 'ok', zone: 'tzolkin.cloud', records: [] }) },
+ });
+ const queries = [
+  { rows: [{ id: 'skiller', name: 'TZOLKIN Skiller', lifecycle_status: 'active' }] },
+  { rows: [{ id: '11111111-1111-4111-8111-111111111111', product_id: 'skiller', resource_type: 'repository', provider: 'github', external_id: '123456', display_name: 'tzolkin/skiller', environment: null, url: null }] },
+  { rows: [] },
+  { rows: [] },
+ ];
+ let output;
+ await handler({ pool: { query: async () => queries.shift() }, url: { searchParams: new URLSearchParams() }, reply: (_status, body) => { output = body; } });
+ const { repositories } = output.products[0].connections;
+ assert.equal(repositories.length, 1);
+ assert.equal(repositories[0].source, 'confirmed');
+ assert.equal(repositories[0].reconciliation, 'unverified');
+});

@@ -11,6 +11,9 @@ export function setupTracking({api,openTenant}){
  const clear=()=>{generation++;host.replaceChildren();data=null;tenants=[];tenant='';query='';statusFilter='';};
  function field(form,label,type='text',options){const wrap=el('label',label),n=el(options?'select':'input');if(options)for(const [v,name]of options){const o=el('option',name);o.value=v;n.append(o);}else n.type=type;n.required=true;wrap.append(n);form.append(wrap);return n;}
  const choices=keys=>keys.map(k=>[k,labels[k]]);
+ // Contratações da empresa escolhida (a atividade só pode ser de uma contratação da mesma empresa).
+ const engagementOptions=(tenantId,empty)=>[['',empty],...(data?.engagements||[]).filter(e=>e.tenant_id===tenantId).map(e=>[e.id,e.label])];
+ const refill=(select,options,keep)=>{select.replaceChildren();for(const [v,name] of options){const o=el('option',name);o.value=v;select.append(o);}select.value=options.some(([v])=>v===keep)?keep:'';};
  function button(label,icon,fn){const b=el('button',null,'secondary');b.type='button';b.append(createIcon(icon),document.createTextNode(label));b.onclick=fn;return b;}
  function details(activity){
   const origin=document.activeElement,dialog=el('dialog',null,'tracking-drawer'),head=el('header',null,'tracking-drawer-head');
@@ -18,12 +21,14 @@ export function setupTracking({api,openTenant}){
   head.append(el('span','Detalhes da atividade','detail'),button('Fechar','close',()=>dialog.close()));
   const body=el('div',null,'tracking-form');body.append(title);
   const facts=el('dl',null,'tracking-facts');
-  for(const [label,value] of [['Cliente',activity.tenant_name],['Categoria',labels[activity.category]],['Tipo',labels[activity.kind]],['Situação',labels[activity.status]],['Início',new Date(activity.starts_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'})],['Fim',new Date(activity.ends_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'})]])facts.append(el('dt',label),el('dd',value));
+  for(const [label,value] of [['Cliente',activity.tenant_name],['Contratação',activity.engagement_label||'Geral da empresa'],['Categoria',labels[activity.category]],['Tipo',labels[activity.kind]],['Situação',labels[activity.status]],['Início',new Date(activity.starts_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'})],['Fim',new Date(activity.ends_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'})]])facts.append(el('dt',label),el('dd',value));
   body.append(facts,el('p','Horários de Brasília.','detail'));
   const status=field(body,'Alterar situação','text',choices(['planned','done','cancelled']));status.value=activity.status;
   const error=el('p',null,'form-error');error.setAttribute('role','alert');
   const save=button('Salvar situação','check',async()=>{save.disabled=true;try{await api('/api/tracking/'+activity.id+'/status','PUT',{status:status.value,revision:activity.revision});dialog.close();await load();}catch(e){error.textContent=e.message;}finally{save.disabled=false;}});
-  body.append(error,save,button('Registrar tempo','clock',()=>{dialog.close();editor(activity);}));
+  const contratacao=field(body,'Contratação','text',engagementOptions(activity.tenant_id,'Geral da empresa (sem contratação)'));contratacao.required=false;contratacao.value=activity.engagement_id||'';
+  const saveEngagement=button('Salvar contratação','check',async()=>{saveEngagement.disabled=true;try{await api('/api/tracking/'+activity.id+'/engagement','PUT',{engagement_id:contratacao.value||null,revision:activity.revision});dialog.close();await load();}catch(e){error.textContent=e.message;}finally{saveEngagement.disabled=false;}});
+  body.append(saveEngagement,error,save,button('Registrar tempo','clock',()=>{dialog.close();editor(activity);}));
   if(openTenant&&activity.tenant_id)body.append(button('Abrir ficha da empresa','building',()=>{dialog.close();openTenant(activity.tenant_id);}));
   body.append(el('h3','Apontamentos do mês'));
   const logs=data.logs.filter(l=>l.activity_id===activity.id);
@@ -46,6 +51,8 @@ export function setupTracking({api,openTenant}){
    values=()=>({id,worked_on:date.value,minutes:Number(minutes.value),note:note.value});
   }else{
    const customer=field(form,'Cliente','text',[['','Selecione'],...tenants.map(t=>[t.id,t.name])]);customer.value=tenant;
+   const engagement=field(form,'Contratação (opcional)','text',engagementOptions(customer.value,'Geral da empresa (sem contratação)'));engagement.required=false;
+   customer.addEventListener('change',()=>refill(engagement,engagementOptions(customer.value,'Geral da empresa (sem contratação)'),''));
    const category=field(form,'Categoria','text',choices(['mentoria','consultoria','software','educacional','outro'])),kind=field(form,'Tipo','text',choices(['sessao','entregavel','feature','tarefa']));
    const name=field(form,'Título');name.minLength=2;name.maxLength=160;
    name.placeholder='Ex.: Revisão dos objetivos da mentoria';
@@ -56,7 +63,7 @@ export function setupTracking({api,openTenant}){
    if(selectedDay){start.value=selectedDay+'T09:00';end.value=selectedDay+'T10:00';}
    start.addEventListener('change',()=>{end.min=start.value;if(!end.value||end.value<=start.value){const next=new Date(start.value+':00Z');next.setUTCHours(next.getUTCHours()+1);if(Number.isFinite(next.getTime()))end.value=next.toISOString().slice(0,16);}});
    form.append(el('p','Agenda interna. Sem recorrência ou convite externo nesta versão.','detail'));
-   values=()=>({id,tenant_id:customer.value,category:category.value,kind:kind.value,title:name.value,starts_at:start.value+':00-03:00',ends_at:end.value+':00-03:00'});
+   values=()=>({id,tenant_id:customer.value,engagement_id:engagement.value||null,category:category.value,kind:kind.value,title:name.value,starts_at:start.value+':00-03:00',ends_at:end.value+':00-03:00'});
   }
   const error=el('p',null,'form-error');error.setAttribute('role','alert');error.tabIndex=-1;form.append(error);const footer=el('div',null,'tracking-editor-footer'),save=el('button',activity?'Salvar apontamento':'Criar atividade','primary');save.type='submit';footer.append(button('Cancelar','close',()=>dialog.close()),save);form.append(footer);
   form.onsubmit=async e=>{e.preventDefault();if(save.disabled)return;const saveLabel=save.textContent;save.disabled=true;save.textContent='Salvando…';form.setAttribute('aria-busy','true');error.textContent='';try{await api(activity?`/api/tracking/${activity.id}/time`:'/api/tracking','POST',values());dialog.close();await load();}catch(e){error.textContent=e.message;error.focus();}finally{save.disabled=false;save.textContent=saveLabel;form.removeAttribute('aria-busy');}};
@@ -68,7 +75,7 @@ export function setupTracking({api,openTenant}){
   const selection=document.activeElement?.selectionStart;
   const shown=data.activities.filter(a=>(!statusFilter||a.status===statusFilter)&&(!query||[a.title,a.tenant_name,labels[a.category],labels[a.kind]].join(' ').toLocaleLowerCase('pt-BR').includes(query.toLocaleLowerCase('pt-BR'))));
   host.replaceChildren();const toolbar=el('div',null,'section-toolbar'),filters=el('div',null,'tracking-actions');const period=field(filters,'Mês','month');period.value=month;period.onchange=()=>{if(period.value){month=period.value;load();}};
-  const customer=field(filters,'Cliente','text',[['','Todos os clientes'],...tenants.map(t=>[t.id,t.name])]);customer.value=tenant;customer.onchange=()=>{tenant=customer.value;load();};toolbar.append(filters,button('Nova atividade','plus',()=>editor()));host.append(toolbar,el('p','Agenda interna · Brasília · Gestão administrativa. Categoria desta atividade; vínculo com contratação ainda pendente.','detail'));
+  const customer=field(filters,'Cliente','text',[['','Todos os clientes'],...tenants.map(t=>[t.id,t.name])]);customer.value=tenant;customer.onchange=()=>{tenant=customer.value;load();};toolbar.append(filters,button('Nova atividade','plus',()=>editor()));host.append(toolbar,el('p','Agenda interna · Brasília · Gestão administrativa. Cada atividade pode pertencer a uma contratação do cliente.','detail'));
   period.dataset.trackingFocus='period';customer.dataset.trackingFocus='customer';
   const navigation=el('div',null,'tracking-actions');navigation.setAttribute('aria-label','Navegação da agenda');
   const shift=delta=>{const [year,m]=month.split('-').map(Number);const next=new Date(Date.UTC(year,m-1+delta,1));if(next.getUTCFullYear()<2000||next.getUTCFullYear()>2099)return;month=next.toISOString().slice(0,7);load();};
@@ -84,7 +91,7 @@ export function setupTracking({api,openTenant}){
   for(let n=1;n<=days;n++){const key=month+'-'+String(n).padStart(2,'0'),cell=el('div',null,'tracking-day');const add=el('button',n,'tracking-day-add');add.type='button';add.setAttribute('aria-label','Criar atividade em '+key);if(key===day(Date.now()))add.setAttribute('aria-current','date');add.onclick=()=>editor(null,key);cell.append(add);cell.addEventListener('click',event=>{if(event.target===cell)editor(null,key);});for(const a of shown.filter(a=>day(a.starts_at)<=key&&day(new Date(a.ends_at).getTime()-1)>=key)){const link=el('button',new Date(a.starts_at).toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'})+' · '+a.title+' · '+a.tenant_name+' · '+labels[a.status],'tracking-calendar-event');link.type='button';link.title=a.title+' · '+a.tenant_name+' · '+labels[a.status];
 link.replaceChildren(el('span',new Date(a.starts_at).toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'}),'tracking-event-time'),el('strong',a.title,'tracking-event-title'),el('span',a.tenant_name,'tracking-event-client'),el('span',labels[a.status],'tracking-event-status'));link.dataset.status=a.status;link.onclick=()=>details(a);cell.append(link);}grid.append(cell);}grid.hidden=mode==='list';host.append(grid,el('h2','Atividades e entregas','section-title'));
   const list=el('div',null,'list-panel');if(!shown.length){list.append(el('p',data.activities.length?'Nenhuma atividade corresponde aos filtros.':'Nenhuma atividade cadastrada neste período.','empty-list'));if(query||statusFilter)list.append(button('Limpar filtros','close',()=>{query='';statusFilter='';render();}));}
-  for(const a of shown){const row=el('article',null,'tracking-row');row.tabIndex=-1;row.id='activity-'+a.id;const body=el('div');body.append(el('h3',a.title),el('p',a.tenant_name+' · '+labels[a.category]+' · '+labels[a.kind],'detail'),el('p',new Date(a.starts_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'})+' — '+new Date(a.ends_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'}),'detail'));
+  for(const a of shown){const row=el('article',null,'tracking-row');row.tabIndex=-1;row.id='activity-'+a.id;const body=el('div');body.append(el('h3',a.title),el('p',a.tenant_name+(a.engagement_label?' · '+a.engagement_label:'')+' · '+labels[a.category]+' · '+labels[a.kind],'detail'),el('p',new Date(a.starts_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'})+' — '+new Date(a.ends_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'}),'detail'));
    const actions=el('div',null,'tracking-actions');actions.append(el('span',labels[a.status],'status'),button('Abrir detalhes','arrow',()=>details(a)));row.append(body,actions);list.append(row);
   }host.append(list,el('h2','Horas por dia trabalhado','section-title'));
   const chart=el('div',null,'tracking-chart'),totals=new Map();for(const l of data.logs){const d=String(l.worked_on).slice(0,10);totals.set(d,(totals.get(d)||0)+l.minutes);}const max=Math.max(1,...totals.values());for(const [d,v]of [...totals].sort()){const row=el('div',null,'tracking-bar'),meter=el('meter');meter.min=0;meter.max=max;meter.value=v;meter.setAttribute('aria-label',d+' · '+v+' minutos');row.append(el('span',d.slice(8)+'/'+d.slice(5,7)),meter,el('span',(v/60).toLocaleString('pt-BR',{maximumFractionDigits:1})+' h'));chart.append(row);}if(!totals.size)chart.append(el('p','Nenhum tempo registrado. Horas planejadas não contam como realizadas.','empty-list'));host.append(chart,el('h2','Histórico de apontamentos','section-title'));
