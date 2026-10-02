@@ -63,6 +63,11 @@ const AUTOMACOES = [
   actions: [{ action: 'tarefa.criar', title: 'Ligar para o lead', tag: 'Geral', delay_days: 2 }], is_enabled: true, version: 1, last_run_at: ago, last_result: 'OK' },
 ];
 
+const REQUISITOS = [
+ { id: 'e1111111-1111-4111-8111-111111111111', pipeline_id: FUNIL, stage_id: '55555555-5555-4555-8555-555555555501', stage_name: 'Em contato', stage_kind: 'LEAD', gate: 'ENTER', kind: 'ACTION',
+  title: 'Confirmar o telefone', field_entity: null, field_key: null, tag: 'Cadastro', owner_id: null, due_days: 2, position: 0, is_active: true, version: 1 },
+];
+
 // 1x1 PNG válido: o navegador consegue decodificar, e o servidor reconhece pelos primeiros bytes.
 export const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 
@@ -93,6 +98,8 @@ export function bancoFalso() {
      { at: '2026-09-02T12:00:00.000Z', source: 'empresa', type: 'tenant.updated', actor: 'dono@exemplo.test', details: { before: { relationship_kind: 'prospect' }, after: { relationship_kind: 'customer' } } },
      { at: '2026-09-01T12:00:00.000Z', source: 'atividade', type: 'time_logged', actor: 'dono@exemplo.test', details: null },
     ] };
+   // Requisitos de etapa do funil
+   if (/FROM stage_requirements r JOIN pipeline_stages s ON s\.id=r\.stage_id WHERE r\.pipeline_id=\$1/.test(sql)) return { rows: REQUISITOS };
    // Fase 5: responsáveis, tarefas do lead e automações do espaço
    if (/SELECT id,name,email FROM operator_accounts WHERE status='active'/.test(sql)) return { rows: [DONO] };
    if (/FROM commercial_tasks t LEFT JOIN operator_accounts a ON a\.id=t\.owner_id WHERE t\.lead_id=\$1/.test(sql)) return { rows: TAREFAS };

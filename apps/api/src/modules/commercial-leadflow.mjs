@@ -3,6 +3,7 @@ import { commercialPermission } from './commercial-keys.mjs';
 import { capabilitiesOf } from './catalog.mjs';
 import { carryOver, fieldsOf } from '../platform/space-fields.mjs';
 import { emitEvent } from '../platform/automations.mjs';
+import { stageBlockers } from './commercial-gates.mjs';
 
 // Fase 3 do funil (plano de leads da Kalidash, adaptado: leadFlow.ts moveLeadStage / qualifyLead / discardLead /
 // restoreLead, agora no servidor). O lead anda só entre as etapas de tipo LEAD; qualificar o transforma em
@@ -123,6 +124,10 @@ export function commercialLeadflowRoutes(router) {
   if (to.kind !== 'LEAD') throw fail(400, 'O lead só anda entre etapas de lead. Para seguir adiante, qualifique.');
   if (to.id === lead.stage_id) throw fail(400, 'O lead já está nesta etapa.');
   const from = lead.stage_id ? (await client.query('SELECT id,name FROM pipeline_stages WHERE id=$1', [lead.stage_id])).rows[0] : null;
+  // Requisitos da etapa (sair da de agora, entrar na nova): falta algo, o lead não anda e a tela mostra o que falta.
+  // Responde 200 de propósito: as tarefas que nasceram na tentativa precisam ficar gravadas.
+  const blockers = await stageBlockers(client, { kind: 'lead', record: lead, pipelineId: lead.pipeline_id, fromStageId: lead.stage_id, toStageId: to.id });
+  if (blockers.length) return { body: { ok: false, blocked: true, blockers } };
   const first = (await client.query("SELECT id FROM pipeline_stages WHERE pipeline_id=$1 AND kind='LEAD' ORDER BY position LIMIT 1", [lead.pipeline_id])).rows[0];
   await client.query(
    `UPDATE commercial_leads SET stage_id=$2,was_seen=true,first_contact_at=CASE WHEN $3::boolean THEN COALESCE(first_contact_at,now()) ELSE first_contact_at END,version=version+1,updated_at=now() WHERE id=$1`,

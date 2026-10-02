@@ -247,6 +247,49 @@ test('Inbound: o gerenciador de automações lista, mostra o histórico e só pe
  semExcecoes();
 });
 
+test('Inbound: requisitos de etapa lista por etapa, e o campo oferecido é o do tipo de registro da etapa', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 800);
+ await pagina.avaliar(CLICAR_NO_MENU('Inbound'));
+ await pagina.esperar(`document.querySelector('#inbound-panel-leads details.requirements-manager')`, { descricao: 'gerenciador de requisitos' });
+ await pagina.avaliar(`document.querySelector('#inbound-panel-leads details.requirements-manager summary').click()`);
+ await pagina.esperar(`document.querySelectorAll('#inbound-panel-leads .requirements-manager .requirements-stage').length === 8`, { descricao: 'as oito etapas listadas' });
+ const linhas = await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .requirements-manager .field-row span')].map(s => s.textContent)`);
+ assert.deepEqual(linhas, ['Para entrar na etapa: Confirmar o telefone · Tarefa a concluir (prazo 2 dias)']);
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .requirements-manager .requirements-stage')][1].querySelector('h4').textContent`), 'Em contato');
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .requirements-manager .field-row button')].map(b => b.textContent).join('|')`), 'Desligar');
+ const campo = nome => `[...document.querySelectorAll('#inbound-panel-leads .requirements-manager form label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)})`;
+ const escolher = (nome, valor) => pagina.avaliar(`(() => { const s = ${campo(nome)}.querySelector('select'); s.value = ${JSON.stringify(valor)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+ // Tarefa: prazo e responsável; sem a escolha de campo.
+ assert.equal(await pagina.avaliar(`${campo('Campo')}.hidden`), true);
+ assert.equal(await pagina.avaliar(`${campo('Prazo da tarefa, em dias (opcional)')}.hidden`), false);
+ // Campo, em etapa de lead (Novos): os campos do lead.
+ await escolher('Exige', 'FIELD');
+ assert.equal(await pagina.avaliar(`${campo('Campo')}.hidden`), false);
+ assert.equal(await pagina.avaliar(`${campo('Prazo da tarefa, em dias (opcional)')}.hidden`), true);
+ assert.deepEqual(await pagina.avaliar(`[...${campo('Campo')}.querySelector('select').options].map(o => o.textContent)`), ['Porte', 'Observação']);
+ // Campo, em etapa aberta (Qualificação): os campos da oportunidade.
+ await escolher('Etapa', '55555555-5555-4555-8555-555555555502');
+ assert.deepEqual(await pagina.avaliar(`[...${campo('Campo')}.querySelector('select').options].map(o => o.textContent)`), ['Orçamento']);
+ semExcecoes();
+});
+
+test('Inbound: o aviso de bloqueio diz o que falta, separando tarefa de campo', { skip: PULAR }, async () => {
+ const html = await pagina.avaliar(`(async () => {
+  const m = await import('/stage-requirements.js');
+  const n = m.blockersNotice([
+   { kind: 'ACTION', title: 'Confirmar o telefone', field_key: null },
+   { kind: 'FIELD', title: 'Informar o orçamento', field_key: 'orcamento' }]);
+  return { role: n.getAttribute('role'), texto: n.innerText.replace(/\\s+/g, ' ').trim() };
+ })()`);
+ assert.equal(html.role, 'alert');
+ assert.match(html.texto, /Faltam estes requisitos da etapa/);
+ assert.match(html.texto, /Confirmar o telefone — a tarefa foi criada; conclua em Tarefas\./);
+ assert.match(html.texto, /Informar o orçamento — preencha o campo "orcamento" em Dados do espaço\./);
+ const um = await pagina.avaliar(`(async () => { const m = await import('/stage-requirements.js'); return m.blockersNotice([{ kind: 'ACTION', title: 'X', field_key: null }]).querySelector('p').textContent; })()`);
+ assert.equal(um, 'Ainda não dá para mover. Falta este requisito da etapa:');
+ semExcecoes();
+});
+
 test('Acompanhamento: a atividade escolhe a contratação da empresa selecionada', { skip: PULAR }, async () => {
  await pagina.tela(1280, 800);
  await pagina.avaliar(CLICAR_NO_MENU('Acompanhamento'));

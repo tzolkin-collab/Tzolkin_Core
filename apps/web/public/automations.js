@@ -19,7 +19,7 @@ export function tasksPanel({ api, lead, detail, owners, onChange }) {
  if (!tarefas.length) box.append(el('p', 'Nenhuma tarefa ainda.', 'empty-list'));
  for (const t of tarefas) {
   const linha = el('div', null, 'task-row' + (t.done_at ? ' task-done' : ''));
-  const partes = [t.tag, t.due_at ? 'prazo ' + dia(t.due_at) : null, t.owner_name ? 'responsável ' + t.owner_name : null, t.source === 'automacao' ? 'criada por automação' : null].filter(Boolean);
+  const partes = [t.tag, t.due_at ? 'prazo ' + dia(t.due_at) : null, t.owner_name ? 'responsável ' + t.owner_name : null, t.source === 'automacao' ? 'criada por automação' : t.source === 'requisito' ? 'exigida pela etapa' : null].filter(Boolean);
   const texto = el('span'); texto.append(el('strong', t.title), el('small', ' · ' + partes.join(' · ')));
   const b = el('button', t.done_at ? 'Reabrir' : 'Concluir', 'secondary'); b.type = 'button';
   b.onclick = async () => { b.disabled = true; try { await api('/api/commercial/tasks/' + t.id, 'PUT', { version: t.version, done: !t.done_at }); await onChange(); } catch (e) { aviso(linha, e); b.disabled = false; } };

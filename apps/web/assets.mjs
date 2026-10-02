@@ -19,6 +19,7 @@ const FILES = {
  '/automations.js':['automations.js','text/javascript'],
  '/client-edit.js':['client-edit.js','text/javascript'],
  '/client-history.js':['client-history.js','text/javascript'],
+ '/stage-requirements.js':['stage-requirements.js','text/javascript'],
  '/media.css':['media.css','text/css'],
  '/': ['index.html', 'text/html'],
  // O favicon precisa de uma rota própria e estável. Não depender de

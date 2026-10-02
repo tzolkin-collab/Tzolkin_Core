@@ -3,6 +3,7 @@ import { commercialPermission } from './commercial-keys.mjs';
 import { capabilitiesOf } from './catalog.mjs';
 import { onOpportunityMoved } from './commercial-leadflow.mjs';
 import { emitEvent } from '../platform/automations.mjs';
+import { stageBlockers } from './commercial-gates.mjs';
 
 // Funil por espaço (fase 1 do plano de leads da Kalidash, adaptada). Ver db/migrations/040_funil_por_espaco.sql
 // e docs/design/2026-10-01-pipeline-por-espaco-e-atribuicao.md.
@@ -282,6 +283,11 @@ export function commercialPipelineRoutes(router) {
    if (!found) throw fail(400, 'Motivo de perda inválido.');
    reason = found.id; reasonName = found.name;
   } else if (body.lost_reason_id != null) throw fail(400, 'Motivo de perda só vale ao mover para a etapa de perda.');
+  // Requisitos de etapa. Perder nunca fica preso. Bloqueado devolve 200 com o que falta (as tarefas criadas na tentativa ficam).
+  if (to.kind !== 'LOST') {
+   const blockers = await stageBlockers(client, { kind: 'opportunity', record: old, pipelineId: old.pipeline_id, fromStageId: old.stage_id, toStageId: to.id });
+   if (blockers.length) return { tenant: old.tenant_id, type: 'opportunity_move_blocked', body: { ok: false, blocked: true, blockers } };
+  }
   const closes = to.kind === 'WON' || to.kind === 'LOST';
   await client.query(
    `UPDATE commercial_opportunities SET stage_id=$2,lost_reason_id=$3,closed_at=${closes ? 'now()' : 'NULL'},entered_stage_at=now(),version=version+1,updated_at=now() WHERE id=$1`,

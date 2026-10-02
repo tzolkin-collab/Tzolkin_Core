@@ -40,13 +40,16 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 - [ ] **P0 [VOCÊ]** Aplicar a migração **040** (funil por espaço) no banco compartilhado, antes do deploy do Core. Só adiciona tabelas e colunas; o banco tem 0 leads.
 - [ ] **P0 [VOCÊ]** Aplicar a migração **041** (acompanhamento por contratação) no banco compartilhado, junto com a 040. Só adiciona uma coluna, uma chave e um índice; o banco tem 0 atividades.
 - [ ] **P0 [VOCÊ]** Aplicar a migração **042** (oportunidade guarda a contratação que criou) junto com a 040 e a 041. Só adiciona uma coluna e um índice; o banco tem 0 oportunidades.
+- [ ] **P0 [VOCÊ]** Aplicar a migração **046** (requisitos de etapa) junto com as outras. Cria uma tabela, uma coluna opcional e dois índices; a lista de origens da tarefa só ganha o valor `requisito`.
 - [ ] **P0 [VOCÊ]** Aplicar a migração **045** (a trilha de auditoria ganha a coluna `details`) junto com as outras. Só adiciona uma coluna opcional.
 - [ ] **P0 [VOCÊ]** Aplicar a migração **044** (eventos, automações e tarefas) junto com as outras. Só cria três tabelas; o banco tem 0 leads.
 - [ ] **P0 [VOCÊ]** Aplicar a migração **043** (campos próprios por espaço) junto com as outras. Cria uma tabela, duas colunas com padrão e semeia os 4 campos do site; o banco tem 0 leads.
 - [ ] **P2** Campos próprios: "obrigatório" vale só no intake; a edição não força preencher os que já existiam. Edição de valor na lista e filtro por campo ficam para depois (os valores moram em `jsonb`; se virar gargalo, tabela própria, como a Kalidash prevê).
+- [x] **P1** Funil: requisitos de etapa (bloquear entrar ou sair; tarefa a concluir ou campo a preencher).
+  *(feito em 02/10: migração 046, `commercial-gates.mjs` (gate.ts da Kalidash), bloqueio ao mover o lead e a oportunidade com a lista do que falta, e gerenciador no Inbound. Perder, descartar e qualificar nunca ficam presos. **Migração 046 ainda não aplicada no banco compartilhado.**)*
 - [x] **P1** Funil, fase 5: eventos e automações (e as tarefas mínimas que a ação "criar tarefa" pede).
   *(feito em 02/10: migração 044, `platform/automations.mjs`, `commercial-automations.mjs`, tarefas no lead e gerenciador de automações no Inbound. **Migração 044 ainda não aplicada no banco compartilhado.** Ações de hoje: criar tarefa e atribuir responsável.)*
-- [ ] **P1** Funil, o que as fases 3 a 5 deixaram: fontes do lead ("Conectar fonte"), exigências por etapa (bloquear entrar ou sair), automação com atraso (precisa de agendador; ADR 0011 diz sem worker), ações de e-mail e de push na automação, gatilho por webhook de entrada (pagamento confirmado move a oportunidade para Ganho: o Core já recebe Stripe e Asaas), lead criado pela tela (outbound) e mover o lead em lote. **[D]**
+- [ ] **P1** Funil, o que as fases 3 a 5 deixaram: fontes do lead ("Conectar fonte"), automação com atraso (precisa de agendador; ADR 0011 diz sem worker), ações de e-mail e de push na automação, gatilho por webhook de entrada (pagamento confirmado move a oportunidade para Ganho: o Core já recebe Stripe e Asaas), lead criado pela tela (outbound) e mover o lead em lote. **[D]**
 - [ ] **P1** Acompanhamento: responsável por operador (depende da decisão: do cliente ou da contratação), orçamento de horas, participantes e anexos.
 - [x] **P1** Fase 3 do funil: qualificar, descartar e mover o lead pela tela; ganhar a oportunidade cria a contratação (decisão 3).
   *(feito em 02/10: `commercial-leadflow.mjs`, migração 042 e a tela. **Migração 042 ainda não aplicada no banco compartilhado.** Falta uso com lead real.)*
@@ -251,7 +254,7 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | Bloco | Abertos |
 |---|---:|
 | 0. Lembretes que você pediu | 1 |
-| 1. Leads e funil | 20 |
+| 1. Leads e funil | 21 |
 | 2. Risco sem volta | 8 |
 | 3. Dinheiro, cobrança e fiscal | 15 |
 | 4. Conexões, infraestrutura e deploy | 11 |
@@ -262,6 +265,6 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | 9. Documentação a corrigir | 5 |
 | 10. Fora do Core | 2 |
 | 11. Substituir o Notion pelo Core | 11 |
-| **Total** | **101** |
+| **Total** | **102** |
 
-Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 20. Dos 101 abertos: **P0: 14**, **[VOCÊ]: 15**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
+Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 21. Dos 102 abertos: **P0: 15**, **[VOCÊ]: 16**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.

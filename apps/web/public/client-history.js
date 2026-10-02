@@ -12,6 +12,7 @@ export const TIPOS = {
  'entitlement.changed': 'Direito de acesso alterado',
  'opportunity_created': 'Oportunidade criada',
  'opportunity_moved': 'Oportunidade mudou de etapa',
+ 'opportunity_move_blocked': 'Mudança de etapa bloqueada por requisito',
  'marketing.binding.saved': 'Campanha vinculada a uma contratação',
  'service_receivable.plan_created': 'Plano de recebimento criado',
  'service_receivable.plan_approved': 'Plano de recebimento aprovado',

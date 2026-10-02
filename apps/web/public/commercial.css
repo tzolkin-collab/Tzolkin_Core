@@ -36,3 +36,7 @@
 .automation-runs p{margin:4px 0;font-size:13px}
 .task-row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:6px 0}
 .task-row.task-done strong{text-decoration:line-through;opacity:.6}
+.requirements-manager{margin-top:16px}
+.requirements-manager summary{cursor:pointer;font-weight:600}
+.requirements-stage h4{margin:12px 0 2px}
+.blockers ul{margin:6px 0 0;padding-left:20px}
