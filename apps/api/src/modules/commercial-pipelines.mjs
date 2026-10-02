@@ -45,7 +45,7 @@ const hexColor = v => {
  return v;
 };
 
-async function spaceOf(client, id) {
+export async function spaceOf(client, id) {
  if (!isProductId(id)) throw fail(400, 'Espaço inválido.');
  const row = (await client.query("SELECT id,name,portfolio_kind FROM products WHERE id=$1 AND lifecycle_status IN ('active','draft')", [id])).rows[0];
  if (!row) throw fail(404, 'Espaço não encontrado.');

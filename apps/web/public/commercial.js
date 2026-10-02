@@ -1,4 +1,5 @@
 import {photoPanel} from './media.js';
+import {dataPanel,fieldsManager} from './space-fields.js';
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;if(cls)e.className=cls;return e;};
 const labels={open:'Novo',qualified:'Qualificado',won:'Ganho',lost:'Perdido',archived:'Arquivado'};
 const date=v=>v?new Date(v).toLocaleString('pt-BR'):'—';
@@ -50,6 +51,9 @@ export function setupCommercial({api,openTenant}) {
   if(!data.leads.length)r.append(el('p',filtered?'Nada com estes filtros.':'Ainda não chegou nenhum.','empty-list'));
   const list=el('div',null,'commercial-list');for(const l of data.leads){const row=el('article',null,'context-card');row.append(el('h3',l.name||l.organization_name),el('p',`${l.stage_name&&l.status==='open'?l.stage_name:labels[l.status]} · ${l.product_id||'Sem produto'} · ${l.interest||'Contato'}`),el('p',`${l.email||l.whatsapp||''} · Responsável: ${l.owner_name||l.owner_email||'Não atribuído'}`),el('small',`${l.source_system||'Origem desconhecida'} · ${date(l.source_created_at||l.created_at)}`),button('Abrir detalhe',()=>detail(l.id)));list.append(row);}r.append(list);
   const nav=el('div',null,'commercial-actions');if(offset)nav.append(button('Anterior',async()=>{offset=Math.max(0,offset-25);await load(product,false);}));if(data.has_more)nav.append(button('Próxima',async()=>{offset+=25;await load(product,false);}));r.append(nav);
+  // Campos próprios do espaço: definir o que cada espaço guarda do lead, da oportunidade e da contratação.
+  const espacos=[...new Map((funis.pipelines||[]).filter(x=>x.is_active).map(x=>[x.space_id,{id:x.space_id,name:x.space_name}])).values()];
+  if(espacos.length)r.append(fieldsManager({api,spaces:espacos,initialSpace:p}));
  }
  // Oportunidades da etapa escolhida. Mover pede o motivo quando o destino é "Perdido"; ao ganhar, o Core cria a contratação.
  async function opportunityList(r,ticket){
@@ -102,6 +106,7 @@ export function setupCommercial({api,openTenant}) {
   r.replaceChildren(button('← Voltar à lista',()=>load(product,false)),el('h2',l.name||'Lead'));
   const facts=el('div',null,'context-card');facts.append(el('p',`${l.organization_name} · ${l.email||''} · ${l.whatsapp||''}`),el('p',l.message||'Sem mensagem.'),el('p',`${l.interest||''} · ${l.service_model}`),el('p',`Origem: ${l.source_system} / ${l.source_ref} · ${date(l.source_created_at||l.created_at)}`),el('p',`Preferência de contato registrada: ${l.privacy?.contact_allowed?'Sim':'Não informada ou não autorizada'}`));if(d.attribution)facts.append(el('p',`Campanha: ${d.attribution.utm_campaign||'—'} · Canal: ${d.attribution.channel||'—'}`));if(openTenant&&l.tenant_id){const company=el('button',`Abrir ficha de ${l.organization_name||'empresa'} →`,'secondary');company.type='button';company.onclick=()=>openTenant(l.tenant_id);facts.append(company);}r.append(facts);r.append(el('h3','Fotos'),photoPanel({type:'lead',id}));
   if(l.pipeline_id)r.append(funnelPanel(id,l,d,rs.lost_reasons));
+  const dados=dataPanel({api,lead:l,detail:d,onSaved:()=>detail(id)});if(dados)r.append(dados);
   const funnel=Boolean(l.pipeline_id);
   const form=el('form',null,'commercial-form'),stage=select('Estágio',Object.entries(labels),l.status),responsible=select('Responsável comercial',[['','Não atribuído'],...o.owners.map(x=>[x.id,x.name||x.email])],l.owner_id||''),loss=field('Motivo de perda','text',l.loss_reason||'');form.append(...(funnel?[responsible.wrap]:[stage.wrap,responsible.wrap,loss.wrap]));submit(form,'Salvar acompanhamento',async()=>{await api('/api/commercial/leads/'+id,'PUT',funnel?{version:l.version,owner_id:responsible.input.value||null}:{version:l.version,status:stage.input.value,owner_id:responsible.input.value||null,loss_reason:loss.input.value});await detail(id);});r.append(form);
   r.append(el('h3','Timeline'));const activityForm=el('form',null,'commercial-form'),kind=select('Tipo',[['note','Nota'],['call','Ligação'],['meeting','Reunião'],['email','E-mail registrado']]),content=field('Atividade','textarea');content.input.required=true;activityForm.append(kind.wrap,content.wrap);submit(activityForm,'Registrar atividade',async()=>{await api('/api/commercial/leads/'+id+'/activities','POST',{kind:kind.input.value,note:content.input.value});await detail(id);});r.append(activityForm);

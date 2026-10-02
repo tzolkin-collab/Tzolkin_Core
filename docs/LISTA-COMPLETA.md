@@ -40,13 +40,16 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 - [ ] **P0 [VOCÊ]** Aplicar a migração **040** (funil por espaço) no banco compartilhado, antes do deploy do Core. Só adiciona tabelas e colunas; o banco tem 0 leads.
 - [ ] **P0 [VOCÊ]** Aplicar a migração **041** (acompanhamento por contratação) no banco compartilhado, junto com a 040. Só adiciona uma coluna, uma chave e um índice; o banco tem 0 atividades.
 - [ ] **P0 [VOCÊ]** Aplicar a migração **042** (oportunidade guarda a contratação que criou) junto com a 040 e a 041. Só adiciona uma coluna e um índice; o banco tem 0 oportunidades.
-- [ ] **P1** Funil, o que a fase 3 deixou: fontes do lead, tarefas e exigências por etapa, eventos e automações, campos próprios por espaço (fase 4), lead entrando pela tela (outbound) e mover o lead em lote.
+- [ ] **P0 [VOCÊ]** Aplicar a migração **043** (campos próprios por espaço) junto com as outras. Cria uma tabela, duas colunas com padrão e semeia os 4 campos do site; o banco tem 0 leads.
+- [ ] **P2** Campos próprios: "obrigatório" vale só no intake; a edição não força preencher os que já existiam. Edição de valor na lista e filtro por campo ficam para depois (os valores moram em `jsonb`; se virar gargalo, tabela própria, como a Kalidash prevê).
+- [ ] **P1** Funil, o que a fase 3 deixou: fontes do lead, tarefas e exigências por etapa, eventos e automações, lead entrando pela tela (outbound) e mover o lead em lote.
 - [ ] **P1** Acompanhamento: responsável por operador (depende da decisão: do cliente ou da contratação), orçamento de horas, participantes e anexos.
 - [x] **P1** Fase 3 do funil: qualificar, descartar e mover o lead pela tela; ganhar a oportunidade cria a contratação (decisão 3).
   *(feito em 02/10: `commercial-leadflow.mjs`, migração 042 e a tela. **Migração 042 ainda não aplicada no banco compartilhado.** Falta uso com lead real.)*
 - [x] **P1** Fase 2 do plano da Kalidash: dedupe de pessoa e empresa (e-mail, CPF por hash, CNPJ alfanumérico) no intake.
   *(feito em 02/10 por e-mail: o mesmo e-mail, em qualquer caixa e em qualquer espaço, reaproveita a pessoa; a empresa é reaproveitada se for da pessoa e tiver o mesmo nome; cliente que volta sai com `returning_client`. Sem migração. Falta CPF por hash e CNPJ: o site não envia documento, então entram quando o formulário pedir.)*
-- [ ] **P1** Campos próprios por espaço (`space_fields` + `custom_data`) e bloco `space_data` no intake. **[D]**
+- [x] **P1** Campos próprios por espaço (`space_fields` + `custom_data`) e bloco `space_data` no intake. **[D]**
+  *(feito em 02/10: migração 043, `commercial-fields.mjs`, `platform/space-fields.mjs`, gerenciador no Inbound e painel "Dados do espaço" no lead. **Migração 043 ainda não aplicada no banco compartilhado.** Decisão tomada pela recomendação (opção A, só os espaços da Tzolkin); mude se quiser outra.)*
 - [x] **P1** `utm_tzolkin`: conferir no servidor que o prefixo é o espaço da chave.
   *(feito em 02/10: o prefixo errado é ignorado para escolher o funil; o site também descarta `utm_tzolkin` que não comece por `sites.`.)*
 - [x] **P1** Convenção de URL de anúncio (parâmetros dinâmicos da Meta) escrita em `ATTRIBUTION.md`.
@@ -68,8 +71,8 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
   escopo `commercial:intake`; o segredo aparece uma vez), `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_INTERNAL_TO`. Revisar e mergear a branch do site.
   Sem isso o formulário responde 503 e nenhum lead entra. *(`tzolkin-site/db/README.md`.)*
 - [ ] **P1** Primeiro lead real de ponta a ponta com o site novo (formulário → Core → tela de Inbound), em prévia da Vercel antes da produção.
-- [ ] **P1** O Core ainda não tem onde guardar porte, funcionários, Instagram e site do formulário: hoje vão no início da mensagem.
-  Resolve com o bloco `space_data` (campos por espaço). *(avaliação do funil por espaço.)*
+- [x] **P1** O Core ainda não tem onde guardar porte, funcionários, Instagram e site do formulário: hoje vão no início da mensagem.
+  Resolve com o bloco `space_data` (campos por espaço). *(feito em 02/10 nos dois lados: o Core guarda e o site manda em `space_data`, com volta ao formato antigo se o Core não conhecer o bloco. Depende do deploy do Core com a migração 043.)*
 - [ ] **P2 [D]** "Educacional TZOLKIN" entra no espaço **sites** com modelo `education`. Deveria ir para Mentorias/Educare? *(desta sessão.)*
 - [ ] **P2** Código morto no site: `LeadDirectForm.tsx` (ninguém importa), `chatApi.saveLead` (ninguém chama), `db/001–003` e `scripts/email-worker.mjs`
   (legado, fila nunca preenchida). Remover de vez.
@@ -254,4 +257,4 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | 11. Substituir o Notion pelo Core | 11 |
 | **Total** | **103** |
 
-Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 12. Dos 103 abertos: **P0: 11**, **[VOCÊ]: 12**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
+Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 14. Dos 103 abertos: **P0: 12**, **[VOCÊ]: 13**, **[D] (decisão sua): 15**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.

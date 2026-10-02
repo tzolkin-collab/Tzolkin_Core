@@ -185,9 +185,33 @@ test('Inbound: o detalhe do lead no funil oferece mover, qualificar e descartar,
  assert.deepEqual(botoes, ['Mover', 'Qualificar (vira oportunidade)', 'Descartar']);
  assert.equal(await pagina.avaliar(`document.querySelectorAll('#inbound-panel-leads .funnel-track .funnel-chip').length`), 8);
  assert.equal(await pagina.avaliar(`document.querySelector('#inbound-panel-leads .funnel-track .funnel-chip.active').textContent`), 'Novos');
+ // Dados do espaço: os campos ativos do lead aparecem com o valor guardado; o desativado com valor aparece travado.
+ const campos = await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .data-panel form')][0] && [...document.querySelectorAll('#inbound-panel-leads .data-panel form')][0].innerText`);
+ assert.match(campos, /Porte/); assert.match(campos, /Observação/); assert.match(campos, /Campo antigo \(desativado\)/);
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .data-panel select')][0].value`), 'Micro');
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .data-panel label')].find(l => l.firstChild.textContent.startsWith('Campo antigo')).querySelector('input').disabled`), true);
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .data-panel form button')].map(b => b.textContent).join('|')`), 'Salvar dados — lead', 'sem oportunidade, só o grupo do lead');
  // O formulário antigo só tem o responsável quando o lead está em funil: o estágio vem do funil.
  const rotulos = await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads form.commercial-form > label')].map(l => l.firstChild.textContent)`);
  assert.ok(!rotulos.includes('Estágio') && rotulos.includes('Responsável comercial'), JSON.stringify(rotulos));
+ semExcecoes();
+});
+
+test('Inbound: o gerenciador de campos do espaço lista por tipo de registro e abre o formulário de novo campo', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 800);
+ await pagina.avaliar(CLICAR_NO_MENU('Inbound'));
+ await pagina.esperar(`document.querySelector('#inbound-panel-leads details.fields-manager')`, { descricao: 'gerenciador de campos' });
+ await pagina.avaliar(`document.querySelector('#inbound-panel-leads details.fields-manager summary').click()`);
+ await pagina.esperar(`document.querySelectorAll('#inbound-panel-leads .fields-manager .field-row').length === 4`, { descricao: 'quatro campos listados' });
+ const linhas = await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .fields-manager .field-row span')].map(s => s.textContent)`);
+ assert.deepEqual(linhas, ['Porte · Lista (uma opção) (Micro, Pequena)', 'Observação · Texto · obrigatório', 'Campo antigo · Texto · desativado', 'Orçamento · Número']);
+ const botoes = await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .fields-manager .field-row')].map(r => [...r.querySelectorAll('button')].map(b => b.textContent).join('/'))`);
+ assert.deepEqual(botoes, ['Desativar/Tornar obrigatório', 'Desativar/Tornar opcional', 'Ativar', 'Desativar/Tornar obrigatório']);
+ // As opções só aparecem para tipo de lista.
+ const opcoes = () => pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .fields-manager form label')].find(l => l.firstChild.textContent === 'Opções, separadas por vírgula').hidden`);
+ assert.equal(await opcoes(), true);
+ await pagina.avaliar(`(() => { const s = [...document.querySelectorAll('#inbound-panel-leads .fields-manager form label')].find(l => l.firstChild.textContent === 'Tipo').querySelector('select'); s.value = 'SELECT'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+ assert.equal(await opcoes(), false);
  semExcecoes();
 });
 

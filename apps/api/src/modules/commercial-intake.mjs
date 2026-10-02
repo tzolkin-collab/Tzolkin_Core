@@ -3,6 +3,7 @@ import { fail, input, isProductId, isUuid, text } from '../platform/http.mjs';
 import { notificarLeadNovo } from './push.mjs';
 import { placeLead } from './commercial-pipelines.mjs';
 import { CHAVES_ATRIBUICAO, atribuicaoEstendida } from '../platform/attribution.mjs';
+import { fieldsOf, validateSpaceData } from '../platform/space-fields.mjs';
 export { commercialKeyRoutes } from './commercial-keys.mjs';
 
 const optional=(v,max=500)=>v==null||v===''?null:text(v,1,max);
@@ -10,12 +11,13 @@ const multiline=(v,max)=>{if(v==null||v==='')return null;if(typeof v!=='string'|
 export const SERVICE_MODELS=['on_demand','education','consulting','advisory','product','unclassified'];
 export const canonical=v=>JSON.stringify(v,(_,value)=>value&&typeof value==='object'&&!Array.isArray(value)?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b))):value);
 export function validateIntake(body,productId) {
- input(body,['lead','organization','stakeholder','commercial','attribution','privacy']);
+ input(body,['lead','organization','stakeholder','commercial','attribution','privacy','space_data']);
  const l=body.lead??{},o=body.organization??{},s=body.stakeholder??{},c=body.commercial??{},a=body.attribution??{},p=body.privacy??{};
  input(l,['name','email','whatsapp','message']);input(o,['name','slug','organization_type']);input(s,['role','title']);input(c,['product_id','service_model','label']);
  input(a,CHAVES_ATRIBUICAO);
  input(p,['notice_version','contact_allowed','captured_at','source']);
  if(c.product_id!==productId||!isProductId(productId))throw fail(403,'Produto inválido para esta chave.');
+ if(body.space_data!=null&&(typeof body.space_data!=='object'||Array.isArray(body.space_data)))throw fail(400,'Dados do espaço inválidos.');
  if(!SERVICE_MODELS.includes(c.service_model))throw fail(400,'Modelo comercial inválido.');
  const name=text(l.name,2,200),email=optional(l.email,320)?.toLowerCase()??null,phone=optional(l.whatsapp,40)?.replace(/[\s()+.-]/g,'')??null;
  if((!email&&!phone)||(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))||(phone&&!/^\d{10,15}$/.test(phone)))throw fail(400,'Contato inválido.');
@@ -31,6 +33,8 @@ export function validateIntake(body,productId) {
  // Os 7 campos de sempre entram sempre (null quando ausentes), como antes. A parte estendida
  // (ids do anúncio, sessão, localização) só entra se foi enviada, para o hash de um pedido
  // antigo não mudar (ver platform/attribution.mjs).
+ // Dados próprios do espaço (fase 4): só entram no objeto, e portanto no hash, quando foram enviados.
+ ...(body.space_data&&Object.keys(body.space_data).length?{space_data:body.space_data}:{}),
  attribution:{...Object.fromEntries(['channel','utm_source','utm_medium','utm_campaign','utm_content','landing_page','referrer'].map(k=>[k,optional(a[k],k==='referrer'?1000:500)])),...atribuicaoEstendida(a,date)}};
 }
 export async function recordActivity(client,lead,kind,operator,note=null,details={}) {
@@ -75,6 +79,8 @@ export function commercialIntakeRoutes(router,{avisarLeadNovo=notificarLeadNovo}
     const recentes=Number((await client.query("SELECT count(*) FROM commercial_leads WHERE product_id=$1 AND lower(email)=$2 AND created_at>now()-interval '1 hour'",[productId,v.email])).rows[0].count);
     if(recentes>=5)throw fail(429,'Muitos envios com este e-mail. Aguarde antes de tentar novamente.');
    }
+   // Campos próprios do espaço (fase 4): chave que o espaço não define é 400; obrigatório que falta também.
+   const customData=validateSpaceData(await fieldsOf(client,productId,'lead'),v.space_data);
    const source=`inbound:${productId}:${v.source_system}`;
    const slug='lead-'+digest(`${source}:${v.source_ref}`).slice(0,40);
    const found=await resolveParties(client,v);
@@ -84,7 +90,7 @@ export function commercialIntakeRoutes(router,{avisarLeadNovo=notificarLeadNovo}
    await client.query('INSERT INTO organization_stakeholders(tenant_id,stakeholder_id,role,title,is_primary,contact_allowed) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(tenant_id,stakeholder_id) DO NOTHING',[tenant,person,v.role,v.title,!found.tenant,v.privacy.contact_allowed]);
    // Funil do espaço: o nicho do utm_tzolkin escolhe o funil; sem casamento, o padrão. Espaço sem funil = lead sem funil.
    const place=await placeLead(client,productId,v.attribution?.utm_tzolkin);
-   const lead=(await client.query(`INSERT INTO commercial_leads(tenant_id,stakeholder_id,product_id,name,email,whatsapp,message,source_system,source_ref,service_model,interest,privacy,source_created_at,request_hash,pipeline_id,stage_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,[tenant,person,productId,v.name,v.email,v.phone,v.message,v.source_system,v.source_ref,v.service_model,v.interest,v.privacy,v.source_created_at,hash,place?.pipelineId??null,place?.stageId??null])).rows[0].id;
+   const lead=(await client.query(`INSERT INTO commercial_leads(tenant_id,stakeholder_id,product_id,name,email,whatsapp,message,source_system,source_ref,service_model,interest,privacy,source_created_at,request_hash,pipeline_id,stage_id,custom_data) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,[tenant,person,productId,v.name,v.email,v.phone,v.message,v.source_system,v.source_ref,v.service_model,v.interest,v.privacy,v.source_created_at,hash,place?.pipelineId??null,place?.stageId??null,customData])).rows[0].id;
    const a=v.attribution;
    await client.query(`INSERT INTO commercial_attributions(lead_id,source_system,source_ref,channel,utm_source,utm_medium,utm_campaign,utm_content,landing_page,referrer,
      utm_term,utm_tzolkin,meta_campaign_id,meta_adset_id,meta_ad_id,fbclid,gclid,fbc,fbp,session_key,first_touch_at,last_touch,session,geo)

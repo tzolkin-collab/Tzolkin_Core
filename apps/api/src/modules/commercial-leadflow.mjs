@@ -1,6 +1,7 @@
 import { fail, input, isUuid, text } from '../platform/http.mjs';
 import { commercialPermission } from './commercial-keys.mjs';
 import { capabilitiesOf } from './catalog.mjs';
+import { carryOver, fieldsOf } from '../platform/space-fields.mjs';
 
 // Fase 3 do funil (plano de leads da Kalidash, adaptado: leadFlow.ts moveLeadStage / qualifyLead / discardLead /
 // restoreLead, agora no servidor). O lead anda só entre as etapas de tipo LEAD; qualificar o transforma em
@@ -78,11 +79,13 @@ export async function onOpportunityMoved(client, opp, to, reasonName, operator) 
  const base = opp.title.slice(0, 110);
  let label = base;
  for (let n = 2; (await client.query('SELECT 1 FROM client_engagements WHERE tenant_id=$1 AND label=$2', [opp.tenant_id, label])).rowCount; n += 1) label = `${base} (${n})`;
+ // Os valores da oportunidade sobem para a contratação quando o espaço define o mesmo campo para ela.
+ const customData = carryOver(await fieldsOf(client, space.id, 'engagement'), opp.custom_data);
  const engagement = (await client.query(
-  `INSERT INTO client_engagements(tenant_id,product_id,service_model,status,label,source_system,source_ref)
-   VALUES($1,$2,$3,'active',$4,'commercial_opportunity',$5)
-   RETURNING id,tenant_id,product_id,service_model,status,label,revision,created_at,updated_at,archived_at`,
-  [opp.tenant_id, space.id, model, label, opp.id])).rows[0];
+  `INSERT INTO client_engagements(tenant_id,product_id,service_model,status,label,source_system,source_ref,custom_data)
+   VALUES($1,$2,$3,'active',$4,'commercial_opportunity',$5,$6)
+   RETURNING id,tenant_id,product_id,service_model,status,label,revision,created_at,updated_at,archived_at,custom_data`,
+  [opp.tenant_id, space.id, model, label, opp.id, customData])).rows[0];
  await client.query(
   `INSERT INTO portfolio_audit(entity,entity_id,action,before,after,actor_subject,actor_email) VALUES('engagement',$1,'created',NULL,$2,$3,$4)`,
   [engagement.id, engagement, operator?.subject ?? null, operator?.email ?? null]);
@@ -134,11 +137,13 @@ export function commercialLeadflowRoutes(router) {
   const owner = Object.hasOwn(body, 'owner_id') ? await activeOwner(client, body.owner_id) : lead.owner_id;
   const closes = Object.hasOwn(body, 'expected_close_at') ? dateOrNull(body.expected_close_at) : lead.expected_close_at;
   const org = (await client.query('SELECT name FROM tenants WHERE id=$1', [lead.tenant_id])).rows[0].name;
+  // Os valores do lead sobem para a oportunidade quando o espaço define o mesmo campo (mesma chave e mesmo tipo).
+  const customData = carryOver(await fieldsOf(client, lead.product_id, 'opportunity'), lead.custom_data);
   const title = (lead.interest && lead.interest !== 'Contato comercial' ? `${org} · ${lead.interest}` : org).slice(0, 200);
   const opp = (await client.query(
-   `INSERT INTO commercial_opportunities(pipeline_id,stage_id,tenant_id,stakeholder_id,lead_id,title,value_minor,origin,owner_id,expected_close_at)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
-   [pipeline.id, first.id, lead.tenant_id, lead.stakeholder_id, lead.id, title, value, lead.origin, owner, closes])).rows[0];
+   `INSERT INTO commercial_opportunities(pipeline_id,stage_id,tenant_id,stakeholder_id,lead_id,title,value_minor,origin,owner_id,expected_close_at,custom_data)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+   [pipeline.id, first.id, lead.tenant_id, lead.stakeholder_id, lead.id, title, value, lead.origin, owner, closes, customData])).rows[0];
   await client.query(
    `UPDATE commercial_leads SET status='qualified',owner_id=$2,estimated_value_minor=$3,expected_close_at=$4,was_seen=true,version=version+1,updated_at=now() WHERE id=$1`,
    [lead.id, owner, value || lead.estimated_value_minor, closes]);

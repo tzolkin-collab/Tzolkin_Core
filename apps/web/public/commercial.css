@@ -24,3 +24,9 @@
 .funnel-track .funnel-chip{cursor:default}
 .funnel-track .funnel-chip:hover{border-color:var(--line,#e5e7eb)}
 .funnel-track .funnel-chip.active:hover{border-color:var(--ink,#111)}
+.fields-manager{margin-top:24px}
+.fields-manager summary{cursor:pointer;font-weight:600}
+.field-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
+.field-row span{flex:1 1 220px}
+.field-options{display:flex;gap:12px;flex-wrap:wrap;border:0;padding:0}
+.data-panel h4{margin:12px 0 4px}

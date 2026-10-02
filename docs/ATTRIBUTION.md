@@ -13,6 +13,18 @@ Contrato do bloco `attribution` em `POST /v1/commercial/intake`. Implementação
 - `session.events`: no máximo 20. `last_touch`, `session` e `geo` têm teto de tamanho no banco.
 - Chave desconhecida em qualquer nível: 400.
 
+## Dados próprios do espaço (`space_data`)
+
+Bloco opcional do intake: um objeto chave → valor, validado contra os campos que o **espaço da chave** define em
+`space_fields` (migração 043; entidade `lead`). Tipos: TEXT (até 500), NUMBER, DATE (AAAA-MM-DD), SELECT, MULTISELECT,
+BOOLEAN e LINK (http/https). Vazio (`""`, `null`) significa sem valor e não vira chave.
+
+- Chave que o espaço não define, ou que está desativada: **400**, a mesma política dos outros blocos. Obrigatório que falta: 400.
+- O espaço **sites** nasce com quatro campos TEXT opcionais: `porte`, `funcionarios`, `instagram`, `site`.
+- Os valores sobem do lead para a oportunidade e para a contratação nos campos que o espaço também define lá (mesma chave e mesmo tipo).
+- Só entra no pedido normalizado quando enviado, então pedido antigo mantém o hash.
+- O site, se um Core antigo recusar o bloco (400), reenvia uma vez no formato antigo (campos no início da mensagem).
+
 ## Compatibilidade
 
 Só entra no pedido normalizado o que foi enviado, então pedidos antigos têm o mesmo hash de antes (sem 409 em reenvio).

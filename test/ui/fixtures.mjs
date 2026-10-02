@@ -46,6 +46,13 @@ const OPORTUNIDADE = { id: '77777777-7777-4777-8777-777777777777', pipeline_id: 
  stakeholder_id: null, contact_name: null, lead_id: null, title: 'Venda de teste', value_minor: '450000', currency: 'BRL', origin: 'INBOUND', owner_id: null, owner_name: null,
  expected_close_at: null, entered_stage_at: ago, closed_at: null, lost_reason_id: null, version: 1, created_at: ago };
 
+const CAMPOS = [
+ { id: 'a1111111-1111-4111-8111-111111111111', space_id: 'mentorias', entity: 'lead', key: 'porte', label: 'Porte', type: 'SELECT', options: ['Micro', 'Pequena'], required: false, is_active: true, position: 0, version: 1 },
+ { id: 'a2222222-2222-4222-8222-222222222222', space_id: 'mentorias', entity: 'lead', key: 'observacao', label: 'Observação', type: 'TEXT', options: null, required: true, is_active: true, position: 1, version: 1 },
+ { id: 'a3333333-3333-4333-8333-333333333333', space_id: 'mentorias', entity: 'lead', key: 'antigo', label: 'Campo antigo', type: 'TEXT', options: null, required: false, is_active: false, position: 2, version: 2 },
+ { id: 'a4444444-4444-4444-8444-444444444444', space_id: 'mentorias', entity: 'opportunity', key: 'orcamento', label: 'Orçamento', type: 'NUMBER', options: null, required: false, is_active: true, position: 0, version: 1 },
+];
+
 // 1x1 PNG válido: o navegador consegue decodificar, e o servidor reconhece pelos primeiros bytes.
 export const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 
@@ -64,12 +71,15 @@ export function bancoFalso() {
    if (sql === 'SELECT * FROM tenants ORDER BY created_at DESC') return { rows: DADOS.tenants };
    // Inbound: lista e detalhe de lead, oportunidades da etapa e motivos de perda
    if (/FROM commercial_leads l JOIN tenants t ON t.id=l.tenant_id LEFT JOIN operator_accounts a ON a.id=l.owner_id LEFT JOIN pipeline_stages st/.test(sql)) return { rows: [LEAD_LINHA] };
-   if (/SELECT l\.\*,t\.name AS organization_name/.test(sql)) return { rows: [{ ...LEAD_LINHA, version: 1, service_model: 'education', message: 'Quero saber mais', source_ref: 'ref-1', privacy: {}, tenant_id: EMPRESA, estimated_value_minor: null, expected_close_at: null, loss_reason: null }] };
+   if (/SELECT l\.\*,t\.name AS organization_name/.test(sql)) return { rows: [{ ...LEAD_LINHA, version: 1, service_model: 'education', message: 'Quero saber mais', source_ref: 'ref-1', privacy: {}, tenant_id: EMPRESA, estimated_value_minor: null, expected_close_at: null, loss_reason: null, custom_data: { porte: 'Micro', antigo: 'valor guardado' } }] };
    if (/FROM commercial_opportunities o JOIN pipeline_stages s ON s\.id=o\.stage_id LEFT JOIN client_engagements/.test(sql)) return { rows: [] };
    if (/FROM commercial_opportunities o\s+JOIN pipeline_stages s ON s\.id=o\.stage_id JOIN tenants t/.test(sql)) return { rows: params[1] === ETAPA(2) ? [OPORTUNIDADE] : [] };
    if (/SELECT id,name,kind,position FROM pipeline_stages WHERE pipeline_id=\$1 ORDER BY position/.test(sql))
     return { rows: ETAPAS.map(([name, kind], i) => ({ id: ETAPA(i), name, kind, position: i })) };
    if (/FROM lost_reasons WHERE is_active/.test(sql)) return { rows: [{ id: '88888888-8888-4888-8888-888888888888', name: 'Sem orçamento' }, { id: '99999999-9999-4999-8999-999999999999', name: 'Sem resposta' }] };
+   // Campos próprios do espaço: lista do gerenciador e do detalhe do lead
+   if (/FROM space_fields WHERE \(\$1::text IS NULL OR space_id=\$1\)/.test(sql)) return { rows: CAMPOS.filter(c => !params[0] || c.space_id === params[0]) };
+   if (/FROM space_fields WHERE space_id=\$1 ORDER BY entity/.test(sql)) return { rows: CAMPOS.map(({ version, space_id, ...c }) => c) };
    // Acompanhamento: contratações em curso oferecidas ao formulário de atividade
    if (/FROM client_engagements WHERE archived_at IS NULL ORDER BY label/.test(sql))
     return { rows: DADOS.engagements.filter(e => e.status === 'active').map(e => ({ id: e.id, tenant_id: e.tenant_id, label: e.label, service_model: e.service_model, status: e.status, product_id: e.product_id })) };

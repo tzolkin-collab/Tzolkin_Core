@@ -26,11 +26,13 @@ async function detail({pool,params,reply,productId,operator}) {
  const contracts=(await pool.query('SELECT * FROM commercial_contracts WHERE lead_id=$1 ORDER BY created_at DESC',[lead.id])).rows;
  // Funil do lead (fase 3): só para o operador. A chave de serviço do site não vê oportunidade nem contratação.
  if(!operator)return reply(200,{lead,attribution,activities,contracts});
- const opportunity=(await pool.query(`SELECT o.id,o.stage_id,s.name AS stage_name,s.kind AS stage_kind,o.value_minor::text AS value_minor,o.currency,o.version,o.engagement_id,e.label AS engagement_label
+ const opportunity=(await pool.query(`SELECT o.id,o.stage_id,s.name AS stage_name,s.kind AS stage_kind,o.value_minor::text AS value_minor,o.currency,o.version,o.custom_data,o.engagement_id,e.label AS engagement_label,e.revision AS engagement_revision,e.custom_data AS engagement_custom_data
   FROM commercial_opportunities o JOIN pipeline_stages s ON s.id=o.stage_id LEFT JOIN client_engagements e ON e.id=o.engagement_id WHERE o.lead_id=$1`,[lead.id])).rows[0]||null;
  if(opportunity)opportunity.value_minor=Number(opportunity.value_minor);
  const stages=lead.pipeline_id?(await pool.query('SELECT id,name,kind,position FROM pipeline_stages WHERE pipeline_id=$1 ORDER BY position',[lead.pipeline_id])).rows:[];
- return reply(200,{lead,attribution,activities,contracts,opportunity,stages});
+ // Campos próprios do espaço (fase 4), ativos e desativados: o que já tem valor continua aparecendo.
+ const fields=lead.product_id?(await pool.query('SELECT id,entity,key,label,type,options,required,is_active,position FROM space_fields WHERE space_id=$1 ORDER BY entity,position,label',[lead.product_id])).rows:[];
+ return reply(200,{lead,attribution,activities,contracts,opportunity,stages,fields});
 }
 export function commercialWorkspaceRoutes(router) {
  router.get('/api/commercial/leads',list);router.get('/api/commercial/leads/:id',detail);
