@@ -156,6 +156,41 @@ test('Inbound: o funil do espaço mostra as etapas com a contagem e filtra por e
  semExcecoes();
 });
 
+test('Inbound: etapa aberta lista oportunidades; mover pede o motivo só ao perder', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 800);
+ await pagina.avaliar(CLICAR_NO_MENU('Inbound'));
+ await pagina.esperar(`document.querySelectorAll('#inbound-panel-leads .funnel-chip').length === 8`, { descricao: 'oito etapas do funil' });
+ await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .funnel-chip')].find(c => c.textContent.startsWith('Qualificação')).click()`);
+ await pagina.esperar(`[...document.querySelectorAll('#inbound-panel-leads h3')].some(h => h.textContent === 'Venda de teste')`, { descricao: 'oportunidade da etapa listada' });
+ const campo = nome => `[...document.querySelectorAll('#inbound-panel-leads .commercial-form label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)})`;
+ assert.deepEqual(await pagina.avaliar(`[...(${campo('Mover para')}).querySelector('select').options].map(o => o.textContent)`), ['Proposta', 'Negociação', 'Assinatura do contrato', 'Ganho', 'Perdido']);
+ const escolher = nome => pagina.avaliar(`(() => { const s = ${campo('Mover para')}.querySelector('select'); s.value = [...s.options].find(o => o.textContent === ${JSON.stringify(nome)}).value; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+ const motivoVisivel = () => pagina.avaliar(`!${campo('Motivo da perda')}.hidden`);
+ assert.equal(await motivoVisivel(), false, 'o motivo da perda não aparece de saída');
+ await escolher('Perdido'); assert.equal(await motivoVisivel(), true, 'perder pede o motivo');
+ await escolher('Ganho'); assert.equal(await motivoVisivel(), false, 'ganhar não pede motivo');
+ // solta a etapa para o teste seguinte começar pela lista de leads
+ await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .funnel-chip.active')].forEach(c => c.click())`);
+ await pagina.esperar(`!document.querySelector('#inbound-panel-leads .funnel-chip.active')`, { descricao: 'etapa solta' });
+ semExcecoes();
+});
+
+test('Inbound: o detalhe do lead no funil oferece mover, qualificar e descartar, sem o seletor antigo de estágio', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 800);
+ await pagina.avaliar(CLICAR_NO_MENU('Inbound'));
+ await pagina.esperar(`[...document.querySelectorAll('#inbound-panel-leads button')].some(b => b.textContent === 'Abrir detalhe')`, { descricao: 'lead listado' });
+ await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads button')].find(b => b.textContent === 'Abrir detalhe').click()`);
+ await pagina.esperar(`document.querySelector('#inbound-panel-leads .funnel-panel')`, { descricao: 'painel do funil' });
+ const botoes = await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .funnel-panel button')].map(b => b.textContent)`);
+ assert.deepEqual(botoes, ['Mover', 'Qualificar (vira oportunidade)', 'Descartar']);
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#inbound-panel-leads .funnel-track .funnel-chip').length`), 8);
+ assert.equal(await pagina.avaliar(`document.querySelector('#inbound-panel-leads .funnel-track .funnel-chip.active').textContent`), 'Novos');
+ // O formulário antigo só tem o responsável quando o lead está em funil: o estágio vem do funil.
+ const rotulos = await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads form.commercial-form > label')].map(l => l.firstChild.textContent)`);
+ assert.ok(!rotulos.includes('Estágio') && rotulos.includes('Responsável comercial'), JSON.stringify(rotulos));
+ semExcecoes();
+});
+
 test('Acompanhamento: a atividade escolhe a contratação da empresa selecionada', { skip: PULAR }, async () => {
  await pagina.tela(1280, 800);
  await pagina.avaliar(CLICAR_NO_MENU('Acompanhamento'));

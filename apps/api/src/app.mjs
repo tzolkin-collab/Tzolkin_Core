@@ -46,6 +46,7 @@ import { tenantSummaryRoutes } from './modules/tenant-summary.mjs';
 import { pushRoutes } from './modules/push.mjs';
 import { mediaRoutes } from './modules/media.mjs';
 import { commercialPipelineRoutes } from './modules/commercial-pipelines.mjs';
+import { commercialLeadflowRoutes } from './modules/commercial-leadflow.mjs';
 
 const MODULES = [
  identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes, emailTemplateRoutes, productFaviconRoutes, productDeployBindingRoutes, productResourceBindingRoutes, serviceDeployBindingRoutes, managementRoutes, productPaymentRoutes, productTopologyRoutes,
@@ -80,6 +81,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  pushRoutes(router,pushOptions);
  mediaRoutes(router,{clock,...mediaOptions});
  commercialPipelineRoutes(router);
+ commercialLeadflowRoutes(router);
  // Ficha da empresa: leitura transversal por tenant, com o relógio do Core para o mês corrente.
  tenantSummaryRoutes(router,{clock});
 

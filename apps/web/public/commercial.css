@@ -21,3 +21,6 @@
 .funnel-chip:hover{border-color:currentColor}
 .funnel-chip.active{background:var(--ink,#111);color:var(--paper,#fff);border-color:var(--ink,#111)}
 .funnel-chip:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+.funnel-track .funnel-chip{cursor:default}
+.funnel-track .funnel-chip:hover{border-color:var(--line,#e5e7eb)}
+.funnel-track .funnel-chip.active:hover{border-color:var(--ink,#111)}

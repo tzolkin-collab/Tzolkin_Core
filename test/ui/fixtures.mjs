@@ -38,6 +38,14 @@ export const DADOS = {
 export const FUNIL = '44444444-4444-4444-8444-444444444444';
 const ETAPAS = [['Novos', 'LEAD', 2], ['Em contato', 'LEAD', 0], ['Qualificação', 'OPEN', 0], ['Proposta', 'OPEN', 0], ['Negociação', 'OPEN', 0], ['Assinatura do contrato', 'OPEN', 0], ['Ganho', 'WON', 0], ['Perdido', 'LOST', 0]];
 
+export const LEAD = '66666666-6666-4666-8666-666666666666';
+const ETAPA = i => `55555555-5555-4555-8555-55555555550${i}`;
+const LEAD_LINHA = { id: LEAD, product_id: 'mentorias', name: 'Lead de teste', email: 'lead@exemplo.test', whatsapp: null, status: 'open', interest: 'Mentoria', source_system: 'tzolkin-site',
+ source_created_at: ago, created_at: ago, owner_id: null, owner_name: null, owner_email: null, pipeline_id: FUNIL, stage_id: ETAPA(0), stage_name: 'Novos', organization_name: 'Empresa Alfa' };
+const OPORTUNIDADE = { id: '77777777-7777-4777-8777-777777777777', pipeline_id: FUNIL, stage_id: ETAPA(2), stage_name: 'Qualificação', stage_kind: 'OPEN', tenant_id: EMPRESA, organization_name: 'Empresa Alfa',
+ stakeholder_id: null, contact_name: null, lead_id: null, title: 'Venda de teste', value_minor: '450000', currency: 'BRL', origin: 'INBOUND', owner_id: null, owner_name: null,
+ expected_close_at: null, entered_stage_at: ago, closed_at: null, lost_reason_id: null, version: 1, created_at: ago };
+
 // 1x1 PNG válido: o navegador consegue decodificar, e o servidor reconhece pelos primeiros bytes.
 export const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 
@@ -54,6 +62,14 @@ export function bancoFalso() {
     return { rows: [{ tenants: DADOS.tenants, products: DADOS.products, memberships: [], entitlements: [], engagements: DADOS.engagements, stakeholders: DADOS.stakeholders, entries: [], resource_bindings: [] }] };
    // /api/overview (o Acompanhamento lê as empresas dele)
    if (sql === 'SELECT * FROM tenants ORDER BY created_at DESC') return { rows: DADOS.tenants };
+   // Inbound: lista e detalhe de lead, oportunidades da etapa e motivos de perda
+   if (/FROM commercial_leads l JOIN tenants t ON t.id=l.tenant_id LEFT JOIN operator_accounts a ON a.id=l.owner_id LEFT JOIN pipeline_stages st/.test(sql)) return { rows: [LEAD_LINHA] };
+   if (/SELECT l\.\*,t\.name AS organization_name/.test(sql)) return { rows: [{ ...LEAD_LINHA, version: 1, service_model: 'education', message: 'Quero saber mais', source_ref: 'ref-1', privacy: {}, tenant_id: EMPRESA, estimated_value_minor: null, expected_close_at: null, loss_reason: null }] };
+   if (/FROM commercial_opportunities o JOIN pipeline_stages s ON s\.id=o\.stage_id LEFT JOIN client_engagements/.test(sql)) return { rows: [] };
+   if (/FROM commercial_opportunities o\s+JOIN pipeline_stages s ON s\.id=o\.stage_id JOIN tenants t/.test(sql)) return { rows: params[1] === ETAPA(2) ? [OPORTUNIDADE] : [] };
+   if (/SELECT id,name,kind,position FROM pipeline_stages WHERE pipeline_id=\$1 ORDER BY position/.test(sql))
+    return { rows: ETAPAS.map(([name, kind], i) => ({ id: ETAPA(i), name, kind, position: i })) };
+   if (/FROM lost_reasons WHERE is_active/.test(sql)) return { rows: [{ id: '88888888-8888-4888-8888-888888888888', name: 'Sem orçamento' }, { id: '99999999-9999-4999-8999-999999999999', name: 'Sem resposta' }] };
    // Acompanhamento: contratações em curso oferecidas ao formulário de atividade
    if (/FROM client_engagements WHERE archived_at IS NULL ORDER BY label/.test(sql))
     return { rows: DADOS.engagements.filter(e => e.status === 'active').map(e => ({ id: e.id, tenant_id: e.tenant_id, label: e.label, service_model: e.service_model, status: e.status, product_id: e.product_id })) };

@@ -12,8 +12,8 @@ async function list({pool,url,reply,productId,operator}) {
  const pipelineId=url.searchParams.get('pipeline_id')||null,stageId=url.searchParams.get('stage_id')||null;if((pipelineId&&!isUuid(pipelineId))||(stageId&&!isUuid(stageId)))throw fail(400,'Funil ou etapa inválidos.');
  const limit=Number(url.searchParams.get('limit')||25),offset=Number(url.searchParams.get('offset')||0),q=url.searchParams.get('q')?.trim()||null;
  if(!Number.isInteger(limit)||limit<1||limit>100||!Number.isInteger(offset)||offset<0||offset>100000||q?.length>200)throw fail(400,'Paginação inválida.');
- const r=await pool.query(`SELECT l.id,l.product_id,l.name,l.email,l.whatsapp,l.status,l.interest,l.source_system,l.source_created_at,l.created_at,l.owner_id,a.name AS owner_name,a.email AS owner_email,l.pipeline_id,l.stage_id,t.name AS organization_name
- FROM commercial_leads l JOIN tenants t ON t.id=l.tenant_id LEFT JOIN operator_accounts a ON a.id=l.owner_id
+ const r=await pool.query(`SELECT l.id,l.product_id,l.name,l.email,l.whatsapp,l.status,l.interest,l.source_system,l.source_created_at,l.created_at,l.owner_id,a.name AS owner_name,a.email AS owner_email,l.pipeline_id,l.stage_id,st.name AS stage_name,t.name AS organization_name
+ FROM commercial_leads l JOIN tenants t ON t.id=l.tenant_id LEFT JOIN operator_accounts a ON a.id=l.owner_id LEFT JOIN pipeline_stages st ON st.id=l.stage_id
  WHERE ($1::text IS NULL OR l.product_id=$1) AND ($2::text IS NULL OR l.status=$2) AND ($3::text IS NULL OR concat_ws(' ',l.name,l.email,t.name,l.interest) ILIKE '%'||$3||'%') AND ($6::uuid IS NULL OR l.pipeline_id=$6) AND ($7::uuid IS NULL OR l.stage_id=$7) ORDER BY l.created_at DESC,l.id DESC LIMIT $4 OFFSET $5`,[product,status,q,limit+1,offset,pipelineId,stageId]);
  return reply(200,{leads:r.rows.slice(0,limit),has_more:r.rows.length>limit,offset,limit});
 }
@@ -24,7 +24,13 @@ async function detail({pool,params,reply,productId,operator}) {
  const attribution=(await pool.query('SELECT * FROM commercial_attributions WHERE lead_id=$1',[lead.id])).rows[0];
  const activities=(await pool.query('SELECT * FROM commercial_activities WHERE lead_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100',[lead.id])).rows;
  const contracts=(await pool.query('SELECT * FROM commercial_contracts WHERE lead_id=$1 ORDER BY created_at DESC',[lead.id])).rows;
- return reply(200,{lead,attribution,activities,contracts});
+ // Funil do lead (fase 3): só para o operador. A chave de serviço do site não vê oportunidade nem contratação.
+ if(!operator)return reply(200,{lead,attribution,activities,contracts});
+ const opportunity=(await pool.query(`SELECT o.id,o.stage_id,s.name AS stage_name,s.kind AS stage_kind,o.value_minor::text AS value_minor,o.currency,o.version,o.engagement_id,e.label AS engagement_label
+  FROM commercial_opportunities o JOIN pipeline_stages s ON s.id=o.stage_id LEFT JOIN client_engagements e ON e.id=o.engagement_id WHERE o.lead_id=$1`,[lead.id])).rows[0]||null;
+ if(opportunity)opportunity.value_minor=Number(opportunity.value_minor);
+ const stages=lead.pipeline_id?(await pool.query('SELECT id,name,kind,position FROM pipeline_stages WHERE pipeline_id=$1 ORDER BY position',[lead.pipeline_id])).rows:[];
+ return reply(200,{lead,attribution,activities,contracts,opportunity,stages});
 }
 export function commercialWorkspaceRoutes(router) {
  router.get('/api/commercial/leads',list);router.get('/api/commercial/leads/:id',detail);

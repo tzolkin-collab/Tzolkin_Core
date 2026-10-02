@@ -1,6 +1,7 @@
 import { fail, input, isUuid, isProductId, onlyParams, text } from '../platform/http.mjs';
 import { commercialPermission } from './commercial-keys.mjs';
 import { capabilitiesOf } from './catalog.mjs';
+import { onOpportunityMoved } from './commercial-leadflow.mjs';
 
 // Funil por espaço (fase 1 do plano de leads da Kalidash, adaptada). Ver db/migrations/040_funil_por_espaco.sql
 // e docs/design/2026-10-01-pipeline-por-espaco-e-atribuicao.md.
@@ -267,21 +268,23 @@ export function commercialPipelineRoutes(router) {
   const old = (await client.query('SELECT * FROM commercial_opportunities WHERE id=$1 FOR UPDATE', [params.id])).rows[0];
   if (!old) throw fail(404, 'Oportunidade não encontrada.');
   if (body.version !== old.version) throw fail(409, 'Oportunidade alterada em outra sessão. Reabra a tela.');
-  const to = (await client.query('SELECT id,pipeline_id,kind FROM pipeline_stages WHERE id=$1', [uuid(body.stage_id)])).rows[0];
+  const to = (await client.query('SELECT id,name,pipeline_id,kind FROM pipeline_stages WHERE id=$1', [uuid(body.stage_id)])).rows[0];
   if (!to || to.pipeline_id !== old.pipeline_id) throw fail(400, 'A etapa não pertence ao funil desta oportunidade.');
   if (to.id === old.stage_id) throw fail(400, 'A oportunidade já está nesta etapa.');
   if (to.kind === 'LEAD') throw fail(400, 'Oportunidade não volta para etapa de lead.');
-  let reason = null;
+  let reason = null, reasonName = null;
   if (to.kind === 'LOST') {
    if (body.lost_reason_id == null) throw fail(400, 'Informe o motivo da perda.');
-   const found = (await client.query('SELECT id FROM lost_reasons WHERE id=$1 AND is_active', [uuid(body.lost_reason_id)])).rows[0];
+   const found = (await client.query('SELECT id,name FROM lost_reasons WHERE id=$1 AND is_active', [uuid(body.lost_reason_id)])).rows[0];
    if (!found) throw fail(400, 'Motivo de perda inválido.');
-   reason = found.id;
+   reason = found.id; reasonName = found.name;
   } else if (body.lost_reason_id != null) throw fail(400, 'Motivo de perda só vale ao mover para a etapa de perda.');
   const closes = to.kind === 'WON' || to.kind === 'LOST';
   await client.query(
    `UPDATE commercial_opportunities SET stage_id=$2,lost_reason_id=$3,closed_at=${closes ? 'now()' : 'NULL'},entered_stage_at=now(),version=version+1,updated_at=now() WHERE id=$1`,
    [old.id, to.id, reason]);
-  return { tenant: old.tenant_id, type: 'opportunity_moved', body: { ok: true } };
+  // O lead de origem acompanha e, ao ganhar, nasce a contratação (fase 3).
+  const engagementId = await onOpportunityMoved(client, old, to, reasonName, operator);
+  return { tenant: old.tenant_id, type: 'opportunity_moved', body: { ok: true, engagement_id: engagementId } };
  }, { transactional: true });
 }

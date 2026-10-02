@@ -212,13 +212,14 @@ test('funil por espaço: migração, funis, etapas, oportunidades e chegada do l
    // reabrir limpa o fechamento e o motivo
    assert.equal((await mover({ stage_id: etapa('Negociação') })).status, 200);
    o = await ver(); assert.equal(o.closed_at, null); assert.equal(o.lost_reason_id, null);
-   // ganhar fecha
+   // ganhar fecha (a suíte divide um só banco entre arquivos: os totais da etapa se comparam por diferença)
+   const ganhoAntes = (await lista('sites')).find(p => p.slug === 'padrao').stages.find(s => s.name === 'Ganho');
    assert.equal((await mover({ stage_id: etapa('Ganho') })).status, 200);
    o = await ver(); assert.equal(o.stage_kind, 'WON'); assert.ok(o.closed_at);
    // totais por etapa e filtros
    const totais = (await lista('sites')).find(p => p.slug === 'padrao').stages.find(s => s.name === 'Ganho');
-   assert.equal(totais.opportunities, 1); assert.equal(totais.value_minor, 450000);
-   assert.equal((await request('/api/commercial/opportunities?stage_id=' + etapa('Ganho'))).body.opportunities.length, 1);
+   assert.equal(totais.opportunities - ganhoAntes.opportunities, 1); assert.equal(totais.value_minor - ganhoAntes.value_minor, 450000);
+   assert.ok((await request('/api/commercial/opportunities?stage_id=' + etapa('Ganho'))).body.opportunities.some(x => x.id === id));
    assert.equal((await request('/api/commercial/opportunities?limit=0')).status, 400);
    assert.equal((await request('/api/commercial/opportunities?x=1')).status, 400);
   });
