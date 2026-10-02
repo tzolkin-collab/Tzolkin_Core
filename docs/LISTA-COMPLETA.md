@@ -39,7 +39,8 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
   *(fase 1 feita em 02/10: migração 040, funis por espaço com funil padrão, etapas, oportunidades e o lead entrando no funil pelo `utm_tzolkin`. **Migração 040 ainda não aplicada no banco compartilhado.** Faltam: fontes, qualificar/descartar/mover o lead pela tela, ganhar → contratação.)*
 - [ ] **P0 [VOCÊ]** Aplicar a migração **040** (funil por espaço) no banco compartilhado, antes do deploy do Core. Só adiciona tabelas e colunas; o banco tem 0 leads.
 - [ ] **P1** Fase 3 do funil: qualificar, descartar e mover o lead pela tela; ganhar a oportunidade cria a contratação (decisão 3).
-- [ ] **P1** Fase 2 do plano da Kalidash: dedupe de pessoa e empresa (e-mail, CPF por hash, CNPJ alfanumérico) no intake.
+- [x] **P1** Fase 2 do plano da Kalidash: dedupe de pessoa e empresa (e-mail, CPF por hash, CNPJ alfanumérico) no intake.
+  *(feito em 02/10 por e-mail: o mesmo e-mail, em qualquer caixa e em qualquer espaço, reaproveita a pessoa; a empresa é reaproveitada se for da pessoa e tiver o mesmo nome; cliente que volta sai com `returning_client`. Sem migração. Falta CPF por hash e CNPJ: o site não envia documento, então entram quando o formulário pedir.)*
 - [ ] **P1** Campos próprios por espaço (`space_fields` + `custom_data`) e bloco `space_data` no intake. **[D]**
 - [x] **P1** `utm_tzolkin`: conferir no servidor que o prefixo é o espaço da chave.
   *(feito em 02/10: o prefixo errado é ignorado para escolher o funil; o site também descarta `utm_tzolkin` que não comece por `sites.`.)*
@@ -234,7 +235,7 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | Bloco | Abertos |
 |---|---:|
 | 0. Lembretes que você pediu | 1 |
-| 1. Leads e funil | 18 |
+| 1. Leads e funil | 17 |
 | 2. Risco sem volta | 8 |
 | 3. Dinheiro, cobrança e fiscal | 15 |
 | 4. Conexões, infraestrutura e deploy | 11 |
@@ -245,6 +246,6 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | 9. Documentação a corrigir | 5 |
 | 10. Fora do Core | 2 |
 | 11. Substituir o Notion pelo Core | 11 |
-| **Total** | **102** |
+| **Total** | **101** |
 
-Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 9. Dos 102 abertos: **P0: 9**, **[VOCÊ]: 10**, **[D] (decisão sua): 17**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
+Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 10. Dos 101 abertos: **P0: 9**, **[VOCÊ]: 10**, **[D] (decisão sua): 17**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.

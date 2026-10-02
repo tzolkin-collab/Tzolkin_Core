@@ -36,6 +36,22 @@ export function validateIntake(body,productId) {
 export async function recordActivity(client,lead,kind,operator,note=null,details={}) {
  await client.query('INSERT INTO commercial_activities(lead_id,kind,note,details,actor_subject,actor_email) VALUES($1,$2,$3,$4,$5,$6)',[lead,kind,note,details,operator.subject,operator.email]);
 }
+// Acha a pessoa pelo e-mail (sem diferenciar maiúsculas) e a empresa entre as dela, ou deixa criar o que faltar,
+// sem duplicar (regra do resolveParties da Kalidash). Só o e-mail identifica a pessoa: o telefone sozinho não, porque
+// é compartilhado (recepção, família). A empresa só é reaproveitada se for da própria pessoa e tiver o mesmo nome;
+// nome igual em outra pessoa vira outra empresa. Cliente que volta (empresa deixou de ser lead) sai com a marca.
+// Lock por e-mail, entre espaços, para dois envios simultâneos não criarem a mesma pessoa duas vezes.
+async function resolveParties(client,v){
+ if(!v.email)return {person:null,tenant:null,returning:false};
+ await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,28))',[v.email]);
+ const person=(await client.query('SELECT id FROM stakeholders WHERE lower(email)=$1 ORDER BY created_at,id LIMIT 1',[v.email])).rows[0]?.id??null;
+ if(!person)return {person:null,tenant:null,returning:false};
+ const orgs=(await client.query(`SELECT t.id,t.name,t.relationship_kind,t.lifecycle_status FROM organization_stakeholders os JOIN tenants t ON t.id=os.tenant_id
+  WHERE os.stakeholder_id=$1 AND t.relationship_kind<>'internal' ORDER BY os.is_primary DESC,t.created_at,t.id`,[person])).rows;
+ const same=orgs.find(o=>o.name.trim().toLowerCase()===v.org_name.trim().toLowerCase());
+ const returning=orgs.some(o=>o.relationship_kind==='customer'&&['onboarding','active','paused','completed'].includes(o.lifecycle_status));
+ return {person,tenant:same?.id??null,returning};
+}
 // `avisarLeadNovo` é injetável para o teste conferir QUANDO e com QUÊ o aviso sai, sem push de verdade.
 export function commercialIntakeRoutes(router,{avisarLeadNovo=notificarLeadNovo}={}) {
  router.post('/v1/commercial/intake',async({client,pool,body,productId,req})=>{
@@ -61,9 +77,11 @@ export function commercialIntakeRoutes(router,{avisarLeadNovo=notificarLeadNovo}
    }
    const source=`inbound:${productId}:${v.source_system}`;
    const slug='lead-'+digest(`${source}:${v.source_ref}`).slice(0,40);
-   const tenant=(await client.query(`INSERT INTO tenants(name,slug,relationship_kind,lifecycle_status,organization_type,source_system,source_ref) VALUES($1,$2,'prospect','lead',$3,$4,$5) RETURNING id`,[v.org_name,slug,v.org_type,source,v.source_ref])).rows[0].id;
-   const person=(await client.query('INSERT INTO stakeholders(name,email,phone,source_system,source_ref) VALUES($1,$2,$3,$4,$5) RETURNING id',[v.name,v.email,v.phone,source,v.source_ref])).rows[0].id;
-   await client.query('INSERT INTO organization_stakeholders(tenant_id,stakeholder_id,role,title,is_primary,contact_allowed) VALUES($1,$2,$3,$4,true,$5)',[tenant,person,v.role,v.title,v.privacy.contact_allowed]);
+   const found=await resolveParties(client,v);
+   const tenant=found.tenant??(await client.query(`INSERT INTO tenants(name,slug,relationship_kind,lifecycle_status,organization_type,source_system,source_ref) VALUES($1,$2,'prospect','lead',$3,$4,$5) RETURNING id`,[v.org_name,slug,v.org_type,source,v.source_ref])).rows[0].id;
+   const person=found.person??(await client.query('INSERT INTO stakeholders(name,email,phone,source_system,source_ref) VALUES($1,$2,$3,$4,$5) RETURNING id',[v.name,v.email,v.phone,source,v.source_ref])).rows[0].id;
+   if(found.person&&v.phone)await client.query('UPDATE stakeholders SET phone=$2 WHERE id=$1 AND phone IS NULL',[person,v.phone]);
+   await client.query('INSERT INTO organization_stakeholders(tenant_id,stakeholder_id,role,title,is_primary,contact_allowed) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(tenant_id,stakeholder_id) DO NOTHING',[tenant,person,v.role,v.title,!found.tenant,v.privacy.contact_allowed]);
    // Funil do espaço: o nicho do utm_tzolkin escolhe o funil; sem casamento, o padrão. Espaço sem funil = lead sem funil.
    const place=await placeLead(client,productId,v.attribution?.utm_tzolkin);
    const lead=(await client.query(`INSERT INTO commercial_leads(tenant_id,stakeholder_id,product_id,name,email,whatsapp,message,source_system,source_ref,service_model,interest,privacy,source_created_at,request_hash,pipeline_id,stage_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,[tenant,person,productId,v.name,v.email,v.phone,v.message,v.source_system,v.source_ref,v.service_model,v.interest,v.privacy,v.source_created_at,hash,place?.pipelineId??null,place?.stageId??null])).rows[0].id;
@@ -74,8 +92,8 @@ export function commercialIntakeRoutes(router,{avisarLeadNovo=notificarLeadNovo}
     [lead,v.source_system,v.source_ref,a.channel,a.utm_source,a.utm_medium,a.utm_campaign,a.utm_content,a.landing_page,a.referrer,
      a.utm_term??null,a.utm_tzolkin??null,a.meta_campaign_id??null,a.meta_adset_id??null,a.meta_ad_id??null,a.fbclid??null,a.gclid??null,a.fbc??null,a.fbp??null,a.session_key??null,a.first_touch_at??null,
      a.last_touch?JSON.stringify(a.last_touch):null,a.session?JSON.stringify(a.session):null,a.geo?JSON.stringify(a.geo):null]);
-   await recordActivity(client,lead,'received',{subject:`app:${productId}`,email:null},null,{source_system:v.source_system,source_ref:v.source_ref});
-   result={lead_id:lead,tenant_id:tenant,stakeholder_id:person,engagement_id:null,contract_id:null,created:true};
+   await recordActivity(client,lead,'received',{subject:`app:${productId}`,email:null},null,{source_system:v.source_system,source_ref:v.source_ref,matched_person:Boolean(found.person),matched_organization:Boolean(found.tenant),returning_client:found.returning});
+   result={lead_id:lead,tenant_id:tenant,stakeholder_id:person,engagement_id:null,contract_id:null,created:true,returning_client:found.returning};
   }
   await client.query('INSERT INTO commercial_intake_requests(product_id,idempotency_key,request_hash,response) VALUES($1,$2,$3,$4)',[productId,key,hash,result]);
   // Aviso de lead novo no aparelho da equipe. Só quando o lead foi CRIADO agora: um
