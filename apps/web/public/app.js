@@ -1,4 +1,5 @@
 import {setupCommercial} from './commercial.js';
+import {editTenantDialog} from './client-edit.js';
 import {photoPanel} from './media.js';
 // Apresentação e serialização de formulários. Autorização, recorte por produto
 // e regras de negócio ficam no servidor: nada aqui decide o que o operador pode ver.
@@ -609,7 +610,8 @@ function paintClientDetail(summary){
  identity.append(node('span',tenant.name.slice(0,1),'client-avatar large'),node('div'));
  identity.lastChild.append(node('p',tenantKicker(tenant),'overview-kicker'),node('h2',tenant.name),node('p',[clientLabel(tenant.organization_type),clientLabel(tenant.lifecycle_status),tenant.status==='suspended'?'Suspensa':null].filter(Boolean).join(' · '),'detail'));
  const create=node('button',undefined,'primary');create.type='button';create.append(createIcon('plus'),document.createTextNode('Nova contratação'));create.onclick=()=>openEngagementDialog(tenant).catch(reportError);
- hero.append(identity,create);
+ const edit=node('button',undefined,'secondary');edit.type='button';edit.append(createIcon('settings'),document.createTextNode('Editar empresa'));edit.onclick=()=>editTenantDialog({api,tenant,onSaved:async()=>{state.clientSummary=null;await load();}});
+ hero.append(identity,edit,create);
  const grid=node('div',undefined,'client-detail-grid client-summary-grid');
  const panel=(title,caption,wide)=>{const el=node('section',undefined,'client-detail-panel'+(wide?' client-detail-wide':''));el.append(node('h3',title));if(caption)el.append(node('p',caption,'detail'));grid.append(el);return el;};
  const unavailable=(title,section)=>panel(title).append(node('p',section.reason,'notice-inline'));

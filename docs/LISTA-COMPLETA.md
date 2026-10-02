@@ -40,6 +40,7 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 - [ ] **P0 [VOCÊ]** Aplicar a migração **040** (funil por espaço) no banco compartilhado, antes do deploy do Core. Só adiciona tabelas e colunas; o banco tem 0 leads.
 - [ ] **P0 [VOCÊ]** Aplicar a migração **041** (acompanhamento por contratação) no banco compartilhado, junto com a 040. Só adiciona uma coluna, uma chave e um índice; o banco tem 0 atividades.
 - [ ] **P0 [VOCÊ]** Aplicar a migração **042** (oportunidade guarda a contratação que criou) junto com a 040 e a 041. Só adiciona uma coluna e um índice; o banco tem 0 oportunidades.
+- [ ] **P0 [VOCÊ]** Aplicar a migração **045** (a trilha de auditoria ganha a coluna `details`) junto com as outras. Só adiciona uma coluna opcional.
 - [ ] **P0 [VOCÊ]** Aplicar a migração **044** (eventos, automações e tarefas) junto com as outras. Só cria três tabelas; o banco tem 0 leads.
 - [ ] **P0 [VOCÊ]** Aplicar a migração **043** (campos próprios por espaço) junto com as outras. Cria uma tabela, duas colunas com padrão e semeia os 4 campos do site; o banco tem 0 leads.
 - [ ] **P2** Campos próprios: "obrigatório" vale só no intake; a edição não força preencher os que já existiam. Edição de valor na lista e filtro por campo ficam para depois (os valores moram em `jsonb`; se virar gargalo, tabela própria, como a Kalidash prevê).
@@ -145,7 +146,8 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 - [x] **P1** Acompanhamento não liga atividade a contratação (a própria ficha admite). Decidir religar ou remover. **[D]**
   *(decidido por você em 02/10: religar. Migração 041, rota, formulário, ficha da empresa por contratação e menu de volta. **Migração 041 ainda não aplicada no banco compartilhado.** Falta uso com dado real: hoje há 0 atividades.)*
 - [ ] **P1 [D]** Responsável é do cliente ou da contratação? *(PENDENCIAS §5.)* `acquisition_mode` e `billing_mode` não existem.
-- [ ] **P1** `PUT /api/tenants` só troca `status`; reclassificar organização continua sem rota. *(STATUS §3.F.)*
+- [x] **P1** `PUT /api/tenants` só troca `status`; reclassificar organização continua sem rota. *(STATUS §3.F.)*
+  *(feito em 02/10: a rota troca nome, relacionamento, tipo e ciclo de vida, com o antes e o depois na trilha (migração 045), e a ficha ganhou "Editar empresa". O identificador não muda; a organização interna não se reclassifica. **Migração 045 ainda não aplicada no banco compartilhado.**)*
 - [ ] **P2** Modelo educacional inteiro: turma, aluno, matrícula, responsável financeiro. *(TODO etapa 7.)*
 - [ ] **P2 [D]** Vocabulário de tags e marcas; regra de sincronização do Notion para clientes e contatos (**superada pelo bloco 11**); importação sem log
   nem prévia. *(STATUS §3.E.)*
@@ -247,17 +249,17 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | Bloco | Abertos |
 |---|---:|
 | 0. Lembretes que você pediu | 1 |
-| 1. Leads e funil | 21 |
+| 1. Leads e funil | 20 |
 | 2. Risco sem volta | 8 |
 | 3. Dinheiro, cobrança e fiscal | 15 |
 | 4. Conexões, infraestrutura e deploy | 11 |
-| 5. Clientes, pessoas, empresas e portfólio | 11 |
+| 5. Clientes, pessoas, empresas e portfólio | 10 |
 | 6. Integrações | 6 |
 | 7. Identidade, papéis, auditoria | 6 |
 | 8. Qualidade, testes e publicação | 7 |
 | 9. Documentação a corrigir | 5 |
 | 10. Fora do Core | 2 |
 | 11. Substituir o Notion pelo Core | 11 |
-| **Total** | **104** |
+| **Total** | **102** |
 
-Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 15. Dos 104 abertos: **P0: 13**, **[VOCÊ]: 14**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
+Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 18. Dos 102 abertos: **P0: 14**, **[VOCÊ]: 15**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.

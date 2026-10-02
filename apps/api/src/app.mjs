@@ -142,8 +142,11 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
    try {
     await client.query('BEGIN');
     const result = await route.handler({ ...context, client });
-    const { tenant, type } = result || {};
-    if(route.audit!==false)await client.query('INSERT INTO audit_events(type,tenant_id,actor_subject,actor_email) VALUES($1,$2,$3,$4)', [type, tenant,operator?.subject,operator?.email]);
+    const { tenant, type, details } = result || {};
+    // `details` (migração 045) só existe para a rota que tem o que contar; sem ele o insert é o de sempre.
+    if(route.audit!==false)await (details
+     ? client.query('INSERT INTO audit_events(type,tenant_id,actor_subject,actor_email,details) VALUES($1,$2,$3,$4,$5)', [type, tenant,operator?.subject,operator?.email,details])
+     : client.query('INSERT INTO audit_events(type,tenant_id,actor_subject,actor_email) VALUES($1,$2,$3,$4)', [type, tenant,operator?.subject,operator?.email]));
     await client.query('COMMIT');
     // `afterCommit`: efeito colateral que só faz sentido com a gravação já confirmada
     // (hoje, o push de lead novo). Roda FORA da transação e da resposta: a rota não

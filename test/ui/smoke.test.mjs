@@ -277,6 +277,22 @@ test('ficha da empresa abre pelo cartão e traz o painel de fotos', { skip: PULA
  semExcecoes();
 });
 
+test('ficha da empresa: Editar empresa abre o diálogo com a classificação atual e sem a opção "interna"', { skip: PULAR }, async () => {
+ await pagina.avaliar(`[...document.querySelectorAll('#view-client button')].find(b => b.textContent.trim() === 'Editar empresa').click()`);
+ await pagina.esperar(`document.querySelector('dialog.tenant-edit-dialog[open]')`, { descricao: 'diálogo de edição aberto' });
+ const campo = nome => `[...document.querySelectorAll('dialog.tenant-edit-dialog label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)}).querySelector('input,select')`;
+ assert.equal(await pagina.avaliar(`${campo('Nome')}.value`), 'Empresa Alfa');
+ assert.equal(await pagina.avaliar(`${campo('Relacionamento')}.value`), 'customer');
+ assert.equal(await pagina.avaliar(`${campo('Tipo de organização')}.value`), 'company');
+ assert.equal(await pagina.avaliar(`${campo('Situação')}.value`), 'active');
+ assert.deepEqual(await pagina.avaliar(`[...${campo('Relacionamento')}.options].map(o => o.textContent)`), ['Cliente', 'Prospect', 'Parceiro'], 'organização comum não pode virar interna');
+ assert.equal(await pagina.avaliar(`${campo('Relacionamento')}.disabled`), false);
+ assert.ok((await pagina.avaliar(`document.querySelector('dialog.tenant-edit-dialog small').textContent`)).includes('O identificador (empresa-alfa) não muda'));
+ await pagina.avaliar(`document.querySelector('dialog.tenant-edit-dialog .close').click()`);
+ await pagina.esperar(`!document.querySelector('dialog.tenant-edit-dialog')`, { descricao: 'diálogo fechado' });
+ semExcecoes();
+});
+
 test('fotos: colar uma imagem envia, aparece e fica privada; arquivo que não é imagem é recusado', { skip: PULAR }, async () => {
  const antes = banco.fotos.length;
  pagina.limparProblemas();

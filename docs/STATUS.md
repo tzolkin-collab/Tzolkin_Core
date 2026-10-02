@@ -122,7 +122,7 @@ Consolidação de **2026-09-29**, verificada contra o código. **Este é o ponto
 - [ ] Push no iPhone: não existe VAPID, tabela nem rota; só o `sw.js` exibe a mensagem
 - [ ] Leitores de `audit_events`, `delivery_audit` e `service_activity_audit`: nenhuma rota lê, o explorador de banco as esconde
 - [ ] Reconciliação agendada: não há `setInterval`, cron nem `.github/`; a de vínculos roda só ao abrir a tela
-- [ ] `PUT /api/tenants` só troca `status`; reclassificar organização continua sem rota
+- [x] `PUT /api/tenants` só troca `status`; reclassificar organização continua sem rota *(feito em 02/10, migração 045)*
 - [ ] Interface de contas e times: a API existe, nenhuma tela a chama
 - [ ] Tela Segurança e Métricas de servidor: placeholders ocultos
 - [ ] Alertas operacionais: não há módulo
