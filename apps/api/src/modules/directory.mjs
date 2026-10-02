@@ -33,10 +33,17 @@ export function directoryRoutes(router) {
  // modules/portfolio.mjs, junto do portfólio a que elas se ligam.
 
  router.post('/api/stakeholders', async ({ client, body }) => {
-  input(body, ['tenant_id', 'name', 'role', 'title', 'is_primary', 'contact_allowed']);
+  input(body, ['tenant_id', 'name', 'role', 'title', 'is_primary', 'contact_allowed', 'email', 'phone']);
   if (!isUuid(body.tenant_id) || !['owner','decision_maker','champion','finance','technical','operational','student','contact'].includes(body.role) ||
       typeof body.is_primary !== 'boolean' || typeof body.contact_allowed !== 'boolean') throw fail(400, 'Stakeholder inválido.');
-  const person=await client.query('INSERT INTO stakeholders(name) VALUES($1) RETURNING id',[text(body.name,2,160)]);
+  // E-mail e telefone são opcionais. O e-mail identifica a pessoa (o intake do site reaproveita por ele), então um e-mail que já
+  // existe não cria a pessoa de novo. Telefone no mesmo formato do intake: só dígitos, de 10 a 15.
+  const email = body.email ? text(body.email, 3, 320).toLowerCase() : null;
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw fail(400, 'E-mail inválido.');
+  const phone = body.phone ? text(body.phone, 8, 40).replace(/[\s()+.-]/g, '') : null;
+  if (phone && !/^\d{10,15}$/.test(phone)) throw fail(400, 'Telefone inválido: use DDD e número, com 10 a 15 dígitos.');
+  if (email && (await client.query('SELECT 1 FROM stakeholders WHERE lower(email)=$1', [email])).rowCount) throw fail(409, 'Já existe uma pessoa com este e-mail.');
+  const person=await client.query('INSERT INTO stakeholders(name,email,phone) VALUES($1,$2,$3) RETURNING id',[text(body.name,2,160),email,phone]);
   await client.query(`INSERT INTO organization_stakeholders(tenant_id,stakeholder_id,role,title,is_primary,contact_allowed)
    VALUES($1,$2,$3,$4,$5,$6)`,[body.tenant_id,person.rows[0].id,body.role,body.title?text(body.title,2,120):null,body.is_primary,body.contact_allowed]);
   return { tenant: body.tenant_id, type: 'stakeholder.created' };

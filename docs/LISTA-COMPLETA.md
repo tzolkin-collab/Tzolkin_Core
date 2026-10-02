@@ -141,7 +141,7 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 - [x] **A fusão de Empresas/Pessoas/Contratações em abas de Clientes foi revertida** (`ecdf52d`, 01/10). Contradizia
   `UX-RELATION-MAP.md` e o E10 ("Empresas e Pessoas passam a ser irmãs"). O menu voltou a ter 14 itens.
 - [ ] **P1 [D]** Menu: confirmar a saída de E-mails, Redis e Acessos (ocultos por mim em 01/10). O Acompanhamento voltou em 02/10.
-- [ ] **P1** Pessoas sem e-mail nem telefone na lista. *(STATUS §4.)*
+- [x] **P1** Pessoas sem e-mail nem telefone na lista. *(STATUS §4.)* *(feito em 02/10: o cartão mostra e-mail e telefone, ou "Sem e-mail nem telefone"; a busca acha por eles; o cadastro pede os dois, opcionais, e recusa e-mail repetido. Sem migração.)*
 - [ ] **P1** Ficha da empresa em grade, sem abas, pagamentos nem documentos. *(STATUS §4; `DESIGN-360.md`.)*
 - [x] **P1** Acompanhamento não liga atividade a contratação (a própria ficha admite). Decidir religar ou remover. **[D]**
   *(decidido por você em 02/10: religar. Migração 041, rota, formulário, ficha da empresa por contratação e menu de volta. **Migração 041 ainda não aplicada no banco compartilhado.** Falta uso com dado real: hoje há 0 atividades.)*
@@ -253,13 +253,13 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | 2. Risco sem volta | 8 |
 | 3. Dinheiro, cobrança e fiscal | 15 |
 | 4. Conexões, infraestrutura e deploy | 11 |
-| 5. Clientes, pessoas, empresas e portfólio | 10 |
+| 5. Clientes, pessoas, empresas e portfólio | 9 |
 | 6. Integrações | 6 |
 | 7. Identidade, papéis, auditoria | 6 |
 | 8. Qualidade, testes e publicação | 7 |
 | 9. Documentação a corrigir | 5 |
 | 10. Fora do Core | 2 |
 | 11. Substituir o Notion pelo Core | 11 |
-| **Total** | **102** |
+| **Total** | **101** |
 
-Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 18. Dos 102 abertos: **P0: 14**, **[VOCÊ]: 15**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
+Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 19. Dos 101 abertos: **P0: 14**, **[VOCÊ]: 15**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.

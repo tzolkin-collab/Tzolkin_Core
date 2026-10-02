@@ -24,7 +24,7 @@ const BOOTSTRAP_SQL = `SELECT
  COALESCE((SELECT jsonb_agg(to_jsonb(e)) FROM entitlements e), '[]'::jsonb) AS entitlements,
  COALESCE((SELECT jsonb_agg(to_jsonb(ce) ORDER BY ce.created_at) FROM client_engagements ce), '[]'::jsonb) AS engagements,
  COALESCE((SELECT jsonb_agg(to_jsonb(stakeholder) ORDER BY stakeholder.name) FROM (
-   SELECT os.tenant_id,os.role,os.title,os.is_primary,os.contact_allowed,s.id,s.name
+   SELECT os.tenant_id,os.role,os.title,os.is_primary,os.contact_allowed,s.id,s.name,s.email,s.phone
    FROM organization_stakeholders os JOIN stakeholders s ON s.id=os.stakeholder_id
  ) stakeholder), '[]'::jsonb) AS stakeholders,
  COALESCE((SELECT jsonb_agg(jsonb_build_object('kind',e.kind,'payload',e.payload,'imported_at',e.imported_at) ORDER BY e.id)
@@ -94,7 +94,7 @@ export function workspaceRoutes(router) {
    'SELECT * FROM memberships',
    'SELECT * FROM entitlements',
    'SELECT * FROM client_engagements ORDER BY created_at',
-   `SELECT os.tenant_id,os.role,os.title,os.is_primary,os.contact_allowed,s.id,s.name
+   `SELECT os.tenant_id,os.role,os.title,os.is_primary,os.contact_allowed,s.id,s.name,s.email,s.phone
     FROM organization_stakeholders os JOIN stakeholders s ON s.id=os.stakeholder_id ORDER BY s.name`,
   ]) results.push(await pool.query(sql));
   const [tenants, products, memberships, entitlements, engagements, stakeholders] = results;

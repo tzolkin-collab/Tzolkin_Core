@@ -51,8 +51,8 @@ aplique estilo pelo DOM (`el.style.width = …`), não por `innerHTML`.
 para `BANIDOS` em `ux-guards.test.mjs` (com o motivo ao lado e uma amostra no teste de controle); defeito
 que só aparece renderizado entra na leitura de `leituraDe` em `smoke.test.mjs`.
 
-**Linha de base em 2026-10-02:** `npm test` com 720 testes aprovados, 0 falhas, saída 0 (banco
-descartável criado e apagado); `npm run test:unit` com 437 aprovados e `npm run test:ui` com 18 aprovados.
+**Linha de base em 2026-10-02:** `npm test` com 729 testes aprovados, 0 falhas, saída 0 (banco
+descartável criado e apagado); `npm run test:unit` com 438 aprovados e `npm run test:ui` com 19 aprovados.
 
 **Armadilha da suíte completa:** os arquivos de `test/` dividem um só banco descartável, em série. Um teste que
 suponha banco vazio passa sozinho e falha no `npm test`; compare por diferença (antes/depois) em vez de valor absoluto.

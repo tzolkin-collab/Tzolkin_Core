@@ -266,6 +266,25 @@ test('Acompanhamento: a atividade escolhe a contratação da empresa selecionada
  semExcecoes();
 });
 
+test('Pessoas: o cartão mostra e-mail e telefone, ou diz que faltam; a busca acha por eles; o cadastro pede os dois', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 800);
+ await pagina.avaliar(CLICAR_NO_MENU('Pessoas'));
+ await pagina.esperar(`document.querySelectorAll('#stakeholder-directory .person-card').length === 2`, { descricao: 'duas pessoas listadas' });
+ const cartao = nome => `[...document.querySelectorAll('#stakeholder-directory .person-card')].find(c => c.querySelector('h3').textContent === ${JSON.stringify(nome)})`;
+ assert.equal(await pagina.avaliar(`${cartao('Ana Contato')}.querySelector('.person-contact').textContent`), 'ana@exemplo.test · 11999990000');
+ assert.equal(await pagina.avaliar(`${cartao('Bruno Aluno')}.querySelector('.person-contact').textContent`), 'Sem e-mail nem telefone');
+ assert.equal(await pagina.avaliar(`${cartao('Bruno Aluno')}.querySelector('.person-contact').classList.contains('person-no-contact')`), true);
+ // a busca acha pelo e-mail
+ await pagina.avaliar(`(() => { const i = document.getElementById('people-search'); i.value = 'ana@exemplo'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+ await pagina.esperar(`document.querySelectorAll('#stakeholder-directory .person-card').length === 1`, { descricao: 'busca por e-mail' });
+ await pagina.avaliar(`(() => { const i = document.getElementById('people-search'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+ // o cadastro tem os dois campos opcionais
+ const campos = await pagina.avaliar(`[...document.querySelectorAll('#stakeholder-form label')].map(l => l.firstChild.textContent.trim()).filter(Boolean)`);
+ assert.ok(campos.includes('E-mail (opcional)') && campos.includes('Telefone ou WhatsApp (opcional)'), JSON.stringify(campos));
+ assert.equal(await pagina.avaliar(`document.querySelector('#stakeholder-form [name=email]').required`), false);
+ semExcecoes();
+});
+
 test('ficha da empresa abre pelo cartão e traz o painel de fotos', { skip: PULAR }, async () => {
  await pagina.avaliar(`[...document.querySelectorAll('#view-clients .client-card')].find(c => c.textContent.includes('Empresa Alfa')).click()`);
  await pagina.esperar(`document.querySelector('#view-client .photo-panel .photo-zone') && !document.querySelector('#view-client .photo-panel .photo-zone').hidden`, { descricao: 'painel de fotos na ficha' });
