@@ -32,17 +32,20 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 - [x] **P1** **Rede de segurança do envio** sem banco: o site tenta o intake 2 a 3 vezes (idempotente) e, se falhar,
   manda e-mail interno com o lead. *(proposta, [D])*
   *(feito em 02/10: 3 tentativas e e-mail interno; só vale com `RESEND_API_KEY`, `EMAIL_FROM` e `EMAIL_INTERNAL_TO` no site.)*
-- [ ] **P1** Dedupe de pessoa e empresa no intake (e-mail, CPF por hash, CNPJ alfanumérico). Hoje cada lead cria uma
-  empresa e uma pessoa novas. *(achado desta sessão; STATUS §3.D G3.)*
+- [ ] **P1** Dedupe por CPF (hash) e CNPJ alfanumérico no intake. O e-mail já deduplica pessoa e empresa (02/10); o documento entra
+  quando o formulário pedir. *(STATUS §3.D G3.)*
 - [x] **P1** Funil por espaço: pipeline, etapas, fontes, oportunidade (copiar o desenho da Kalidash).
   *(`design/2026-10-01-pipeline-por-espaco-e-atribuicao.md`.)* **[D]** 4 decisões nesse documento.
   *(fase 1 feita em 02/10: migração 040, funis por espaço com funil padrão, etapas, oportunidades e o lead entrando no funil pelo `utm_tzolkin`. **Migração 040 ainda não aplicada no banco compartilhado.** Faltam: fontes, qualificar/descartar/mover o lead pela tela, ganhar → contratação.)*
 - [ ] **P0 [VOCÊ]** Aplicar a migração **040** (funil por espaço) no banco compartilhado, antes do deploy do Core. Só adiciona tabelas e colunas; o banco tem 0 leads.
 - [ ] **P0 [VOCÊ]** Aplicar a migração **041** (acompanhamento por contratação) no banco compartilhado, junto com a 040. Só adiciona uma coluna, uma chave e um índice; o banco tem 0 atividades.
 - [ ] **P0 [VOCÊ]** Aplicar a migração **042** (oportunidade guarda a contratação que criou) junto com a 040 e a 041. Só adiciona uma coluna e um índice; o banco tem 0 oportunidades.
+- [ ] **P0 [VOCÊ]** Aplicar a migração **044** (eventos, automações e tarefas) junto com as outras. Só cria três tabelas; o banco tem 0 leads.
 - [ ] **P0 [VOCÊ]** Aplicar a migração **043** (campos próprios por espaço) junto com as outras. Cria uma tabela, duas colunas com padrão e semeia os 4 campos do site; o banco tem 0 leads.
 - [ ] **P2** Campos próprios: "obrigatório" vale só no intake; a edição não força preencher os que já existiam. Edição de valor na lista e filtro por campo ficam para depois (os valores moram em `jsonb`; se virar gargalo, tabela própria, como a Kalidash prevê).
-- [ ] **P1** Funil, o que a fase 3 deixou: fontes do lead, tarefas e exigências por etapa, eventos e automações, lead entrando pela tela (outbound) e mover o lead em lote.
+- [x] **P1** Funil, fase 5: eventos e automações (e as tarefas mínimas que a ação "criar tarefa" pede).
+  *(feito em 02/10: migração 044, `platform/automations.mjs`, `commercial-automations.mjs`, tarefas no lead e gerenciador de automações no Inbound. **Migração 044 ainda não aplicada no banco compartilhado.** Ações de hoje: criar tarefa e atribuir responsável.)*
+- [ ] **P1** Funil, o que as fases 3 a 5 deixaram: fontes do lead ("Conectar fonte"), exigências por etapa (bloquear entrar ou sair), automação com atraso (precisa de agendador; ADR 0011 diz sem worker), ações de e-mail e de push na automação, gatilho por webhook de entrada (pagamento confirmado move a oportunidade para Ganho: o Core já recebe Stripe e Asaas), lead criado pela tela (outbound) e mover o lead em lote. **[D]**
 - [ ] **P1** Acompanhamento: responsável por operador (depende da decisão: do cliente ou da contratação), orçamento de horas, participantes e anexos.
 - [x] **P1** Fase 3 do funil: qualificar, descartar e mover o lead pela tela; ganhar a oportunidade cria a contratação (decisão 3).
   *(feito em 02/10: `commercial-leadflow.mjs`, migração 042 e a tela. **Migração 042 ainda não aplicada no banco compartilhado.** Falta uso com lead real.)*
@@ -54,8 +57,8 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
   *(feito em 02/10: o prefixo errado é ignorado para escolher o funil; o site também descarta `utm_tzolkin` que não comece por `sites.`.)*
 - [x] **P1** Convenção de URL de anúncio (parâmetros dinâmicos da Meta) escrita em `ATTRIBUTION.md`.
   *(feito em 02/10 em `ATTRIBUTION.md`.)*
-- [ ] **P1** Tarefas e requisitos de etapa; eventos `objeto.ação` e automações gerenciadas (fases 4 e 5 do plano).
-- [ ] **P1** Lead sem "próximo passo" nem conversão em cliente: marcar `won` não muda o `tenant`. *(STATUS §4.)*
+- [x] **P1** Tarefas, eventos `objeto.ação` e automações (fases 4 e 5 do plano). *(02/10: tarefas mínimas, dez eventos e automações com duas ações. Requisitos de etapa e automações gerenciadas seguem no item de funil mais abaixo.)*
+- [x] **P1** Lead sem "próximo passo" nem conversão em cliente: marcar `won` não muda o `tenant`. *(STATUS §4.)* *(02/10: ganhar a oportunidade cria a contratação e promove a empresa a cliente; o próximo passo é a tarefa.)*
 - [ ] **P1** Contrato comercial para cliente que não veio de lead: `POST /api/commercial/contracts` exige `lead_id`
   (as mentorias vieram do Notion). *(handoff 16/09 §5.1.)* **[D]**
 - [ ] **P1** Decidir qual registro nasce ao ganhar uma oportunidade (contrato, contratação ou os dois). **[D]**
@@ -244,7 +247,7 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | Bloco | Abertos |
 |---|---:|
 | 0. Lembretes que você pediu | 1 |
-| 1. Leads e funil | 20 |
+| 1. Leads e funil | 21 |
 | 2. Risco sem volta | 8 |
 | 3. Dinheiro, cobrança e fiscal | 15 |
 | 4. Conexões, infraestrutura e deploy | 11 |
@@ -255,6 +258,6 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | 9. Documentação a corrigir | 5 |
 | 10. Fora do Core | 2 |
 | 11. Substituir o Notion pelo Core | 11 |
-| **Total** | **103** |
+| **Total** | **104** |
 
-Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 14. Dos 103 abertos: **P0: 12**, **[VOCÊ]: 13**, **[D] (decisão sua): 15**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
+Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 15. Dos 104 abertos: **P0: 13**, **[VOCÊ]: 14**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.

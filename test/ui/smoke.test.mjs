@@ -165,6 +165,7 @@ test('Inbound: etapa aberta lista oportunidades; mover pede o motivo só ao perd
  const campo = nome => `[...document.querySelectorAll('#inbound-panel-leads .commercial-form label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)})`;
  assert.deepEqual(await pagina.avaliar(`[...(${campo('Mover para')}).querySelector('select').options].map(o => o.textContent)`), ['Proposta', 'Negociação', 'Assinatura do contrato', 'Ganho', 'Perdido']);
  const escolher = nome => pagina.avaliar(`(() => { const s = ${campo('Mover para')}.querySelector('select'); s.value = [...s.options].find(o => o.textContent === ${JSON.stringify(nome)}).value; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+ assert.equal(await pagina.avaliar(`${campo('Motivo da perda')}.querySelector('select').value !== ''`), true, 'o motivo da perda vem com a primeira opção marcada');
  const motivoVisivel = () => pagina.avaliar(`!${campo('Motivo da perda')}.hidden`);
  assert.equal(await motivoVisivel(), false, 'o motivo da perda não aparece de saída');
  await escolher('Perdido'); assert.equal(await motivoVisivel(), true, 'perder pede o motivo');
@@ -183,8 +184,15 @@ test('Inbound: o detalhe do lead no funil oferece mover, qualificar e descartar,
  await pagina.esperar(`document.querySelector('#inbound-panel-leads .funnel-panel')`, { descricao: 'painel do funil' });
  const botoes = await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .funnel-panel button')].map(b => b.textContent)`);
  assert.deepEqual(botoes, ['Mover', 'Qualificar (vira oportunidade)', 'Descartar']);
+ // Um select sem opção vazia precisa vir com a primeira marcada: vazio iria para a API como valor em branco.
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .funnel-panel select')].every(s => s.value !== '')`), true, 'select sem nada marcado');
  assert.equal(await pagina.avaliar(`document.querySelectorAll('#inbound-panel-leads .funnel-track .funnel-chip').length`), 8);
  assert.equal(await pagina.avaliar(`document.querySelector('#inbound-panel-leads .funnel-track .funnel-chip.active').textContent`), 'Novos');
+ // Tarefas do lead: a aberta (criada por automação) e a concluída, cada uma com o botão certo, e o formulário de nova.
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .tasks-panel .task-row')].map(r => r.querySelector('strong').textContent + '|' + r.querySelector('button').textContent + '|' + r.classList.contains('task-done'))`),
+  ['Ligar para o lead|Concluir|false', 'Mandar o portfólio|Reabrir|true']);
+ assert.match(await pagina.avaliar(`document.querySelector('#inbound-panel-leads .tasks-panel .task-row').innerText`), /criada por automação/);
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .tasks-panel form button')].map(b => b.textContent).join('|')`), 'Adicionar tarefa');
  // Dados do espaço: os campos ativos do lead aparecem com o valor guardado; o desativado com valor aparece travado.
  const campos = await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .data-panel form')][0] && [...document.querySelectorAll('#inbound-panel-leads .data-panel form')][0].innerText`);
  assert.match(campos, /Porte/); assert.match(campos, /Observação/); assert.match(campos, /Campo antigo \(desativado\)/);
@@ -212,6 +220,30 @@ test('Inbound: o gerenciador de campos do espaço lista por tipo de registro e a
  assert.equal(await opcoes(), true);
  await pagina.avaliar(`(() => { const s = [...document.querySelectorAll('#inbound-panel-leads .fields-manager form label')].find(l => l.firstChild.textContent === 'Tipo').querySelector('select'); s.value = 'SELECT'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
  assert.equal(await opcoes(), false);
+ semExcecoes();
+});
+
+test('Inbound: o gerenciador de automações lista, mostra o histórico e só pede o que a ação precisa', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 800);
+ await pagina.avaliar(CLICAR_NO_MENU('Inbound'));
+ await pagina.esperar(`document.querySelector('#inbound-panel-leads details.automations-manager')`, { descricao: 'gerenciador de automações' });
+ await pagina.avaliar(`document.querySelector('#inbound-panel-leads details.automations-manager summary').click()`);
+ await pagina.esperar(`document.querySelectorAll('#inbound-panel-leads .automations-manager .automation-row').length === 1`, { descricao: 'automação listada' });
+ const texto = await pagina.avaliar(`document.querySelector('#inbound-panel-leads .automations-manager .automation-row').innerText`);
+ assert.match(texto, /Ligar logo/); assert.match(texto, /Quando: Lead criado · funil Funil padrão/); assert.match(texto, /criar tarefa "Ligar para o lead" \(prazo 2 dias\)/); assert.match(texto, /Última execução: .* · deu certo/);
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('#inbound-panel-leads .automations-manager .automation-row button')].map(b => b.textContent).join('|')`), 'Desativar|Ver execuções');
+ const campo = nome => `[...document.querySelectorAll('#inbound-panel-leads .automations-manager form label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)})`;
+ const escolher = (nome, valor) => pagina.avaliar(`(() => { const s = ${campo(nome)}.querySelector('select'); s.value = ${JSON.stringify(valor)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+ // A etapa só aparece depois de escolher o funil; título e prazo são da tarefa, o responsável é da outra ação.
+ assert.equal(await pagina.avaliar(`${campo('Só nesta etapa')}.hidden`), true);
+ await escolher('Só neste funil', '44444444-4444-4444-8444-444444444444');
+ assert.equal(await pagina.avaliar(`${campo('Só nesta etapa')}.hidden`), false);
+ assert.equal(await pagina.avaliar(`${campo('Título da tarefa')}.hidden`), false);
+ assert.equal(await pagina.avaliar(`${campo('Responsável')}.hidden`), true);
+ await escolher('Então', 'responsavel.atribuir');
+ assert.equal(await pagina.avaliar(`${campo('Título da tarefa')}.hidden`), true);
+ assert.equal(await pagina.avaliar(`${campo('Responsável')}.hidden`), false);
+ assert.deepEqual(await pagina.avaliar(`[...${campo('Responsável')}.querySelector('select').options].map(o => o.textContent)`), ['Dono Teste']);
  semExcecoes();
 });
 

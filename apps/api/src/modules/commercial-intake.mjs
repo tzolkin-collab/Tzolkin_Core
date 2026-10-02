@@ -4,6 +4,7 @@ import { notificarLeadNovo } from './push.mjs';
 import { placeLead } from './commercial-pipelines.mjs';
 import { CHAVES_ATRIBUICAO, atribuicaoEstendida } from '../platform/attribution.mjs';
 import { fieldsOf, validateSpaceData } from '../platform/space-fields.mjs';
+import { emitEvent } from '../platform/automations.mjs';
 export { commercialKeyRoutes } from './commercial-keys.mjs';
 
 const optional=(v,max=500)=>v==null||v===''?null:text(v,1,max);
@@ -100,6 +101,8 @@ export function commercialIntakeRoutes(router,{avisarLeadNovo=notificarLeadNovo}
      a.last_touch?JSON.stringify(a.last_touch):null,a.session?JSON.stringify(a.session):null,a.geo?JSON.stringify(a.geo):null]);
    await recordActivity(client,lead,'received',{subject:`app:${productId}`,email:null},null,{source_system:v.source_system,source_ref:v.source_ref,matched_person:Boolean(found.person),matched_organization:Boolean(found.tenant),returning_client:found.returning});
    result={lead_id:lead,tenant_id:tenant,stakeholder_id:person,engagement_id:null,contract_id:null,created:true,returning_client:found.returning};
+   // Automações do espaço ligadas a "lead criado" (fase 5). Falha de automação não derruba o lead: o motor se isola num savepoint.
+   await emitEvent(client,'lead.criado',{spaceId:productId,tenantId:tenant,leadId:lead,pipelineId:place?.pipelineId,stageId:place?.stageId});
   }
   await client.query('INSERT INTO commercial_intake_requests(product_id,idempotency_key,request_hash,response) VALUES($1,$2,$3,$4)',[productId,key,hash,result]);
   // Aviso de lead novo no aparelho da equipe. Só quando o lead foi CRIADO agora: um

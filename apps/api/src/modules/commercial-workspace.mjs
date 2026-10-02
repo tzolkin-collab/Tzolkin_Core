@@ -32,7 +32,9 @@ async function detail({pool,params,reply,productId,operator}) {
  const stages=lead.pipeline_id?(await pool.query('SELECT id,name,kind,position FROM pipeline_stages WHERE pipeline_id=$1 ORDER BY position',[lead.pipeline_id])).rows:[];
  // Campos próprios do espaço (fase 4), ativos e desativados: o que já tem valor continua aparecendo.
  const fields=lead.product_id?(await pool.query('SELECT id,entity,key,label,type,options,required,is_active,position FROM space_fields WHERE space_id=$1 ORDER BY entity,position,label',[lead.product_id])).rows:[];
- return reply(200,{lead,attribution,activities,contracts,opportunity,stages,fields});
+ // Tarefas do lead (as da oportunidade dele também, que guardam o lead_id): abertas primeiro, por prazo.
+ const tasks=(await pool.query(`SELECT t.id,t.opportunity_id,t.title,t.tag,t.due_at,t.owner_id,a.name AS owner_name,t.source,t.done_at,t.version FROM commercial_tasks t LEFT JOIN operator_accounts a ON a.id=t.owner_id WHERE t.lead_id=$1 ORDER BY (t.done_at IS NOT NULL),t.due_at NULLS LAST,t.created_at DESC LIMIT 100`,[lead.id])).rows;
+ return reply(200,{lead,attribution,activities,contracts,opportunity,stages,fields,tasks});
 }
 export function commercialWorkspaceRoutes(router) {
  router.get('/api/commercial/leads',list);router.get('/api/commercial/leads/:id',detail);

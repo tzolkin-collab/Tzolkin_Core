@@ -30,3 +30,9 @@
 .field-row span{flex:1 1 220px}
 .field-options{display:flex;gap:12px;flex-wrap:wrap;border:0;padding:0}
 .data-panel h4{margin:12px 0 4px}
+.automations-manager{margin-top:16px}
+.automations-manager summary{cursor:pointer;font-weight:600}
+.automation-row{border-top:1px solid var(--line,#e5e7eb);padding:10px 0}
+.automation-runs p{margin:4px 0;font-size:13px}
+.task-row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:6px 0}
+.task-row.task-done strong{text-decoration:line-through;opacity:.6}

@@ -3,7 +3,7 @@
 Status: **`[AVALIAÇÃO]`** em 2026-10-01. **Fase 1 implementada em 2026-10-02** (migração 040, `commercial-pipelines.mjs`, barra do funil no Inbound),
 com as 4 recomendações do §6 aceitas pelo dono ("pode"): vários funis por espaço, campos próprios por espaço (fase 4), nasce a contratação
 ao ganhar (fase 3), só espaços da TZOLKIN. **Fase 2 (dedupe por e-mail) e fase 3 (mover, qualificar, descartar, ganhar → contratação) feitas em 2026-10-02**
-(`commercial-intake.mjs`, `commercial-leadflow.mjs`, migração 042). A fase 4 (campos próprios por espaço, `space_data`) também foi feita em 2026-10-02 (migração 043). A fase 5 segue aberta.
+(`commercial-intake.mjs`, `commercial-leadflow.mjs`, migração 042). A fase 4 (campos próprios por espaço, `space_data`) também foi feita em 2026-10-02 (migração 043). A fase 5 (eventos e automações, com tarefas mínimas) também foi feita em 2026-10-02 (migração 044). Ficam de fora, na lista: fontes ("Conectar fonte"), exigências por etapa, atraso de automação, webhook de entrada.
 Base de cópia: o desenho de leads da Kalidash (`Projetos/Carol/Kalidash/docs/plano-schema.md`,
 `apps/admin/src/lib/leadFlow.ts`, `lifecycle.ts`, `documents.ts`), só trocando o contexto de aplicação.
 

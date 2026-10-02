@@ -16,6 +16,7 @@ const FILES = {
  '/commercial.css':['commercial.css','text/css'],
  '/media.js':['media.js','text/javascript'],
  '/space-fields.js':['space-fields.js','text/javascript'],
+ '/automations.js':['automations.js','text/javascript'],
  '/media.css':['media.css','text/css'],
  '/': ['index.html', 'text/html'],
  // O favicon precisa de uma rota própria e estável. Não depender de

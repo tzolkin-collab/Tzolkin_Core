@@ -2,6 +2,7 @@ import { fail, input, isUuid, text } from '../platform/http.mjs';
 import { commercialPermission } from './commercial-keys.mjs';
 import { capabilitiesOf } from './catalog.mjs';
 import { carryOver, fieldsOf } from '../platform/space-fields.mjs';
+import { emitEvent } from '../platform/automations.mjs';
 
 // Fase 3 do funil (plano de leads da Kalidash, adaptado: leadFlow.ts moveLeadStage / qualifyLead / discardLead /
 // restoreLead, agora no servidor). O lead anda só entre as etapas de tipo LEAD; qualificar o transforma em
@@ -58,16 +59,16 @@ async function activeOwner(client, id) {
  *  - ganhar cria a contratação (uma só, mesmo que reabra e ganhe de novo) e promove a empresa de prospect a cliente.
  * Devolve o id da contratação quando houve (criada agora ou já existente), senão null.
  */
-export async function onOpportunityMoved(client, opp, to, reasonName, operator) {
+async function moveEffects(client, opp, to, reasonName, operator) {
  if (opp.lead_id) {
   const status = to.kind === 'WON' ? 'won' : to.kind === 'LOST' ? 'lost' : 'qualified';
   await client.query('UPDATE commercial_leads SET status=$2,loss_reason=$3,version=version+1,updated_at=now() WHERE id=$1',
    [opp.lead_id, status, to.kind === 'LOST' ? reasonName : null]);
   await log(client, opp.lead_id, 'opportunity_moved', operator, to.kind === 'LOST' ? reasonName : null, { opportunity_id: opp.id, stage_id: to.id, stage_name: to.name, kind: to.kind });
  }
- if (to.kind !== 'WON') return null;
+ if (to.kind !== 'WON') return { engagementId: null, created: false };
 
- if (opp.engagement_id) return opp.engagement_id;
+ if (opp.engagement_id) return { engagementId: opp.engagement_id, created: false };
  const tenant = (await client.query('SELECT id,relationship_kind,lifecycle_status FROM tenants WHERE id=$1 FOR UPDATE', [opp.tenant_id])).rows[0];
  const space = (await client.query('SELECT pr.id,pr.portfolio_kind FROM pipelines p JOIN products pr ON pr.id=p.space_id WHERE p.id=$1', [opp.pipeline_id])).rows[0];
  const lead = opp.lead_id ? (await client.query('SELECT service_model FROM commercial_leads WHERE id=$1', [opp.lead_id])).rows[0] : null;
@@ -93,7 +94,19 @@ export async function onOpportunityMoved(client, opp, to, reasonName, operator) 
  if (tenant.relationship_kind === 'prospect')
   await client.query("UPDATE tenants SET relationship_kind='customer',lifecycle_status=CASE WHEN lifecycle_status='lead' THEN 'onboarding' ELSE lifecycle_status END WHERE id=$1", [tenant.id]);
  if (opp.lead_id) await log(client, opp.lead_id, 'engagement_created', operator, null, { opportunity_id: opp.id, engagement_id: engagement.id, label });
- return engagement.id;
+ return { engagementId: engagement.id, created: true };
+}
+
+/** Efeitos de mover a oportunidade (lead acompanha, ganhar cria a contratação) e, depois, os eventos para as automações. */
+export async function onOpportunityMoved(client, opp, to, reasonName, operator) {
+ const { engagementId, created } = await moveEffects(client, opp, to, reasonName, operator);
+ const space = (await client.query('SELECT space_id FROM pipelines WHERE id=$1', [opp.pipeline_id])).rows[0].space_id;
+ const ctx = { spaceId: space, tenantId: opp.tenant_id, leadId: opp.lead_id, opportunityId: opp.id, pipelineId: opp.pipeline_id, stageId: to.id };
+ await emitEvent(client, 'oportunidade.mudou_de_etapa', ctx);
+ if (to.kind === 'WON') await emitEvent(client, 'oportunidade.ganha', ctx);
+ if (to.kind === 'LOST') await emitEvent(client, 'oportunidade.perdida', ctx);
+ if (created) await emitEvent(client, 'contratacao.criada', ctx);
+ return engagementId;
 }
 
 export function commercialLeadflowRoutes(router) {
@@ -115,6 +128,7 @@ export function commercialLeadflowRoutes(router) {
    `UPDATE commercial_leads SET stage_id=$2,was_seen=true,first_contact_at=CASE WHEN $3::boolean THEN COALESCE(first_contact_at,now()) ELSE first_contact_at END,version=version+1,updated_at=now() WHERE id=$1`,
    [lead.id, to.id, to.id !== first.id]);
   await log(client, lead.id, 'stage_changed', operator, null, { from: from && { id: from.id, name: from.name }, to: { id: to.id, name: to.name } });
+  await emitEvent(client, 'lead.mudou_de_etapa', { spaceId: lead.product_id, tenantId: lead.tenant_id, leadId: lead.id, pipelineId: lead.pipeline_id, stageId: to.id });
   return { body: { ok: true } };
  }, { transactional: true, audit: false });
 
@@ -148,6 +162,8 @@ export function commercialLeadflowRoutes(router) {
    `UPDATE commercial_leads SET status='qualified',owner_id=$2,estimated_value_minor=$3,expected_close_at=$4,was_seen=true,version=version+1,updated_at=now() WHERE id=$1`,
    [lead.id, owner, value || lead.estimated_value_minor, closes]);
   await log(client, lead.id, 'qualified', operator, null, { opportunity_id: opp.id, stage_id: first.id, stage_name: first.name, value_minor: value });
+  await emitEvent(client, 'lead.qualificado', { spaceId: lead.product_id, tenantId: lead.tenant_id, leadId: lead.id, pipelineId: pipeline.id, stageId: lead.stage_id });
+  await emitEvent(client, 'oportunidade.criada', { spaceId: lead.product_id, tenantId: lead.tenant_id, leadId: lead.id, opportunityId: opp.id, pipelineId: pipeline.id, stageId: first.id });
   return { body: { opportunity_id: opp.id } };
  }, { transactional: true, audit: false });
 
@@ -160,6 +176,7 @@ export function commercialLeadflowRoutes(router) {
   const reason = await lostReason(client, body.lost_reason_id);
   await client.query("UPDATE commercial_leads SET status='lost',loss_reason=$2,version=version+1,updated_at=now() WHERE id=$1", [lead.id, reason.name]);
   await log(client, lead.id, 'discarded', operator, noteOrNull(body.note), { lost_reason_id: reason.id, reason: reason.name });
+  await emitEvent(client, 'lead.descartado', { spaceId: lead.product_id, tenantId: lead.tenant_id, leadId: lead.id, pipelineId: lead.pipeline_id, stageId: lead.stage_id });
   return { body: { ok: true } };
  }, { transactional: true, audit: false });
 
@@ -172,6 +189,7 @@ export function commercialLeadflowRoutes(router) {
   if ((await client.query('SELECT 1 FROM commercial_opportunities WHERE lead_id=$1', [lead.id])).rowCount) throw fail(409, 'Este lead virou oportunidade; reabra a oportunidade.');
   await client.query("UPDATE commercial_leads SET status='open',loss_reason=NULL,version=version+1,updated_at=now() WHERE id=$1", [lead.id]);
   await log(client, lead.id, 'restored', operator, null, { previous_reason: lead.loss_reason });
+  await emitEvent(client, 'lead.restaurado', { spaceId: lead.product_id, tenantId: lead.tenant_id, leadId: lead.id, pipelineId: lead.pipeline_id, stageId: lead.stage_id });
   return { body: { ok: true } };
  }, { transactional: true, audit: false });
 

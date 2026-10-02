@@ -2,6 +2,7 @@ import { fail, input, isUuid, isProductId, onlyParams, text } from '../platform/
 import { commercialPermission } from './commercial-keys.mjs';
 import { capabilitiesOf } from './catalog.mjs';
 import { onOpportunityMoved } from './commercial-leadflow.mjs';
+import { emitEvent } from '../platform/automations.mjs';
 
 // Funil por espaço (fase 1 do plano de leads da Kalidash, adaptada). Ver db/migrations/040_funil_por_espaco.sql
 // e docs/design/2026-10-01-pipeline-por-espaco-e-atribuicao.md.
@@ -258,6 +259,8 @@ export function commercialPipelineRoutes(router) {
    `INSERT INTO commercial_opportunities(pipeline_id,stage_id,tenant_id,stakeholder_id,title,value_minor,currency,origin,owner_id,expected_close_at)
     VALUES($1,$2,$3,$4,$5,$6,$7,'OUTBOUND',$8,$9) RETURNING id`,
    [pipeline.id, first.id, tenant.id, body.stakeholder_id ?? null, title, value, currency, owner, dateOrNull(body.expected_close_at)])).rows[0].id;
+  const space = (await client.query('SELECT space_id FROM pipelines WHERE id=$1', [pipeline.id])).rows[0].space_id;
+  await emitEvent(client, 'oportunidade.criada', { spaceId: space, tenantId: tenant.id, opportunityId: id, pipelineId: pipeline.id, stageId: first.id });
   return { tenant: tenant.id, type: 'opportunity_created', body: { id } };
  }, { transactional: true });
 

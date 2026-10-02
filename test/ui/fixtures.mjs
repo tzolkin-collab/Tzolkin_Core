@@ -53,6 +53,16 @@ const CAMPOS = [
  { id: 'a4444444-4444-4444-8444-444444444444', space_id: 'mentorias', entity: 'opportunity', key: 'orcamento', label: 'Orçamento', type: 'NUMBER', options: null, required: false, is_active: true, position: 0, version: 1 },
 ];
 
+const DONO = { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', name: 'Dono Teste', email: 'dono@exemplo.test' };
+const TAREFAS = [
+ { id: 'c1111111-1111-4111-8111-111111111111', opportunity_id: null, title: 'Ligar para o lead', tag: 'Geral', due_at: '2026-09-03T12:00:00.000Z', owner_id: null, owner_name: null, source: 'automacao', done_at: null, version: 1 },
+ { id: 'c2222222-2222-4222-8222-222222222222', opportunity_id: null, title: 'Mandar o portfólio', tag: 'Vendas', due_at: null, owner_id: DONO.id, owner_name: 'Dono Teste', source: 'manual', done_at: '2026-09-02T12:00:00.000Z', version: 2 },
+];
+const AUTOMACOES = [
+ { id: 'd1111111-1111-4111-8111-111111111111', space_id: 'mentorias', pipeline_id: FUNIL, stage_id: null, name: 'Ligar logo', trigger_event: 'lead.criado',
+  actions: [{ action: 'tarefa.criar', title: 'Ligar para o lead', tag: 'Geral', delay_days: 2 }], is_enabled: true, version: 1, last_run_at: ago, last_result: 'OK' },
+];
+
 // 1x1 PNG válido: o navegador consegue decodificar, e o servidor reconhece pelos primeiros bytes.
 export const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 
@@ -77,6 +87,10 @@ export function bancoFalso() {
    if (/SELECT id,name,kind,position FROM pipeline_stages WHERE pipeline_id=\$1 ORDER BY position/.test(sql))
     return { rows: ETAPAS.map(([name, kind], i) => ({ id: ETAPA(i), name, kind, position: i })) };
    if (/FROM lost_reasons WHERE is_active/.test(sql)) return { rows: [{ id: '88888888-8888-4888-8888-888888888888', name: 'Sem orçamento' }, { id: '99999999-9999-4999-8999-999999999999', name: 'Sem resposta' }] };
+   // Fase 5: responsáveis, tarefas do lead e automações do espaço
+   if (/SELECT id,name,email FROM operator_accounts WHERE status='active'/.test(sql)) return { rows: [DONO] };
+   if (/FROM commercial_tasks t LEFT JOIN operator_accounts a ON a\.id=t\.owner_id WHERE t\.lead_id=\$1/.test(sql)) return { rows: TAREFAS };
+   if (/FROM automations a WHERE \(\$1::text IS NULL OR a\.space_id=\$1\)/.test(sql)) return { rows: AUTOMACOES.filter(a => !params[0] || a.space_id === params[0]) };
    // Campos próprios do espaço: lista do gerenciador e do detalhe do lead
    if (/FROM space_fields WHERE \(\$1::text IS NULL OR space_id=\$1\)/.test(sql)) return { rows: CAMPOS.filter(c => !params[0] || c.space_id === params[0]) };
    if (/FROM space_fields WHERE space_id=\$1 ORDER BY entity/.test(sql)) return { rows: CAMPOS.map(({ version, space_id, ...c }) => c) };
