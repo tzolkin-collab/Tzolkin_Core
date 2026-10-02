@@ -21,15 +21,17 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 
 ## 1. Leads e funil — a frente atual
 
-- [ ] **P1** O site manda o lead **direto** ao intake do Core (decisão: tudo centralizado, sem banco por produto).
+- [x] **P1** O site manda o lead **direto** ao intake do Core (decisão: tudo centralizado, sem banco por produto).
+  *(feito em 02/10, commit `eeeb5cd` no `tzolkin-site`, branch `codex/publicacao-institucional`, **local, sem push**. 34 testes; formato conferido contra `validateIntake` do Core.)*
 - [x] **P1** Remover do Core o worker/fila do site: `integrations/institutional-outbox.mjs`, `modules/inbound-delivery.mjs`,
   linha "Entrega do site" em `commercial.js`, variáveis `INBOUND_SITE_*`, e os trechos de teste que leem o SQL do site
   (`scripts/test-commercial.mjs:10`, `test/commercial-intake.test.mjs`).
   *(feito em 01/10: worker, rota, tela e variáveis `INBOUND_*` saíram; testes verdes.)*
 - [x] **P1** Corrigir `DATA-OWNERSHIP.md` (lead só no Site) e registrar a decisão em ADR 0011.
   *(feito em 01/10: ADR 0011 e `DATA-OWNERSHIP.md`.)*
-- [ ] **P1** **Rede de segurança do envio** sem banco: o site tenta o intake 2 a 3 vezes (idempotente) e, se falhar,
+- [x] **P1** **Rede de segurança do envio** sem banco: o site tenta o intake 2 a 3 vezes (idempotente) e, se falhar,
   manda e-mail interno com o lead. *(proposta, [D])*
+  *(feito em 02/10: 3 tentativas e e-mail interno; só vale com `RESEND_API_KEY`, `EMAIL_FROM` e `EMAIL_INTERNAL_TO` no site.)*
 - [ ] **P1** Dedupe de pessoa e empresa no intake (e-mail, CPF por hash, CNPJ alfanumérico). Hoje cada lead cria uma
   empresa e uma pessoa novas. *(achado desta sessão; STATUS §3.D G3.)*
 - [ ] **P1** Funil por espaço: pipeline, etapas, fontes, oportunidade (copiar o desenho da Kalidash).
@@ -47,8 +49,18 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
   `contact_allowed=false` sem captar nada). *(STATUS §3.D.)*
 - [ ] **P1** Primeiro lead real chegando e visível na tela (hoje: 0 leads, 0 pedidos de intake, 3 chaves nunca usadas;
   medido em 01/10).
-- [ ] **P2** Verificar no `tzolkin-site` se o UTM ainda é descartado e se a rota de leads ainda dá 503 *(BACKLOG 03/09,
+- [x] **P2** Verificar no `tzolkin-site` se o UTM ainda é descartado e se a rota de leads ainda dá 503 *(BACKLOG 03/09,
   não reverificado)*.
+  *(confirmado e corrigido em 02/10: o formulário nunca conseguia mandar UTM, a rota recusava campo desconhecido. Agora captura e envia.)*
+- [ ] **P0 [VOCÊ]** Cadastrar no **ambiente de produção do site** (Vercel): `CORE_INTAKE_URL`, `CORE_INTAKE_KEY` (chave nova do espaço sites,
+  escopo `commercial:intake`; o segredo aparece uma vez), `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_INTERNAL_TO`. Revisar e mergear a branch do site.
+  Sem isso o formulário responde 503 e nenhum lead entra. *(`tzolkin-site/db/README.md`.)*
+- [ ] **P1** Primeiro lead real de ponta a ponta com o site novo (formulário → Core → tela de Inbound), em prévia da Vercel antes da produção.
+- [ ] **P1** O Core ainda não tem onde guardar porte, funcionários, Instagram e site do formulário: hoje vão no início da mensagem.
+  Resolve com o bloco `space_data` (campos por espaço). *(avaliação do funil por espaço.)*
+- [ ] **P2 [D]** "Educacional TZOLKIN" entra no espaço **sites** com modelo `education`. Deveria ir para Mentorias/Educare? *(desta sessão.)*
+- [ ] **P2** Código morto no site: `LeadDirectForm.tsx` (ninguém importa), `chatApi.saveLead` (ninguém chama), `db/001–003` e `scripts/email-worker.mjs`
+  (legado, fila nunca preenchida). Remover de vez.
 - [ ] **P2** Escolher se o CRM da Kalidash (outro contrato) segue separado; leads de produto de cliente no Core exigem
   papel de operador de dado pessoal definido em contrato. **[D]**
 
@@ -216,7 +228,7 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | Bloco | Abertos |
 |---|---:|
 | 0. Lembretes que você pediu | 1 |
-| 1. Leads e funil | 16 |
+| 1. Leads e funil | 18 |
 | 2. Risco sem volta | 8 |
 | 3. Dinheiro, cobrança e fiscal | 15 |
 | 4. Conexões, infraestrutura e deploy | 11 |
@@ -227,6 +239,6 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 | 9. Documentação a corrigir | 5 |
 | 10. Fora do Core | 2 |
 | 11. Substituir o Notion pelo Core | 11 |
-| **Total** | **100** |
+| **Total** | **102** |
 
-Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 3. Dos 100 abertos: **P0: 7**, **[VOCÊ]: 8**, **[D] (decisão sua): 16**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
+Contados por script nas linhas de cada item. Fechados e mantidos no histórico: 6. Dos 102 abertos: **P0: 8**, **[VOCÊ]: 9**, **[D] (decisão sua): 17**. Os 900 itens que você citou não estão neste repositório (devem estar no Notion); esta lista é o que o código, os documentos e as sessões mostram.
