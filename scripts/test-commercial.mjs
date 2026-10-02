@@ -7,7 +7,6 @@ const comAdmin=async fn=>{const c=new pg.Client({connectionString:env.DATABASE_U
 let created=false,testClient;
 try {await comAdmin(c=>c.query(`CREATE DATABASE ${name}`));created=true;const url=new URL(env.DATABASE_URL);url.pathname='/'+name;
  testClient=new pg.Client({connectionString:url.href,connectionTimeoutMillis:10000});testClient.on('error',()=>{});await testClient.connect();await testClient.query(readFileSync('db/schema.sql','utf8'));if(!await applyMigrations(testClient,()=>{}))throw Error('MIGRATIONS_FAILED');if(!await applyMigrations(testClient,()=>{}))throw Error('MIGRATIONS_REPLAY_FAILED');
- for(const path of ['001_leads.sql','002_lead_delivery.sql','004_core_outbox.sql'])await testClient.query(readFileSync('../tzolkin-site/db/'+path,'utf8'));
  await testClient.end();testClient=null;
  // DATABASE_URL é forçada para o banco descartável nos processos filhos. Nem o importador nem um
  // teste que leia process.env.DATABASE_URL direto consegue alcançar o banco de produção.

@@ -21,17 +21,19 @@
 import { fail, input, isProductId, isUuid, onlyParams, text } from '../platform/http.mjs';
 import { commercialPermission } from './commercial-keys.mjs';
 import { SERVICE_MODELS } from './commercial-intake.mjs';
-import { CAPABILITIES, capabilitiesOf, requireProductFor } from './catalog.mjs';
+import { CAPABILITIES, KIND_ALIASES, KIND_REGISTRY, canonicalKind, capabilitiesOf, requireProductFor } from './catalog.mjs';
 
 // `internal`: software da própria TZOLKIN, sem comprador externo (ADR 0007).
-export const PORTFOLIO_KINDS = ['product', 'platform', 'service_line', 'internal'];
+// Os tipos vêm do registro de catalog.mjs. 'product' é o nome antigo de 'platform' e
+// continua sendo aceito na escrita (vira 'platform' ao gravar).
+export const PORTFOLIO_KINDS = [...Object.keys(KIND_ALIASES), ...KIND_REGISTRY.map(item => item.kind)];
 export const ENGAGEMENT_STATUS = ['planned', 'active', 'paused', 'completed', 'discontinued', 'unclassified'];
 
 // O próprio Core é item do portfólio. Arquivá-lo ou devolvê-lo a rascunho
 // tiraria a identidade do painel de dentro dele mesmo.
 const PROTEGIDOS = new Set(['core']);
 const FAMILIA = /^[a-z][a-z0-9-]{1,39}$/;
-const COLUNAS = 'id,name,portfolio_kind,brand_family,lifecycle_status,revision,created_at,updated_at,archived_at,archived_from';
+const COLUNAS = 'id,name,portfolio_kind,brand_family,tags,lifecycle_status,revision,created_at,updated_at,archived_at,archived_from';
 const COLUNAS_CONTRATACAO = 'id,tenant_id,product_id,service_model,status,label,revision,created_at,updated_at,archived_at';
 
 const revisao = body => {
@@ -125,14 +127,29 @@ export async function dependentesDaReclassificacao(client, id, de, para) {
  return vivos;
 }
 
+// Tags são rótulos curtos do espaço ("consultoria", "assessoria", "mentoria"). Chegam
+// como lista ou como texto separado por vírgula; saem em minúsculas, sem repetição e
+// em forma de identificador (letras sem acento, números e hífen).
+const TAG = /^[a-z0-9][a-z0-9-]{1,29}$/;
+export function validarTags(valor) {
+ if (valor == null || valor === '') return [];
+ const bruto = Array.isArray(valor) ? valor : typeof valor === 'string' ? valor.split(',') : null;
+ if (!bruto) throw fail(400, 'Tags inválidas: envie uma lista de textos.');
+ const tags = [...new Set(bruto.map(item => String(item).trim().toLowerCase().replace(/\s+/g, '-')).filter(Boolean))];
+ if (tags.length > 8) throw fail(400, 'No máximo 8 tags.');
+ for (const tag of tags)
+  if (!TAG.test(tag)) throw fail(400, `Tag inválida "${tag}": 2 a 30 caracteres, letras minúsculas sem acento, números e hífen.`);
+ return tags;
+}
+
 function validarItem(body) {
  const name = text(body.name, 2, 120);
  if (!PORTFOLIO_KINDS.includes(body.portfolio_kind))
-  throw fail(400, 'Tipo inválido: use produto, plataforma, linha de serviço ou interno.');
+  throw fail(400, 'Tipo inválido: use plataforma, linha de serviço, consultoria e assessoria ou interno.');
  const brand = body.brand_family == null || body.brand_family === ''
   ? 'tzolkin' : String(body.brand_family).trim().toLowerCase();
  if (!FAMILIA.test(brand)) throw fail(400, 'Família inválida: letras minúsculas, números e hífen.');
- return { name, portfolio_kind: body.portfolio_kind, brand_family: brand };
+ return { name, portfolio_kind: canonicalKind(body.portfolio_kind), brand_family: brand, tags: validarTags(body.tags) };
 }
 
 // ---------------------------------------------------------------------------
@@ -191,7 +208,7 @@ export function portfolioRoutes(router) {
   onlyParams(url.searchParams, ['include_archived']);
   const incluirArquivados = url.searchParams.get('include_archived') === '1';
   const r = await pool.query(
-   `SELECT p.id,p.name,p.portfolio_kind,p.brand_family,p.lifecycle_status,p.revision,
+   `SELECT p.id,p.name,p.portfolio_kind,p.brand_family,p.tags,p.lifecycle_status,p.revision,
            p.created_at,p.updated_at,p.archived_at,p.archived_from,
            (SELECT count(*)::int FROM client_engagements e WHERE e.product_id=p.id AND e.archived_at IS NULL) AS contratacoes,
            (SELECT count(*)::int FROM entitlements x WHERE x.product_id=p.id AND x.active) AS contratos_ativos,
@@ -201,23 +218,23 @@ export function portfolioRoutes(router) {
      ORDER BY p.name`, [incluirArquivados]);
   return reply(200, {
    items: r.rows.map(item => ({ ...item, protected: PROTEGIDOS.has(item.id), capabilities: capabilitiesOf(item.portfolio_kind) })),
-   kinds: PORTFOLIO_KINDS,
+   kinds: KIND_REGISTRY, kind_aliases: KIND_ALIASES,
   });
  }, { body: false });
 
  // --- portfólio: criar -------------------------------------------------------
  router.post('/api/portfolio', async ({ client, body, operator }) => {
   await commercialPermission(client, operator, true);
-  input(body, ['id', 'name', 'portfolio_kind', 'brand_family']);
+  input(body, ['id', 'name', 'portfolio_kind', 'brand_family', 'tags']);
   if (!isProductId(body.id))
    throw fail(400, 'Identificador inválido: comece com letra e use minúsculas, números e hífen (2 a 64).');
   const campos = validarItem(body);
   // Nasce rascunho: rascunho não entra em contrato, checkout nem acesso até
   // alguém decidir ativar. Identificador repetido vira 409 em describeError.
   const r = await client.query(
-   `INSERT INTO products(id,name,portfolio_kind,brand_family,lifecycle_status)
-    VALUES($1,$2,$3,$4,'draft') RETURNING ${COLUNAS}`,
-   [body.id, campos.name, campos.portfolio_kind, campos.brand_family]);
+   `INSERT INTO products(id,name,portfolio_kind,brand_family,tags,lifecycle_status)
+    VALUES($1,$2,$3,$4,$5,'draft') RETURNING ${COLUNAS}`,
+   [body.id, campos.name, campos.portfolio_kind, campos.brand_family, campos.tags]);
   await registrar(client, 'product', body.id, 'created', null, r.rows[0], operator);
   return { tenant: null, type: 'portfolio.created', body: r.rows[0] };
  }, { transactional: true, audit: false });
@@ -225,7 +242,7 @@ export function portfolioRoutes(router) {
  // --- portfólio: editar nome, tipo e família --------------------------------
  router.put('/api/portfolio/:id', async ({ client, params, body, operator }) => {
   await commercialPermission(client, operator, true);
-  input(body, ['name', 'portfolio_kind', 'brand_family', 'revision']);
+  input(body, ['name', 'portfolio_kind', 'brand_family', 'tags', 'revision']);
   const campos = validarItem(body);
   const antes = await carregarItem(client, params.id, revisao(body));
   if (antes.lifecycle_status === 'archived') throw fail(409, 'Item arquivado. Restaure antes de editar.');
@@ -235,9 +252,9 @@ export function portfolioRoutes(router) {
     throw fail(409, `Não dá para mudar o tipo enquanto houver ${vivos.join('; ')}. Encerre ou mova esses vínculos antes.`);
   }
   const r = await client.query(
-   `UPDATE products SET name=$2, portfolio_kind=$3, brand_family=$4, revision=revision+1, updated_at=now()
+   `UPDATE products SET name=$2, portfolio_kind=$3, brand_family=$4, tags=$5, revision=revision+1, updated_at=now()
      WHERE id=$1 RETURNING ${COLUNAS}`,
-   [antes.id, campos.name, campos.portfolio_kind, campos.brand_family]);
+   [antes.id, campos.name, campos.portfolio_kind, campos.brand_family, campos.tags]);
   await registrar(client, 'product', antes.id, 'updated', antes, r.rows[0], operator);
   return { tenant: null, type: 'portfolio.updated', body: r.rows[0] };
  }, { transactional: true, audit: false });

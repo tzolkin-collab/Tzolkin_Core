@@ -15,6 +15,50 @@ encerrava o processo antes do `DROP DATABASE` e o banco descartável ficava no s
 
 ---
 
+## 0. As camadas de teste (2026-10-01) `[EXISTENTE E VERIFICADO]`
+
+Quatro camadas, da mais barata à mais completa. Cada uma pega uma classe de defeito que a anterior não vê.
+
+| # | Camada | Comando | Precisa de | O que pega |
+|---|---|---|---|---|
+| 1 | **Unitária** (`test/unit`) | `npm run test:unit` | nada | regra de negócio, validação, assinatura SigV4, rotas com banco falso |
+| 2 | **Guardas de UX e UI estáticas** (`test/unit/ux-guards.test.mjs`, `redundant-titles`, `web-nav`) | `npm run test:unit` | nada | texto fora do glossário, acessibilidade do HTML, `innerHTML` dinâmico, menu fora do combinado |
+| 3 | **Integração** (`test/*.test.mjs`) | `npm test` | banco do `DATABASE_URL` (cria e apaga um descartável) | SQL real, migrações duas vezes, isolamento, transações |
+| 4 | **Tela no navegador** (`test/ui`) | `npm run test:ui` | Chrome ou Edge instalado | a tela de verdade: login, menu, cada tela em 1280 e 390 px, abas, ficha, colar foto |
+
+**Camada 4, como funciona.** `test/ui/smoke.test.mjs` sobe o `createCore` real com um banco falso
+(`test/ui/fixtures.mjs`, dados 100% sintéticos) e abre a tela num navegador sem janela, guiado por
+um mini-driver do protocolo do Chrome (`test/ui/browser.mjs`, sem dependência: o Node 24 já traz
+WebSocket). Não toca no banco real nem em provedor. Sem Chrome/Edge os testes são **pulados com o
+motivo**; `CHROME_PATH` aponta um navegador específico. `UI_SCREENSHOTS=1` grava uma imagem de cada
+tela em `test/ui/artifacts/` (fora do git).
+
+**O que a varredura de telas confere**, para cada item do menu e nos dois tamanhos: a tela renderiza,
+o título da página é o do menu, nenhuma exceção de JavaScript, nenhum `undefined`/`NaN`/`[object Object]`
+no texto, nenhum cabeçalho repetido em sequência, nenhum botão sem nome acessível e nenhum elemento
+passando da largura (medido pela borda de cada elemento, porque o painel rola por dentro e
+`scrollWidth` do documento não enxerga isso).
+
+**Controles positivos.** Uma guarda que nunca falha não prova nada. Por isso há testes que alimentam
+o detector com o defeito de propósito (`controle: o detector de defeitos de tela…`, `cada regra do
+glossário reconhece o defeito que descreve`, `o detector de innerHTML reprova interpolação…`). O controle
+da camada 4 já pagou o preço: mostrou que a primeira medição de rolagem horizontal estava cega.
+
+**Armadilha conhecida.** A CSP da tela (`style-src 'self'`) ignora `style="…"` escrito em HTML. Em teste,
+aplique estilo pelo DOM (`el.style.width = …`), não por `innerHTML`.
+
+**Como acrescentar uma regra.** Defeito de tela que se repetiu entra como regra: texto proibido vai
+para `BANIDOS` em `ux-guards.test.mjs` (com o motivo ao lado e uma amostra no teste de controle); defeito
+que só aparece renderizado entra na leitura de `leituraDe` em `smoke.test.mjs`.
+
+**Linha de base em 2026-10-02:** `npm test` com 747 testes aprovados, 0 falhas, saída 0 (banco
+descartável criado e apagado); `npm run test:unit` com 442 aprovados e `npm run test:ui` com 22 aprovados.
+
+**Armadilha da suíte completa:** os arquivos de `test/` dividem um só banco descartável, em série. Um teste que
+suponha banco vazio passa sozinho e falha no `npm test`; compare por diferença (antes/depois) em vez de valor absoluto.
+
+---
+
 ## 1. Estratégia `[EXISTENTE E VERIFICADO]`
 
 **Integração contra PostgreSQL real, não simulação.** Cada suíte sobe um servidor Core numa porta efêmera de loopback e conversa com ele por HTTP, como um cliente de verdade.

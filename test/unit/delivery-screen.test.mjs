@@ -66,26 +66,32 @@ test('a tela manda o dono no corpo, e só quando há o que decidir', () => {
  assert.match(delivery, /if \(dono && dono\.kind !== 'none'\)/);
 });
 
-test('o botão de ativar diz o tipo do item, e some onde não há o que ativar', () => {
- assert.ok(!delivery.includes("'Ativar produto'"), 'a tela chamava de produto toda linha de serviço');
- assert.match(delivery, /button\(`Ativar \$\{tipo\}`/);
+test('o botão de ativar (agora no cartão do dono) diz o tipo do item, e some onde não há o que ativar', () => {
+ const conexoes = fonte('connections.js');
+ assert.ok(!delivery.includes("'Ativar produto'") && !conexoes.includes("'Ativar produto'"), 'a tela chamava de produto toda linha de serviço');
+ assert.match(conexoes, /`Ativar \$\{projeto\.belongs_to\.item_kind_label \|\| 'item'\}`/);
  // Três condições, todas no fonte: é item do portfólio, está em rascunho e o
  // checklist persistido está completo. O servidor recusa as três de novo.
- assert.match(delivery, /dono\.kind === 'item' && project\.product_lifecycle_status === 'draft' && project\.readiness\?\.ready/);
+ assert.match(conexoes, /projeto\.belongs_to\?\.kind === 'item' && projeto\.product_lifecycle_status === 'draft' && checklist\?\.ready/);
+ // A ativação em si continua sendo uma função do cadastro técnico.
+ assert.match(delivery, /async function activate\(project\)/);
 });
 
-test('Deploys e Projetos técnicos leem o mesmo cadastro, e as duas recarregam depois de salvar', () => {
+test('Conexões e as abas dos provedores leem o mesmo cadastro, e recarregam depois de salvar', () => {
  const app = fonte('app.js');
- // Duas telas, um cadastro só: quem salva estando em Projetos técnicos precisa ver
- // o projeto aparecer. Listar só 'deploys' na recarga deixava a tela dizendo
- // "seu primeiro projeto começa acima" com o projeto já gravado.
- assert.match(app, /view === 'deploys' \|\| view === 'projects'/);
- assert.match(app, /\['deploys','projects'\]\.includes\(state\.view\)/);
- // O dono oferecido é o mesmo cadastro da tela de Conexões, com o tipo já traduzido
+ // Duas telas, um cadastro só: os projetos técnicos moram em Conexões e os
+ // repositórios em GitHub. Quem salva estando em qualquer uma delas precisa ver o
+ // projeto aparecer, e as telas antigas (Deploys, Projetos técnicos) não existem mais.
+ assert.match(app, /\['connections','github','vercel','easypanel'\]\.includes\(view\)/);
+ assert.match(app, /\['connections','github','vercel','easypanel'\]\.includes\(state\.view\)/);
+ assert.ok(!/view-delivery|view-deploys|view-management/.test(app), 'as seções antigas de Tecnologia saíram');
+// O dono oferecido é o mesmo cadastro da tela de Conexões, com o tipo já traduzido
  // pelo dicionário que vive no app.js — delivery.js não tem uma cópia dele.
  assert.match(app, /owners:\(\)=>\(\{/);
- assert.match(app, /kind_label:PORTFOLIO_KIND_LABELS\[item\.portfolio_kind\]/);
- assert.ok(!/PORTFOLIO_KIND_LABELS/.test(delivery), 'o dicionário de tipos não pode existir em dois lugares');
+ assert.match(app, /kind_label:kindInfo\(item\.portfolio_kind\)\?\.label/);
+ // Os tipos vêm da API (registro em catalog.mjs); nem o painel nem esta tela guardam
+ // um dicionário próprio.
+ assert.ok(!/PORTFOLIO_KIND_LABELS|KIND_INFO|KIND_ORDER/.test(app + delivery), 'o dicionário de tipos não pode existir no painel');
 });
 
 test('a tela de projetos técnicos não pede mais exclusão a ninguém', () => {

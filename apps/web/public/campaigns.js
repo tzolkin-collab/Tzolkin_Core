@@ -116,15 +116,20 @@ export function setupCampaigns({ api, onError = () => {} }) {
    conectar.onclick = () => abrirCredencial();
    acoes.append(conectar);
    corpo.append(acoes);
+   // Instrução de quem administra o servidor não é do operador: fica recolhida.
+   const tecnico = [];
    if (dados && !dados.oauth_available) {
-    corpo.append(el('small', 'Para conectar com o Facebook em um clique, defina META_APP_ID e META_APP_SECRET no servidor.'));
+    tecnico.push('Para conectar com o Facebook em um clique, defina META_APP_ID e META_APP_SECRET no servidor.');
    }
    if (dados?.login_mode === 'business') {
     corpo.append(el('small', 'O botão usa o Login do Facebook para Empresas: entre com o portfólio empresarial dono das contas de anúncio. Com a configuração de token de usuário do sistema, o token não expira.'));
    } else if (dados?.login_mode === 'classic') {
     corpo.append(el('small', 'O botão usa o Login do Facebook clássico: o token dura cerca de 60 dias. ' + DICA_SEM_EXPIRACAO));
    }
-   corpo.append(el('small', 'Também dá para conectar pelo servidor, com npm run marketing:connect.'));
+   tecnico.push('Também dá para conectar pelo servidor, com npm run marketing:connect.');
+   const detalhes = el('details');
+   detalhes.append(el('summary', 'Para quem administra o servidor'), ...tecnico.map(texto => el('small', texto)));
+   corpo.append(detalhes);
    card.append(corpo);
    return card;
   }
@@ -393,13 +398,13 @@ export function setupCampaigns({ api, onError = () => {} }) {
  // Render da tela geral
  // ---------------------------------------------------------------------------
  function render() {
-  const root = host('view-campaigns');
+  const root = host('inbound-panel-campaigns');
   if (!root) return;
   root.replaceChildren();
 
   const capa = el('section', undefined, 'campaign-hero');
   const titulo = el('div');
-  titulo.append(el('span', 'AQUISIÇÃO', 'overview-kicker'), el('h2', 'Campanhas'),
+  titulo.append(
    el('p', 'O que foi investido em anúncios, e a que produto ou contratação esse investimento pertence.'));
   capa.append(titulo);
   root.append(capa);
@@ -537,7 +542,7 @@ export function setupCampaigns({ api, onError = () => {} }) {
 
  async function loadProduct(produto) {
   const r = await api(`/api/products/${encodeURIComponent(produto.id)}/campaigns`);
-  renderContexto('view-product-campaigns', r, `Campanhas de ${produto.name || produto.id}`,
+  renderContexto('inbound-panel-campaigns', r, `Campanhas de ${produto.name || produto.id}`,
    'Investimento em anúncios atribuído a este produto.');
   return r;
  }

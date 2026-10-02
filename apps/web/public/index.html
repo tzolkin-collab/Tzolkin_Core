@@ -9,10 +9,12 @@
 <meta name="apple-mobile-web-app-title" content="Core"><link rel="icon" href="/favicon.ico" type="image/png"><link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/style.css">
 <link rel="stylesheet" href="/commercial.css">
+<link rel="stylesheet" href="/media.css">
 <link rel="stylesheet" href="/design.css">
 <link rel="stylesheet" href="/overview.css">
 <link rel="stylesheet" href="/relationships.css">
 <link rel="stylesheet" href="/portfolio.css">
+<link rel="stylesheet" href="/tabs.css">
 <link rel="stylesheet" href="/connections.css">
 <link rel="stylesheet" href="/delivery.css">
 <link rel="stylesheet" href="/management.css">
@@ -54,7 +56,7 @@
 <div id="metrics" class="metrics"></div>
 
 <section id="view-overview" class="view" hidden aria-label="Visão geral">
-<div class="overview-hero"><div><span class="overview-kicker">OPERAÇÃO TZOLKIN</span><h2>O que precisa da sua atenção hoje</h2><p id="overview-summary">Consolidando os dados já salvos no Core.</p></div><div class="overview-hero-actions"><span id="overview-period" class="overview-period"></span><button class="primary-action" type="button" data-overview-view="clients">Abrir carteira <span aria-hidden="true">↗</span></button></div></div>
+<div class="overview-hero"><div><span class="overview-kicker">OPERAÇÃO TZOLKIN</span><h2>Hoje na operação</h2><p id="overview-summary">Consolidando os dados já salvos no Core.</p></div><div class="overview-hero-actions"><span id="overview-period" class="overview-period"></span><button class="primary-action" type="button" data-overview-view="clients">Abrir carteira <span aria-hidden="true">↗</span></button></div></div>
 <div id="overview-kpis" class="overview-kpis"></div>
 <div class="overview-layout"><section class="overview-panel overview-attention"><div class="overview-panel-title"><div><span class="overview-kicker">PRÓXIMAS DECISÕES</span><h3>O que merece atenção</h3></div></div><div id="overview-alerts"></div></section><section class="overview-panel"><div class="overview-panel-title"><div><span class="overview-kicker">SISTEMA</span><h3>Conexões essenciais</h3></div><button class="table-action" type="button" data-overview-view="finance">Revisar financeiro →</button></div><div id="overview-integrations" class="overview-integrations"></div></section></div>
 <section class="overview-panel overview-products"><div class="overview-panel-title"><div><span class="overview-kicker">PORTFÓLIO</span><h3>Portfólio e clientes ligados</h3></div><button class="table-action" type="button" data-overview-view="products">Ver portfólio →</button></div><div id="overview-product-list" class="overview-product-list"></div></section>
@@ -63,7 +65,7 @@
 
 <section id="view-clients" class="view">
 <div id="client-summary" class="client-summary"></div>
-<div class="section-toolbar client-toolbar"><div><h2>Clientes</h2><p class="detail">Relacionamentos ativos.</p></div><label class="search-label"><span class="sr-only">Buscar cliente</span><input id="client-search" type="search" placeholder="Buscar cliente…"></label></div>
+<div class="section-toolbar client-toolbar"><p class="detail">Quem a TZOLKIN atende e o que cada um contratou.</p><label class="search-label"><span class="sr-only">Buscar cliente</span><input id="client-search" type="search" placeholder="Buscar cliente…"></label></div>
 <div id="tenants" class="client-grid"></div><div id="clients-empty" class="empty-state" hidden><span class="empty-symbol" aria-hidden="true">＋</span><h3>Sua carteira começa aqui.</h3><p>Cadastre o primeiro cliente.</p><button class="secondary" data-open="tenant-dialog">Adicionar cliente</button></div><p id="search-empty" class="empty-list" hidden>Nenhum cliente encontrado.</p>
 </section>
 
@@ -73,24 +75,23 @@
 </section>
 
 <section id="view-companies" class="view" hidden aria-label="Empresas">
-<div class="section-toolbar client-toolbar"><div><h2>Empresas</h2><p class="detail">Cadastro das organizações.</p></div><label class="search-label"><span class="sr-only">Buscar empresa</span><input id="company-search" type="search" placeholder="Buscar empresa…"></label></div>
+<div class="section-toolbar client-toolbar"><p class="detail">Cadastro das organizações, sejam ou não clientes.</p><label class="search-label"><span class="sr-only">Buscar empresa</span><input id="company-search" type="search" placeholder="Buscar empresa…"></label></div>
 <div id="companies" class="client-grid"></div><p id="companies-empty" class="empty-list" hidden>Nenhuma empresa encontrada.</p>
 </section>
 
 <section id="view-client" class="view" hidden aria-label="Detalhes do cliente"><button id="client-back" class="table-action client-back" type="button">← Voltar para clientes</button><div id="client-detail"></div></section>
 
-<section id="view-people" class="view" hidden aria-label="Pessoas"><div class="section-toolbar"><div><h2>Stakeholders</h2><p class="detail">Pessoas do relacionamento comercial, separadas dos acessos aos produtos.</p></div><label class="search-label"><span class="sr-only">Buscar pessoa</span><input id="people-search" type="search" placeholder="Buscar pessoa ou empresa…"></label></div><div id="stakeholder-directory" class="people-grid"></div><p id="people-empty" class="empty-list" hidden>Nenhum stakeholder encontrado.</p></section>
+<section id="view-people" class="view" hidden aria-label="Pessoas"><div class="section-toolbar"><p class="detail">Pessoas do relacionamento comercial, separadas dos acessos aos produtos.</p><label class="search-label"><span class="sr-only">Buscar pessoa</span><input id="people-search" type="search" placeholder="Buscar pessoa ou empresa…"></label></div><div id="stakeholder-directory" class="people-grid"></div><p id="people-empty" class="empty-list" hidden>Nenhum stakeholder encontrado.</p></section>
 
-<section id="view-products" class="view" hidden><div class="section-toolbar"><div><h2 class="section-title">Portfólio TZOLKIN</h2><p class="catalog-caption">Cada item tem um tipo. Produto e plataforma vendem acesso por oferta e checkout; linha de serviço vende trabalho por contrato; interno não se vende. Rascunho ainda não opera, e deploy observado é evidência técnica, separada do ciclo comercial.</p></div><button id="products-services-link" class="secondary" type="button">Serviços contratados →</button></div><div id="product-catalog" class="portfolio-grid"></div><h2 class="section-title contracts-title">Clientes vinculados</h2><div id="contracts" class="list-panel"></div></section>
-<section id="view-services" class="view" hidden aria-label="Serviços"><div class="section-toolbar"><div><h2 class="section-title">Serviços</h2><p class="catalog-caption">Toda contratação de serviço: mentoria, consultoria, assessoria, sob demanda e o que ainda não foi classificado. Elas pertencem ao cliente e não viram produto por causa de um deploy.</p></div><label class="search-label"><span class="sr-only">Filtrar por tipo de serviço</span><select id="services-filter"></select></label></div><div id="services-summary" class="deploy-summary" aria-label="Resumo dos serviços"></div><div id="services-list" class="service-grid"></div></section>
+<section id="view-products" class="view" hidden><div class="section-toolbar"><p class="catalog-caption">O que a TZOLKIN vende e opera. O tipo de cada espaço diz o que ele pode fazer; rascunho ainda não opera.</p><button id="products-services-link" class="secondary" type="button">Serviços contratados →</button></div><div id="portfolio-tabs"></div><div id="portfolio-note" class="portfolio-note"></div><div id="product-catalog" class="space-grid" role="tabpanel"></div><h2 class="section-title contracts-title">Clientes vinculados</h2><div id="contracts" class="list-panel"></div></section>
+<section id="view-services" class="view" hidden aria-label="Serviços"><div class="section-toolbar"><div><p class="catalog-caption">Toda contratação de serviço: mentoria, consultoria, assessoria, sob demanda e o que ainda não foi classificado. Elas pertencem ao cliente e não viram produto por causa de um deploy.</p></div><label class="search-label"><span class="sr-only">Filtrar por tipo de serviço</span><select id="services-filter"></select></label></div><div id="services-summary" class="deploy-summary" aria-label="Resumo dos serviços"></div><div id="services-list" class="service-grid"></div></section>
 
-<section id="view-access" class="view" hidden><h2 class="section-title">Acessos aos produtos</h2><div id="members" class="list-panel"></div></section>
-<section id="view-settings" class="view" hidden aria-label="Configurações"><div class="section-toolbar"><div><h2>Configurações</h2><p class="detail">Preferências operacionais e integrações do Core.</p></div></div><div class="empty-state"><h3>Configurações do espaço</h3><p>Em breve: preferências, integrações e regras padrão.</p></div></section>
-<section id="view-management" class="view" hidden aria-label="Gestão técnica"><div class="section-toolbar"><div><div class="projects-kicker">OPERAÇÃO E INTEGRAÇÕES</div><h2>Gestão técnica</h2><p class="detail">Domínios, integrações e verificações operacionais dos produtos. Banco de dados e Redis têm áreas próprias para manter a leitura objetiva.</p></div></div><div class="management-grid management-overview-grid"><section id="management-dns" class="management-panel"></section><section id="management-apis" class="management-panel"></section><section id="management-ops" class="management-panel"></section></div></section>
+<section id="view-access" class="view" hidden><p class="catalog-caption">Quem tem acesso a qual produto, separado do cadastro de pessoas.</p><div id="members" class="list-panel"></div></section>
+<section id="view-settings" class="view" hidden aria-label="Configurações"><div class="section-toolbar"><p class="detail">Preferências operacionais e integrações do Core.</p></div><div class="empty-state"><h3>Em breve</h3><p>Em breve: preferências, integrações e regras padrão.</p></div></section>
 <section id="view-database" class="view" hidden aria-label="Banco de dados"><section id="management-schema" class="management-panel technical-page-panel"></section></section>
 <section id="view-redis" class="view" hidden aria-label="Redis e caches"><p class="technical-intro">Instâncias de cache encontradas na infraestrutura. Métricas aparecem somente quando a integração autorizada estiver disponível.</p><section id="management-redis" class="management-panel technical-page-panel"></section></section>
-<section id="view-security" class="view" hidden aria-label="Segurança"><div class="section-toolbar"><div><h2>Segurança</h2><p class="detail">Sessões, permissões e saúde de acesso.</p></div></div><div class="empty-state"><h3>Segurança do Core</h3><p>Os controles de segurança serão reunidos nesta área.</p></div></section>
-<section id="view-server-metrics" class="view" hidden aria-label="Métricas de servidor"><div class="section-toolbar"><div><h2>Métricas de servidor</h2><p class="detail">Disponibilidade e capacidade da infraestrutura.</p></div></div><div class="empty-state"><h3>Métricas de infraestrutura</h3><p>Conecte um provedor para acompanhar os indicadores do servidor.</p></div></section>
+<section id="view-security" class="view" hidden aria-label="Segurança"><div class="section-toolbar"><p class="detail">Sessões, permissões e saúde de acesso.</p></div><div class="empty-state"><h3>Em breve</h3><p>Os controles de segurança serão reunidos nesta área.</p></div></section>
+<section id="view-server-metrics" class="view" hidden aria-label="Métricas de servidor"><div class="section-toolbar"><p class="detail">Disponibilidade e capacidade da infraestrutura.</p></div><div class="empty-state"><h3>Em breve</h3><p>Conecte um provedor para acompanhar os indicadores do servidor.</p></div></section>
 <section id="view-tracking" class="view" hidden aria-label="Acompanhamento"></section>
 <section id="view-finance" class="view" hidden aria-label="Financeiro"></section>
 <section id="view-emails" class="view" hidden aria-label="E-mails"></section>
@@ -102,17 +103,15 @@
      por nome. As três listas são estados diferentes da mesma pergunta: quem já tem
      dono, o que o provedor mostra e ninguém reclamou, e o que ficou para trás. -->
 <section id="view-connections" class="view" hidden aria-label="Conexões">
-<div class="section-toolbar"><div><h2 class="section-title">Conexões técnicas</h2><p class="catalog-caption">Cada repositório, deploy, domínio e banco tem um dono só: um item do portfólio ou uma contratação. Desligar guarda o último dono, a data e o motivo; trocar de dono é Reatribuir, com motivo.</p></div><button id="connections-refresh" class="secondary" type="button">Atualizar inventário</button></div>
+<div class="section-toolbar"><div><p class="catalog-caption">O que está ligado a cada cliente, contratação ou item do portfólio, e o que provavelmente deveria estar. O inventário completo de cada provedor fica nas abas Vercel, GitHub e EasyPanel.</p></div><div class="connections-tools"><label class="search-label"><span class="sr-only">Buscar cliente, item ou recurso</span><input id="connections-search" type="search" placeholder="Buscar cliente, item ou recurso…"></label><button id="connections-refresh" class="secondary" type="button">Atualizar inventário</button></div></div>
 <p id="connections-message" class="notice" role="status"></p>
-<div id="connections-summary" class="deploy-summary" aria-label="Resumo das conexões"></div>
+<p id="delivery-message" class="notice" role="status"></p>
 <div id="connections-providers" class="delivery-chips" aria-label="Inventário dos provedores"></div>
+<div id="connections-suggestions"></div>
+<h2 class="section-title contracts-title">Conectado</h2>
 <div id="connections-owned"></div>
-<h2 class="section-title contracts-title">Sem classificar</h2>
-<p class="catalog-caption">O provedor mostra, e nenhuma conexão reclama. Escolher o dono aqui é o que transforma observação em registro.</p>
-<div id="connections-unclassified" class="list-panel"></div>
-<h2 class="section-title contracts-title">Desligadas</h2>
-<p class="catalog-caption">A linha continua, sem dono ativo. É dela que Reatribuir parte quando alguém decide de quem o recurso passa a ser.</p>
-<div id="connections-inactive" class="list-panel"></div>
+<div id="connections-orphans"></div>
+<details class="connection-inactive"><summary>Desligadas (<span id="connections-inactive-count">0</span>)</summary><p class="catalog-caption">A linha continua, sem dono ativo. Reatribuir parte dela quando alguém decide de quem o recurso passa a ser.</p><div id="connections-inactive" class="list-panel"></div></details>
 <dialog id="connection-reason-dialog"><form id="connection-reason-form" novalidate>
 <div class="dialog-heading"><h2 id="connection-reason-title">Desvincular conexão</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div>
 <p id="connection-reason-subject" class="detail"></p>
@@ -128,13 +127,54 @@
 <div id="connection-history-list" class="list-panel"></div>
 </form></dialog>
 </section>
-<section id="view-delivery" class="view" hidden aria-label="GitHub e cadastro técnico">
-<div class="section-toolbar"><div><h2>GitHub e configuração de deploy</h2><p class="delivery-subtitle">Escolha o repositório, organize os serviços e conecte os destinos de publicação.</p></div></div>
-<p id="delivery-message" class="notice" role="status"></p>
+
+<section id="view-vercel" class="view" hidden aria-label="Vercel">
+<div class="section-toolbar deploy-intro"><div><p>Projetos e histórico de deploys. Abra o projeto para ver configuração e domínios aqui no Core.</p></div><span class="catalog-caption" id="deploys-caption"></span></div>
+<div id="deploys-summary" class="deploy-summary" aria-label="Resumo dos projetos consultados"></div>
+<div class="deploy-filters"><label class="deploy-search"><span>Buscar projeto, branch ou commit</span><input id="deploy-search" type="search" placeholder="Ex.: website, main, abc1234"></label><label><span>Último deploy do projeto</span><select id="deploy-filter"><option value="all">Todos os estados</option><option value="ready">Pronto</option><option value="progress">Em andamento</option><option value="failed">Falhou ou foi interrompido</option><option value="unknown">Sem estado confirmado</option></select></label><span id="deploy-results" class="catalog-caption" role="status"></span></div>
+<div id="deploys-status"></div>
+<div id="deploys-list" class="deploy-grid"></div>
+<p class="catalog-caption catalog-footnote">Somente leitura. O Core não dispara, cancela nem promove deploy na Vercel.</p>
+</section>
+
+<section id="view-easypanel" class="view" hidden aria-label="EasyPanel">
+<div class="section-toolbar deploy-intro"><div><p>Projetos e serviços da infraestrutura. Abra um serviço para ver configuração, domínios, métricas, containers, logs, volumes e backups; operações remotas pedem confirmação.</p></div></div>
+<div id="easypanel-inventory" class="deploy-grid"></div>
+</section>
+
+<section id="view-github" class="view" hidden aria-label="GitHub">
+<div class="section-toolbar"><div><p class="delivery-subtitle">Repositórios que a credencial do Core alcança. Configurar um repositório abre o cadastro técnico; o dono de cada projeto e o checklist de ativação ficam em Conexões.</p></div></div>
 <div id="delivery-provider-status" class="delivery-chips" aria-label="Conexões"></div>
 <section class="delivery-repo-panel" aria-label="Repositórios do GitHub"><div class="section-toolbar"><h3>Seus repositórios <span id="delivery-repo-count" class="status"></span></h3><label class="delivery-search"><span class="sr-only">Buscar nos repositórios</span><input id="delivery-repository-search" type="search" placeholder="Buscar organização ou repositório"></label></div><div id="delivery-repositories"></div></section>
-<div class="section-toolbar"><h2>Repositórios e configurações</h2><span class="catalog-caption">GitHub, Vercel e EasyPanel no mesmo fluxo.</span></div>
-<div id="delivery-list" class="deploy-grid"></div>
+</section>
+
+<section id="view-dns" class="view" hidden aria-label="DNS">
+<div class="section-toolbar"><div><p class="catalog-caption">Zonas de DNS por provedor. Hoje só a Hostinger está conectada; outro provedor entra como uma nova seção nesta tela, sem mudar a navegação.</p></div></div>
+<section id="management-dns" class="management-panel"></section>
+</section>
+
+<section id="view-commercial" class="view" hidden aria-label="Inbound"><div id="inbound-tabs"></div><div id="inbound-panel-leads" class="tab-panel" role="tabpanel" aria-labelledby="inbound-tab-leads"></div><div id="inbound-panel-campaigns" class="tab-panel" role="tabpanel" aria-labelledby="inbound-tab-campaigns" hidden></div></section>
+<section id="view-product-keys" class="view" hidden aria-label="Chaves de integração"></section>
+<section id="view-product" class="view" hidden>
+<div id="product-record" class="context-panel"></div>
+<h2 id="product-rights-title" class="section-title contracts-title">Direitos contratados</h2>
+<div id="product-rights" class="list-panel"></div>
+</section>
+
+<section id="view-product-orgs" class="view" hidden>
+<div class="section-toolbar"><h2>Organizações com contrato</h2><label class="search-label"><span class="sr-only">Buscar organização</span><input id="org-search" type="search" placeholder="Buscar organização…"></label></div>
+<div class="table-container"><table><thead><tr><th>Organização</th><th>Contrato</th><th>Plano</th><th>Pessoas neste produto</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody id="product-orgs"></tbody></table>
+<div id="product-orgs-empty" class="empty-state" hidden><span class="empty-symbol" aria-hidden="true">◈</span><h3 id="product-orgs-empty-title">Nenhuma organização contratou este produto.</h3><p>O Core não infere vínculos: uma organização só aparece aqui depois que um contrato deste produto é registrado.</p><button class="secondary" data-open="entitlement-dialog">Registrar contrato</button></div>
+<p id="product-orgs-search-empty" class="empty-list" hidden>Nenhuma organização encontrada.</p></div>
+<p class="catalog-caption catalog-footnote" id="scope-note">Pessoas vinculadas contam apenas este produto. Um vínculo em outro produto da mesma organização não dá acesso aqui.</p>
+</section>
+<section id="view-product-engagements" class="view" hidden aria-label="Contratações"><div class="section-toolbar"><div><p class="catalog-caption">O que cada cliente contratou neste item. Linha de serviço não tem contrato de acesso: o vínculo com o cliente é a contratação.</p></div></div><div id="product-engagements" class="service-grid"></div></section>
+<section id="view-product-payments" class="view" hidden aria-label="Pagamentos do produto"></section>
+<section id="view-product-receivables" class="view" hidden aria-label="Recebimentos"></section>
+<section id="view-product-emails" class="view" hidden aria-label="E-mails do produto"></section>
+<section id="view-service-campaigns" class="view" hidden aria-label="Campanhas do serviço"></section>
+
+</main></div></div>
 <dialog id="delivery-dialog" class="delivery-dialog" aria-labelledby="delivery-title"><form id="delivery-form" novalidate>
 <header class="delivery-heading"><div><p class="eyebrow">CATÁLOGO TÉCNICO</p><h2 id="delivery-title">Configurar projeto</h2></div><button id="delivery-close" type="button" class="quiet">Fechar</button></header>
 <nav id="delivery-steps" class="delivery-steps" aria-label="Etapas da configuração"></nav>
@@ -152,50 +192,20 @@
 <p id="delivery-error" class="dialog-error" role="alert"></p>
 <footer class="delivery-footer"><p class="catalog-caption">Salva no Core. Não altera plataformas nem publica código.</p><div class="delivery-heading"><button id="delivery-back" type="button" class="secondary">Voltar</button><button id="delivery-next" type="button" class="primary">Continuar</button><button id="delivery-save" type="submit" class="primary" hidden>Salvar projeto</button></div></footer>
 </form></dialog>
-</section>
-
-<section id="view-deploys" class="view" hidden>
-<div class="section-toolbar deploy-intro"><div><h2>Publicações e infraestrutura</h2><p>Acompanhe seus projetos e abra os detalhes aqui no Core.</p></div><span class="catalog-caption" id="deploys-caption"></span></div>
-<nav class="provider-tabs" aria-label="Provedores de deploy"><button type="button" class="active" data-provider-tab="vercel">Vercel</button><button type="button" data-provider-tab="easypanel">EasyPanel</button></nav>
-<div id="deploys-summary" class="deploy-summary" aria-label="Resumo dos projetos consultados"></div>
-<div class="deploy-filters"><label class="deploy-search"><span>Buscar projeto, branch ou commit</span><input id="deploy-search" type="search" placeholder="Ex.: website, main, abc1234"></label><label><span>Último deploy do projeto</span><select id="deploy-filter"><option value="all">Todos os estados</option><option value="ready">Pronto</option><option value="progress">Em andamento</option><option value="failed">Falhou ou foi interrompido</option><option value="unknown">Sem estado confirmado</option></select></label><span id="deploy-results" class="catalog-caption" role="status"></span></div>
-<div id="deploys-status"></div>
-<div data-provider-panel="vercel"><div class="section-toolbar deploy-infra-heading"><h2>Deploys · Vercel</h2><span class="status">Projetos e histórico de deployments</span></div><div id="deploys-list" class="deploy-grid"></div></div>
-<div data-provider-panel="easypanel" hidden><div class="section-toolbar deploy-infra-heading"><h2>Deploys e serviços · EasyPanel</h2><span class="status">Projetos agrupados por projeto</span></div>
-<p class="catalog-caption">Abra um serviço para consultar configuração e domínios no Core. Saúde, logs e ações operacionais ainda não integrados.</p>
-<div id="easypanel-inventory" class="deploy-grid"></div>
-</div>
-<p class="catalog-caption catalog-footnote">Somente leitura. O Core não dispara, cancela nem promove deploy.</p>
-</section>
-
-<section id="view-commercial" class="view" hidden aria-label="Inbound comercial"></section>
-<section id="view-product-keys" class="view" hidden aria-label="Chaves de integração"></section>
-<section id="view-product" class="view" hidden>
-<div id="product-record" class="context-panel"></div>
-<h2 id="product-rights-title" class="section-title contracts-title">Direitos contratados</h2>
-<div id="product-rights" class="list-panel"></div>
-</section>
-
-<section id="view-product-orgs" class="view" hidden>
-<div class="section-toolbar"><h2>Organizações com contrato</h2><label class="search-label"><span class="sr-only">Buscar organização</span><input id="org-search" type="search" placeholder="Buscar organização…"></label></div>
-<div class="table-container"><table><thead><tr><th>Organização</th><th>Contrato</th><th>Plano</th><th>Pessoas neste produto</th><th><span class="sr-only">Ações</span></th></tr></thead><tbody id="product-orgs"></tbody></table>
-<div id="product-orgs-empty" class="empty-state" hidden><span class="empty-symbol" aria-hidden="true">◈</span><h3 id="product-orgs-empty-title">Nenhuma organização contratou este produto.</h3><p>O Core não infere vínculos: uma organização só aparece aqui depois que um contrato deste produto é registrado.</p><button class="secondary" data-open="entitlement-dialog">Registrar contrato</button></div>
-<p id="product-orgs-search-empty" class="empty-list" hidden>Nenhuma organização encontrada.</p></div>
-<p class="catalog-caption catalog-footnote" id="scope-note">Pessoas vinculadas contam apenas este produto. Um vínculo em outro produto da mesma organização não dá acesso aqui.</p>
-</section>
-<section id="view-product-engagements" class="view" hidden aria-label="Contratações"><div class="section-toolbar"><div><h2 class="section-title">Contratações</h2><p class="catalog-caption">O que cada cliente contratou neste item. Linha de serviço não tem contrato de acesso: o vínculo com o cliente é a contratação.</p></div></div><div id="product-engagements" class="service-grid"></div></section>
-<section id="view-product-payments" class="view" hidden aria-label="Pagamentos do produto"></section>
-<section id="view-product-receivables" class="view" hidden aria-label="Recebimentos"></section>
-<section id="view-product-emails" class="view" hidden aria-label="E-mails do produto"></section>
-<section id="view-campaigns" class="view" hidden aria-label="Campanhas"></section>
-<section id="view-product-campaigns" class="view" hidden aria-label="Campanhas do produto"></section>
-<section id="view-service-campaigns" class="view" hidden aria-label="Campanhas do serviço"></section>
-
-</main></div></div>
+<dialog id="space-dialog" class="space-dialog"><form id="space-form">
+<div class="dialog-heading"><div><h2 id="space-title">Novo espaço</h2><p id="space-subtitle" class="detail">Um espaço é onde a TZOLKIN organiza o que vende ou opera.</p></div><button type="button" class="close" data-close aria-label="Fechar">×</button></div>
+<fieldset class="space-kinds"><legend>Tipo</legend><div id="space-kind-grid" role="radiogroup" aria-label="Tipo de espaço"></div></fieldset>
+<label>Nome<input name="name" required minlength="2" maxlength="120" autocomplete="off" placeholder="Ex.: Skiller"></label>
+<label>Identificador<input name="id" required pattern="[a-z][a-z0-9\-]{1,63}" maxlength="64" autocomplete="off" placeholder="skiller"><small id="space-id-help">Sugerido a partir do nome. Aparece nos endereços e nas chaves e não muda depois.</small></label>
+<div id="space-tags-field" class="tags-field" hidden><label for="space-tag-input">Tags</label><div id="space-tag-box" class="tag-box"><input id="space-tag-input" autocomplete="off" data-placeholder="consultoria, assessoria, mentoria"></div><small>Enter ou vírgula adiciona. Até 8; letras minúsculas, números e hífen.</small><input type="hidden" name="tags"></div>
+<input type="hidden" name="revision">
+<p class="dialog-error form-error" role="alert"></p>
+<div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button type="submit" class="primary" id="space-submit">Criar espaço</button></div>
+</form></dialog>
 <dialog id="tenant-dialog"><form id="tenant-form"><div class="dialog-heading"><h2>Nova empresa</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div><label>Nome<input name="name" required maxlength="160" autocomplete="organization"></label><label>Identificador<input name="slug" required maxlength="64" placeholder="nome-da-empresa" aria-describedby="slug-help"></label><small id="slug-help">Letras minúsculas, números e hífen.</small><label>Relacionamento<select name="relationship_kind"><option value="customer">Cliente</option><option value="prospect">Prospect</option><option value="partner">Parceiro</option><option value="internal">Organização interna</option></select></label><label>Tipo de organização<select name="organization_type"><option value="company">Empresa</option><option value="person">Pessoa física</option><option value="nonprofit">Organização sem fins lucrativos</option><option value="internal">Interna</option></select></label><label>Situação<select name="lifecycle_status"><option value="active">Ativo</option><option value="lead">Lead</option><option value="onboarding">Em implantação</option><option value="paused">Pausado</option><option value="completed">Concluído</option><option value="discontinued">Descontinuado</option><option value="unclassified">A classificar</option></select></label><p class="dialog-error form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button class="primary">Criar empresa</button></div></form></dialog>
 <dialog id="member-dialog"><form id="member-form"><div class="dialog-heading"><h2>Vincular acesso</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div><label>Cliente<select name="tenant_id" class="tenant-select" required></select></label><label>Produto<select name="product_id" class="product-select" required></select></label><label>ID do usuário<input name="subject" required maxlength="200" aria-describedby="subject-help"></label><small id="subject-help">Identificador da conta no app. Não envia convite. O vínculo vale só para o produto escolhido.</small><label>Status<select name="active"><option value="true">Ativo</option><option value="false">Revogado</option></select></label><p class="dialog-error form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button class="primary">Salvar acesso</button></div></form></dialog>
 <dialog id="entitlement-dialog"><form id="entitlement-form"><div class="dialog-heading"><h2>Contrato de produto</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div><label>Cliente<select name="tenant_id" class="tenant-select" required></select></label><label>Produto<select name="product_id" class="product-select" required></select></label><label>Plano<input name="plan" required maxlength="80" aria-describedby="plan-help"></label><small id="plan-help">Rótulo cadastral do contrato. Não define preço nem cobrança.</small><label>Status<select name="active"><option value="true">Ativo</option><option value="false">Revogado</option></select></label><details><summary>Permissões</summary><label>Direitos de acesso<input name="rights" placeholder="dashboard.read, appointments.write"></label></details><p class="dialog-error form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button class="primary">Salvar contrato</button></div></form></dialog>
-<dialog id="stakeholder-dialog"><form id="stakeholder-form"><div class="dialog-heading"><h2>Novo stakeholder</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div><label>Cliente<select name="tenant_id" class="customer-select" required></select></label><label>Nome<input name="name" required maxlength="160" autocomplete="name"></label><label>Papel<select name="role"><option value="decision_maker">Decisor</option><option value="champion">Champion</option><option value="finance">Financeiro</option><option value="technical">Técnico</option><option value="operational">Operacional</option><option value="student">Aluno</option><option value="owner">Proprietário</option><option value="contact">Contato</option></select></label><label>Cargo ou função<input name="title" maxlength="120"></label><label class="checkbox-label"><input name="is_primary" type="checkbox"> Contato principal</label><label class="checkbox-label"><input name="contact_allowed" type="checkbox" checked> Contato profissional permitido</label><p class="dialog-error form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button class="primary">Salvar pessoa</button></div></form></dialog>
+<dialog id="stakeholder-dialog"><form id="stakeholder-form"><div class="dialog-heading"><h2>Novo stakeholder</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div><label>Cliente<select name="tenant_id" class="customer-select" required></select></label><label>Nome<input name="name" required maxlength="160" autocomplete="name"></label><label>Papel<select name="role"><option value="decision_maker">Decisor</option><option value="champion">Champion</option><option value="finance">Financeiro</option><option value="technical">Técnico</option><option value="operational">Operacional</option><option value="student">Aluno</option><option value="owner">Proprietário</option><option value="contact">Contato</option></select></label><label>Cargo ou função<input name="title" maxlength="120"></label><label>E-mail (opcional)<input name="email" type="email" maxlength="320" autocomplete="email"></label><label>Telefone ou WhatsApp (opcional)<input name="phone" type="tel" maxlength="40" autocomplete="tel" placeholder="11 99999-9999"></label><label class="checkbox-label"><input name="is_primary" type="checkbox"> Contato principal</label><label class="checkbox-label"><input name="contact_allowed" type="checkbox" checked> Contato profissional permitido</label><p class="dialog-error form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button class="primary">Salvar pessoa</button></div></form></dialog>
 <dialog id="engagement-dialog" aria-labelledby="engagement-dialog-title"><form id="engagement-form"><div class="dialog-heading"><h2 id="engagement-dialog-title">Nova contratação</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div><label>Empresa<input name="tenant_name" readonly tabindex="-1" aria-describedby="engagement-tenant-help"></label><small id="engagement-tenant-help">Vem da ficha e não muda: levar a contratação para outra empresa é outra contratação.</small><label>Tipo de contratação<select name="service_model" required></select></label><label>Item do portfólio<select name="product_id" aria-describedby="engagement-product-help"></select></label><small id="engagement-product-help">Opcional em serviço. Contratação do tipo produto exige um produto ou plataforma ativo.</small><label>Situação<select name="status" required></select></label><label>Nome da contratação<input name="label" required minlength="2" maxlength="120" placeholder="Ex.: Assessoria de marketing 2026" aria-describedby="engagement-label-help"></label><small id="engagement-label-help">Único dentro da empresa.</small><p class="dialog-error form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button class="primary">Criar contratação</button></div></form></dialog>
 <dialog id="campaign-binding-dialog"><form id="campaign-binding-form"><div class="dialog-heading"><h2>Atribuir campanha</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div><p class="campaign-binding-name detail"></p><p class="campaign-suggestion" hidden></p><label>Pertence a<select name="target" required></select></label><small>Uma campanha pertence a um produto <strong>ou</strong> a uma contratação, nunca aos dois — somar nos dois lados contaria o mesmo gasto duas vezes. Deixe em branco para desvincular.</small><label>Observação<input name="note" maxlength="300" placeholder="por que esta campanha é deste contexto"></label><p class="dialog-error form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button class="primary">Salvar atribuição</button></div></form></dialog>
 <dialog id="marketing-credential-dialog"><form id="marketing-credential-form" autocomplete="off"><div class="dialog-heading"><h2>Conectar token da Meta</h2><button type="button" class="close" data-close aria-label="Fechar">×</button></div><p class="detail">O token é cifrado no servidor e nunca volta para esta tela. Depois de salvar, só a impressão digital fica visível.</p><p class="marketing-key-warning notice-inline" hidden></p><label>Rótulo<input name="label" maxlength="120" value="Meta Ads" required></label><label>Token de acesso<input name="token" type="password" required minlength="20" maxlength="1000" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-describedby="marketing-token-help"></label><small id="marketing-token-help">Usuário do Sistema (não expira) ou token de longa duração. Precisa da permissão <code>ads_read</code>.</small><label class="checkbox-label"><input name="exchange" type="checkbox"> Meu token é de curta duração — trocar por um de ~60 dias</label><details><summary>Credenciais do app (para conferir validade)</summary><small>Sem elas o token é gravado, mas o Core não consegue conferir escopos nem avisar quando estiver perto de expirar. A chave secreta é usada só nesta requisição e não é guardada. Obrigatórias para a troca de token curto.</small><label>ID do app<input name="app_id" inputmode="numeric" maxlength="25" autocomplete="off"></label><label>Chave secreta do app<input name="app_secret" type="password" maxlength="200" autocomplete="off"></label></details><p class="dialog-error form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="secondary" data-close>Cancelar</button><button class="primary">Conectar</button></div></form></dialog>

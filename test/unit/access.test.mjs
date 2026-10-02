@@ -35,7 +35,7 @@ test('app key is authenticated against the kinds its scope requires', async () =
  await authenticateApp(pool, 'token-de-teste', 'commercial:intake');
  assert.match(calls[0].sql, /portfolio_kind=ANY\(\$3/);
  assert.deepEqual(calls[0].values.slice(1), ['context:read', ['product', 'platform']]);
- assert.deepEqual(calls[1].values.slice(1), ['commercial:intake', ['product', 'platform', 'service_line']]);
+ assert.deepEqual(calls[1].values.slice(1), ['commercial:intake', ['product', 'platform', 'service_line', 'advisory']]);
  // Escopo que não existe não chega ao banco.
  assert.equal(await authenticateApp({ query: async () => assert.fail('não deveria consultar') }, 'token-de-teste', 'admin'), null);
 });

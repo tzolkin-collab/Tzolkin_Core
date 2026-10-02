@@ -14,6 +14,13 @@ const marcas = nomes => Object.fromEntries(nomes.map(nome => {
 const FILES = {
  '/commercial.js':['commercial.js','text/javascript'],
  '/commercial.css':['commercial.css','text/css'],
+ '/media.js':['media.js','text/javascript'],
+ '/space-fields.js':['space-fields.js','text/javascript'],
+ '/automations.js':['automations.js','text/javascript'],
+ '/client-edit.js':['client-edit.js','text/javascript'],
+ '/client-history.js':['client-history.js','text/javascript'],
+ '/stage-requirements.js':['stage-requirements.js','text/javascript'],
+ '/media.css':['media.css','text/css'],
  '/': ['index.html', 'text/html'],
  // O favicon precisa de uma rota própria e estável. Não depender de
  // /logo.svg aqui: navegadores, crawlers e instaladores PWA procuram
@@ -65,6 +72,11 @@ const FILES = {
  '/relationships.css': ['relationships.css', 'text/css'],
  '/portfolio.css': ['portfolio.css', 'text/css'],
  '/connections.js': ['connections.js', 'text/javascript'],
+ '/owner-suggestions.js': ['owner-suggestions.js', 'text/javascript'],
+ '/owner-link.js': ['owner-link.js', 'text/javascript'],
+ '/tabs.js': ['tabs.js', 'text/javascript'],
+ '/space-form.js': ['space-form.js', 'text/javascript'],
+ '/tabs.css': ['tabs.css', 'text/css'],
  '/connections.css': ['connections.css', 'text/css'],
  '/management.css': ['management.css', 'text/css'],
  '/icons.js': ['icons.js', 'text/javascript'],

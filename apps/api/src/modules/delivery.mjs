@@ -387,7 +387,7 @@ export function deliveryRoutes(router, { options = createDeliveryOptions(), sett
   const antes = (await client.query(`SELECT ${COLUNAS_ITEM} FROM products WHERE id=$1 FOR UPDATE`, [current.product_id])).rows[0];
   if (!antes) throw fail(404, 'Item do portfólio não encontrado.');
   if (antes.lifecycle_status === 'archived') throw fail(409, 'Item arquivado. Restaure pelo Portfólio antes de ativar.');
-  if (antes.lifecycle_status !== 'draft') throw fail(409, `Este ${KIND_LABELS[antes.portfolio_kind] || 'item'} já está ativo.`);
+  if (antes.lifecycle_status !== 'draft') throw fail(409, `${antes.name} já está ativo.`);
   // O tipo lido AGORA, com trava: reclassificar o item muda o checklist, e ativar
   // por um checklist que o tipo atual não pede é ativar sem conferir.
   const state = readiness({ ...current, portfolio_kind: antes.portfolio_kind });

@@ -6,14 +6,15 @@ const note=v=>{if(typeof v!=='string'||v.trim().length<2||v.length>10000||/[\u00
 const uuid=v=>{if(!isUuid(v))throw fail(400,'Identificador inválido.');return v;};
 async function owner(client,id){if(id!==null&&!(await client.query("SELECT id FROM operator_accounts WHERE id=$1 AND status='active' AND role IN ('owner','member')",[uuid(id)])).rowCount)throw fail(400,'Responsável não está ativo.');return id;}
 async function list({pool,url,reply,productId,operator}) {
- if(operator)await commercialPermission(pool,operator);onlyParams(url.searchParams,['product_id','status','q','offset','limit']);
+ if(operator)await commercialPermission(pool,operator);onlyParams(url.searchParams,['product_id','status','q','offset','limit','pipeline_id','stage_id']);
  const product=productId||url.searchParams.get('product_id');if(product&&!isProductId(product))throw fail(400,'Produto inválido.');
  const status=url.searchParams.get('status')||null;if(status&&!STAGES.includes(status))throw fail(400,'Estágio inválido.');
+ const pipelineId=url.searchParams.get('pipeline_id')||null,stageId=url.searchParams.get('stage_id')||null;if((pipelineId&&!isUuid(pipelineId))||(stageId&&!isUuid(stageId)))throw fail(400,'Funil ou etapa inválidos.');
  const limit=Number(url.searchParams.get('limit')||25),offset=Number(url.searchParams.get('offset')||0),q=url.searchParams.get('q')?.trim()||null;
  if(!Number.isInteger(limit)||limit<1||limit>100||!Number.isInteger(offset)||offset<0||offset>100000||q?.length>200)throw fail(400,'Paginação inválida.');
- const r=await pool.query(`SELECT l.id,l.product_id,l.name,l.email,l.whatsapp,l.status,l.interest,l.source_system,l.source_created_at,l.created_at,l.owner_id,a.name AS owner_name,a.email AS owner_email,t.name AS organization_name
- FROM commercial_leads l JOIN tenants t ON t.id=l.tenant_id LEFT JOIN operator_accounts a ON a.id=l.owner_id
- WHERE ($1::text IS NULL OR l.product_id=$1) AND ($2::text IS NULL OR l.status=$2) AND ($3::text IS NULL OR concat_ws(' ',l.name,l.email,t.name,l.interest) ILIKE '%'||$3||'%') ORDER BY l.created_at DESC,l.id DESC LIMIT $4 OFFSET $5`,[product,status,q,limit+1,offset]);
+ const r=await pool.query(`SELECT l.id,l.product_id,l.name,l.email,l.whatsapp,l.status,l.interest,l.source_system,l.source_created_at,l.created_at,l.owner_id,a.name AS owner_name,a.email AS owner_email,l.pipeline_id,l.stage_id,st.name AS stage_name,t.name AS organization_name
+ FROM commercial_leads l JOIN tenants t ON t.id=l.tenant_id LEFT JOIN operator_accounts a ON a.id=l.owner_id LEFT JOIN pipeline_stages st ON st.id=l.stage_id
+ WHERE ($1::text IS NULL OR l.product_id=$1) AND ($2::text IS NULL OR l.status=$2) AND ($3::text IS NULL OR concat_ws(' ',l.name,l.email,t.name,l.interest) ILIKE '%'||$3||'%') AND ($6::uuid IS NULL OR l.pipeline_id=$6) AND ($7::uuid IS NULL OR l.stage_id=$7) ORDER BY l.created_at DESC,l.id DESC LIMIT $4 OFFSET $5`,[product,status,q,limit+1,offset,pipelineId,stageId]);
  return reply(200,{leads:r.rows.slice(0,limit),has_more:r.rows.length>limit,offset,limit});
 }
 async function detail({pool,params,reply,productId,operator}) {
@@ -23,7 +24,17 @@ async function detail({pool,params,reply,productId,operator}) {
  const attribution=(await pool.query('SELECT * FROM commercial_attributions WHERE lead_id=$1',[lead.id])).rows[0];
  const activities=(await pool.query('SELECT * FROM commercial_activities WHERE lead_id=$1 ORDER BY created_at DESC,id DESC LIMIT 100',[lead.id])).rows;
  const contracts=(await pool.query('SELECT * FROM commercial_contracts WHERE lead_id=$1 ORDER BY created_at DESC',[lead.id])).rows;
- return reply(200,{lead,attribution,activities,contracts});
+ // Funil do lead (fase 3): só para o operador. A chave de serviço do site não vê oportunidade nem contratação.
+ if(!operator)return reply(200,{lead,attribution,activities,contracts});
+ const opportunity=(await pool.query(`SELECT o.id,o.stage_id,s.name AS stage_name,s.kind AS stage_kind,o.value_minor::text AS value_minor,o.currency,o.version,o.custom_data,o.engagement_id,e.label AS engagement_label,e.revision AS engagement_revision,e.custom_data AS engagement_custom_data
+  FROM commercial_opportunities o JOIN pipeline_stages s ON s.id=o.stage_id LEFT JOIN client_engagements e ON e.id=o.engagement_id WHERE o.lead_id=$1`,[lead.id])).rows[0]||null;
+ if(opportunity)opportunity.value_minor=Number(opportunity.value_minor);
+ const stages=lead.pipeline_id?(await pool.query('SELECT id,name,kind,position FROM pipeline_stages WHERE pipeline_id=$1 ORDER BY position',[lead.pipeline_id])).rows:[];
+ // Campos próprios do espaço (fase 4), ativos e desativados: o que já tem valor continua aparecendo.
+ const fields=lead.product_id?(await pool.query('SELECT id,entity,key,label,type,options,required,is_active,position FROM space_fields WHERE space_id=$1 ORDER BY entity,position,label',[lead.product_id])).rows:[];
+ // Tarefas do lead (as da oportunidade dele também, que guardam o lead_id): abertas primeiro, por prazo.
+ const tasks=(await pool.query(`SELECT t.id,t.opportunity_id,t.title,t.tag,t.due_at,t.owner_id,a.name AS owner_name,t.source,t.done_at,t.version FROM commercial_tasks t LEFT JOIN operator_accounts a ON a.id=t.owner_id WHERE t.lead_id=$1 ORDER BY (t.done_at IS NOT NULL),t.due_at NULLS LAST,t.created_at DESC LIMIT 100`,[lead.id])).rows;
+ return reply(200,{lead,attribution,activities,contracts,opportunity,stages,fields,tasks});
 }
 export function commercialWorkspaceRoutes(router) {
  router.get('/api/commercial/leads',list);router.get('/api/commercial/leads/:id',detail);

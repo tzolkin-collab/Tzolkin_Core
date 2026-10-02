@@ -12,7 +12,7 @@ Consolidação de **2026-09-29**, verificada contra o código. **Este é o ponto
 
 | Para saber… | Leia | Situação |
 |---|---|---|
-| O que fazer agora | **este arquivo, §3** | vigente |
+| O que fazer agora | **[LISTA-COMPLETA.md](LISTA-COMPLETA.md)** (substitui o §3 deste arquivo, 01/10) | vigente |
 | O que o Core faz hoje | [FEATURES.md](FEATURES.md) | **desatualizado**: foto de 14/09 (30 migrações, 377 testes). Real: 35 migrações escritas, 034 aplicada |
 | Riscos abertos, com evidência | [BACKLOG.md](BACKLOG.md) §1, §3, §9.8 | vigente. Contagens de §9.9 são de 05/09 |
 | Decisões tomadas | [decisions/README.md](decisions/README.md) | vigente (0001 e 0003 seguem `PROPOSTO`) |
@@ -122,7 +122,7 @@ Consolidação de **2026-09-29**, verificada contra o código. **Este é o ponto
 - [ ] Push no iPhone: não existe VAPID, tabela nem rota; só o `sw.js` exibe a mensagem
 - [ ] Leitores de `audit_events`, `delivery_audit` e `service_activity_audit`: nenhuma rota lê, o explorador de banco as esconde
 - [ ] Reconciliação agendada: não há `setInterval`, cron nem `.github/`; a de vínculos roda só ao abrir a tela
-- [ ] `PUT /api/tenants` só troca `status`; reclassificar organização continua sem rota
+- [x] `PUT /api/tenants` só troca `status`; reclassificar organização continua sem rota *(feito em 02/10, migração 045)*
 - [ ] Interface de contas e times: a API existe, nenhuma tela a chama
 - [ ] Tela Segurança e Métricas de servidor: placeholders ocultos
 - [ ] Alertas operacionais: não há módulo

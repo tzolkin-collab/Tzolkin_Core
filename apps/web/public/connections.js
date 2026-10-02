@@ -12,6 +12,8 @@
 // recusar, e a tela mostra a recusa em vez de escondê-la. Desligar e trocar de dono
 // pedem motivo porque é o motivo que, meses depois, separa uma decisão de um sumiço.
 import { providerLogo, createIcon } from './icons.js';
+import { achatar, agruparSugestoes, nomeDoDono } from './owner-suggestions.js';
+import { PROVEDORES, donoEscolhido, seletorDeDono as seletorBase, vincularRecursos, valorDoDono } from './owner-link.js';
 
 /**
  * Casamento entre uma conexão confirmada e um item do inventário do provedor.
@@ -35,8 +37,6 @@ export const casaConexao = (binding, recurso) => Boolean(recurso) && binding.pro
 // e dizer a primeira coisa seria inventar uma ausência.
 const INVENTARIADOS = ['github', 'vercel', 'easypanel'];
 
-const PROVEDORES = { github: 'GitHub', vercel: 'Vercel', easypanel: 'EasyPanel', hostinger: 'Hostinger', stripe: 'Stripe', asaas: 'Asaas', manual: 'Manual' };
-
 // Como a tela agrupa os tipos do banco. A ordem é a da pergunta que o operador faz
 // ("onde está o código, onde ele roda, por onde se chega, onde estão os dados"), e
 // todo tipo aceito pela API cai em algum grupo: um tipo sem grupo sumiria da tela.
@@ -50,14 +50,9 @@ const GRUPOS = [
 const TIPOS = { repository: 'Repositório', frontend: 'Frontend', backend: 'Backend', api: 'API', worker: 'Worker', database: 'Banco', cache: 'Cache', domain: 'Domínio', checkout: 'Checkout', email: 'E-mail' };
 const AMBIENTES = { production: 'Produção', staging: 'Homologação', development: 'Desenvolvimento', internal: 'Interno' };
 
-// O tipo que um projeto de provedor vira quando é confirmado. Mesma regra da API
-// (vinculoDeDeploy) e das cópias da 034: o mesmo projeto tem o mesmo tipo em toda
-// parte, senão a tela grava 'frontend' onde o banco já disse 'backend'.
-const TIPO_PADRAO = { vercel: 'frontend', easypanel: 'backend', github: 'repository' };
-
 const dataHora = valor => valor ? new Date(valor).toLocaleString('pt-BR') : '';
 
-export function setupConnections({ api, openTenant, openProduct, onChanged = () => {} }) {
+export function setupConnections({ api, openTenant, openProduct, onChanged = () => {}, projectFor = () => null, openProject = () => {}, activateProject = async () => {}, goTo = () => {} }) {
  const $ = id => document.getElementById(id);
  const node = (tag, texto, classe) => { const el = document.createElement(tag); if (texto !== undefined) el.textContent = texto; if (classe) el.className = classe; return el; };
  const option = (valor, rotulo) => { const el = node('option', rotulo); el.value = valor; return el; };
@@ -74,10 +69,8 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
  // com id projeto/serviço — é o formato que delivery-options.mjs já devolve e o
  // que está gravado no banco. Listar por projeto era o motivo de um serviço
  // classificado aparecer como "Classificação pendente".
- const itensDoInventario = () => INVENTARIADOS.flatMap(provider => {
-  const bloco = inventario?.[provider];
-  return bloco?.status === 'ok' ? bloco.items.map(item => ({ provider, id: item.id, name: item.name })) : [];
- });
+ const itensDoInventario = () => achatar(inventario);
+
 
  const lido = provider => inventario?.[provider]?.status === 'ok';
 
@@ -110,28 +103,8 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
   return { tipo: 'sem', rotulo: 'Sem dono', detalhe: 'Desligada sem dono definido', abrir: null };
  };
 
- /** Seletor de dono: itens e contratações no mesmo <select>, separados por grupo. */
- const seletorDeDono = (selecionado = '') => {
-  const select = document.createElement('select');
-  select.append(option('', 'Escolher dono…'));
-  const grupo = (rotulo, opcoes) => { if (!opcoes.length) return; const g = document.createElement('optgroup'); g.label = rotulo; g.append(...opcoes); select.append(g); };
-  grupo('Itens do portfólio', donos.products.map(item => option(`product:${item.id}`, item.name)));
-  grupo('Contratações', donos.engagements.map(item => {
-   const cliente = empresa(item.tenant_id);
-   return option(`engagement:${item.id}`, cliente ? `${item.label} · ${cliente.name}` : item.label);
-  }));
-  select.value = selecionado;
-  return select;
- };
-
- // 'product:skiller' → { product_id:'skiller', engagement_id:null }. O XOR de dono
- // é conferido pelo servidor (CHECK um_dono da 034); aqui ele é só a forma.
- const donoEscolhido = valor => {
-  const [tipo, id] = String(valor || '').split(/:(.+)/);
-  if (tipo === 'product' && id) return { product_id: id, engagement_id: null };
-  if (tipo === 'engagement' && id) return { product_id: null, engagement_id: id };
-  return null;
- };
+ /** Seletor de dono, com os donos que a tela conhece agora (a implementação é de owner-link.js). */
+ const seletorDeDono = (selecionado = '') => seletorBase(donos, selecionado);
 
  // ---------------------------------------------------------------------------
  // Diálogos
@@ -234,7 +207,7 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
  // ---------------------------------------------------------------------------
  const chip = (texto, tom) => node('span', texto, `status ${tom}`);
 
- function linhaDeConexao(binding) {
+ function linhaDeConexao(binding, { mostrarDono = true } = {}) {
   const row = node('article', undefined, 'record connection-row'), copy = node('div', undefined, 'connection-row-copy');
   const cabeca = node('div', undefined, 'connection-row-head');
   cabeca.append(providerLogo(binding.provider), node('strong', binding.display_name));
@@ -247,11 +220,13 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
   if (binding.external_id_kind === 'name') id.title = 'Vínculo por nome: o provedor não deu identificador próprio.';
   copy.append(id);
 
-  const dono = donoDe(binding), donoBloco = node('div', undefined, 'connection-owner');
-  if (dono.abrir) { const link = node('button', dono.rotulo, 'table-action'); link.type = 'button'; link.onclick = dono.abrir; donoBloco.append(link); }
-  else donoBloco.append(node('strong', dono.rotulo));
-  donoBloco.append(node('span', dono.detalhe, 'detail'));
-  copy.append(donoBloco);
+  if (mostrarDono) {
+   const dono = donoDe(binding), donoBloco = node('div', undefined, 'connection-owner');
+   if (dono.abrir) { const link = node('button', dono.rotulo, 'table-action'); link.type = 'button'; link.onclick = dono.abrir; donoBloco.append(link); }
+   else donoBloco.append(node('strong', dono.rotulo));
+   donoBloco.append(node('span', dono.detalhe, 'detail'));
+   copy.append(donoBloco);
+  }
 
   const marcas = node('div', undefined, 'connection-flags');
   if (!binding.active) marcas.append(chip('Desligada', 'building'));
@@ -270,50 +245,164 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
   return row;
  }
 
- function linhaSemDono(recurso) {
-  const row = node('article', undefined, 'record connection-row'), copy = node('div', undefined, 'connection-row-copy');
-  const cabeca = node('div', undefined, 'connection-row-head');
-  cabeca.append(providerLogo(recurso.provider), node('strong', recurso.name));
-  copy.append(cabeca, node('span', `${PROVEDORES[recurso.provider]} · ${TIPOS[TIPO_PADRAO[recurso.provider]]} quando confirmado`, 'detail'), node('code', recurso.id, 'connection-external-id'));
-  const acoes = node('div', undefined, 'connection-actions'), select = seletorDeDono();
-  select.className = 'connection-owner-select';
-  const confirmar = node('button', 'Vincular', 'table-action'); confirmar.type = 'button';
-  confirmar.onclick = async () => {
-   const dono = donoEscolhido(select.value);
-   if (!dono) return;
-   confirmar.disabled = select.disabled = true;
-   try {
-    await vincular({
-     ...dono, resource_type: TIPO_PADRAO[recurso.provider], provider: recurso.provider,
-     external_id: recurso.id, display_name: recurso.name,
-     // Repositório não tem ambiente; projeto de deploy que aparece aqui é o que
-     // está no ar. Se for outro, a ficha do item edita — sem adivinhar em silêncio.
-     environment: recurso.provider === 'github' ? null : 'production',
-    });
-    await recarregar();
-   } catch (error) { confirmar.disabled = select.disabled = false; $('connections-message').textContent = error.message; }
-  };
-  acoes.append(select, confirmar);
-  row.append(copy, acoes);
+ const semAcento = texto => String(texto || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+ const contextoDeSugestao = () => ({ itens: itensDoInventario(), conexoes: conexoes.filter(b => b.active), donos, casa: casaConexao });
+
+ // Quem é o dono de uma conexão, como objeto para o cadastro técnico e como chave.
+ const donoObjeto = binding => ({ product_id: binding.product_id || null, engagement_id: binding.engagement_id || null });
+ const chaveDaConexao = binding => binding.product_id ? `product:${binding.product_id}` : binding.engagement_id ? `engagement:${binding.engagement_id}` : 'sem';
+
+ /** O que o dono é, sem repetir o que o nome dele já diz ("Kalidash sob demanda" não vira "… · sob demanda"). */
+ const naturezaDoDono = binding => {
+  if (binding.product_id) {
+   const tipo = produto(binding.product_id)?.kind_label;
+   return tipo ? `Item do portfólio · ${tipo}` : 'Item do portfólio';
+  }
+  const acordo = contratacao(binding.engagement_id), rotulo = acordo?.label || '';
+  const extras = nomeDoDono({ label: rotulo, cliente: empresa(acordo?.tenant_id)?.name, modelo: acordo?.service_model }).slice(rotulo.length).replace(/^ · /, '');
+  return extras ? `Contratação · ${extras}` : 'Contratação';
+ };
+
+ /** Checklist como pílula com uma barra fina: 2/4 se lê de relance. */
+ const pilulaDeChecklist = checklist => {
+  const pronta = checklist.ready, pilula = node('span', undefined, `check-pill ${pronta ? 'ready' : 'partial'}`);
+  const barra = node('i', undefined, 'check-bar'), preenchido = node('b'); preenchido.style.width = `${Math.round(100 * checklist.completed / Math.max(checklist.total, 1))}%`;
+  barra.append(preenchido);
+  pilula.append(node('span', pronta ? 'Checklist completo' : `Checklist ${checklist.completed}/${checklist.total}`), barra);
+  return pilula;
+ };
+
+ const logosDe = bindings => {
+  const grupo = node('span', undefined, 'owner-logos');
+  for (const provider of [...new Set(bindings.map(b => b.provider))].slice(0, 4)) grupo.append(providerLogo(provider));
+  return grupo;
+ };
+
+  /** Um recurso dentro do cartão do dono: uma linha, e só o que foge do normal ganha etiqueta. */
+ function linhaDoRecurso(binding) {
+  const row = node('div', undefined, 'resource-row');
+  row.title = `${PROVEDORES[binding.provider] || binding.provider} · ${binding.external_id}${binding.external_id_kind === 'name' ? ' (vínculo por nome)' : ''}`;
+  const texto = node('div', undefined, 'resource-text');
+  const meta = [TIPOS[binding.resource_type] || binding.resource_type, AMBIENTES[binding.environment] || binding.environment].filter(Boolean).join(' · ');
+  texto.append(node('strong', binding.display_name), node('span', meta, 'resource-meta'));
+  if (sumiuDoProvedor(binding)) texto.append(chip('Não encontrada no provedor', 'danger'));
+  const acoes = node('div', undefined, 'resource-actions');
+  const botao = (rotulo, acao, classe = 'ghost') => { const b = node('button', rotulo, classe); b.type = 'button'; b.onclick = acao; return b; };
+  acoes.append(botao('Reatribuir', () => reatribuir(binding)), botao('Desvincular', () => desvincular(binding), 'ghost danger'), botao('Histórico', () => abrirHistorico(binding)));
+  row.append(providerLogo(binding.provider), texto, acoes);
   return row;
  }
 
+ // O cadastro técnico do dono, compacto: quanto do checklist está pronto, o que
+ // falta e os dois botões que existiam na tela de Projetos técnicos.
+ function rodapeDoCadastro(dono, info) {
+  const rodape = node('div', undefined, 'owner-project');
+  const projeto = projectFor(dono), texto = node('div', undefined, 'owner-project-text');
+  const acoes = node('div', undefined, 'owner-project-actions');
+  const botao = (rotulo, acao, classe = 'secondary') => { const b = node('button', rotulo, classe); b.type = 'button'; b.onclick = acao; return b; };
+  if (!projeto) {
+   texto.append(node('strong', 'Cadastro técnico'), node('span', 'Ainda não cadastrado.', 'resource-meta'));
+   acoes.append(botao('Cadastrar projeto', () => openProject(null)));
+  } else {
+   const checklist = projeto.readiness, faltando = (checklist?.items || []).filter(item => !item.ready).map(item => item.label);
+   texto.append(node('strong', 'Cadastro técnico'), node('span', faltando.length ? `Falta: ${faltando.join(', ')}.` : 'Checklist completo.', 'resource-meta'));
+   acoes.append(botao('Configurações', () => openProject(projeto)));
+   if (projeto.belongs_to?.kind === 'item' && projeto.product_lifecycle_status === 'draft' && checklist?.ready) {
+    const ativar = botao(`Ativar ${projeto.belongs_to.item_kind_label || 'item'}`, async () => {
+     ativar.disabled = true;
+     try { await activateProject(projeto); await recarregar(); }
+     catch (error) { ativar.disabled = false; $('connections-message').textContent = error.message; }
+    }, 'primary');
+    acoes.append(ativar);
+   }
+  }
+  if (info?.abrir) acoes.append(botao(info.tipo === 'item' ? 'Abrir o item' : 'Abrir a ficha', info.abrir, 'ghost'));
+  rodape.append(texto, acoes);
+  return rodape;
+ }
+
+ /** Um cartão por dono: o que está ligado a ele, e o cadastro técnico logo abaixo. */
+ function cartaoDoDono({ bindings }, aberto) {
+  const primeira = bindings[0], info = donoDe(primeira), dono = donoObjeto(primeira);
+  const cartao = node('details', undefined, 'owner-card');
+  cartao.open = aberto;
+  const resumo = node('summary', undefined, 'owner-summary'), nome = node('span', undefined, 'owner-name');
+  nome.append(node('strong', info.rotulo), node('small', naturezaDoDono(primeira)));
+  const projeto = projectFor(dono), checklist = projeto?.readiness;
+  resumo.append(logosDe(bindings), nome, node('span', `${bindings.length} ${bindings.length === 1 ? 'recurso' : 'recursos'}`, 'owner-count'),
+   checklist ? pilulaDeChecklist(checklist) : node('span'));
+  const corpo = node('div', undefined, 'owner-body'), lista = node('div', undefined, 'list-panel');
+  lista.append(...bindings.map(linhaDoRecurso));
+  corpo.append(lista, rodapeDoCadastro(dono, info));
+  cartao.append(resumo, corpo);
+  return cartao;
+ }
+
+ /**
+  * O grupo de sugestão: um dono provável e os recursos que iriam com ele. A ação
+  * principal é aceitar; escolher outro dono fica recolhido, porque repetir o dono
+  * sugerido num seletor logo abaixo do título só confundia. O motivo por extenso é o
+  * tooltip de cada linha; à vista fica uma etiqueta curta.
+  */
+ function cartaoDeSugestao(grupo) {
+  const cartao = node('article', undefined, 'suggestion-card');
+  const cabeca = node('div', undefined, 'suggestion-head');
+  cabeca.append(node('strong', grupo.rotulo), node('span', `${grupo.recursos.length} ${grupo.recursos.length === 1 ? 'recurso' : 'recursos'}`, 'owner-count'));
+  const lista = node('ul', undefined, 'suggestion-list');
+  for (const { recurso, motivo, etiqueta } of grupo.recursos) {
+   const item = node('li'); item.title = motivo;
+   item.append(providerLogo(recurso.provider), node('strong', recurso.name), node('span', etiqueta, 'suggestion-tag'));
+   lista.append(item);
+  }
+  const erro = node('p', undefined, 'notice-inline link-error');
+  const lote = grupo.recursos.map(item => item.recurso);
+  const gravar = async (dono, botoes) => {
+   if (!dono) { erro.textContent = 'Escolha o dono antes de vincular.'; return; }
+   botoes.forEach(b => { b.disabled = true; }); erro.textContent = '';
+   try { await vincularRecursos(api, lote, dono); await recarregar(); }
+   catch (falha) { botoes.forEach(b => { b.disabled = false; }); erro.textContent = falha.message; }
+  };
+  const aceitar = node('button', grupo.recursos.length === 1 ? 'Vincular' : `Vincular os ${grupo.recursos.length}`, 'primary'); aceitar.type = 'button';
+  const outro = node('details', undefined, 'other-owner');
+  const select = seletorDeDono(''); select.className = 'connection-owner-select';
+  const escolher = node('button', 'Vincular ao escolhido', 'secondary'); escolher.type = 'button';
+  outro.append(node('summary', 'Outro dono…'), select, escolher);
+  const botoes = [aceitar, escolher];
+  aceitar.onclick = () => gravar(grupo.dono, botoes);
+  escolher.onclick = () => gravar(donoEscolhido(select.value), botoes);
+  const acoes = node('div', undefined, 'suggestion-actions'); acoes.append(aceitar, outro);
+  cartao.append(cabeca, lista, acoes, erro);
+  return cartao;
+ }
+
+ function cartaoAmbiguo({ recurso, candidatos }) {
+  const cartao = node('article', undefined, 'suggestion-card ambiguous');
+  const cabeca = node('div', undefined, 'suggestion-head');
+  cabeca.append(providerLogo(recurso.provider), node('strong', recurso.name));
+  cartao.append(cabeca, node('span', `O nome combina com mais de um dono: ${candidatos.join('; ')}. Escolha um.`, 'detail'));
+  const select = seletorDeDono(''); select.className = 'connection-owner-select';
+  const erro = node('p', undefined, 'notice-inline link-error');
+  const vincular = node('button', 'Vincular', 'primary'); vincular.type = 'button';
+  vincular.onclick = async () => {
+   const dono = donoEscolhido(select.value);
+   if (!dono) { erro.textContent = 'Escolha o dono antes de vincular.'; return; }
+   vincular.disabled = select.disabled = true; erro.textContent = '';
+   try { await vincularRecursos(api, [recurso], dono); await recarregar(); }
+   catch (falha) { vincular.disabled = select.disabled = false; erro.textContent = falha.message; }
+  };
+  const acoes = node('div', undefined, 'connection-actions'); acoes.append(select, vincular);
+  cartao.append(acoes, erro);
+  return cartao;
+ }
+
  function desenhar() {
+  const termo = semAcento($('connections-search').value).trim();
   const ativas = conexoes.filter(b => b.active), desligadas = conexoes.filter(b => !b.active);
-  const semDono = itensDoInventario().filter(recurso => !conexoes.some(b => b.active && casaConexao(b, recurso)));
+  const semDono = itensDoInventario().filter(recurso => !ativas.some(b => casaConexao(b, recurso)));
   const sumidas = ativas.filter(sumiuDoProvedor);
 
-  $('connections-summary').replaceChildren(...[
-   ['Conexões ativas', ativas.length],
-   ['De item do portfólio', ativas.filter(b => b.product_id).length],
-   ['De contratação', ativas.filter(b => b.engagement_id).length],
-   ['Sem classificar', semDono.length],
-   ['Não encontradas no provedor', sumidas.length],
-   ['Desligadas', desligadas.length],
-  ].map(([rotulo, valor]) => { const card = node('article'); card.append(node('span', rotulo), node('strong', String(valor))); return card; }));
-
-  // O estado de cada provedor sai explícito: "sem classificar: 0" com o GitHub
-  // fora do ar não é a mesma frase que "sem classificar: 0" com ele respondendo.
+  // O estado de cada provedor sai explícito: "sem dono: 0" com o GitHub fora do ar
+  // não é a mesma frase que "sem dono: 0" com ele respondendo.
   $('connections-providers').replaceChildren(...INVENTARIADOS.map(provider => {
    const bloco = inventario?.[provider], estado = bloco?.status;
    const texto = estado === 'ok' ? `${bloco.items.length} no inventário${bloco.truncated ? ' · lista parcial' : ''}`
@@ -323,27 +412,50 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
    return item;
   }));
 
+  // 1. Sugestões — só o que tem uma pista, agrupado por dono provável.
+  const { grupos, ambiguos, restantes } = agruparSugestoes(semDono, contextoDeSugestao());
+  const casaComBusca = (...textos) => !termo || textos.some(texto => semAcento(texto).includes(termo));
+  const gruposVisiveis = grupos.filter(g => casaComBusca(g.rotulo, ...g.recursos.map(r => r.recurso.name)));
+  const ambiguosVisiveis = ambiguos.filter(a => casaComBusca(a.recurso.name, ...a.candidatos));
+  const blocoSugestoes = $('connections-suggestions');
+  if (!gruposVisiveis.length && !ambiguosVisiveis.length) blocoSugestoes.replaceChildren();
+  else {
+   const titulo = node('h2', `Sugestões (${gruposVisiveis.length + ambiguosVisiveis.length})`, 'section-title');
+   blocoSugestoes.replaceChildren(titulo,
+    node('p', 'Recursos sem dono que provavelmente pertencem a alguém. Nada é vinculado sem o seu clique.', 'catalog-caption'),
+    ...gruposVisiveis.map(cartaoDeSugestao), ...ambiguosVisiveis.map(cartaoAmbiguo));
+  }
+
+  // 2. Conectado — um cartão por dono, só donos que têm alguma conexão.
+  const porDono = new Map();
+  for (const b of ativas) { const k = chaveDaConexao(b); if (!porDono.has(k)) porDono.set(k, []); porDono.get(k).push(b); }
+  const donosComConexao = [...porDono.entries()].map(([chave, bindings]) => ({ chave, bindings, rotulo: donoDe(bindings[0]).rotulo }))
+   .filter(item => casaComBusca(item.rotulo, ...item.bindings.map(b => b.display_name)))
+   .sort((a, b) => a.rotulo.localeCompare(b.rotulo, 'pt-BR'));
   const raiz = $('connections-owned');
-  if (!ativas.length) raiz.replaceChildren(node('p', 'Nenhuma conexão confirmada ainda.', 'empty-list'));
-  else raiz.replaceChildren(...GRUPOS.map(grupo => {
-   const linhas = ativas.filter(b => grupo.tipos.includes(b.resource_type));
-   if (!linhas.length) return null;
-   const secao = node('section', undefined, 'connection-group');
-   const cabeca = node('div', undefined, 'section-toolbar'), titulo = node('h2', undefined, 'section-title');
-   titulo.append(createIcon(grupo.icone), document.createTextNode(` ${grupo.titulo}`));
-   cabeca.append(titulo, chip(`${linhas.length} ${linhas.length === 1 ? 'conexão' : 'conexões'}`, 'active'));
-   const lista = node('div', undefined, 'list-panel');
-   lista.append(...linhas.map(linhaDeConexao));
-   secao.append(cabeca, lista);
-   return secao;
-  }).filter(Boolean));
+  if (!ativas.length) raiz.replaceChildren(node('p', 'Nenhum recurso está ligado a um cliente, contratação ou item do portfólio ainda.', 'empty-list'));
+  else if (!donosComConexao.length) raiz.replaceChildren(node('p', 'Nada encontrado para essa busca.', 'empty-list'));
+  else raiz.replaceChildren(...donosComConexao.map(item => cartaoDoDono(item, Boolean(termo))));
+  if (sumidas.length) raiz.prepend(node('p', `${sumidas.length} ${sumidas.length === 1 ? 'conexão não aparece' : 'conexões não aparecem'} mais no provedor: ${sumidas.map(b => b.display_name).join(', ')}.`, 'notice-inline'));
 
-  $('connections-unclassified').replaceChildren(...(semDono.length
-   ? semDono.map(linhaSemDono)
-   : [node('p', INVENTARIADOS.some(lido) ? 'Tudo o que os provedores mostram já tem dono.' : 'Nenhum provedor respondeu: não dá para dizer o que falta classificar.', 'empty-list')]));
+  // 3. Sem dono e sem pista — só a contagem e o caminho até a aba do provedor.
+  const porProvedor = INVENTARIADOS.map(provider => [provider, restantes.filter(r => r.provider === provider).length]).filter(([, n]) => n);
+  const orfaos = $('connections-orphans');
+  if (!porProvedor.length) orfaos.replaceChildren(node('p', INVENTARIADOS.some(lido) ? 'Nenhum recurso ficou sem dono e sem pista.' : 'Nenhum provedor respondeu: não dá para dizer o que falta ligar.', 'empty-list'));
+  else {
+   const linha = node('div', undefined, 'orphan-line');
+   linha.append(node('span', `${restantes.length} ${restantes.length === 1 ? 'recurso sem dono e sem pista' : 'recursos sem dono e sem pista'}. Ligue-os na aba do provedor:`));
+   for (const [provider, n] of porProvedor) {
+    const ir = node('button', `${PROVEDORES[provider]} (${n})`, 'table-action'); ir.type = 'button'; ir.onclick = () => goTo(provider); linha.append(ir);
+   }
+   orfaos.replaceChildren(linha);
+  }
 
-  $('connections-inactive').replaceChildren(...(desligadas.length
-   ? desligadas.map(linhaDeConexao)
+  // 4. Desligadas — recolhidas: são histórico, não trabalho.
+  const visiveisDesligadas = desligadas.filter(b => casaComBusca(b.display_name));
+  $('connections-inactive-count').textContent = String(visiveisDesligadas.length);
+  $('connections-inactive').replaceChildren(...(visiveisDesligadas.length
+   ? visiveisDesligadas.map(b => linhaDeConexao(b))
    : [node('p', 'Nenhuma conexão desligada.', 'empty-list')]));
  }
 
@@ -362,8 +474,10 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
   onChanged(conexoes.filter(b => b.active));
  }
 
+ $('connections-search').oninput = desenhar;
  $('connections-refresh').onclick = () => { $('connections-message').textContent = ''; recarregar().catch(error => { $('connections-message').textContent = error.message; }); };
 
+ // redraw: o cadastro técnico mudou (delivery.load terminou) e a tela se redesenha com ele.
  return {
   async load(owners) {
    donos = { products: owners?.products || [], engagements: owners?.engagements || [], tenants: owners?.tenants || [] };
@@ -371,10 +485,11 @@ export function setupConnections({ api, openTenant, openProduct, onChanged = () 
    try { await recarregar(); }
    catch (error) { $('connections-message').textContent = error.message; }
   },
+  redraw() { if (inventario || conexoes.length) desenhar(); },
   clear() {
    geracao++; conexoes = []; inventario = null; donos = { products: [], engagements: [], tenants: [] };
-   for (const id of ['connections-summary', 'connections-providers', 'connections-owned', 'connections-unclassified', 'connections-inactive', 'connection-history-list']) $(id).replaceChildren();
-   $('connections-message').textContent = '';
+   for (const id of ['connections-providers', 'connections-suggestions', 'connections-owned', 'connections-orphans', 'connections-inactive', 'connection-history-list']) $(id).replaceChildren();
+   $('connections-message').textContent = ''; $('connections-search').value = '';
    reasonDialog.close(); $('connection-history-dialog').close();
   },
  };

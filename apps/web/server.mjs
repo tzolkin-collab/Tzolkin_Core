@@ -30,9 +30,13 @@ export function createWeb({ apiOrigin = 'http://127.0.0.1:3102' } = {}) {
    // aqui e o verbo parecia quebrado no servidor errado.
    if(!['GET','POST','PUT','DELETE'].includes(req.method)) return error(405,'Método não permitido.');
    if(req.method !== 'GET' && req.headers.origin !== `http://${host}`) return error(403,'Origem não permitida.');
-   if(req.headers['content-length'] && Number(req.headers['content-length']) > 16384) return error(413,'Requisição muito grande.');
+   // Corpo pequeno por padrão: tudo no painel é JSON curto. A única exceção é o envio de foto,
+   // que carrega a imagem inteira (até 8 MB, e a API reconfere o limite e o tipo). Sem a exceção,
+   // o proxy de desenvolvimento devolvia 413 para qualquer foto acima de 16 KB.
+   const limite = req.method === 'POST' && url.pathname === '/api/media' ? 9 * 1024 * 1024 : 16384;
+   if(req.headers['content-length'] && Number(req.headers['content-length']) > limite) return error(413,'Requisição muito grande.');
    const chunks=[];let size=0;
-   for await(const chunk of req) { size+=chunk.length; if(size>16384) return error(413,'Requisição muito grande.'); chunks.push(chunk); }
+   for await(const chunk of req) { size+=chunk.length; if(size>limite) return error(413,'Requisição muito grande.'); chunks.push(chunk); }
    // Não encaminha Host, headers de proxy, hop-by-hop ou headers arbitrários.
    const headers={};
    for(const name of ['origin','cookie','authorization','content-type','accept']) if(req.headers[name]) headers[name]=req.headers[name];

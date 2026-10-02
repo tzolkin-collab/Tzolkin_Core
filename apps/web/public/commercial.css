@@ -13,3 +13,30 @@
 
 @media(max-width:760px){.keys-hero{align-items:stretch;flex-direction:column;gap:18px}.keys-create-toggle{width:100%}.keys-stats{grid-template-columns:1fr}.keys-stats article{grid-template-columns:40px 1fr}.keys-stats article+article{border-left:0;border-top:1px solid var(--line)}.keys-form-fields,.keys-scopes,.key-rotate-panel{grid-template-columns:1fr}.key-facts{grid-template-columns:1fr;gap:10px}.key-facts dd{margin-top:1px}.key-card{padding:16px}.keys-composer{padding:18px}.keys-audit-list li>div{grid-template-columns:1fr;gap:2px}.keys-secret-actions>*{flex:1 1 180px}}
 @media(max-width:600px){.commercial-form{padding:12px}.commercial-form>*{width:100%}.commercial-form label{flex-basis:100%}#view-product-keys{gap:20px}.keys-hero h2{font-size:23px}.keys-stats strong{font-size:22px}.key-actions{align-items:stretch;flex-direction:column}.key-actions>*{width:100%}.key-rotate>summary{width:100%}.key-rotate-panel{padding:14px}.keys-section-head{gap:12px}}
+
+.funnel-bar{display:grid;gap:12px;margin-bottom:16px}
+.funnel-stages{display:flex;gap:8px;flex-wrap:wrap}
+.funnel-chip{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border:1px solid var(--line,#e5e7eb);border-radius:999px;background:transparent;color:inherit;font:inherit;font-size:13px;cursor:pointer}
+.funnel-chip small{font-size:12px;opacity:.7}
+.funnel-chip:hover{border-color:currentColor}
+.funnel-chip.active{background:var(--ink,#111);color:var(--paper,#fff);border-color:var(--ink,#111)}
+.funnel-chip:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+.funnel-track .funnel-chip{cursor:default}
+.funnel-track .funnel-chip:hover{border-color:var(--line,#e5e7eb)}
+.funnel-track .funnel-chip.active:hover{border-color:var(--ink,#111)}
+.fields-manager{margin-top:24px}
+.fields-manager summary{cursor:pointer;font-weight:600}
+.field-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
+.field-row span{flex:1 1 220px}
+.field-options{display:flex;gap:12px;flex-wrap:wrap;border:0;padding:0}
+.data-panel h4{margin:12px 0 4px}
+.automations-manager{margin-top:16px}
+.automations-manager summary{cursor:pointer;font-weight:600}
+.automation-row{border-top:1px solid var(--line,#e5e7eb);padding:10px 0}
+.automation-runs p{margin:4px 0;font-size:13px}
+.task-row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:6px 0}
+.task-row.task-done strong{text-decoration:line-through;opacity:.6}
+.requirements-manager{margin-top:16px}
+.requirements-manager summary{cursor:pointer;font-weight:600}
+.requirements-stage h4{margin:12px 0 2px}
+.blockers ul{margin:6px 0 0;padding-left:20px}

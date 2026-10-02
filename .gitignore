@@ -8,3 +8,6 @@ node_modules/
 # Capturas e rascunhos temporários de sessão.
 .tmp/
 .tmp-*
+
+# Imagens dos testes de tela (UI_SCREENSHOTS=1)
+test/ui/artifacts/

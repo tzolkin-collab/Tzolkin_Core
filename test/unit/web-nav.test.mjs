@@ -19,12 +19,11 @@ const fonte = nome => readFileSync(new URL(nome, PUBLIC), 'utf8');
 // A navegação do contexto geral, como foi decidida: grupo e, dentro dele, ordem.
 const NAVEGACAO = [
  ['Hoje', ['Visão geral', 'Financeiro']],
- ['Relacionamentos', ['Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Campanhas', 'E-mails']],
+ ['Relacionamentos', ['Empresas', 'Pessoas', 'Clientes', 'Inbound']],
  ['Portfólio', ['Portfólio']],
  ['Entrega', ['Serviços', 'Acompanhamento']],
- ['Tecnologia', ['Conexões', 'Deploys', 'Projetos técnicos', 'Gestão técnica']],
- ['Bases de dados', ['Banco de dados', 'Redis e caches']],
- ['Administração', ['Acessos']],
+ ['Tecnologia', ['Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS']],
+ ['Bases de dados', ['Banco de dados']],
 ];
 
 // Esvazia o conteúdo das aspas simples preservando o tamanho: os blocos lidos aqui
@@ -78,7 +77,7 @@ test('a barra do contexto geral tem os grupos e as telas combinados, nesta ordem
  // Guardas do próprio teste: sem elas, um regex que parasse de casar deixaria o
  // teste verde afirmando coisa nenhuma.
  assert.ok(views.length >= 18, `poucas telas lidas de CONTEXTS (${views.length})`);
- for (const chave of ['overview', 'connections', 'deploys', 'projects', 'management', 'access'])
+ for (const chave of ['overview', 'connections', 'vercel', 'github', 'easypanel', 'dns', 'access'])
   assert.ok(views.some(v => v.chave === chave), `tela ${chave} não foi lida de CONTEXTS`);
 
  const visiveis = views.filter(v => !v.oculta);

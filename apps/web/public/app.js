@@ -1,4 +1,7 @@
 import {setupCommercial} from './commercial.js';
+import {editTenantDialog} from './client-edit.js';
+import {describe as describeHistory} from './client-history.js';
+import {photoPanel} from './media.js';
 // Apresentação e serialização de formulários. Autorização, recorte por produto
 // e regras de negócio ficam no servidor: nada aqui decide o que o operador pode ver.
 import { setupDelivery, deliveryIcon } from './delivery.js';
@@ -15,6 +18,10 @@ import {setupProductEmails} from './product-emails.js';
 import {renderDatabaseWorkspace} from './management-workspace.js';
 import {setupCampaigns} from './campaigns.js';
 import {setupConnections, casaConexao} from './connections.js';
+import {achatar} from './owner-suggestions.js';
+import {vinculoNaLista} from './owner-link.js';
+import {mountTabs} from './tabs.js';
+import {slugDoNome, mountTagInput} from './space-form.js';
 // Ficha da empresa por callback: os módulos não importam app.js (evita ciclo).
 const commercial=setupCommercial({api,openTenant:id=>openClient(id)});
 const billing=setupBilling({api});
@@ -27,7 +34,9 @@ const finance=setupFinance({api});
 const tracking=setupTracking({api,openTenant:id=>openClient(id)});
 // Conexões devolve a lista ativa ao painel: quem confirma um deploy aqui muda o
 // endereço público do item no portfólio, e a tela ao lado não pode ficar velha.
-const connections=setupConnections({api,openTenant:id=>openClient(id),openProduct:id=>switchContext(id).catch(reportError),onChanged:async ativas=>{
+const connections=setupConnections({api,openTenant:id=>openClient(id),openProduct:id=>switchContext(id).catch(reportError),
+ projectFor:dono=>delivery.projectFor(dono),openProject:project=>delivery.open(project),activateProject:project=>delivery.activate(project),goTo:view=>switchView(view),
+ onChanged:async ativas=>{
  state.resourceBindings=ativas;
  state.topology=await api('/api/products/topology').catch(()=>state.topology);
  if(state.overview)renderGeneral();
@@ -36,7 +45,8 @@ const $ = id => document.getElementById(id);
 fetch('/api/auth/mode').then(r=>r.ok?r.json():null).then(auth=>{const oidc=auth?.mode==='google-oidc';$('login-form').hidden=oidc;$('google-login').hidden=!oidc;if(oidc&&new URLSearchParams(location.search).has('auth_error'))$('login-notice').textContent='Conta Google não autorizada ou login expirado.';}).catch(()=>{$('login-notice').textContent='Não foi possível verificar o modo de acesso. Atualize a página.';});
 $('plan-help').textContent='Use o slug de uma oferta deste produto. Ele identifica as condições comerciais copiadas para o contrato.';
 
-const state = { context: '', view: 'overview', overview: null, product: null, catalog: [], deploys: [], resourceBindings: [], infrastructure: null, management: null, dns: null, topology: null, selectedTenant: null, clientSummary: null, clientBack: 'clients' };
+const state = { context: '', view: 'overview', overview: null, product: null, catalog: [], deploys: [], resourceBindings: [], infrastructure: null, management: null, dns: null, topology: null, security: null, selectedTenant: null, clientSummary: null, clientBack: 'clients', inboundTab: 'leads', portfolioTab: 'all' };
+let loadGeneration = 0;
 
 // Cada contexto declara a própria navegação. Menu só existe quando há dado real por trás.
 //
@@ -57,27 +67,32 @@ const CONTEXTS = {
    people: { title: 'Pessoas', section: 'view-people', action: ['Nova pessoa', 'stakeholder-dialog'], metrics:false },
    clients: { title: 'Clientes', section: 'view-clients', action: ['Novo cliente', 'tenant-dialog'], metrics:false },
    leads: { title: 'Inbound', section: 'view-commercial', metrics:false },
-   campaigns: { title: 'Campanhas', section: 'view-campaigns', metrics:false },
-   emails: { title: 'E-mails', section: 'view-emails', metrics:false },
+   // Campanhas mora dentro de Inbound, como uma aba (montarInbound).
+   // Oculta até enviar e receber de verdade: a própria tela diz que ainda são rascunhos.
+   emails: { title: 'E-mails', section: 'view-emails', metrics:false, hidden:true },
    client: { title: 'Cliente', section: 'view-client', hidden:true, metrics:false },
    // PORTFÓLIO — o que a TZOLKIN tem para vender.
-   products: { title: 'Portfólio', section: 'view-products', action: ['Vincular cliente', 'entitlement-dialog'] },
+   products: { title: 'Portfólio', section: 'view-products', action: ['Novo espaço', 'space-dialog'], metrics:false },
    // ENTREGA — o trabalho contratado e o andamento dele.
    services: { title: 'Serviços', section: 'view-services', metrics:false },
+   // A atividade e as horas pertencem a uma contratação (migração 041).
    tracking: { title: 'Acompanhamento', section: 'view-tracking', metrics:false },
    serviceCampaigns: { title: 'Campanhas do serviço', section: 'view-service-campaigns', metrics: false, hidden:true },
-   // TECNOLOGIA — de quem é cada recurso, onde ele está publicado e como é operado.
-   connections: { title: 'Conexões', section: 'view-connections', metrics:false },
-   deploys: { title: 'Deploys', section: 'view-deploys', metrics: false },
-   projects: { title: 'Projetos técnicos', section: 'view-delivery', action: ['Novo projeto', 'delivery-new'], metrics: false },
-   management: { title: 'Gestão técnica', section: 'view-management', metrics:false },
+   // TECNOLOGIA — Conexões diz de quem é cada recurso; uma tela por provedor diz onde ele está.
+   connections: { title: 'Conexões', section: 'view-connections', action: ['Novo projeto', 'delivery-new'], metrics:false },
+   vercel: { title: 'Vercel', section: 'view-vercel', metrics: false },
+   github: { title: 'GitHub', section: 'view-github', metrics: false },
+   easypanel: { title: 'EasyPanel', section: 'view-easypanel', metrics: false },
+   dns: { title: 'DNS', section: 'view-dns', metrics: false },
    resource: { title: 'Projeto e serviço', section: 'view-resource', metrics: false, hidden:true },
    serverMetrics: { title: 'Métricas de servidor', section: 'view-server-metrics', metrics:false, hidden:true },
    // BASES DE DADOS
    database: { title: 'Banco de dados', section: 'view-database', metrics:false },
-   redis: { title: 'Redis e caches', section: 'view-redis', metrics:false },
+   // Oculta: todo número da tela é "Não exposto"; volta com métricas de verdade.
+   redis: { title: 'Redis e caches', section: 'view-redis', metrics:false, hidden:true },
    // ADMINISTRAÇÃO
-   access: { title: 'Acessos', section: 'view-access', action: ['Vincular acesso', 'member-dialog'] },
+   // Acesso a produto é assunto do contexto de produto; no geral a tela só mostrava vazio.
+   access: { title: 'Acessos', section: 'view-access', action: ['Vincular acesso', 'member-dialog'], hidden:true },
    settings: { title: 'Configurações', section: 'view-settings', metrics:false, hidden:true },
    security: { title: 'Segurança', section: 'view-security', metrics:false, hidden:true },
   },
@@ -96,13 +111,13 @@ const CONTEXTS = {
    'product-payments': { title: 'Cobrança', section: 'view-product-payments', metrics:false },
    'product-receivables': { title: 'Recebimentos', section: 'view-product-receivables', metrics:false },
    'product-emails': { title: 'E-mails', section: 'view-product-emails', metrics:false },
-   'product-campaigns': { title: 'Campanhas', section: 'view-product-campaigns', metrics:false },
+   // Campanhas do item mora dentro de Inbound, como uma aba (montarInbound).
   },
  },
 };
 
-const SECTIONS = ['view-commercial','view-product-keys','view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-services', 'view-connections', 'view-access', 'view-management', 'view-database', 'view-redis', 'view-settings', 'view-security', 'view-deploys', 'view-server-metrics', 'view-delivery', 'view-product', 'view-product-orgs', 'view-product-engagements', 'view-product-payments', 'view-product-receivables', 'view-product-emails', 'view-campaigns', 'view-product-campaigns', 'view-service-campaigns'];
-const DATA_NODES = ['tenants', 'leads', 'companies', 'client-summary', 'client-detail', 'stakeholder-directory', 'members', 'contracts', 'product-catalog', 'services-list', 'services-summary', 'management-schema', 'management-dns', 'management-redis', 'management-apis', 'overview-kpis', 'overview-alerts', 'overview-integrations', 'overview-product-list', 'overview-actions', 'product-orgs', 'product-engagements', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
+const SECTIONS = ['view-commercial','view-product-keys','view-tracking', 'view-resource', 'view-overview', 'view-clients', 'view-leads', 'view-companies', 'view-client', 'view-people', 'view-products', 'view-services', 'view-connections', 'view-access', 'view-database', 'view-redis', 'view-settings', 'view-security', 'view-vercel', 'view-github', 'view-easypanel', 'view-dns', 'view-server-metrics', 'view-product', 'view-product-orgs', 'view-product-engagements', 'view-product-payments', 'view-product-receivables', 'view-product-emails', 'view-service-campaigns'];
+const DATA_NODES = ['tenants', 'leads', 'companies', 'client-summary', 'client-detail', 'stakeholder-directory', 'members', 'contracts', 'product-catalog', 'services-list', 'services-summary', 'management-schema', 'management-dns', 'management-redis', 'overview-kpis', 'overview-alerts', 'overview-integrations', 'overview-product-list', 'overview-actions', 'product-orgs', 'product-engagements', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
 SECTIONS.push('view-finance','view-emails');
 
 const contextKind = () => (state.context ? 'product' : 'general');
@@ -110,10 +125,10 @@ const views = () => CONTEXTS[contextKind()].views;
 
 // Telas de contexto que dependem de uma capacidade do tipo do item. A regra é do
 // servidor (catalog.mjs, ADR 0007); a tela só lê as capacidades que ele devolve.
-const VIEW_CAPABILITIES = {'product-inbound':['commercial'],'product-keys':['access','commercial'],'product-orgs':['access'],'product-engagements':['commercial'],'product-payments':['checkout'],'product-receivables':['contract_billing']};
+const VIEW_CAPABILITIES = {'product-inbound':['commercial','operate'],'product-keys':['access','commercial'],'product-orgs':['access'],'product-engagements':['commercial'],'product-payments':['checkout'],'product-receivables':['contract_billing']};
 const contextProduct = () => state.product?.product || state.overview?.products?.find(product => product.id === state.context) || null;
 const hasCapability = (product, capability) => Boolean(product?.capabilities?.includes(capability));
-const contextKindLabel = () => PORTFOLIO_KIND_LABELS[contextProduct()?.portfolio_kind] || 'Produto';
+const contextKindLabel = () => kindLabelOf(contextProduct()?.portfolio_kind);
 // Enquanto as capacidades não chegam, só aparecem as telas que não dependem de nenhuma.
 const viewAllowed = key => {
  if (contextKind() !== 'product' || !VIEW_CAPABILITIES[key]) return true;
@@ -165,16 +180,13 @@ function option(value, label) { const el = node('option', label); el.value = val
 
 // O transporte do banco é medido no servidor; aqui só se exibe o veredito.
 // Sem hostname, sem credencial — só o estado.
-async function renderSecurityBanner() {
+function renderSecurityBanner() {
  const banner = $('security-banner');
- try {
-  const health = await (await fetch('/health')).json();
-  const claro = health.database_transport === 'plaintext';
-  banner.hidden = !claro;
-  if (claro) banner.textContent =
-   'O banco está em host remoto e a conexão não é criptografada: senha e dados trafegam em texto claro. '
-   + 'Não cadastre cliente real até isto ser corrigido.';
- } catch { banner.hidden = true; }
+ const claro = state.security?.transport === 'plaintext';
+ banner.hidden = !claro;
+ if (claro) banner.textContent =
+  'O banco está em host remoto e a conexão não é criptografada: senha e dados trafegam em texto claro. '
+  + 'Não cadastre cliente real até isto ser corrigido.';
 }
 
 // Limpa tudo que veio do servidor. Chamado ao trocar de contexto e ao sair:
@@ -204,7 +216,8 @@ function clearRenderedData() {
 }
 
 function signedOut() {
- state.overview = null; state.catalog = []; state.deploys = []; state.resourceBindings = []; state.infrastructure = null; state.management = null; state.dns = null; state.topology = null; state.product = null; state.context = '';
+ loadGeneration++;
+ state.overview = null; state.catalog = []; state.deploys = []; state.resourceBindings = []; state.infrastructure = null; state.management = null; state.dns = null; state.topology = null; state.security = null; state.product = null; state.context = '';
  clearRenderedData();
  $('context-select').replaceChildren(option('', 'TZOLKIN · Geral'));
  $('workspace').hidden = true; $('login').hidden = false;
@@ -244,10 +257,10 @@ function renderNav() {
  // teste de navegação pega antes de virar dois cabeçalhos "Tecnologia" na tela.
  const groups=contextKind()==='general'?{
   overview:'Hoje',finance:'Hoje',
-  companies:'Relacionamentos',people:'Relacionamentos',clients:'Relacionamentos',leads:'Relacionamentos',campaigns:'Relacionamentos',emails:'Relacionamentos',client:'Relacionamentos',
+  companies:'Relacionamentos',people:'Relacionamentos',clients:'Relacionamentos',leads:'Relacionamentos',emails:'Relacionamentos',client:'Relacionamentos',
   products:'Portfólio',
   services:'Entrega',tracking:'Entrega',serviceCampaigns:'Entrega',
-  connections:'Tecnologia',deploys:'Tecnologia',projects:'Tecnologia',management:'Tecnologia',resource:'Tecnologia',serverMetrics:'Tecnologia',
+  connections:'Tecnologia',vercel:'Tecnologia',github:'Tecnologia',easypanel:'Tecnologia',dns:'Tecnologia',resource:'Tecnologia',serverMetrics:'Tecnologia',
   database:'Bases de dados',redis:'Bases de dados',
   access:'Administração',settings:'Administração',security:'Administração',
  }:Object.fromEntries(Object.keys(context.views).map(key=>[key,contextKindLabel()]));
@@ -256,7 +269,7 @@ function renderNav() {
   if(groups[key]!==previous){section=node('section',undefined,'nav-section');const label=node('h2',groups[key],'nav-group');section.append(label);items.push(section);previous=groups[key];}
   const button = node('button', undefined, 'nav-item' + (key === state.view ? ' active' : ''));
   button.type = 'button'; button.dataset.view = key;
-  const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',metrics:'chart',leads:'user-plus',products:'package',services:'briefcase',connections:'branch',projects:'repo',delivery:'cloud',access:'shield',management:'settings',database:'database',redis:'cache',settings:'sliders',security:'lock',deploys:'cloud',serverMetrics:'activity',product:'package','product-inbound':'user-plus','product-keys':'lock','product-orgs':'people','product-engagements':'briefcase','product-payments':'wallet','product-receivables':'calendar','product-emails':'mail',campaigns:'chart','product-campaigns':'chart'})[key]);
+  const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',metrics:'chart',leads:'user-plus',products:'package',services:'briefcase',connections:'branch',vercel:'cloud',github:'repo',easypanel:'server',dns:'globe',access:'shield',database:'database',redis:'cache',settings:'sliders',security:'lock',serverMetrics:'activity',product:'package','product-inbound':'user-plus','product-keys':'lock','product-orgs':'people','product-engagements':'briefcase','product-payments':'wallet','product-receivables':'calendar','product-emails':'mail',campaigns:'chart','product-campaigns':'chart'})[key]);
   icon.classList.add('nav-icon'); button.append(icon, document.createTextNode(view.title));
   if (key === state.view) button.setAttribute('aria-current', 'page');
   button.onclick = () => {switchView(key);closeNavigation();};
@@ -272,9 +285,8 @@ function switchView(view) {
  state.view = view;
  document.body.dataset.view = view;
  const active = views()[view];
- // Uma tela, uma seção. Deploys arrastava view-delivery junto, e o cadastro técnico
- // aparecia colado embaixo das publicações sem ter sido pedido: agora ele é a tela
- // "Projetos técnicos", com entrada própria na navegação.
+ // Uma tela, uma seção. Cada provedor (Vercel, GitHub, EasyPanel, DNS) tem a sua;
+ // o cadastro técnico dos projetos mora em Conexões, junto de quem é o dono.
  SECTIONS.forEach(id => { $(id).hidden = id !== active.section; });
  $('breadcrumb').textContent = $('page-title').textContent = active.title;
  $('mobile-page-title').textContent=active.title;
@@ -290,24 +302,41 @@ function switchView(view) {
  if (view === 'emails') emails.load().catch(reportError);
  if (view === 'people') renderPeople();
  if (view === 'clients') renderTenants();
- if (view === 'leads') commercial.load().catch(reportError);
- if(view==='product-inbound') commercial.load(state.context).catch(reportError);
+ if (view === 'leads' || view === 'product-inbound') montarInbound();
  if(view==='product-keys') commercial.keys(state.context).catch(reportError);
  if (view === 'companies') renderCompanies();
  if (view === 'products') renderGeneral();
  if (view === 'services') renderServices();
- if (['management','database','redis'].includes(view)) renderManagement();
- if (['management','database','redis'].includes(view) && !state.management) api('/api/management/schema').then(data=>{state.management=data;renderManagement();}).catch(error=>{$('management-schema').replaceChildren(node('p',error.message,'notice-inline'));});
- if (view === 'management' && !state.dns) api('/api/dns/hostinger').then(data=>{state.dns=data;renderManagement();}).catch(error=>{$('management-dns').replaceChildren(node('p',error.message,'notice-inline'));});
+ if (['dns','database','redis'].includes(view)) renderManagement();
+ if (['database','redis'].includes(view) && !state.management) api('/api/management/schema').then(data=>{state.management=data;renderManagement();}).catch(error=>{$('management-schema').replaceChildren(node('p',error.message,'notice-inline'));});
+ if (view === 'dns' && !state.dns) api('/api/dns/hostinger').then(data=>{state.dns=data;renderManagement();}).catch(error=>{$('management-dns').replaceChildren(node('p',error.message,'notice-inline'));});
  if (view === 'client') renderClientDetail();
  if (view === 'product-payments'&&state.product) productPayments.load(state.product.product).catch(reportError);
  if (view === 'product-receivables'&&state.product) serviceReceivables.load(state.product.product).catch(reportError);
  if (view === 'product-emails'&&state.product) productEmails.load({...state.product.product,deploy_url:publishedDeployUrl(state.product.product),favicon_url:productFaviconUrl(state.product.product)}).catch(reportError);
- // Deploys e Projetos técnicos leem o mesmo cadastro; só a seção visível difere.
- if (view === 'deploys' || view === 'projects') delivery.load().catch(reportError);
+ // Conexões (projetos técnicos) e GitHub (repositórios) leem o mesmo cadastro.
+ if (['connections','github','vercel','easypanel'].includes(view)) delivery.load().catch(reportError);
  if (view === 'connections') loadConnections();
- if (view === 'campaigns') campaigns.load().catch(reportError);
- if (view === 'product-campaigns'&&state.product) campaigns.loadProduct(state.product.product).catch(reportError);
+}
+
+// Inbound: uma tela, dois tópicos (Leads e Campanhas), como abas. No contexto de um
+// item, Leads só existe onde o item tem a capacidade comercial; Campanhas existe em
+// todo item (um item interno, como o Core, também anuncia).
+function montarInbound() {
+ const doItem = contextKind() === 'product';
+ const comLeads = !doItem || hasCapability(contextProduct(), 'commercial');
+ const abas = [...(comLeads ? [{ key: 'leads', label: 'Leads' }] : []), { key: 'campaigns', label: 'Campanhas' }];
+ if (!abas.some(aba => aba.key === state.inboundTab)) state.inboundTab = abas[0].key;
+ const mostrar = key => {
+  state.inboundTab = key;
+  $('inbound-panel-leads').hidden = key !== 'leads';
+  $('inbound-panel-campaigns').hidden = key !== 'campaigns';
+  if (key === 'leads') commercial.load(doItem ? state.context : '').catch(reportError);
+  else if (!doItem) campaigns.load().catch(reportError);
+  else if (state.product) campaigns.loadProduct(state.product.product).catch(reportError);
+ };
+ mountTabs({ host: $('inbound-tabs'), tabs: abas, active: state.inboundTab, label: 'Seções de Inbound', prefix: 'inbound', onChange: mostrar });
+ mostrar(state.inboundTab);
 }
 
 function renderContextChrome() {
@@ -396,7 +425,7 @@ function renderOverviewDashboard(entries,{finance,sales,deploys,infrastructure}=
   : [integration('Contas bancárias',bankCount>0,bankCount?`${bankCount} ${bankCount===1?'conexão sem contas lidas':'conexões sem contas lidas'}`:'Nenhuma conexão')];
  $('overview-integrations').replaceChildren(integration('Stripe',sales?.configured?.stripe,`${saleRows.filter(s=>s.provider==='stripe').length} vendas no mês`,providerLogo('stripe')),integration('Asaas',sales?.configured?.asaas,sales?.configured?.asaas?'Leitura por API ativa':'Chave de produção ausente',providerLogo('asaas')),...linhasBanco,integration('EasyPanel',infrastructure==null?null:infrastructure.status==='ok',infrastructure==null?'Consultando inventário':`${easyCount} serviços no inventário`,providerLogo('easypanel')));
  $('overview-product-list').replaceChildren(...byKind(overview.products).flatMap(group=>group.items).map(product=>{const count=portfolioCount(product),row=node('button',undefined,'overview-product');row.type='button';row.onclick=()=>openProductModule(product,'product').catch(reportError);row.append(productFavicon(productFaviconUrl(product)));const text=node('span');text.append(node('strong',product.name),node('small',[kindLabel(product),productLifecycle(product).label,count?.text].filter(Boolean).join(' · ')));row.append(text,node('span',count?String(count.n):'—','overview-product-count'),createIcon('arrow'));return row;}));
- $('overview-actions').replaceChildren(overviewButton('Adicionar cliente','Abrir a carteira e iniciar um relacionamento','clients','people'),overviewButton('Revisar caixa','Bancos, Stripe e Asaas em um só lugar','finance','wallet'),overviewButton('Acompanhar deploys','GitHub, projetos e ambientes de publicação','deploys','cloud'));
+ $('overview-actions').replaceChildren(overviewButton('Adicionar cliente','Abrir a carteira e iniciar um relacionamento','clients','people'),overviewButton('Revisar caixa','Bancos, Stripe e Asaas em um só lugar','finance','wallet'),overviewButton('Acompanhar deploys','Projetos e ambientes de publicação na Vercel','vercel','cloud'));
  document.querySelectorAll('[data-overview-view]').forEach(button=>button.onclick=()=>switchView(button.dataset.overviewView));
 }
 
@@ -408,7 +437,25 @@ const CLIENT_LABELS={
 };
 const clientLabel=value=>CLIENT_LABELS[value]||value||'A classificar';
 // Separado de CLIENT_LABELS: lá `product` é modalidade de contratação e `internal` é tipo de relacionamento.
-const PORTFOLIO_KIND_LABELS={product:'Produto',platform:'Plataforma',service_line:'Linha de serviço',internal:'Interno'};
+// Os TIPOS do portfólio (rótulo, plural, ícone, texto e ordem) vêm da API, junto do
+// resto do painel (portfolio_kinds em /api/overview): o painel não guarda dicionário
+// próprio. 'kind_aliases' diz que nome antigo virou qual ('product' → 'platform').
+const kindRegistry=()=>state.overview?.portfolio_kinds||[];
+const canonKind=kind=>state.overview?.kind_aliases?.[kind]||kind;
+const kindInfo=kind=>kindRegistry().find(item=>item.kind===canonKind(kind))||null;
+const kindLabelOf=kind=>kindInfo(kind)?.label||'Item';
+
+// O cartão é o alvo do clique: sem um "Abrir X →" repetido em cada linha. Botões e
+// links dentro do cartão continuam com a ação própria.
+function cardLink(card, open, label) {
+ card.classList.add('is-clickable');card.tabIndex=0;card.setAttribute('role','link');card.setAttribute('aria-label',label);
+ card.onclick=event=>{if(event.target.closest('button,a'))return;open();};
+ card.onkeydown=event=>{if(event.key==='Enter'&&event.target===card)open();};
+ return card;
+}
+// Papel e cargo que dizem a mesma coisa ("Aluno · Aluno") viram um rótulo só.
+const roleLine=person=>[clientLabel(person.role),person.title].filter((v,i,a)=>v&&a.findIndex(x=>x&&String(x).toLocaleLowerCase('pt-BR')===String(v).toLocaleLowerCase('pt-BR'))===i).join(' · ');
+const plural2=(n,um,varios)=>`${n} ${n===1?um:varios}`;
 
 function renderTenants() {
  const overview = state.overview;
@@ -419,11 +466,17 @@ function renderTenants() {
  const active=customers.filter(t=>['active','onboarding'].includes(t.lifecycle_status)).length;
  const unclassified=customers.filter(t=>t.lifecycle_status==='unclassified'||!overview.engagements.some(e=>e.tenant_id===t.id)).length;
  const stakeholderOrgs=new Set(overview.stakeholders.map(s=>s.tenant_id)).size;
- $('client-summary').replaceChildren(...[['Clientes',customers.length],['Ativos / implantação',active],['A classificar',unclassified],['Com stakeholders',stakeholderOrgs]].map(([label,value])=>{const card=node('article');card.append(node('span',label),node('strong',String(value)));return card;}));
+ $('client-summary').replaceChildren(...[['Na carteira',customers.length],['Ativos / em implantação',active],['A classificar',unclassified],['Com pessoas cadastradas',stakeholderOrgs]].map(([label,value])=>{const card=node('article');card.append(node('span',label),node('strong',String(value)));return card;}));
  $('tenants').replaceChildren();
  $('clients-empty').hidden = customers.length > 0;
  $('search-empty').hidden = !customers.length || tenants.length > 0;
- for (const tenant of tenants) {
+ // Quem está em andamento vem primeiro; encerrados ficam no fim, rotulados, em vez de
+ // dividir o mesmo grupo com os ativos sob o subtítulo "quem a TZOLKIN atende".
+ const GRUPOS=[['Ativos e em implantação',t=>['active','onboarding'].includes(t.lifecycle_status)],['A classificar',t=>t.lifecycle_status==='unclassified'],['Encerrados',()=>true]];
+ const lista=[],vistos=new Set();
+ for(const [groupLabel,pertence] of GRUPOS){const itens=tenants.filter(t=>!vistos.has(t.id)&&pertence(t));itens.forEach(t=>vistos.add(t.id));if(itens.length)lista.push({groupLabel:`${groupLabel} · ${itens.length}`},...itens);}
+ for (const tenant of lista) {
+  if(tenant.groupLabel){$('tenants').append(node('p',tenant.groupLabel,'client-group-label'));continue;}
   const engagements=overview.engagements.filter(e=>e.tenant_id===tenant.id);
   const stakeholders=overview.stakeholders.filter(s=>s.tenant_id===tenant.id);
   const card=node('article',undefined,'client-card'),head=node('header'),identity=node('div');
@@ -432,9 +485,11 @@ function renderTenants() {
   head.append(identity,node('span',clientLabel(tenant.lifecycle_status),'status '+(['active','onboarding'].includes(tenant.lifecycle_status)?'active':tenant.lifecycle_status==='unclassified'?'building':'')));
   const facts=node('div',undefined,'client-card-facts');
   const fact=(label,value)=>{const item=node('div');item.append(node('span',label),node('strong',value));return item;};
-  facts.append(fact('Contratação',engagements.length?engagements.map(e=>clientLabel(e.service_model)).join(', '):'A classificar'),fact('Oferta / marca',engagements.length?engagements.map(e=>e.label).join(', '):'Sem oferta'),fact('Stakeholders',String(stakeholders.length)));
-  const open=node('button','Abrir cliente →','secondary');open.type='button';open.onclick=()=>openClient(tenant.id);
-  card.append(head,facts,open);$('tenants').append(card);
+  // A oferta só aparece quando acrescenta algo ao tipo ("Assessoria / Assessoria" não acrescenta).
+  const norm=t=>String(t||'').toLocaleLowerCase('pt-BR').normalize('NFD').replace(/\p{M}/gu,'').trim();
+  const ofertas=[...new Set(engagements.filter(e=>e.label&&norm(e.label)!==norm(clientLabel(e.service_model))).map(e=>e.label))];
+  facts.append(fact('Contratação',engagements.length?[...new Set(engagements.map(e=>clientLabel(e.service_model)))].join(', '):'A classificar'),...(ofertas.length?[fact('Oferta',ofertas.join(', '))]:[]),fact('Pessoas',String(stakeholders.length)));
+  card.append(head,facts);cardLink(card,()=>openClient(tenant.id),`Abrir ${tenant.name}`);$('tenants').append(card);
  }
 }
 
@@ -454,10 +509,10 @@ function renderDirectory(kind, searchId, targetId, emptyId) {
  for(const tenant of rows){
   const engagements=overview.engagements.filter(e=>e.tenant_id===tenant.id), people=overview.stakeholders.filter(s=>s.tenant_id===tenant.id);
   const card=node('article',undefined,'client-card'),head=node('header'),identity=node('div');
-  identity.append(node('span',tenant.name.slice(0,1),'client-avatar'),node('span'));identity.lastChild.append(node('h3',tenant.name),node('small',clientLabel(tenant.organization_type)));
+  identity.append(node('span',tenant.name.slice(0,1),'client-avatar'),node('span'));identity.lastChild.append(node('h3',tenant.name),...(tenant.organization_type==='company'?[]:[node('small',clientLabel(tenant.organization_type))]));
   head.append(identity,node('span',clientLabel(tenant.relationship_kind),'status'));const facts=node('div',undefined,'client-card-facts');
-  const fact=(l,v)=>{const i=node('div');i.append(node('span',l),node('strong',v));return i;};facts.append(fact('Contratação',engagements.length?engagements.length+' vínculo(s)':'Sem vínculo'),fact('Stakeholders',String(people.length)),fact('Situação',clientLabel(tenant.lifecycle_status)));
-  const open=node('button','Abrir organização →','secondary');open.type='button';open.onclick=()=>openClient(tenant.id);card.append(head,facts,open);target.append(card);
+  const fact=(l,v)=>{const i=node('div');i.append(node('span',l),node('strong',v));return i;};facts.append(fact('Contratação',engagements.length?plural2(engagements.length,'contratação','contratações'):'Sem contratação'),fact('Pessoas',String(people.length)),fact('Situação',clientLabel(tenant.lifecycle_status)));
+  card.append(head,facts);cardLink(card,()=>openClient(tenant.id),`Abrir ${tenant.name}`);target.append(card);
  }
 }
 function renderLeads(){renderDirectory(t=>t.relationship_kind==='prospect','lead-search','leads','leads-empty');}
@@ -528,7 +583,7 @@ function clientEngagement(engagement,summary){
  head.append(copy,node('span',clientLabel(engagement.status),'status '+(['active','planned'].includes(engagement.status)?'active':'building')));
  const links=node('div',undefined,'client-engagement-links'),item=engagement.product;
  if(item){
-  const kind=PORTFOLIO_KIND_LABELS[item.portfolio_kind]||'Item';
+  const kind=kindLabelOf(item.portfolio_kind);
   // Item arquivado não abre contexto: o seletor só conhece ativos e rascunhos.
   if(['active','draft'].includes(item.lifecycle_status)){const open=node('button',undefined,'table-action');open.type='button';open.append(createIcon('package'),document.createTextNode(`${kind}: ${item.name}`));open.onclick=()=>openProductModule(item,'product').catch(reportError);links.append(open);}
   else links.append(node('span',`${kind}: ${item.name} · arquivado`,'detail'));
@@ -556,7 +611,8 @@ function paintClientDetail(summary){
  identity.append(node('span',tenant.name.slice(0,1),'client-avatar large'),node('div'));
  identity.lastChild.append(node('p',tenantKicker(tenant),'overview-kicker'),node('h2',tenant.name),node('p',[clientLabel(tenant.organization_type),clientLabel(tenant.lifecycle_status),tenant.status==='suspended'?'Suspensa':null].filter(Boolean).join(' · '),'detail'));
  const create=node('button',undefined,'primary');create.type='button';create.append(createIcon('plus'),document.createTextNode('Nova contratação'));create.onclick=()=>openEngagementDialog(tenant).catch(reportError);
- hero.append(identity,create);
+ const edit=node('button',undefined,'secondary');edit.type='button';edit.append(createIcon('settings'),document.createTextNode('Editar empresa'));edit.onclick=()=>editTenantDialog({api,tenant,onSaved:async()=>{state.clientSummary=null;await load();}});
+ hero.append(identity,edit,create);
  const grid=node('div',undefined,'client-detail-grid client-summary-grid');
  const panel=(title,caption,wide)=>{const el=node('section',undefined,'client-detail-panel'+(wide?' client-detail-wide':''));el.append(node('h3',title));if(caption)el.append(node('p',caption,'detail'));grid.append(el);return el;};
  const unavailable=(title,section)=>panel(title).append(node('p',section.reason,'notice-inline'));
@@ -590,17 +646,21 @@ function paintClientDetail(summary){
  else{
   const team=panel('Pessoas','Quem participa do relacionamento.');
   if(!people.items.length)team.append(node('p','Nenhuma pessoa vinculada a esta empresa.','empty-list'));
-  for(const person of people.items){const r=row(person.name,clientLabel(person.role)+(person.title?' · '+person.title:''));r.prepend(node('span',person.name.slice(0,1),'person-avatar'));if(person.is_primary)r.append(node('span','Principal','status active'));team.append(r);}
+  for(const person of people.items){const r=row(person.name,roleLine(person));r.prepend(node('span',person.name.slice(0,1),'person-avatar'));if(person.is_primary)r.append(node('span','Principal','status active'));team.append(r);}
  }
 
  if(!hours.available)unavailable('Horas do mês',hours);
- else{
-  // Soma da empresa: atividade ainda não tem ligação com contratação (by_engagement:false).
-  const time=panel('Horas do mês',`${monthTitle(hours.month)} · somadas por empresa; o Acompanhamento ainda não liga atividade a contratação.`);
+ else if(hours.minutes){
+  // Total da empresa e, abaixo, o que é de cada contratação (id nulo = atividade geral, sem contratação).
+  const time=panel('Horas do mês',`${monthTitle(hours.month)} · separadas por contratação.`);
   time.append(node('strong',hours.minutes?`${workedTime(hours.minutes)} em ${plural(hours.logs,'apontamento','apontamentos')} de ${plural(hours.activities,'atividade','atividades')}`:'Nenhuma hora lançada neste mês.','client-access-count'));
+  for(const item of hours.items||[])time.append(node('p',`${item.label||'Sem contratação'} · ${workedTime(item.minutes)}`,'detail'));
   const open=node('button',undefined,'secondary');open.type='button';open.append(createIcon('calendar'),document.createTextNode('Abrir no Acompanhamento'));
   open.onclick=()=>{tracking.focus(tenant.id);switchView('tracking');};time.append(open);
  }
+
+ // Fotos da empresa, no R2 privado: o painel monta a própria listagem e o próprio colar/arrastar.
+ panel('Fotos').append(photoPanel({type:'tenant',id:tenant.id}));
 
  // Acesso só aparece quando existe: empresa só de serviço não ganha um painel de zeros.
  if(!access.available)unavailable('Acessos',access);
@@ -609,6 +669,14 @@ function paintClientDetail(summary){
   for(const e of access.entitlements)byProduct.set(e.product_id,{name:e.product_name||e.product_id,plan:e.plan,rights:e.rights||[],members:0});
   for(const m of access.memberships){const item=byProduct.get(m.product_id)||{name:m.product_name||m.product_id,plan:null,rights:[],members:0};item.members=m.active;byProduct.set(m.product_id,item);}
   for(const item of byProduct.values())granted.append(row(item.name,[item.plan?`Plano ${item.plan}`:'Sem contrato ativo',item.members?plural(item.members,'identidade com acesso','identidades com acesso'):null,item.rights.length?item.rights.join(', '):null].filter(Boolean).join(' · ')));
+ }
+ // Histórico: o que mudou na empresa, do mais recente para o mais antigo (a trilha de auditoria).
+ const history=summary.history;
+ if(history&&!history.available)unavailable('Histórico',history);
+ else if(history?.items.length){
+  const log=panel('Histórico','O que mudou nesta empresa, do mais recente para o mais antigo.',true);
+  for(const h of history.items){const d=describeHistory(h),r=row(d.title,[d.detail,new Date(h.at).toLocaleString('pt-BR'),h.actor].filter(Boolean).join(' · '));r.classList.add('history-row');log.append(r);}
+  if(history.truncated)log.append(node('p','Mostrando os 30 mais recentes.','detail'));
  }
  root.replaceChildren(hero,grid);
 }
@@ -629,15 +697,15 @@ function fillEngagementProducts(){
  // Mesma regra de validarContratacao: item ativo com a capacidade do tipo. O servidor confere de novo.
  const capability=model==='product'?'product_engagement':'commercial';
  const items=(state.overview?.products||engagementItems||[]).filter(item=>item.lifecycle_status==='active'&&hasCapability(item,capability));
- select.replaceChildren(option('',model==='product'?'Selecione o produto':'Sem item do portfólio'),...items.map(item=>option(item.id,`${item.name} · ${PORTFOLIO_KIND_LABELS[item.portfolio_kind]||'Item'}`)));
+ select.replaceChildren(option('',model==='product'?'Selecione o produto':'Sem item do portfólio'),...items.map(item=>option(item.id,`${item.name} · ${kindLabelOf(item.portfolio_kind)}`)));
  select.required=model==='product';
  if(items.some(item=>item.id===previous))select.value=previous;
 }
 
 function renderPeople(){
  if(!state.overview)return;const names=new Map(state.overview.tenants.map(t=>[t.id,t.name])),query=$('people-search').value.trim().toLocaleLowerCase('pt-BR');
- const people=state.overview.stakeholders.filter(p=>(p.name+' '+(p.title||'')+' '+(names.get(p.tenant_id)||'')).toLocaleLowerCase('pt-BR').includes(query));$('stakeholder-directory').replaceChildren();$('people-empty').hidden=people.length>0;
- for(const p of people){const card=node('article',undefined,'person-card');card.append(node('span',p.name.slice(0,1),'person-avatar'),node('div'));card.lastChild.append(node('h3',p.name),node('p',clientLabel(p.role)+(p.title?' · '+p.title:''),'detail'),node('button',names.get(p.tenant_id)||'Cliente','person-company'));card.lastChild.lastChild.type='button';card.lastChild.lastChild.onclick=()=>openClient(p.tenant_id);if(p.is_primary)card.append(node('span','Principal','status active'));$('stakeholder-directory').append(card);}
+ const people=state.overview.stakeholders.filter(p=>(p.name+' '+(p.title||'')+' '+(names.get(p.tenant_id)||'')+' '+(p.email||'')+' '+(p.phone||'')).toLocaleLowerCase('pt-BR').includes(query));$('stakeholder-directory').replaceChildren();$('people-empty').hidden=people.length>0;
+ for(const p of people){const card=node('article',undefined,'person-card');card.append(node('span',p.name.slice(0,1),'person-avatar'),node('div'));card.lastChild.append(node('h3',p.name),node('p',roleLine(p),'detail'),node('p',[p.email,p.phone].filter(Boolean).join(' · ')||'Sem e-mail nem telefone',[p.email,p.phone].some(Boolean)?'detail person-contact':'detail person-contact person-no-contact'),node('button',names.get(p.tenant_id)||'Cliente','person-company'));card.lastChild.lastChild.type='button';card.lastChild.lastChild.onclick=()=>openClient(p.tenant_id);if(p.is_primary)card.append(node('span','Principal','status active'));$('stakeholder-directory').append(card);}
 }
 
 function record(title, detail, edit) {
@@ -659,7 +727,7 @@ const productLifecycle=product=>{
  const deployment=readyDeployment(product);
  const evidenceStatus=catalogOf(product)?.status||'';
  if(product.lifecycle_status==='draft')return {label:'Rascunho',tone:'building',next:'Concluir o checklist do projeto antes de ativar',unproven:true};
- if(deployment)return {label:'No ar',tone:'active',next:'Deploy READY observado no provedor'};
+ if(deployment)return {label:'No ar',tone:'active',next:'Publicado e conferido no provedor'};
  if(product.portfolio_kind==='internal')return {label:'Uso interno',tone:'',next:'Não é vendido; guarda a infraestrutura da própria TZOLKIN'};
  if(!hasCapability(product,'checkout')&&hasCapability(product,'commercial'))return {label:'Opera por contrato',tone:'',next:'Contratada por proposta; deploy não é requisito'};
  if(evidenceStatus==='Planejamento')return {label:'Em planejamento',tone:'building',next:'Criar ou vincular um projeto de deploy',unproven:true};
@@ -675,19 +743,11 @@ const portfolioCount=product=>{
  if(hasCapability(product,'commercial')){const n=ov.engagements.filter(e=>e.product_id===product.id&&!e.archived_at&&['planned','active','paused'].includes(e.status)).length;return {n,text:`${n} ${n===1?'contratação em curso':'contratações em curso'}`};}
  return null;
 };
-const kindLabel=product=>PORTFOLIO_KIND_LABELS[product?.portfolio_kind]||'Produto';
-// Como o portfólio se organiza na tela: ordem, nome no plural, ícone e o que cada tipo
-// É (vocabulário da ADR 0007). O que cada tipo PODE fazer vem das capacidades que o
-// servidor devolve em cada item, nunca desta tabela.
-const KIND_ORDER=['product','platform','service_line','internal'];
-const KIND_INFO={
- product:{plural:'Produtos',icon:'package',what:'Software que o cliente usa. Se cancelar, perde o acesso.'},
- platform:{plural:'Plataformas',icon:'layers',what:'O cliente assina o conteúdo que roda nela.'},
- service_line:{plural:'Linhas de serviço',icon:'briefcase',what:'Trabalho feito por pessoas, sob contrato. Se cancelar, o cliente fica com o que foi entregue.'},
- internal:{plural:'Interno',icon:'settings',what:'Software da própria TZOLKIN. Não se vende.'},
-};
+const kindLabel=product=>kindLabelOf(product?.portfolio_kind);
+// A ordem, o plural, o ícone e o texto de cada tipo vêm do registro da API (kindInfo).
+// O que cada tipo PODE fazer vem das capacidades que o servidor devolve em cada item.
 const CAPABILITY_LABELS={access:'Dá acesso pelo Core',checkout:'Vende por oferta e checkout',contract_billing:'Cobra por contrato (Recebimentos)',commercial:'Captação e contratações'};
-const byKind=products=>KIND_ORDER.map(kind=>({kind,items:products.filter(p=>(KIND_INFO[p.portfolio_kind]?p.portfolio_kind:'product')===kind)})).filter(group=>group.items.length);
+const byKind=products=>kindRegistry().map(info=>({kind:info.kind,items:products.filter(p=>canonKind(p.portfolio_kind)===info.kind)})).filter(group=>group.items.length);
 
 // A ficha da empresa recebe o deploy da contratação com as chaves antigas
 // (external_project_*). Traduz para a forma do registro único e usa o MESMO
@@ -726,13 +786,13 @@ function renderServices(){
  // Uma conexão de contratação é de um serviço; contar as linhas do registro único
  // é contar a mesma coisa que a tela mostra, e não o tamanho de uma tabela.
  const conectadas=state.resourceBindings.filter(b=>b.engagement_id&&todos.some(e=>e.id===b.engagement_id));
- $('services-summary').replaceChildren(...[['Contratações de serviço',todos.length],[serviceFilter?clientLabel(serviceFilter):'Nesta lista',engagements.length],['Com projeto conectado',new Set(conectadas.map(b=>b.engagement_id)).size]].map(([label,value])=>{const card=node('article');card.append(node('span',label),node('strong',String(value)));return card;}));
+ $('services-summary').replaceChildren(...[['Contratações de serviço',todos.length],...(serviceFilter?[[clientLabel(serviceFilter),engagements.length]]:[]),['Com projeto conectado',new Set(conectadas.map(b=>b.engagement_id)).size]].map(([label,value])=>{const card=node('article');card.append(node('span',label),node('strong',String(value)));return card;}));
  // O filtro é montado a partir dos tipos que EXISTEM: uma opção que não traz nada
  // só ensina o operador a desconfiar da tela.
  const filtro=$('services-filter');
  if(filtro){
   const tipos=MODELOS_DE_SERVICO.filter(model=>todos.some(e=>e.service_model===model));
-  filtro.replaceChildren(option('',`Todos os tipos · ${todos.length}`),...tipos.map(model=>option(model,`${clientLabel(model)} · ${todos.filter(e=>e.service_model===model).length}`)));
+  filtro.replaceChildren(option('','Todos os tipos'),...tipos.map(model=>option(model,`${clientLabel(model)} · ${todos.filter(e=>e.service_model===model).length}`)));
   filtro.value=tipos.includes(serviceFilter)?serviceFilter:(serviceFilter='');
   filtro.onchange=()=>{serviceFilter=filtro.value;renderServices();};
  }
@@ -744,32 +804,26 @@ function renderServices(){
   const facts=node('div',undefined,'service-card-facts'),bindings=state.resourceBindings.filter(b=>b.engagement_id===engagement.id);
   facts.append(node('span',bindings.length?`${bindings.length} projeto${bindings.length===1?'':'s'} conectado${bindings.length===1?'':'s'}`:'Nenhum projeto conectado','detail'));
   for(const binding of bindings){const project=state.deploys.find(p=>casaConexao(binding,recursoDoDeploy(p)));const latest=project?.deployments?.[0];const row=node('div',undefined,'service-deploy-row');row.append(node('strong',binding.display_name),node('span',`${PROVIDER_LABELS[binding.provider]||binding.provider} · ${latest?.state_label||latest?.state||'sem deploy observado'}`,'detail'));if(latest?.url)row.append(catalogLink('Abrir ↗',latest.url,'product-live-link'));facts.append(row);}
-  const action=node('button','Abrir cliente →','secondary');action.type='button';action.onclick=()=>openClient(engagement.tenant_id);
+  cardLink(card,()=>openClient(engagement.tenant_id),`Abrir ${names.get(engagement.tenant_id)||'cliente'}`);
   // Campanhas por contratação: sob demanda, assessoria e consultoria têm
   // investimento próprio, e somá-los ao produto esconderia o custo real.
   const campanhas=node('button','Campanhas','secondary');campanhas.type='button';
   campanhas.onclick=()=>{switchView('serviceCampaigns');campaigns.loadService(engagement.id,engagement.label).catch(reportError);};
-  const acoes=node('div',undefined,'service-card-actions');acoes.append(action,campanhas);
+  const acoes=node('div',undefined,'service-card-actions');acoes.append(campanhas);
   card.append(head,facts,acoes);return card;
  }));
 }
 
 function renderManagement(){
- const schema=$('management-schema'),dns=$('management-dns'),redis=$('management-redis'),apis=$('management-apis'),ops=$('management-ops');if(!schema||!dns||!redis||!apis||!ops)return;
+ const schema=$('management-schema'),dns=$('management-dns'),redis=$('management-redis');
  const tables=state.management?.tables||[];
- if(state.view==='database')renderDatabaseWorkspace(schema,{
+ if(schema&&state.view==='database')renderDatabaseWorkspace(schema,{
   api,products:state.overview?.products||[],bindings:state.resourceBindings,
   openProduct:id=>switchContext(id).catch(reportError),
   onBindingsChange:async bindings=>{state.resourceBindings=bindings;state.topology=await api('/api/products/topology');}
  });
- const dnsData=state.dns;dns.replaceChildren(node('h3','DNS e domínios'),node('p','Zona consultada diretamente na Hostinger. Registros ficam em leitura até uma alteração ser validada e confirmada.','detail'));if(!dnsData)dns.append(node('p','Consultando zona DNS…','empty-list'));else if(dnsData.status!=='ok')dns.append(node('p',dnsData.status==='unconfigured'?'API DNS ainda não configurada no servidor.':dnsData.status==='unauthorized'?'A chave da Hostinger não possui acesso à zona.':'A zona DNS não pôde ser consultada agora.','notice-inline'));else {const head=node('div',undefined,'dns-zone-head');head.append(node('strong',dnsData.zone),node('span',`${dnsData.records.length} registros`,'status active'));dns.append(head);const records=node('div',undefined,'dns-record-list');dnsData.records.slice(0,12).forEach(record=>{const row=node('article',undefined,'dns-record-row');row.append(node('code',record.type),node('strong',record.name),node('span',record.records.map(item=>item.content).join(' · '),'detail'),node('span',`TTL ${record.ttl}s`,'detail'));records.append(row);});dns.append(records);if(dnsData.records.length>12)dns.append(node('p',`Mostrando 12 de ${dnsData.records.length} registros da zona.`,'detail'));}
- const services=(state.infrastructure?.projects||[]).flatMap(project=>(project.services||[]).map(service=>({...service,project:project.name})));redis.replaceChildren(node('h3','Redis e caches'),node('p','Instâncias agrupadas por projeto EasyPanel. O inventário não expõe chaves nem valores; métricas aparecem quando houver integração autorizada.','detail'));const caches=services.filter(service=>['redis','cache'].includes(String(service.type).toLowerCase()));if(!caches.length)redis.append(node('p','Nenhum Redis/cache foi retornado pelo inventário do EasyPanel.','empty-list'));else {const groups=new Map();for(const service of caches){const key=service.project;const list=groups.get(key)||[];list.push(service);groups.set(key,list);}for(const [project,items] of groups){const group=node('section',undefined,'redis-project-group');group.append(node('h4',project),node('span',`${items.length} instância${items.length===1?'':'s'}`,'status'));for(const service of items){const card=node('article',undefined,'redis-console-card');const head=node('header',undefined,'redis-console-head');head.append(deliveryIcon('cache'),node('div'));head.lastChild.append(node('strong',service.name),node('span',`${service.type} · EasyPanel`,'detail'));head.append(node('span','Observado','status building'));card.append(head);const metrics=node('div',undefined,'redis-metric-grid');[['Estado','Inventário'],['Chaves','Não exposto'],['Memória','Não exposto'],['Operações/s','Não exposto']].forEach(([label,value])=>{const item=node('div');item.append(node('span',label),node('strong',value));metrics.append(item);});card.append(metrics,node('p','Leitura de inventário; chaves e valores permanecem protegidos.','detail'));group.append(card);}redis.append(group);}}
- apis.replaceChildren(node('h3','APIs e aplicações'),node('p','Projetos e serviços de aplicação ligados a produtos ou serviços, quando essa classificação já existe.','detail'));const productNames=new Map((state.overview?.products||[]).map(product=>[product.id,product.name]));const engagementLabels=new Map((state.overview?.engagements||[]).map(engagement=>[engagement.id,engagement.label]));// Um recurso, uma conexão, um dono: o mesmo casamento do resto do painel. O
- // serviço do EasyPanel entra pelo id projeto/serviço — comparar o nome do serviço
- // com esse id era o motivo de um app classificado aparecer "Sem classificação".
- const dono=binding=>binding?.product_id?(productNames.get(binding.product_id)||'Produto vinculado'):binding?.engagement_id?(engagementLabels.get(binding.engagement_id)||'Serviço vinculado'):null;
- const apps=[...state.deploys.map(project=>({name:project.project,provider:'vercel',detail:project.deployments?.[0]?.state_label||'sem deploy',association:dono(bindingForDeployment(project))})),...services.filter(service=>['app','compose','box','wordpress'].includes(service.type)).map(service=>{const id=`${service.project}/${service.name}`;return {name:service.name,provider:'easypanel',detail:`${service.project} · inventário observado`,association:dono(state.resourceBindings.find(binding=>binding.active!==false&&casaConexao(binding,{provider:'easypanel',id,name:`${service.project} / ${service.name}`})))};})];if(!apps.length)apis.append(node('p','Nenhuma API ou aplicação observada.','empty-list'));else apps.forEach(app=>{const row=node('article',undefined,'management-row');row.append(providerLogo(app.provider),node('strong',app.name),node('span',app.detail,'detail'),node('span',app.association?app.association:'Sem classificação','status '+(app.association?'active':'building')));apis.append(row);});
- ops.replaceChildren(node('h3','Checklist operacional'),node('p','Sinais para orientar a próxima ação. A leitura dos provedores continua separada de comandos de deploy.','detail'));const checks=[['Schema do Core',Boolean(state.management?.tables?.length),'Metadados disponíveis'],['Vercel',Boolean(state.deploys.length),'Inventário consultado'],['EasyPanel',state.infrastructure?.status==='ok','Inventário consultado'],['Classificação',apps.filter(app=>!app.association).length===0,'Todos os apps estão ligados a produto ou serviço']];checks.forEach(([label,ready,detail])=>{const row=node('article',undefined,'management-row');row.append(node('span',ready?'✓':'!',`status ${ready?'active':'building'}`),node('strong',label),node('span',ready?detail:'Revisar pendência','detail'));ops.append(row);});
+ if(dns){const dnsData=state.dns;dns.replaceChildren(node('h3','Hostinger'),node('p','Zona consultada diretamente na Hostinger. Registros ficam em leitura até uma alteração ser validada e confirmada.','detail'));if(!dnsData)dns.append(node('p','Consultando zona DNS…','empty-list'));else if(dnsData.status!=='ok')dns.append(node('p',dnsData.status==='unconfigured'?'API DNS ainda não configurada no servidor.':dnsData.status==='unauthorized'?'A chave da Hostinger não possui acesso à zona.':'A zona DNS não pôde ser consultada agora.','notice-inline'));else {const head=node('div',undefined,'dns-zone-head');head.append(node('strong',dnsData.zone),node('span',`${dnsData.records.length} registros`,'status active'));dns.append(head);const records=node('div',undefined,'dns-record-list');dnsData.records.slice(0,12).forEach(record=>{const row=node('article',undefined,'dns-record-row');row.append(node('code',record.type),node('strong',record.name),node('span',record.records.map(item=>item.content).join(' · '),'detail'),node('span',`TTL ${record.ttl}s`,'detail'));records.append(row);});dns.append(records);if(dnsData.records.length>12)dns.append(node('p',`Mostrando 12 de ${dnsData.records.length} registros da zona.`,'detail'));}}
+ if(redis){const services=(state.infrastructure?.projects||[]).flatMap(project=>(project.services||[]).map(service=>({...service,project:project.name})));redis.replaceChildren();const caches=services.filter(service=>['redis','cache'].includes(String(service.type).toLowerCase()));if(!caches.length)redis.append(node('p','Nenhum Redis/cache foi retornado pelo inventário do EasyPanel.','empty-list'));else {const groups=new Map();for(const service of caches){const key=service.project;const list=groups.get(key)||[];list.push(service);groups.set(key,list);}for(const [project,items] of groups){const group=node('section',undefined,'redis-project-group');group.append(node('h4',project),node('span',`${items.length} instância${items.length===1?'':'s'}`,'status'));for(const service of items){const card=node('article',undefined,'redis-console-card');const head=node('header',undefined,'redis-console-head');head.append(deliveryIcon('cache'),node('div'));head.lastChild.append(node('strong',service.name),node('span',`${service.type} · EasyPanel`,'detail'));head.append(node('span','Observado','status building'));card.append(head);const metrics=node('div',undefined,'redis-metric-grid');[['Estado','Inventário'],['Chaves','Não exposto'],['Memória','Não exposto'],['Operações/s','Não exposto']].forEach(([label,value])=>{const item=node('div');item.append(node('span',label),node('strong',value));metrics.append(item);});card.append(metrics,node('p','Leitura de inventário; chaves e valores permanecem protegidos.','detail'));group.append(card);}redis.append(group);}}}
 }
 
 function renderGeneral() {
@@ -787,33 +841,54 @@ function renderGeneral() {
  const products = new Map(overview.products.map(p => [p.id, p.name]));
  const portfolioCard = product => {
   const productInfo=catalogOf(product)||{};
-  const card = node('article', undefined, 'product-card');
+  const card = node('article', undefined, 'space-card');
   const count = portfolioCount(product);
-  const body = node('div', undefined, 'product-card-body');
-  body.append(node('h3', product.name), node('p', [count?.text, product.id].filter(Boolean).join(' · ')));
-  const published=publishedDeployUrl(product),lifecycle=productLifecycle(product),isDraft=Boolean(lifecycle.unproven),live=isDraft?(published||null):productLiveUrl(product),stateBadge=node('span',lifecycle.label,'status '+lifecycle.tone);body.append(stateBadge,node('small',lifecycle.next,'product-next-action'));card.append(productFavicon(productFaviconUrl(product)), body);
-  const open = node('button', 'Abrir gestão →', 'table-action');
-  open.type = 'button';
-  open.onclick = () => openProductModule(product,'product').catch(reportError);
-  card.append(open);
-  // Atalho só para o que o tipo tem: cobrança por checkout, ou recebimentos por contrato.
+  const published=publishedDeployUrl(product),lifecycle=productLifecycle(product),isDraft=Boolean(lifecycle.unproven),live=isDraft?(published||null):productLiveUrl(product);
+  // Cabeçalho: a marca (favicon dos metadados do link), o nome, o tipo e o id, e o estado.
+  const head=node('div',undefined,'space-head'),mark=node('span',undefined,'product-mark');mark.append(productFavicon(productFaviconUrl(product)));
+  const title=node('div',undefined,'space-title');title.append(node('h3',product.name),node('span',[kindLabel(product),product.id].join(' · '),'space-sub'));
+  head.append(mark,title,node('span',lifecycle.label,'status '+lifecycle.tone));
+  card.append(head);
+  if(count?.text&&count.n>0)card.append(node('p',count.text,'space-meta'));
+  if (product.tags?.length) { const tags = node('div', undefined, 'card-tags'); for (const tag of product.tags) tags.append(node('span', tag, 'status')); card.append(tags); }
+  if(lifecycle.next)card.append(node('p',lifecycle.next,'space-next'));
+  // Ações: uma principal, e o resto discreto. O atalho só existe para o que o tipo tem
+  // (cobrança por checkout, ou recebimentos por contrato).
+  const acoes=node('div',undefined,'space-actions');
+  const botao=(rotulo,acao,classe)=>{const b=node('button',rotulo,classe);b.type='button';b.onclick=acao;return b;};
+  acoes.append(botao('Abrir gestão',()=>openProductModule(product,'product').catch(reportError),'secondary'));
+  // Editar é uma ação de primeira classe, com ícone: era um link cinza que ninguém achava.
+  const editar=botao('Editar',()=>abrirEspaco(product),'secondary');editar.prepend(createIcon('pencil'));acoes.append(editar);
   const atalho=hasCapability(product,'checkout')?['Cobrança e e-mails','product-payments']:hasCapability(product,'contract_billing')?['Recebimentos','product-receivables']:null;
-  if(atalho){const configure=node('button',atalho[0],'table-action');configure.type='button';configure.onclick=()=>openProductModule(product,atalho[1]).catch(reportError);card.append(configure);}
-  if(live)card.append(catalogLink(published?'Abrir deploy ↗':'Abrir produto ↗',live,'product-live-link'));else if(productInfo.url&&!isDraft)card.append(catalogLink('Abrir endereço ↗',productInfo.url,'product-live-link'));
+  if(atalho)acoes.append(botao(atalho[0],()=>openProductModule(product,atalho[1]).catch(reportError),'ghost'));
+  if(live)acoes.append(catalogLink(published?'Abrir deploy ↗':'Abrir produto ↗',live,'product-live-link'));else if(productInfo.url&&!isDraft)acoes.append(catalogLink('Abrir endereço ↗',productInfo.url,'product-live-link'));
+  card.append(acoes);
   return card;
  };
- // Agrupado por tipo: a estrutura da tela mostra o que cada item é e o que pode fazer.
- $('product-catalog').replaceChildren(...byKind(overview.products).map(({kind,items})=>{
-  const info=KIND_INFO[kind],section=node('section',undefined,'portfolio-kind'),head=node('header',undefined,'portfolio-kind-head'),icon=node('span',undefined,'portfolio-kind-icon');
-  section.setAttribute('aria-label',info.plural);
-  icon.append(createIcon(info.icon));
-  const title=node('h3',info.plural);title.append(node('small',String(items.length)));
-  const caps=node('div',undefined,'portfolio-kind-caps'),podem=(items[0].capabilities||[]).filter(c=>CAPABILITY_LABELS[c]);
-  caps.append(...(podem.length?podem.map(c=>node('span',CAPABILITY_LABELS[c],'status')):[node('span','Só é operado','status')]));
-  head.append(icon,title,node('p',info.what),caps);
-  const grid=node('div',undefined,'product-grid');grid.append(...items.map(portfolioCard));
-  section.append(head,grid);return section;
- }));
+ // Abas por tipo, com a contagem: "Todos" e uma aba por tipo do registro. Todos os
+ // tipos aparecem, mesmo vazios: quem cadastra precisa ver onde o espaço novo cabe.
+ const tipos=kindRegistry(),doTipo=kind=>overview.products.filter(p=>canonKind(p.portfolio_kind)===kind);
+ const abas=[{key:'all',label:'Todos',count:overview.products.length},...tipos.map(info=>({key:info.kind,label:info.plural,count:doTipo(info.kind).length}))];
+ if(!abas.some(aba=>aba.key===state.portfolioTab))state.portfolioTab='all';
+ const pintarPortfolio=()=>{
+  const key=state.portfolioTab,info=key==='all'?null:kindInfo(key),grade=$('product-catalog'),nota=$('portfolio-note');
+  const itens=key==='all'?tipos.flatMap(item=>doTipo(item.kind)):doTipo(key);
+  grade.setAttribute('aria-labelledby',`portfolio-tab-${key}`);
+  // Só numa aba de tipo há o que dizer sobre ele: o que é e o que pode fazer.
+  nota.replaceChildren();
+  if(info){
+   nota.append(node('p',info.what));
+   const podem=(itens[0]?.capabilities||[]).filter(c=>CAPABILITY_LABELS[c]);
+   if(itens.length){const caps=node('div',undefined,'portfolio-kind-caps');caps.append(...(podem.length?podem.map(c=>node('span',CAPABILITY_LABELS[c],'status')):[node('span','Só é operado','status')]));nota.append(caps);}
+  }
+  if(itens.length){grade.replaceChildren(...itens.map(portfolioCard));return;}
+  const vazio=node('div',undefined,'empty-state');
+  const criar=node('button','Novo espaço','primary');criar.type='button';criar.onclick=()=>abrirEspaco(null,info?.kind);
+  vazio.append(node('h3',info?`Nenhum espaço de ${info.label.toLowerCase()} ainda.`:'Nenhum espaço cadastrado ainda.'),node('p','Um espaço é onde a TZOLKIN organiza o que vende ou opera.'),criar);
+  grade.replaceChildren(vazio);
+ };
+ mountTabs({host:$('portfolio-tabs'),tabs:abas,active:state.portfolioTab,label:'Tipos de espaço',prefix:'portfolio',panelId:'product-catalog',onChange:key=>{state.portfolioTab=key;pintarPortfolio();}});
+ pintarPortfolio();
 
  $('contracts').replaceChildren(...overview.entitlements.map(entitlement => record(
   names.get(entitlement.tenant_id) || 'Cliente',
@@ -828,6 +903,23 @@ function renderGeneral() {
  if (!overview.entitlements.length) $('contracts').append(node('p', 'Nenhum produto vinculado a um cliente.', 'empty-list'));
  if (!overview.memberships.length) $('members').append(node('p', 'Nenhuma pessoa vinculada a um cliente.', 'empty-list'));
 }
+
+/* ---------- vínculo de recurso a dono, nas abas dos provedores ---------- */
+
+const rotuloDoDonoDe = binding => binding.product_id ? state.overview?.products?.find(p => p.id === binding.product_id)?.name
+ : state.overview?.engagements?.find(e => e.id === binding.engagement_id)?.label;
+const contextoDeVinculo = inventario => ({
+ itens: achatar(inventario || delivery.inventory()),
+ conexoes: state.resourceBindings.filter(b => b.active !== false),
+ donos: { products: state.overview?.products || [], engagements: serviceEngagements(), tenants: state.overview?.tenants || [] },
+ casa: casaConexao,
+});
+// Vincular numa aba recarrega as conexões e redesenha tudo o que as mostra.
+async function atualizarVinculos() {
+ state.resourceBindings = (await api('/api/product-resource-bindings')).bindings || [];
+ await delivery.load();
+}
+const vinculoNoProvedor = (recurso, inventario) => vinculoNaLista({ recurso, contexto: contextoDeVinculo(inventario), api, aoVincular: atualizarVinculos, rotuloDoDono: rotuloDoDonoDe });
 
 /* ---------- deploys (leitura de provedores externos) ---------- */
 
@@ -890,7 +982,7 @@ function renderEasypanel(data) {
   const card = node('article', undefined, 'deploy-card');
   const header=node('header'),identity=node('div',undefined,'card-identity');identity.append(providerLogo('easypanel'),node('h3',project.name));header.append(identity,node('span',`${project.services.length} serviços`,'status'));card.append(header);
   const types=node('div',undefined,'card-tags');for(const type of [...new Set(project.services.map(s=>s.type))])types.append(node('span',type,'status'));card.append(types);
-  for (const service of project.services){const row=node('div',undefined,'infra-service-row'),info=node('div',undefined,'card-identity');info.append(deliveryIcon(['postgres','mysql','mariadb','mongo'].includes(service.type)?'database':service.type==='redis'?'cache':'api'),node('strong',service.name),node('span',service.type,'status'));row.append(info,resourceButton('Detalhes','easypanel',`${project.name}/${service.name}`));card.append(row);}
+  for (const service of project.services){const row=node('div',undefined,'infra-service-row'),info=node('div',undefined,'card-identity');info.append(deliveryIcon(['postgres','mysql','mariadb','mongo'].includes(service.type)?'database':service.type==='redis'?'cache':'api'),node('strong',service.name),node('span',service.type,'status'));row.append(info,resourceButton('Detalhes','easypanel',`${project.name}/${service.name}`));card.append(row,vinculoNoProvedor({provider:'easypanel',id:`${project.name}/${service.name}`,name:`${project.name} / ${service.name}`}));}
   card.append(node('p','Inventário do EasyPanel · não comprova saúde dos serviços','card-footer'));
   if (!project.services.length) card.append(node('p', 'Nenhum serviço cadastrado.', 'empty-list'));
   target.append(card);
@@ -942,6 +1034,7 @@ function renderDeploys(data) {
   if(projeto.project_id)actions.append(resourceButton('Ver projeto',projeto.provider,projeto.project_id));
   topo.append(identidade,actions);
   card.append(topo);
+  if(projeto.project_id){const item=achatar(delivery.inventory()).find(i=>i.provider==='vercel'&&i.id===projeto.project_id);card.append(vinculoNoProvedor({provider:'vercel',id:projeto.project_id,name:projeto.project,repository:item?.repository||null}));}
 
   if (!projeto.deployments.length) {
    card.append(node('p', projeto.partial
@@ -1021,8 +1114,8 @@ function productResourceRow(product, category, item) {
  const wrapper=node('div',undefined,'product-architecture-entry'),row=node('div',undefined,'product-architecture-row');
  const title=item.name||item.provider||'Configuração',meta=[item.provider,item.repository||item.branch||item.record_type||item.kind,item.environment].filter(Boolean).join(' · ')||(item.offers?`${item.offers} oferta${item.offers===1?'':'s'}`:'');
  row.append(node('strong',title),node('span',meta,'detail'));
- const statusText=item.source==='confirmed'?(item.reconciliation==='missing'?'Não encontrado no provedor':item.reconciliation==='manual'?'Manual':'Confirmado e observado'):item.source==='detected'?'Detectado':'Configurado';
- row.append(node('span',statusText,`status ${item.reconciliation==='missing'?'danger':item.source==='detected'?'building':'active'}`));
+ const statusText=item.source==='confirmed'?(item.reconciliation==='missing'?'Não encontrado no provedor':item.reconciliation==='manual'?'Manual':item.reconciliation==='unverified'?'Provedor sem resposta agora':'Confirmado e observado'):item.source==='detected'?'Detectado':'Configurado';
+ row.append(node('span',statusText,`status ${item.reconciliation==='missing'?'danger':item.source==='detected'||item.reconciliation==='unverified'?'building':'active'}`));
  const actions=node('div',undefined,'product-resource-actions');
  if(item.source==='detected'){
   const confirm=node('button','Confirmar','table-action');confirm.type='button';confirm.onclick=async()=>{confirm.disabled=true;try{await api('/api/product-resource-bindings','PUT',{...resourcePayload(product,category,item),id:undefined,revision:undefined});await reloadProductConnections(product);}catch(error){confirm.disabled=false;reportError(error);}};actions.append(confirm);
@@ -1040,25 +1133,33 @@ function renderProductArchitecture(product) {
  const heading=node('div',undefined,'product-architecture-heading'),copy=node('div');copy.append(node('div','ARQUITETURA TÉCNICA','overview-kicker'),node('h3','Conexões e recursos'),node('p','O inventário detecta candidatos. Uma conexão confirmada é persistida, auditada e reconciliada com o provedor.','detail'));
  const add=node('button','Adicionar conexão','secondary');add.type='button';heading.append(copy,add);architecture.append(heading);
  const editor=node('div',undefined,'product-resource-editor');add.onclick=()=>{editor.replaceChildren(productResourceForm(product,{},()=>editor.replaceChildren()));};architecture.append(editor);
- if(!topology){architecture.append(node('p','A topologia ainda não foi consultada.','empty-list'));return architecture;}
+ if(!topology){architecture.append(node('p','Consultando as conexões nos provedores…','empty-list'));return architecture;}
  const missing=Object.values(topology.connections).flat().filter(item=>item.reconciliation==='missing').length;
  if(missing)architecture.append(node('p',`${missing} ${missing===1?'conexão confirmada não foi encontrada':'conexões confirmadas não foram encontradas'} no inventário atual. Revise antes do próximo deploy.`,'product-resource-warning'));
- const grid=node('div',undefined,'product-architecture-grid');
+ const grid=node('div',undefined,'product-architecture-grid'),vazias=[];
  for(const [category,[,label]] of Object.entries(PRODUCT_RESOURCE_TYPES)){
-  const group=node('article',undefined,'product-architecture-group');group.append(node('span',label,'product-architecture-label'));const items=topology.connections[category]||[];
-  if(!items.length)group.append(node('p','Ainda não identificado.','detail'));else items.forEach(item=>group.append(productResourceRow(product,category,item)));grid.append(group);
+  const items=topology.connections[category]||[];
+  if(!items.length){vazias.push(label);continue;}
+  const group=node('article',undefined,'product-architecture-group');group.append(node('span',label,'product-architecture-label'));
+  items.forEach(item=>group.append(productResourceRow(product,category,item)));grid.append(group);
  }
- architecture.append(grid);return architecture;
+ if(grid.children.length)architecture.append(grid);
+ // Nove "Ainda não identificado." em fila ensinam a ignorar a tela: uma linha só.
+ if(vazias.length)architecture.append(node('p',`Ainda sem: ${vazias.join(', ')}.`,'detail'));
+ return architecture;
 }
 
 function renderProductRecord(product) {
  const panel = node('div', undefined, 'context-card product-record-card');
  // Linha de serviço: vende por proposta, sem checkout nem acesso de usuários.
  const serviceLine=!hasCapability(product,'checkout')&&hasCapability(product,'commercial');
- const kicker=(PORTFOLIO_KIND_LABELS[product.portfolio_kind]||'Produto').toUpperCase();
+ const kicker=kindLabelOf(product.portfolio_kind).toUpperCase();
  const recordActions=serviceLine?[['Captação inbound','product-inbound','user-plus'],['Contratações','product-engagements','briefcase'],['Chaves de integração','product-keys','lock'],['E-mails','product-emails','mail']]:hasCapability(product,'checkout')?[['Cobrança','product-payments','wallet'],['E-mails','product-emails','mail']]:[];
  const lifecycle=productLifecycle(product),appearsDraft=productUnproven(product),live=appearsDraft?(publishedDeployUrl(product)||null):productLiveUrl(product);const identity=node('div',undefined,'product-record-identity');identity.append(productFavicon(productFaviconUrl(product)),node('div'));identity.lastChild.append(node('span',kicker,'overview-kicker'),node('h2', product.name), node('p', 'Identificador: ' + product.id, 'detail'));panel.append(identity);
- const actions=node('div',undefined,'product-record-actions');for(const [label,view,icon] of recordActions){const button=node('button',undefined,'secondary');button.type='button';button.append(createIcon(icon),document.createTextNode(label));button.onclick=()=>switchView(view);actions.append(button);}const detach=node('button','Desatrelar conexões','quiet');detach.type='button';detach.onclick=async()=>{if(!window.confirm(`Desatrelar domínios, bancos e deploys de ${product.name}? Nenhum dado externo será apagado.`))return;detach.disabled=true;try{await api(`/api/products/${encodeURIComponent(product.id)}/attachments`,'DELETE');state.resourceBindings=state.resourceBindings.filter(item=>item.product_id!==product.id);state.topology=await api('/api/products/topology').catch(()=>null);renderProductRecord(product);}catch(error){detach.disabled=false;reportError(error);}};actions.append(detach);panel.append(actions);
+ const actions=node('div',undefined,'product-record-actions');for(const [label,view,icon] of recordActions){const button=node('button',undefined,'secondary');button.type='button';button.append(createIcon(icon),document.createTextNode(label));button.onclick=()=>switchView(view);actions.append(button);}
+ // A tela do próprio espaço também edita o espaço: nome, tipo e tags (o cadastro do overview tem a revisão).
+ const editarEspaco=node('button',undefined,'secondary');editarEspaco.type='button';editarEspaco.append(createIcon('pencil'),document.createTextNode('Editar espaço'));editarEspaco.onclick=()=>abrirEspaco(state.overview?.products?.find(p=>p.id===product.id)||product);actions.append(editarEspaco);
+ const detach=node('button','Desatrelar conexões','quiet');detach.type='button';detach.onclick=async()=>{if(!window.confirm(`Desatrelar domínios, bancos e deploys de ${product.name}? Nenhum dado externo será apagado.`))return;detach.disabled=true;try{await api(`/api/products/${encodeURIComponent(product.id)}/attachments`,'DELETE');state.resourceBindings=state.resourceBindings.filter(item=>item.product_id!==product.id);state.topology=await api('/api/products/topology').catch(()=>null);renderProductRecord(product);}catch(error){detach.disabled=false;reportError(error);}};actions.append(detach);panel.append(actions);
  const catalog = product.catalog;
  if (catalog) {
   panel.append(node('p', catalog.description, 'context-description'));
@@ -1070,8 +1171,8 @@ function renderProductRecord(product) {
  } else {
   panel.append(node('p', 'Sem ficha no catálogo importado do Notion. Nada foi inferido para preencher este espaço.', 'context-description'));
  }
- const facts=node('div',undefined,'product-record-facts');for(const [label,value] of (serviceLine?[['Tipo','Linha de serviço'],['Entrada','Formulário inbound ou proposta'],['Cobrança','Fora do checkout']]:[['Tipo',PORTFOLIO_KIND_LABELS[product.portfolio_kind]||'Produto'],['Estado operacional',lifecycle.label],['Família',product.brand_family||'TZOLKIN']])){const fact=node('div');fact.append(node('span',label),node('strong',String(value)));facts.append(fact);}panel.append(facts);
- const connection=node('section',undefined,'product-connection-card'),deployment=readyDeployment(product),project=state.deploys.find(item=>deploymentBelongsToProduct(item,product));connection.append(node('h3','Conexão de deploy'),node('p',deployment?`${project?.project||'Projeto'} · ${project?.provider==='vercel'?'Vercel':'EasyPanel'} · READY observado`:'Nenhum deploy READY vinculado a este item.','detail'));const connectionActions=node('div',undefined,'product-connection-actions');if(deployment?.url)connectionActions.append(catalogLink('Abrir produção ↗',deployment.url,'product-live-link'));const openDeploys=node('button','Ver projetos e deploys →','secondary');openDeploys.type='button';openDeploys.onclick=()=>{state.context='';state.view='deploys';clearRenderedData();renderContextChrome();renderNav();load().catch(reportError);};connectionActions.append(openDeploys);connection.append(connectionActions);panel.append(connection);
+ const facts=node('div',undefined,'product-record-facts');for(const [label,value] of (serviceLine?[['Tipo',kindLabelOf(product.portfolio_kind)],['Entrada','Formulário inbound ou proposta'],['Cobrança','Fora do checkout']]:[['Tipo',kindLabelOf(product.portfolio_kind)],['Estado operacional',lifecycle.label],['Família',product.brand_family||'TZOLKIN']])){const fact=node('div');fact.append(node('span',label),node('strong',String(value)));facts.append(fact);}panel.append(facts);
+ const connection=node('section',undefined,'product-connection-card'),deployment=readyDeployment(product),project=state.deploys.find(item=>deploymentBelongsToProduct(item,product));connection.append(node('h3','Conexão de deploy'),node('p',deployment?`${project?.project||'Projeto'} · ${project?.provider==='vercel'?'Vercel':'EasyPanel'} · publicado e observado`:'Nenhum deploy READY vinculado a este item.','detail'));const connectionActions=node('div',undefined,'product-connection-actions');if(deployment?.url)connectionActions.append(catalogLink('Abrir produção ↗',deployment.url,'product-live-link'));const openDeploys=node('button','Ver projetos e deploys →','secondary');openDeploys.type='button';openDeploys.onclick=()=>{state.context='';state.view='deploys';clearRenderedData();renderContextChrome();renderNav();load().catch(reportError);};connectionActions.append(openDeploys);connection.append(connectionActions);panel.append(connection);
  panel.append(renderProductArchitecture(product));
  $('product-record').replaceChildren(panel);
 }
@@ -1207,50 +1308,73 @@ function renderContextPicker(products) {
  currentCopy.replaceChildren(node('strong',current?.name||'TZOLKIN'),node('small',current?detalhe(current):'Gestão geral'));
  const choice=(id,label,detail,icon)=>{const button=node('button',undefined,'context-option'+(id===state.context?' active':''));button.type='button';button.setAttribute('aria-current',id===state.context?'true':'false');const mark=node('span',undefined,'context-option-icon');mark.append(icon);const copy=node('span',undefined,'context-option-copy');copy.append(node('strong',label),node('small',detail));button.append(mark,copy);button.onclick=()=>{picker.open=false;if(id!==state.context)switchContext(id).catch(reportError);};return button;};
  const general=choice('','TZOLKIN','Gestão geral',coreSpaceIcon());
- const productChoices=byKind(products).flatMap(({kind,items})=>[node('span',KIND_INFO[kind].plural,'context-group-label'),...items.map(product=>choice(product.id,product.name,productLifecycle(product).label,productFavicon(productFaviconUrl(product))))]);
+ const productChoices=byKind(products).flatMap(({kind,items})=>[node('span',kindInfo(kind).plural,'context-group-label'),...items.map(product=>choice(product.id,product.name,productLifecycle(product).label,productFavicon(productFaviconUrl(product))))]);
  options.replaceChildren(general,...productChoices);
 }
 
 // O contexto geral é o único que carrega o cadastro completo.
 // O contexto de produto pede apenas o recorte daquele produto ao servidor.
+const loadIsCurrent = (ticket, context) => ticket === loadGeneration && context === state.context;
+
+// Integrações remotas enriquecem o painel depois que o cadastro já está usável.
+// Cada resposta confere a geração/contexto para nunca repintar uma tela posterior.
+async function hydrateGeneral(ticket, context, entries) {
+ let financeData=null,salesData=null,deployments=null,infrastructure=null;
+ const current=()=>loadIsCurrent(ticket,context);
+ const redraw=()=>{if(current())renderOverviewDashboard(entries,{finance:financeData,sales:salesData,deploys:deployments,infrastructure});};
+ const month=currentMonth();
+ const financial=Promise.all([
+  api('/api/finance/board?month='+month).catch(()=>null),
+  api('/api/finance/sales?month='+month).catch(()=>null),
+ ]).then(([finance,sales])=>{if(!current())return;financeData=finance;salesData=sales;redraw();});
+ const deployInventory=api('/api/deploys').then(data=>{
+  if(!current())return;
+  deployments=data;state.deploys=data.projects||[];renderDeploys(data);renderManagement();renderGeneral();redraw();
+  // A ficha pinta antes do inventário chegar: sem repintar, deploy vinculado ficaria "sem deploy observado".
+  if(state.view==='client'&&state.clientSummary?.tenant?.id===state.selectedTenant)paintClientDetail(state.clientSummary);
+ }).catch(error=>{if(current())$('deploys-status').replaceChildren(node('p',error.message,'security-banner'));});
+ $('easypanel-inventory').replaceChildren(node('p','Consultando EasyPanel…','empty-list'));
+ const easyPanelInventory=api('/api/infrastructure/easypanel').then(data=>{
+  if(!current())return;
+  infrastructure=data;state.infrastructure=data;renderEasypanel(data);renderManagement();redraw();
+ }).catch(()=>{if(current())$('easypanel-inventory').replaceChildren(node('p','Não foi possível consultar o EasyPanel.','empty-list'));});
+ await Promise.allSettled([financial,deployInventory,easyPanelInventory]);
+ redraw();
+}
+
+async function hydrateProduct(ticket, context) {
+ const current=()=>loadIsCurrent(ticket,context);
+ const tasks=[api('/api/products/topology').then(topology=>{if(!current())return;state.topology=topology;renderProduct();}).catch(()=>{})];
+ if(!state.deploys.length)tasks.push(api('/api/deploys').then(data=>{if(!current())return;state.deploys=data.projects||[];renderProduct();}).catch(()=>{}));
+ await Promise.allSettled(tasks);
+}
+
 async function load() {
+ const ticket=++loadGeneration,context=state.context;
  if (contextKind() === 'general') {
- // Uma leitura só de vínculo. As fachadas legadas (/api/product-deploy-bindings e
- // /api/service-deploy-bindings) devolvem recortes do MESMO registro desde a 034:
- // buscar as três era pedir a mesma verdade três vezes e arriscar exibi-la em três
- // formas diferentes. Continuam na API para quem ainda as chame; a tela, não.
- const [overview, catalog, resourceBindings, topology] = await Promise.all([api('/api/overview'), api('/api/ecosystem'), api('/api/product-resource-bindings'), api('/api/products/topology').catch(()=>null)]);
- state.overview = overview;
-  state.catalog = catalog.entries || [];
-  state.resourceBindings = resourceBindings.bindings || [];
-  state.topology = topology;
-  $('login').hidden = true; $('workspace').hidden = false;
-  fillContextSelect(overview.products);
-  renderGeneral();
-  renderPeople();
-  if(state.view==='client')renderClientDetail();
-  // Provedor externo pode estar fora do ar: o painel não pode cair junto.
-  const month=currentMonth(),[financeData,salesData]=await Promise.all([api('/api/finance/board?month='+month).catch(()=>null),api('/api/finance/sales?month='+month).catch(()=>null)]);
-  let deployments=null,infrastructure=null;
-  renderOverviewDashboard(catalog.entries,{finance:financeData,sales:salesData});
-  await api('/api/deploys').then(data=>{deployments=data;state.deploys=data.projects||[];renderDeploys(data);renderManagement();renderGeneral();renderOverviewDashboard(catalog.entries,{finance:financeData,sales:salesData,deploys:deployments});
-   // A ficha pinta antes do inventário chegar: sem repintar, deploy vinculado ficaria "sem deploy observado".
-   if(state.view==='client'&&state.clientSummary?.tenant?.id===state.selectedTenant)paintClientDetail(state.clientSummary);}).catch(error => {
-   $('deploys-status').replaceChildren(node('p', error.message, 'security-banner'));
-  });
-  $('easypanel-inventory').replaceChildren(node('p', 'Consultando EasyPanel…', 'empty-list'));
- await api('/api/infrastructure/easypanel').then(data=>{infrastructure=data;state.infrastructure=data;renderEasypanel(data);renderManagement();renderOverviewDashboard(catalog.entries,{finance:financeData,sales:salesData,deploys:deployments,infrastructure});}).catch(() => {
-   $('easypanel-inventory').replaceChildren(node('p', 'Não foi possível consultar o EasyPanel.', 'empty-list'));
-  });
-  renderOverviewDashboard(catalog.entries,{finance:financeData,sales:salesData,deploys:deployments,infrastructure});
- } else {
- const [productContext,topology,resourceBindings]=await Promise.all([api(`/api/products/${encodeURIComponent(state.context)}/console`),api('/api/products/topology').catch(()=>null),api(`/api/product-resource-bindings?product_id=${encodeURIComponent(state.context)}`).catch(()=>({bindings:[]}))]);state.product=productContext;state.topology=topology;state.resourceBindings=resourceBindings.bindings||[];
-  // Se o operador entrou direto em um produto, ainda não há motivo para ter
-  // carregado o inventário geral. Busca a evidência técnica sob demanda para
-  // o cartão de conexão continuar correto neste contexto.
-  if(!state.deploys.length) await api('/api/deploys').then(data=>{state.deploys=data.projects||[];}).catch(()=>{});
-  $('login').hidden = true; $('workspace').hidden = false;
- renderProduct();
+  // Uma viagem ao Postgres traz o cadastro, catálogo e vínculos necessários para
+  // o primeiro quadro. Topologia e provedores externos ficam fora do caminho crítico.
+  const bootstrap=await api('/api/bootstrap');
+  if(!loadIsCurrent(ticket,context))return;
+  const {overview,catalog,resource_bindings:resourceBindings}=bootstrap;
+  state.overview=overview;
+  state.catalog=catalog.entries||[];
+  state.resourceBindings=resourceBindings.bindings||[];
+  state.security=overview.security||null;
+  state.topology=null;
+   $('login').hidden = true; $('workspace').hidden = false;
+   fillContextSelect(overview.products);
+   renderGeneral();
+   renderPeople();
+   if(state.view==='client')renderClientDetail();
+   hydrateGeneral(ticket,context,state.catalog).catch(reportError);
+  } else {
+  const [productContext,resourceBindings]=await Promise.all([api(`/api/products/${encodeURIComponent(state.context)}/console`),api(`/api/product-resource-bindings?product_id=${encodeURIComponent(state.context)}`).catch(()=>({bindings:[]}))]);
+  if(!loadIsCurrent(ticket,context))return;
+  state.product=productContext;state.topology=null;state.resourceBindings=resourceBindings.bindings||[];
+   $('login').hidden = true; $('workspace').hidden = false;
+  renderProduct();
+  hydrateProduct(ticket,context).catch(reportError);
   // As capacidades do item acabaram de chegar: a navegação passa a ser a do tipo,
   // e uma tela que o tipo não tem volta para a visão geral.
   renderNav();
@@ -1260,7 +1384,7 @@ async function load() {
   if(state.view==='product-emails')await productEmails.load({...state.product.product,deploy_url:publishedDeployUrl(state.product.product),favicon_url:productFaviconUrl(state.product.product)});
  }
  renderContextChrome();
- await renderSecurityBanner();
+ renderSecurityBanner();
  if(contextKind()==='general') await resource.resume();
  if(state.view==='tracking') await tracking.load();
  if(state.view==='finance') await finance.load();
@@ -1270,7 +1394,7 @@ async function load() {
  // própria. Listar só 'deploys' aqui fazia o salvar não repintar a lista de quem
  // estava justamente na tela de projetos: o projeto nascia e a tela continuava
  // dizendo "seu primeiro projeto começa acima".
- if(contextKind()==='general'&&['deploys','projects'].includes(state.view)) await delivery.load();
+ if(contextKind()==='general'&&['connections','github','vercel','easypanel'].includes(state.view)) await delivery.load();
 }
 
 // A lista de organizações só é buscada quando o operador abre um formulário que precisa dela.
@@ -1280,6 +1404,42 @@ async function ensureDirectory() {
 }
 
 /* ---------- formulários ---------- */
+
+// Abre o cadastro de um espaço do portfólio: novo (sem item) ou edição (com o item).
+// Os tipos e o texto de cada um vêm do registro da API.
+function abrirEspaco(item, tipoInicial) {
+ const form = $('space-form'), nome = form.elements.namedItem('name'), id = form.elements.namedItem('id');
+ const tipo = () => form.elements.namedItem('portfolio_kind');
+ const sincronizar = () => { $('space-tags-field').hidden = !kindInfo(tipo().value)?.tags; };
+ // Um cartão selecionável por tipo, do registro da API: ícone, nome e o que o tipo é.
+ $('space-kind-grid').replaceChildren(...kindRegistry().map(info => {
+  const cartao = document.createElement('label'), radio = document.createElement('input'), texto = node('span', undefined, 'kind-card-text');
+  cartao.className = 'kind-card';
+  radio.type = 'radio'; radio.name = 'portfolio_kind'; radio.value = info.kind; radio.required = true; radio.onchange = sincronizar;
+  texto.append(node('strong', info.label), node('small', info.what.split('. ')[0] + '.'));
+  cartao.append(radio, createIcon(info.icon), texto);
+  return cartao;
+ }));
+ const tags = mountTagInput({ box: $('space-tag-box'), input: $('space-tag-input'), hidden: form.elements.namedItem('tags') });
+ // O identificador nasce do nome enquanto ninguém o digitar; ao editar, é o que já existe.
+ let idManual = Boolean(item);
+ id.oninput = () => { idManual = true; };
+ nome.oninput = () => { if (!idManual) id.value = slugDoNome(nome.value); };
+ $('space-title').textContent = item ? 'Editar espaço' : 'Novo espaço';
+ $('space-subtitle').textContent = item ? `${item.name} · ${item.id}` : 'Um espaço é onde a TZOLKIN organiza o que vende ou opera.';
+ $('space-submit').textContent = item ? 'Salvar alterações' : 'Criar espaço';
+ $('space-id-help').textContent = item ? 'O identificador aparece nos endereços e nas chaves e não muda.' : 'Sugerido a partir do nome. Aparece nos endereços e nas chaves e não muda depois.';
+ openDialog('space-dialog', item ? { id: item.id, name: item.name, portfolio_kind: canonKind(item.portfolio_kind), tags: item.tags || [], revision: item.revision } : undefined);
+ id.readOnly = Boolean(item);
+ // Depois que o diálogo aplicou os valores: o tipo (o da aba, se veio de uma), as tags em chips.
+ const preencher = () => {
+  if (!item) tipo().value = kindInfo(tipoInicial) ? canonKind(tipoInicial) : (kindRegistry()[0]?.kind || '');
+  tags.set((form.elements.namedItem('tags').value || '').split(',').map(t => t.trim()).filter(Boolean));
+  sincronizar();
+ };
+ ensureDirectory().then(preencher).catch(() => {});
+ preencher();
+}
 
 function openDialog(id, values) {
  const dialog = $(id);
@@ -1331,6 +1491,13 @@ function bindForm(id, handler) {
 }
 
 bindForm('login-form', body => api('/api/login', 'POST', { password: body.password }));
+// Espaço do portfólio: criar (POST) ou editar (PUT, com a revisão que a tela leu). O
+// identificador não muda depois de criado; o servidor confere tipo, tags e revisão.
+bindForm('space-form', body => {
+ const campos = { name: body.name, portfolio_kind: body.portfolio_kind, tags: body.tags || '' };
+ if (body.revision) return api('/api/portfolio/' + encodeURIComponent(body.id), 'PUT', { ...campos, revision: Number(body.revision) });
+ return api('/api/portfolio', 'POST', { id: body.id, ...campos });
+});
 bindForm('tenant-form', body => api('/api/tenants', 'POST', body));
 bindForm('stakeholder-form', body => api('/api/stakeholders', 'POST', {...body,is_primary:body.is_primary==='on',contact_allowed:body.contact_allowed==='on'}));
 bindForm('member-form', body => api('/api/memberships', 'PUT', { ...body, active: body.active === 'true' }));
@@ -1345,6 +1512,7 @@ $('new-record').onclick = () => {
  const dialog=views()[state.view].action[1];
  // Deploys não usa <dialog> simples: o assistente do cadastro técnico tem fluxo próprio.
  if(dialog==='delivery-new'){delivery.open(null);return;}
+ if(dialog==='space-dialog'){abrirEspaco(null,state.portfolioTab==='all'?undefined:state.portfolioTab);return;}
  if(dialog==='tenant-dialog'){
   const relationship=$('tenant-form').elements.relationship_kind;
   if(state.view==='leads') relationship.value='prospect';
@@ -1378,7 +1546,6 @@ $('engagement-form').addEventListener('submit',async event=>{
 });
 $('deploy-search').addEventListener('input',()=>{if(deployData)renderDeploys(deployData);});
 $('deploy-filter').addEventListener('change',()=>{if(deployData)renderDeploys(deployData);});
-document.querySelectorAll('[data-provider-tab]').forEach(tab=>tab.addEventListener('click',()=>{document.querySelectorAll('[data-provider-tab]').forEach(item=>item.classList.toggle('active',item===tab));document.querySelectorAll('[data-provider-panel]').forEach(panel=>{panel.hidden=panel.dataset.providerPanel!==tab.dataset.providerTab;});}));
 $('org-search').addEventListener('input', () => { if (state.product) renderProductOrganizations(); });
 $('show-password').onclick = () => {
  const show = $('password').type === 'password';
@@ -1396,7 +1563,7 @@ $('logout').onclick = async () => {
  catch (error) { $('notice').textContent = error.message; }
 };
 
-const resource = setupResource({api,activate:()=>switchView('resource'),canOpen:()=>!$('workspace').hidden && contextKind()==='general',back:()=>switchView('deploys')});
+const resource = setupResource({api,activate:()=>switchView('resource'),canOpen:()=>!$('workspace').hidden && contextKind()==='general',back:provider=>switchView(provider==='easypanel'?'easypanel':provider==='vercel'?'vercel':'connections')});
 // Ativar um projeto muda o ciclo de vida do item do portfólio: recarrega o painel
 // inteiro (deploys, catálogo e, em Deploys, o cadastro técnico), como os demais
 // formulários. Criar um projeto já NÃO cria item nenhum — item nasce no Portfólio.
@@ -1405,10 +1572,15 @@ const resource = setupResource({api,activate:()=>switchView('resource'),canOpen:
 // vem do mesmo /api/overview: duas telas perguntando "de quem é isto?" têm de
 // oferecer a mesma lista, senão o nome de um item muda conforme a porta de entrada.
 const delivery = setupDelivery({ api,openResource:resource.open,onSaved:()=>load().catch(reportError),
+ // Cada repositório da aba GitHub mostra o dono, ou o controle para dar um: as mesmas
+ // conexões e a mesma regra de sugestão das outras telas (owner-link.js).
+ repoLink:(repo,inventario)=>vinculoNoProvedor({provider:'github',id:repo.id,name:repo.name},inventario),
+ // O cadastro técnico e o inventário chegaram: as telas que dependem deles se redesenham.
+ onLoaded:()=>{connections.redraw();if(deployData)renderDeploys(deployData);if(state.infrastructure)renderEasypanel(state.infrastructure);},
  owners:()=>({
   // O tipo do item vai junto, já traduzido: o dicionário de tipos é daqui, e
   // delivery.js copiá-lo seria a segunda verdade sobre como se chama cada tipo.
-  products:(state.overview?.products||[]).map(item=>({...item,kind_label:PORTFOLIO_KIND_LABELS[item.portfolio_kind]||null})),
+  products:(state.overview?.products||[]).map(item=>({...item,kind_label:kindInfo(item.portfolio_kind)?.label||null})),
   engagements:serviceEngagements(),tenants:state.overview?.tenants||[]}) });
 // Volta de fluxo externo — OAuth da Meta, clique em notificação: `?view=`
 // escolhe a tela inicial e `?meta=` traz o resultado da conexão. Os dois saem
@@ -1417,8 +1589,10 @@ const delivery = setupDelivery({ api,openResource:resource.open,onSaved:()=>load
  const params = new URLSearchParams(location.search);
  const pedida = params.get('view');
  if (pedida && Object.hasOwn(CONTEXTS.general.views, pedida) && !CONTEXTS.general.views[pedida].hidden) state.view = pedida;
+ // Campanhas deixou de ser tela: o endereço antigo abre a aba dentro de Inbound.
+ if (pedida === 'campaigns') { state.view = 'leads'; state.inboundTab = 'campaigns'; }
  const meta = params.get('meta');
- if (meta && /^[a-z]{2,12}$/.test(meta)) campaigns.flash(meta);
+ if (meta && /^[a-z]{2,12}$/.test(meta)) { campaigns.flash(meta); state.view = 'leads'; state.inboundTab = 'campaigns'; }
  if (params.has('view') || params.has('meta')) {
   params.delete('view'); params.delete('meta');
   const resto = params.toString();

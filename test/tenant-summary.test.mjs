@@ -68,7 +68,7 @@ test('Ficha da empresa conectada', async t => {
    // Horas: uma atividade por empresa, com apontamento hoje.
    for (const [tenant, minutos] of [[empresa.a, 90], [empresa.b, 45]]) {
     const id = randomUUID(); atividades.push(id);
-    await ok(await post('/api/tracking', { id, tenant_id: tenant, category: 'mentoria', kind: 'sessao', title: `Sessão ${marca}`, starts_at: `${hoje()}T10:00:00-03:00`, ends_at: `${hoje()}T11:00:00-03:00` }), 'atividade');
+    await ok(await post('/api/tracking', { id, tenant_id: tenant, category: 'mentoria', kind: 'sessao', title: `Sessão ${marca}`, engagement_id: tenant === empresa.a ? A.mentoria.id : null, starts_at: `${hoje()}T10:00:00-03:00`, ends_at: `${hoje()}T11:00:00-03:00` }), 'atividade');
     await ok(await post(`/api/tracking/${id}/time`, { id: randomUUID(), minutes: minutos, worked_on: hoje(), note: 'Sessão realizada' }), 'apontamento');
    }
 
@@ -105,7 +105,8 @@ test('Ficha da empresa conectada', async t => {
    assert.deepEqual(corpo.deploys.items.map(d => [d.external_project_id, d.engagement_id]), [[`prj-a-${marca}`, A.assessoria.id]], 'deploy da arquivada e de B ficam fora');
    assert.deepEqual(corpo.campaigns.items.map(c => [c.external_id, c.engagement_id, c.spend_cents]), [[campanhas[0], A.mentoria.id, 12345]]);
    assert.equal(typeof corpo.campaigns.items[0].spend_cents, 'number');
-   assert.deepEqual([corpo.hours.minutes, corpo.hours.logs, corpo.hours.activities, corpo.hours.by_engagement], [90, 1, 1, false]);
+   assert.deepEqual([corpo.hours.minutes, corpo.hours.logs, corpo.hours.activities, corpo.hours.by_engagement], [90, 1, 1, true]);
+   assert.deepEqual(corpo.hours.items.map(i => [i.id, i.label, i.minutes]), [[A.mentoria.id, `Mentoria ${marca}`, 90]], 'a hora de A é da contratação Mentoria');
    assert.deepEqual(corpo.people.items.map(p => p.name), [`Pessoa A ${marca}`]);
    assert.deepEqual(Object.keys(corpo.people.items[0]).sort(), ['contact_allowed', 'id', 'is_primary', 'name', 'role', 'title']);
    assert.equal(corpo.contracts.available, true);
@@ -125,6 +126,7 @@ test('Ficha da empresa conectada', async t => {
    const corpo = await ficha(empresa.b);
    assert.deepEqual(corpo.engagements.items.map(e => e.id), [B.consultoria.id]);
    assert.equal(corpo.hours.minutes, 45);
+   assert.deepEqual(corpo.hours.items.map(i => [i.id, i.label, i.minutes]), [[null, null, 45]], 'a hora de B ficou sem contratação');
    assert.deepEqual(corpo.access.entitlements.map(e => [e.product_id, e.plan]), [['educare', 'anual']]);
    assert.deepEqual(corpo.access.memberships.map(m => [m.product_id, m.active]), [['educare', 1]]);
    assert.ok(!JSON.stringify(corpo.access).includes(`test:${marca}`), 'identificador de acesso não sai, só a contagem');

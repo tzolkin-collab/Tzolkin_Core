@@ -35,6 +35,32 @@ test('separate web and API preserve cookies, CSRF, logout and static isolation',
  } finally {await stop(web);await stop(api);}
 });
 
+test('o proxy local deixa passar foto grande só em /api/media e segura o resto em 16 KB',async()=>{
+ const reserve=http.createServer();await listen(reserve);const port=reserve.address().port;await stop(reserve);
+ const origin=`http://127.0.0.1:${port}`;
+ const guardado=[];
+ const pool={async query(sql,params){
+  if(/FROM tenants/.test(sql))return{rows:[{tenant_id:'11111111-1111-4111-8111-111111111111'}]};
+  if(/count\(\*\)/.test(sql))return{rows:[{count:'0'}]};
+  if(/INSERT INTO media_objects/.test(sql)){guardado.push(params[5]);return{rows:[{id:'m1',object_key:params[3],content_type:params[4],byte_size:params[5],is_primary:true,original_name:null,created_at:'agora'}]};}
+  return{rows:[]};
+ }};
+ const r2={configured:true,put:async()=>{},remove:async()=>{},signedGetUrl:key=>`https://r2.exemplo/${key}`};
+ const api=createCore({pool,adminPassword:'synthetic-password-for-split-test',webOrigin:origin,deployRegistry:[],mediaOptions:{r2}});
+ await listen(api);const web=createWeb({apiOrigin:`http://127.0.0.1:${api.address().port}`});await new Promise(r=>web.listen(port,'127.0.0.1',r));
+ try {
+  const login=await fetch(origin+'/api/login',{method:'POST',headers:{origin,'Content-Type':'application/json'},body:JSON.stringify({password:'synthetic-password-for-split-test'})});
+  const cookie=login.headers.get('set-cookie').split(';')[0];
+  const png=Buffer.concat([Buffer.from([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a]),Buffer.alloc(120*1024,7)]);
+  const send=(body,path='/api/media?owner_type=tenant&owner_id=11111111-1111-4111-8111-111111111111')=>fetch(origin+path,{method:'POST',headers:{origin,cookie,'Content-Type':'image/png'},body});
+  const ok=await send(png);assert.equal(ok.status,201);assert.equal(guardado[0],png.length);
+  // acima de 8 MB: o proxy recusa antes de a API ler
+  assert.equal((await send(Buffer.alloc(9*1024*1024+1))).status,413);
+  // a exceção é só para esta rota
+  assert.equal((await fetch(origin+'/api/login',{method:'POST',headers:{origin,'Content-Type':'application/json'},body:'x'.repeat(20000)})).status,413);
+ } finally {await stop(web);await stop(api);}
+});
+
 test('local proxy rejects non-loopback targets and gives a safe offline error',async()=>{
  for(const apiOrigin of ['https://remote.example','http://127.0.0.1:1/secret','http://secret@127.0.0.1:1','http://127.0.0.1:1/?token=x'])assert.throws(()=>createWeb({apiOrigin}));
  const api=http.createServer();await listen(api);const apiOrigin=`http://127.0.0.1:${api.address().port}`;await stop(api);
