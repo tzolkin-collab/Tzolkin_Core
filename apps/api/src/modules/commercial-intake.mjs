@@ -50,6 +50,14 @@ export function commercialIntakeRoutes(router,{avisarLeadNovo=notificarLeadNovo}
   let result;
   if(existing){if(existing.request_hash!==hash)throw fail(409,'Origem já importada com outro conteúdo.');result={lead_id:existing.id,tenant_id:existing.tenant_id,stakeholder_id:existing.stakeholder_id,engagement_id:null,contract_id:null,created:false};}
   else {
+   // Limite por e-mail e por espaço: 5 leads novos por hora. Era do site (contava no banco institucional,
+   // que saiu com a ADR 0011); sem ele, um formulário público ficaria aberto a enxurrada. Lock por e-mail
+   // para dois envios simultâneos não passarem juntos do limite.
+   if(v.email){
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,27))',[`${productId}:${v.email}`]);
+    const recentes=Number((await client.query("SELECT count(*) FROM commercial_leads WHERE product_id=$1 AND lower(email)=$2 AND created_at>now()-interval '1 hour'",[productId,v.email])).rows[0].count);
+    if(recentes>=5)throw fail(429,'Muitos envios com este e-mail. Aguarde antes de tentar novamente.');
+   }
    const source=`inbound:${productId}:${v.source_system}`;
    const slug='lead-'+digest(`${source}:${v.source_ref}`).slice(0,40);
    const tenant=(await client.query(`INSERT INTO tenants(name,slug,relationship_kind,lifecycle_status,organization_type,source_system,source_ref) VALUES($1,$2,'prospect','lead',$3,$4,$5) RETURNING id`,[v.org_name,slug,v.org_type,source,v.source_ref])).rows[0].id;

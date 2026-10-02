@@ -1,7 +1,7 @@
 import test from 'node:test';import assert from 'node:assert/strict';import{randomUUID}from'node:crypto';import pg from'pg';
 import{createCore}from'../apps/api/src/app.mjs';
 import{validateIntake}from'../apps/api/src/modules/commercial-intake.mjs';import{validateKey,commercialPermission}from'../apps/api/src/modules/commercial-keys.mjs';
-const payload=(ref=randomUUID(),product='sites')=>({lead:{name:'Pessoa de teste',email:'inbound@example.invalid',whatsapp:'5511999999999',message:'Teste\nSem envio externo'},organization:{organization_type:'person'},commercial:{product_id:product,service_model:'consulting',label:'Diagnóstico de teste'},attribution:{source_ref:ref,source_system:'integration-test'},privacy:{contact_allowed:false,source:'test'}});
+const payload=(ref=randomUUID(),product='sites')=>({lead:{name:'Pessoa de teste',email:`inbound-${String(ref).slice(0,8)}@example.invalid`,whatsapp:'5511999999999',message:'Teste\nSem envio externo'},organization:{organization_type:'person'},commercial:{product_id:product,service_model:'consulting',label:'Diagnóstico de teste'},attribution:{source_ref:ref,source_system:'integration-test'},privacy:{contact_allowed:false,source:'test'}});
 test('commercial input rejects forged fields and incomplete contact permission',()=>{
  assert.throws(()=>validateIntake({...payload(),tenant_id:randomUUID()},'sites'));
  const p=payload();p.privacy.contact_allowed=true;assert.throws(()=>validateIntake(p,'sites'));assert.throws(()=>validateIntake(payload(),'skiller'));
@@ -31,6 +31,17 @@ test('commercial HTTP and queue against isolated PostgreSQL',async t=>{
  await t.test('owner, lost reason, timeline and optimistic version',async()=>{const id=(await pool.query("INSERT INTO operator_accounts(email,name,role,status,source) VALUES('commercial-owner@example.invalid','Teste','member','active','manual') RETURNING id")).rows[0].id;assert.equal((await request('/api/commercial/leads/'+leadId,'PUT',{version:1,status:'lost',owner_id:id})).status,400);assert.equal((await request('/api/commercial/leads/'+leadId,'PUT',{version:1,status:'lost',owner_id:id,loss_reason:'Escopo incompatível'})).status,200);assert.equal((await request('/api/commercial/leads/'+leadId,'PUT',{version:1,status:'open'})).status,409);assert.equal((await request('/api/commercial/leads/'+leadId+'/activities','POST',{kind:'call',note:'Contato sintético registrado, sem ligação real.'})).status,200);const d=(await request('/api/commercial/leads/'+leadId)).body;assert.equal(d.lead.owner_id,id);assert.equal(d.activities.length,3);assert.equal((await request('/api/commercial/leads?status=lost')).body.leads.length,1);});
  await t.test('contract requires acceptance and never creates entitlement',async()=>{const created=await request('/api/commercial/contracts','POST',{lead_id:leadId,title:'Contrato de teste',scope:'Entregável sintético',amount_minor:10000,currency:'BRL'});assert.equal(created.status,200,JSON.stringify(created.body));const c=created.body.contract;assert.equal((await request('/api/commercial/contracts/'+c.id+'/status','PUT',{version:1,status:'active'})).status,400);assert.equal((await request('/api/commercial/contracts/'+c.id+'/status','PUT',{version:1,status:'active',acceptance_reference:'Aceite sintético de teste'})).status,200);assert.equal((await pool.query('select count(*)::int as n from entitlements')).rows[0].n,0);});
  await t.test('transaction rollback leaves no partial lead when timeline fails',async()=>{await pool.query("CREATE FUNCTION reject_test_activity() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected failure'; END $$; CREATE TRIGGER test_activity_failure BEFORE INSERT ON commercial_activities FOR EACH ROW EXECUTE FUNCTION reject_test_activity()");const before=(await pool.query('SELECT count(*)::int n FROM tenants')).rows[0].n;assert.equal((await intake(payload())).status,500);assert.equal((await pool.query('SELECT count(*)::int n FROM tenants')).rows[0].n,before);await pool.query('DROP TRIGGER test_activity_failure ON commercial_activities; DROP FUNCTION reject_test_activity()');});
+ await t.test('o sexto lead do mesmo e-mail na mesma hora recebe 429; outro e-mail segue normal',async()=>{
+  const com=(email)=>{const p=payload(randomUUID());p.lead={...p.lead,email};return p;};
+  for(let i=0;i<5;i++)assert.equal((await intake(com('limite@example.invalid'))).status,200);
+  const bloqueado=await intake(com('limite@example.invalid'));
+  assert.equal(bloqueado.status,429);
+  assert.match(bloqueado.body.message,/Muitos envios/);
+  assert.equal((await intake(com('outro-limite@example.invalid'))).status,200);
+  // reenvio idempotente de um lead que já existia não conta como envio novo
+  const p=com('replay-limite@example.invalid'),k=randomUUID();
+  assert.equal((await intake(p,k)).status,200);assert.equal((await intake(p,k)).status,200);
+ });
  await t.test('revoked key denied immediately and recorded',async()=>{assert.equal((await request('/api/app-clients/'+key.id,'DELETE')).status,200);assert.equal((await intake(payload())).status,401);assert.ok((await request('/api/app-clients?product_id=sites')).body.audit.some(x=>x.action==='revoked'));});
  }finally{server.closeAllConnections();await new Promise(r=>server.close(r));await pool.end();}
 });
