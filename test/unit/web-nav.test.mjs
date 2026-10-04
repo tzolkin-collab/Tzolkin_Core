@@ -24,6 +24,7 @@ const NAVEGACAO = [
  ['Entrega', ['Serviços', 'Acompanhamento']],
  ['Tecnologia', ['Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS']],
  ['Bases de dados', ['Banco de dados']],
+ ['Administração', ['Configurações']],
 ];
 
 // Esvazia o conteúdo das aspas simples preservando o tamanho: os blocos lidos aqui

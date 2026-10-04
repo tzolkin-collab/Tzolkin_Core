@@ -60,7 +60,7 @@ export function caixaDeLembretes(selecionados, aoMudar) {
 
 export function montarNotificacoes(raiz, { api }) {
  const grupo = no('fieldset', undefined, 'config-grupo');
- grupo.append(no('legend', 'Notificações', 'config-titulo'));
+ grupo.append(no('legend', 'Notificações', 'sr-only'));
  const corpo = no('div', undefined, 'config-notif');
  const aviso = no('p', '', 'config-aviso'); aviso.setAttribute('role', 'status');
  grupo.append(corpo, aviso);
@@ -136,7 +136,7 @@ export function montarNotificacoes(raiz, { api }) {
   let prefs;
   try { prefs = await api('/api/agenda/preferencias'); } catch { return null; }
   const bloco = no('div', undefined, 'config-bloco');
-  bloco.append(no('h3', 'Lembrete padrão da agenda', 'config-sub'));
+  bloco.append(no('h3', 'Lembrete padrão da agenda · todo o espaço', 'config-sub'));
   if (!prefs.disponivel) { bloco.append(no('p', 'Disponível assim que a atualização do banco (migração 048) for aplicada.', 'config-ajuda')); return bloco; }
   const resumo = no('p', '', 'config-ajuda');
   const mostrar = m => { resumo.textContent = `Vale para toda atividade que não tem lembrete próprio: ${textoDosLembretes(m).toLowerCase()}.`; };
@@ -151,3 +151,5 @@ export function montarNotificacoes(raiz, { api }) {
 
  desenhar();
 }
+
+export const montar = montarNotificacoes;

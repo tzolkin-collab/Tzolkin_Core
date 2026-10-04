@@ -50,7 +50,7 @@ const $ = id => document.getElementById(id);
 fetch('/api/auth/mode').then(r=>r.ok?r.json():null).then(auth=>{const oidc=auth?.mode==='google-oidc';$('login-form').hidden=oidc;$('google-login').hidden=!oidc;if(oidc&&new URLSearchParams(location.search).has('auth_error'))$('login-notice').textContent='Conta Google não autorizada ou login expirado.';}).catch(()=>{$('login-notice').textContent='Não foi possível verificar o modo de acesso. Atualize a página.';});
 $('plan-help').textContent='Use o slug de uma oferta deste produto. Ele identifica as condições comerciais copiadas para o contrato.';
 
-const state = { context: '', view: 'overview', overview: null, product: null, catalog: [], deploys: [], resourceBindings: [], infrastructure: null, management: null, dns: null, topology: null, security: null, selectedTenant: null, clientSummary: null, clientBack: 'clients', inboundTab: 'leads', portfolioTab: 'all', clientTab: 'all', clientPage: 0, empresaAba: 'geral' };
+const state = { context: '', view: 'overview', overview: null, product: null, catalog: [], deploys: [], resourceBindings: [], infrastructure: null, management: null, dns: null, topology: null, security: null, selectedTenant: null, clientSummary: null, clientBack: 'clients', inboundTab: 'leads', configSecao: '', portfolioTab: 'all', clientTab: 'all', clientPage: 0, empresaAba: 'geral' };
 // Painel lateral da ficha da empresa (criado na primeira abertura; ver peekDaEmpresa).
 let peekEmpresa = null;
 // Painel lateral da ficha da pessoa (criado na primeira abertura; ver abrirPessoa).
@@ -102,7 +102,7 @@ const CONTEXTS = {
    // ADMINISTRAÇÃO
    // Acesso a produto é assunto do contexto de produto; no geral a tela só mostrava vazio.
    access: { title: 'Acessos', section: 'view-access', action: ['Vincular acesso', 'member-dialog'], hidden:true },
-   settings: { title: 'Configurações', section: 'view-settings', metrics:false, hidden:true },
+   settings: { title: 'Configurações', section: 'view-settings', metrics:false },
    security: { title: 'Segurança', section: 'view-security', metrics:false, hidden:true },
   },
  },
@@ -318,7 +318,7 @@ function switchView(view) {
  }
  $('notice').textContent = '';
  renderNav();
- if (view === 'settings') montarConfiguracoes($('settings-body'),{api});
+ if (view === 'settings') montarConfiguracoes($('settings-body'),{api,secao:state.configSecao,aoMudar:id=>{state.configSecao=id;}});
  if (view === 'tracking') tracking.load().catch(reportError);
  if (view === 'finance') finance.load().catch(reportError);
  if (view === 'emails') emails.load().catch(reportError);
@@ -1498,7 +1498,7 @@ function renderContextPicker(products) {
  const current=products.find(product=>product.id===state.context)||null;
  currentIcon.replaceChildren(current?productFavicon(productFaviconUrl(current)):coreSpaceIcon());
  const detalhe=product=>kindLabel(product)+(product.lifecycle_status==='draft'?' · rascunho':'');
- currentCopy.replaceChildren(node('strong',current?.name||'TZOLKIN'),node('small',current?detalhe(current):'Gestão geral'));
+ currentCopy.replaceChildren(node('strong',current?.name||'TZOLKIN'));
  const choice=(id,label,detail,icon)=>{const button=node('button',undefined,'context-option'+(id===state.context?' active':''));button.type='button';button.setAttribute('aria-current',id===state.context?'true':'false');const mark=node('span',undefined,'context-option-icon');mark.append(icon);const copy=node('span',undefined,'context-option-copy');copy.append(node('strong',label),node('small',detail));button.append(mark,copy);button.onclick=()=>{picker.open=false;if(id!==state.context)switchContext(id).catch(reportError);};return button;};
  const general=choice('','TZOLKIN','Gestão geral',coreSpaceIcon());
  const productChoices=byKind(products).flatMap(({kind,items})=>[node('span',kindInfo(kind).plural,'context-group-label'),...items.map(product=>choice(product.id,product.name,productLifecycle(product).label,productFavicon(productFaviconUrl(product))))]);
@@ -1788,10 +1788,12 @@ const delivery = setupDelivery({ api,openResource:resource.open,onSaved:()=>load
  if (pedida && Object.hasOwn(CONTEXTS.general.views, pedida) && !CONTEXTS.general.views[pedida].hidden) state.view = pedida;
  // Campanhas deixou de ser tela: o endereço antigo abre a aba dentro de Inbound.
  if (pedida === 'campaigns') { state.view = 'leads'; state.inboundTab = 'campaigns'; }
+ const secao = params.get('secao');
+ if (secao && /^[a-z]{2,20}$/.test(secao)) { state.configSecao = secao; if (!pedida) state.view = 'settings'; }
  const meta = params.get('meta');
  if (meta && /^[a-z]{2,12}$/.test(meta)) { campaigns.flash(meta); state.view = 'leads'; state.inboundTab = 'campaigns'; }
- if (params.has('view') || params.has('meta')) {
-  params.delete('view'); params.delete('meta');
+ if (params.has('view') || params.has('meta') || params.has('secao')) {
+  params.delete('view'); params.delete('meta'); params.delete('secao');
   const resto = params.toString();
   history.replaceState(null, '', location.pathname + (resto ? '?' + resto : '') + location.hash);
  }
@@ -1800,6 +1802,15 @@ renderNav();
 switchView(state.view);
 renderContextChrome();
 load().catch(error => { if (error.message !== 'Entre para continuar.') $('login-notice').textContent = error.message; });
+
+// Instalar como aplicativo: o Chrome dispara `beforeinstallprompt` logo ao carregar, bem antes de alguém abrir Configurações → Aplicativo.
+// Guarda o evento aqui para a seção poder oferecer o botão. Sem o evento (já instalado, ou navegador sem suporte) a seção só explica.
+{
+ let adiado = null;
+ addEventListener('beforeinstallprompt', evento => { evento.preventDefault(); adiado = evento; });
+ addEventListener('appinstalled', () => { adiado = null; });
+ window.TzolkinInstalar = { pronto: () => adiado !== null, pedir: async () => { const e = adiado; adiado = null; if (!e) return null; await e.prompt(); return (await e.userChoice).outcome; } };
+}
 
 // Registro do service worker. Só existe para notificação: o worker não faz
 // cache, então não há risco de servir código velho depois de um deploy.

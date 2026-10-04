@@ -1,12 +1,6 @@
-// Configurações: por enquanto só a aparência. O tema vive em theme-boot.js (window.TzolkinTema), que roda antes
-// do CSS; aqui só se escolhe. A escolha é deste navegador, não da conta.
-import { montarNotificacoes } from './notificacoes.js';
-
-const OPCOES = [
- ['sistema', 'Seguir o sistema', 'Claro ou escuro, como o seu aparelho estiver.'],
- ['claro', 'Claro', 'Fundo branco.'],
- ['escuro', 'Escuro', 'Fundo cinza-escuro, mais calmo para trabalhar à noite.'],
-];
+// Configurações: a casca. Coluna de seções, selo de escopo e a seção aberta. O que cada seção faz está no módulo dela
+// (config-*.js, notificacoes.js); o que existe e de quem é, em config-indice.js. Plano: docs/CONFIGURACOES.md.
+import { SECOES, GRUPOS, ESCOPOS, SECAO_PADRAO, secaoPorId } from './config-indice.js';
 
 const no = (tag, texto, classe) => {
  const e = document.createElement(tag);
@@ -15,22 +9,48 @@ const no = (tag, texto, classe) => {
  return e;
 };
 
-export function montarConfiguracoes(raiz, { api } = {}) {
- const tema = window.TzolkinTema;
- const atual = tema ? tema.preferencia() : 'sistema';
- const grupo = no('fieldset', undefined, 'config-grupo');
- grupo.append(no('legend', 'Aparência', 'config-titulo'));
- grupo.append(no('p', 'Vale só para este navegador.', 'config-ajuda'));
- for (const [valor, titulo, ajuda] of OPCOES) {
-  const rotulo = no('label', undefined, 'config-opcao');
-  const radio = document.createElement('input');
-  radio.type = 'radio'; radio.name = 'tema'; radio.value = valor; radio.checked = valor === atual;
-  radio.onchange = () => { if (radio.checked && tema) tema.definir(valor); };
-  const texto = no('span', undefined, 'config-opcao-texto');
-  texto.append(no('strong', titulo), no('small', ajuda));
-  rotulo.append(radio, texto);
-  grupo.append(rotulo);
+/**
+ * `secao`: a que abre primeiro (cai na padrão se não existir). `aoMudar(id)`: avisa quando a pessoa troca de seção.
+ * Cada seção é um módulo carregado só quando aberta e exporta `montar(raiz, { api })`.
+ */
+export function montarConfiguracoes(raiz, { api, secao, aoMudar } = {}) {
+ const casca = no('div', undefined, 'cfg');
+ const nav = no('nav', undefined, 'cfg-nav'); nav.setAttribute('aria-label', 'Seções de Configurações');
+ const corpo = no('section', undefined, 'cfg-corpo');
+ casca.append(nav, corpo);
+ raiz.replaceChildren(casca);
+ let ticket = 0;
+
+ for (const grupo of GRUPOS) {
+  const bloco = no('div', undefined, 'cfg-grupo');
+  bloco.append(no('h2', grupo, 'cfg-grupo-titulo'));
+  for (const s of SECOES.filter(x => x.grupo === grupo)) {
+   const b = no('button', s.titulo, 'cfg-item'); b.type = 'button'; b.dataset.secao = s.id;
+   b.onclick = () => abrir(s.id, true);
+   bloco.append(b);
+  }
+  nav.append(bloco);
  }
- raiz.replaceChildren(grupo);
- if (api) montarNotificacoes(raiz, { api });
+
+ async function abrir(id, avisar = false) {
+  const s = secaoPorId(id) || secaoPorId(SECAO_PADRAO);
+  const meu = ++ticket;
+  for (const b of nav.querySelectorAll('.cfg-item')) { if (b.dataset.secao === s.id) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); }
+  const cab = no('header', undefined, 'cfg-cab');
+  const titulo = no('h2', s.titulo, 'cfg-titulo-secao'); titulo.tabIndex = -1;
+  const selo = no('span', ESCOPOS[s.escopo], 'cfg-escopo'); selo.dataset.escopo = s.escopo;
+  cab.append(titulo, selo);
+  const conteudo = no('div', undefined, 'cfg-conteudo');
+  corpo.replaceChildren(cab, no('p', s.descricao, 'config-ajuda'), conteudo);
+  if (avisar) aoMudar?.(s.id);   // o foco fica no item clicado: quem navega pelas setas/Tab continua na lista
+  try {
+   const modulo = await s.carregar();
+   if (meu !== ticket) return;
+   modulo.montar(conteudo, { api });
+  } catch {
+   if (meu === ticket) conteudo.replaceChildren(no('p', 'Não foi possível abrir esta seção. Recarregue a página.', 'config-ajuda'));
+  }
+ }
+
+ abrir(secao);
 }

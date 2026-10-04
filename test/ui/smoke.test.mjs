@@ -18,7 +18,7 @@ import * as AM from '../../apps/web/public/agenda-model.js';
 const PULAR = acharNavegador() ? false : 'Chrome/Edge não encontrado (defina CHROME_PATH)';
 const ARTEFATOS = fileURLToPath(new URL('./artifacts/', import.meta.url));
 
-const MENU_ESPERADO = ['Visão geral', 'Financeiro', 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Portfólio', 'Serviços', 'Acompanhamento', 'Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS', 'Banco de dados'];
+const MENU_ESPERADO = ['Visão geral', 'Financeiro', 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Portfólio', 'Serviços', 'Acompanhamento', 'Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS', 'Banco de dados', 'Configurações'];
 const SECAO = `[...document.querySelectorAll('main section')].find(s => !s.hidden && s.offsetParent)`;
 /**
  * Lê, de dentro da página, os defeitos de uma tela: título, estouro de largura, texto com valor
@@ -1652,10 +1652,59 @@ const COM_PUSH = `(() => {
 })()`;
 const IR_PARA_CONFIG = async () => {
  await pagina.avaliar(`document.getElementById('open-settings').click()`);
- await pagina.esperar(`!document.getElementById('view-settings').hidden && document.querySelector('#settings-body .config-notif')`, { descricao: 'configurações abertas' });
+ await pagina.esperar(`!document.getElementById('view-settings').hidden && document.querySelector('#settings-body .cfg-item')`, { descricao: 'configurações abertas' });
+ await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[data-secao=notificacoes]').click()`);
+ await pagina.esperar(`document.querySelector('#settings-body .config-notif')`, { descricao: 'seção Notificações' });
  await pagina.esperar(`document.querySelector('#settings-body .config-bloco')`, { descricao: 'notificações desenhadas' });
 };
 const BOTAO_CONFIG = texto => `[...document.querySelectorAll('#settings-body button')].find(b => b.textContent.trim() === ${JSON.stringify(texto)})`;
+
+test('configurações: a casca lista as seções com o escopo de cada uma e troca de seção sem recarregar', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await pagina.avaliar(`document.getElementById('open-settings').click()`);
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-item') && document.querySelector('#settings-body input[name=tema]')`);
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-item')].map(b => b.textContent)`), ['Aparência', 'Notificações', 'Aplicativo']);
+ assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[aria-current=page]').textContent`), 'Aparência', 'abre na primeira seção');
+ assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-escopo').textContent`), 'Só neste navegador');
+ await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[data-secao=notificacoes]').click()`);
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-titulo-secao').textContent === 'Notificações'`);
+ assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-escopo').textContent`), 'Sua conta');
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#settings-body input[name=tema]').length`), 0, 'a seção anterior saiu');
+ assert.notEqual(await pagina.avaliar(`document.activeElement.className`), 'cfg-titulo-secao', 'trocar de seção não rouba o foco da lista');
+ // sai e volta: o painel lembra a seção em que a pessoa estava
+ await pagina.avaliar(CLICAR_NO_MENU('Visão geral'));
+ await pagina.avaliar(`document.getElementById('open-settings').click()`);
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-titulo-secao')?.textContent === 'Notificações'`);
+ semExcecoes();
+});
+
+test('configurações → Aplicativo: só leitura, mostra o estado e oferece instalar só quando o navegador deixa', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await pagina.avaliar(`document.getElementById('open-settings').click()`);
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-item')`);
+ // O Chrome real pode já ter oferecido a instalação: troca o guardião por um que diz que não há oferta, para o teste não depender disso.
+ await pagina.avaliar(`window.__instalarReal = window.TzolkinInstalar; window.TzolkinInstalar = { pronto: () => false, pedir: async () => null }`);
+ await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[data-secao=aplicativo]').click()`);
+ await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-linha').length === 3`);
+ const texto = () => pagina.avaliar(`document.querySelector('#settings-body .cfg-lista').textContent`);
+ assert.match(await texto(), /Aberto no navegador/);
+ assert.match(await texto(), /chrome:\/\/apps/);
+ assert.match(await texto(), /não usa Local, Câmera nem Microfone/);
+ assert.equal(await pagina.avaliar(`!![...document.querySelectorAll('#settings-body button')].find(b => b.textContent === 'Instalar o Core')`), false, 'sem o evento do navegador não há botão');
+ // com o evento de instalação guardado, o botão aparece e chama o prompt do navegador
+ await pagina.avaliar(`window.TzolkinInstalar = window.__instalarReal`);
+ await pagina.avaliar(`(() => { window.__instalou = 0; const e = new Event('beforeinstallprompt', { cancelable: true }); e.prompt = async () => { window.__instalou++; }; e.userChoice = Promise.resolve({ outcome: 'accepted' }); window.dispatchEvent(e); })()`);
+ await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[data-secao=aparencia]').click()`);
+ await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[data-secao=aplicativo]').click()`);
+ await pagina.esperar(`[...document.querySelectorAll('#settings-body button')].find(b => b.textContent === 'Instalar o Core')`);
+ await pagina.avaliar(`[...document.querySelectorAll('#settings-body button')].find(b => b.textContent === 'Instalar o Core').click()`);
+ await pagina.esperar(`window.__instalou === 1`);
+ semExcecoes();
+});
 
 test('configurações: ligar, escolher assuntos, testar e desligar as notificações deste aparelho', { skip: PULAR }, async () => {
  const desfazer = await pagina.injetar(COM_PUSH);
@@ -1663,7 +1712,7 @@ test('configurações: ligar, escolher assuntos, testar e desligar as notificaç
  await pagina.ir(origem + '/');
  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
  await IR_PARA_CONFIG();
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-sub')].map(h => h.textContent)`), ['Neste aparelho', 'Lembrete padrão da agenda']);
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-sub')].map(h => h.textContent)`), ['Neste aparelho', 'Lembrete padrão da agenda · todo o espaço']);
  // ainda não assinado: só o botão de ativar
  assert.ok(await pagina.avaliar(`!!${BOTAO_CONFIG('Ativar neste aparelho')}`));
  assert.ok(await pagina.avaliar(`!${BOTAO_CONFIG('Enviar teste')}`));
