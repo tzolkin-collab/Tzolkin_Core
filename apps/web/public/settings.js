@@ -1,6 +1,6 @@
 // Configurações: a casca. Coluna de seções, selo de escopo e a seção aberta. O que cada seção faz está no módulo dela
 // (config-*.js, notificacoes.js); o que existe e de quem é, em config-indice.js. Plano: docs/CONFIGURACOES.md.
-import { SECOES, GRUPOS, ESCOPOS, SECAO_PADRAO, secaoPorId } from './config-indice.js';
+import { SECOES, GRUPOS, SECAO_PADRAO, secaoPorId, seloDeEscopo } from './config-indice.js';
 
 const no = (tag, texto, classe) => {
  const e = document.createElement(tag);
@@ -38,15 +38,15 @@ export function montarConfiguracoes(raiz, { api, secao, aoMudar } = {}) {
   for (const b of nav.querySelectorAll('.cfg-item')) { if (b.dataset.secao === s.id) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); }
   const cab = no('header', undefined, 'cfg-cab');
   const titulo = no('h2', s.titulo, 'cfg-titulo-secao'); titulo.tabIndex = -1;
-  const selo = no('span', ESCOPOS[s.escopo], 'cfg-escopo'); selo.dataset.escopo = s.escopo;
-  cab.append(titulo, selo);
+  cab.append(titulo);
+  if (s.escopo) cab.append(seloDeEscopo(s.escopo));   // seção de escopo misto (null): cada bloco traz o seu selo
   const conteudo = no('div', undefined, 'cfg-conteudo');
   corpo.replaceChildren(cab, no('p', s.descricao, 'config-ajuda'), conteudo);
   if (avisar) aoMudar?.(s.id);   // o foco fica no item clicado: quem navega pelas setas/Tab continua na lista
   try {
    const modulo = await s.carregar();
    if (meu !== ticket) return;
-   modulo.montar(conteudo, { api });
+   modulo.montar(conteudo, { api, irPara: id => abrir(id, true) });
   } catch {
    if (meu === ticket) conteudo.replaceChildren(no('p', 'Não foi possível abrir esta seção. Recarregue a página.', 'config-ajuda'));
   }

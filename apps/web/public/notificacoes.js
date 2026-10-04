@@ -1,7 +1,6 @@
 // Configurações → Notificações: ligar o aviso neste aparelho e escolher o lembrete padrão da agenda.
 // Tudo que depende do navegador (permissão, service worker, PushManager) é perguntado na hora, e cada impedimento
 // vira uma frase clara em vez de um botão que não faz nada. `api` é a mesma função do app (lança Error com a mensagem do servidor).
-import { OPCOES_DE_LEMBRETE, MAX_LEMBRETES, textoDosLembretes } from './agenda-model.js';
 
 export const ASSUNTOS = Object.freeze([
  ['commercial.lead', 'Lead novo', 'Quando alguém preenche um formulário de contato.'],
@@ -37,28 +36,7 @@ async function assinaturaAtual() {
  return { reg, sub: await reg.pushManager.getSubscription() };
 }
 
-/** Caixas de marcar com os tempos de lembrete (no máximo MAX_LEMBRETES). `aoMudar(minutos)` recebe a lista da maior para a menor antecedência. */
-export function caixaDeLembretes(selecionados, aoMudar) {
- const grade = no('div', undefined, 'config-lembretes');
- const marcados = new Set(selecionados);
- const checks = [];
- const atualizar = () => {
-  for (const c of checks) c.disabled = !c.checked && marcados.size >= MAX_LEMBRETES;
- };
- for (const [min, rotulo] of OPCOES_DE_LEMBRETE) {
-  const l = no('label', undefined, 'config-chip');
-  const c = document.createElement('input');
-  c.type = 'checkbox'; c.value = String(min); c.checked = marcados.has(min);
-  c.onchange = () => { c.checked ? marcados.add(min) : marcados.delete(min); atualizar(); aoMudar([...marcados].sort((a, b) => b - a)); };
-  checks.push(c);
-  l.append(c, no('span', rotulo));
-  grade.append(l);
- }
- atualizar();
- return grade;
-}
-
-export function montarNotificacoes(raiz, { api }) {
+export function montarNotificacoes(raiz, { api, irPara }) {
  const grupo = no('fieldset', undefined, 'config-grupo');
  grupo.append(no('legend', 'Notificações', 'sr-only'));
  const corpo = no('div', undefined, 'config-notif');
@@ -132,20 +110,16 @@ export function montarNotificacoes(raiz, { api }) {
   return bloco;
  }
 
+ // O tempo de aviso padrão da agenda é da agenda: mora em Configurações → Agenda. Aqui só o atalho.
  async function blocoDaAgenda() {
-  let prefs;
-  try { prefs = await api('/api/agenda/preferencias'); } catch { return null; }
+  if (!irPara) return null;
   const bloco = no('div', undefined, 'config-bloco');
-  bloco.append(no('h3', 'Lembrete padrão da agenda · todo o espaço', 'config-sub'));
-  if (!prefs.disponivel) { bloco.append(no('p', 'Disponível assim que a atualização do banco (migração 048) for aplicada.', 'config-ajuda')); return bloco; }
-  const resumo = no('p', '', 'config-ajuda');
-  const mostrar = m => { resumo.textContent = `Vale para toda atividade que não tem lembrete próprio: ${textoDosLembretes(m).toLowerCase()}.`; };
-  mostrar(prefs.default_reminders);
-  let revisao = prefs.revision;
-  bloco.append(resumo, caixaDeLembretes(prefs.default_reminders, async minutos => {
-   try { const r = await api('/api/agenda/preferencias', 'PUT', { revision: revisao, default_reminders: minutos }); revisao = r.revision; mostrar(r.default_reminders); dizer('Salvo.'); }
-   catch (e) { dizer(e.message, true); }
-  }));
+  bloco.append(no('h3', 'Quando avisar', 'config-sub'));
+  bloco.append(no('p', 'Cada atividade pode ter o seu lembrete; as que não têm usam o padrão da agenda.', 'config-ajuda'));
+  const ir = no('button', 'Escolher o lembrete padrão', 'secondary'); ir.type = 'button';
+  ir.onclick = () => irPara('agenda');
+  const acoes = no('div', undefined, 'config-acoes'); acoes.append(ir);
+  bloco.append(acoes);
   return bloco;
  }
 

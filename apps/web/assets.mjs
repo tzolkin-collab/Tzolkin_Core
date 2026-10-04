@@ -52,6 +52,10 @@ const FILES = {
  '/config-indice.js': ['config-indice.js', 'text/javascript'],
  '/config-aparencia.js': ['config-aparencia.js', 'text/javascript'],
  '/config-aplicativo.js': ['config-aplicativo.js', 'text/javascript'],
+ '/config-agenda.js': ['config-agenda.js', 'text/javascript'],
+ '/config-teclado.js': ['config-teclado.js', 'text/javascript'],
+ '/agenda-prefs.js': ['agenda-prefs.js', 'text/javascript'],
+ '/agenda-atalhos.js': ['agenda-atalhos.js', 'text/javascript'],
  '/logo-tema.js': ['logo-tema.js', 'text/javascript'],
  // Inter (variável, só o subconjunto latino: cobre o português). Licença SIL OFL 1.1 em fonts/INTER-LICENSE.txt.
  '/fonts/inter-latin-wght-normal.woff2': ['fonts/inter-latin-wght-normal.woff2', 'font/woff2'],

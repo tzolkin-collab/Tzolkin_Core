@@ -6,6 +6,8 @@ import { createIcon } from './icons.js';
 import { el, botao, campo, estilo } from './agenda-dom.js';
 import * as M from './agenda-model.js';
 import { abrirEditor, criarPainel } from './agenda-evento.js';
+import { listaDeAtalhos } from './agenda-atalhos.js';
+import { duracaoPadraoMin, visaoInicial } from './agenda-prefs.js';
 
 const ALTURA_HORA = 48;   // px por hora na grade; o CSS usa o mesmo valor em --ag-hora
 const PASSO = 15;         // minutos: arrastar e esticar grudam de 15 em 15
@@ -24,7 +26,7 @@ const limitar = (n, a, b) => Math.min(Math.max(n, a), b);
 export function setupTracking({ api, openTenant }) {
  const host = document.getElementById('view-tracking');
  const celular = window.matchMedia('(max-width:700px)');
- const estado = { visao: lerVisao() || (celular.matches ? 'dia' : 'semana'), dia: hoje(), miniMes: hoje(), tenant: '', texto: '', categorias: new Set(), status: '' };
+ const estado = { visao: visaoInicial() || lerVisao() || (celular.matches ? 'dia' : 'semana'), dia: hoje(), miniMes: hoje(), tenant: '', texto: '', categorias: new Set(), status: '' };
  let dados = null, eventos = [], tenants = [], geracao = 0, aviso = '', rolagem = null, relogio = 0, suprimirClique = false, filtrosAbertos = false;
  const compacta = window.matchMedia('(max-width:1100px)');   // abaixo disso a lateral some e os filtros viram um bloco recolhível
  const salvando = new Set();
@@ -316,7 +318,7 @@ export function setupTracking({ api, openTenant }) {
     if (ev.target !== col) return;
     if (suprimirClique) { suprimirClique = false; return; }
     const ini = Math.floor(minutoDoY(col, ev.clientY) / 30) * 30;
-    novo(M.inicioDoDia(dias[i]) + ini * 60000, M.inicioDoDia(dias[i]) + (ini + 60) * 60000);
+    novo(M.inicioDoDia(dias[i]) + ini * 60000, M.inicioDoDia(dias[i]) + (ini + duracaoPadraoMin()) * 60000);
    });
    col.addEventListener('pointerdown', ev => {
     if (ev.target !== col || !mouse(ev)) return;
@@ -416,7 +418,7 @@ export function setupTracking({ api, openTenant }) {
      mais.onclick = ev => { ev.stopPropagation(); irPara({ dia: d, visao: 'dia' }); };
      celula.append(mais);
     }
-    celula.onclick = ev => { if (ev.target === celula) novo(M.inicioDoDia(d) + 9 * 3600000, M.inicioDoDia(d) + 10 * 3600000); };
+    celula.onclick = ev => { if (ev.target === celula) novo(M.inicioDoDia(d) + 9 * 3600000, M.inicioDoDia(d) + 9 * 3600000 + duracaoPadraoMin() * 60000); };
     linha.append(celula);
    }
    raiz.append(linha);
@@ -492,10 +494,6 @@ export function setupTracking({ api, openTenant }) {
   host.append(app);
  }
 
- const ATALHOS = [
-  ['Navegar', [['t', 'Hoje'], ['← →  ou  p n', 'Período anterior / próximo'], ['d  w  m  a', 'Dia, semana, mês, agenda'], ['/', 'Buscar']]],
-  ['Atividades', [['c', 'Nova atividade'], ['Enter', 'Abrir o evento focado'], ['↑ ↓', 'Mover o evento focado 15 min'], ['← →', 'Mover o evento focado 1 dia'], ['Shift + ↑ ↓', 'Esticar ou encurtar o fim'], ['Ctrl/⌘ + Z', 'Desfazer a última mudança de horário'], ['Esc', 'Cancelar um arraste ou fechar']]],
- ];
  function ajudaDeAtalhos() {
   if (document.querySelector('dialog.ag-atalhos[open]')) return;
   const anterior = document.activeElement;
@@ -504,11 +502,7 @@ export function setupTracking({ api, openTenant }) {
   const titulo = el('h2', 'Atalhos do teclado'); titulo.id = 'ag-atalhos-titulo';
   topo.append(titulo, botao('Fechar', 'close', () => dialog.close()));
   dialog.append(topo);
-  for (const [grupo, itens] of ATALHOS) {
-   const dl = el('dl', null, 'ag-atalhos-lista'); dl.append(el('h3', grupo));
-   for (const [teclas, texto] of itens) { const linha = el('div'); const dt = el('dt'); for (const t of teclas.split(/(\s{2}ou\s{2}|\s\+\s)/)) dt.append(/^\s/.test(t) ? document.createTextNode(t.trim() === '+' ? ' + ' : ' ou ') : el('kbd', t.trim())); linha.append(dt, el('dd', texto)); dl.append(linha); }
-   dialog.append(dl);
-  }
+  dialog.append(...listaDeAtalhos());
   dialog.onclose = () => { dialog.remove(); if (anterior?.isConnected) anterior.focus(); };
   host.append(dialog); dialog.showModal();
  }

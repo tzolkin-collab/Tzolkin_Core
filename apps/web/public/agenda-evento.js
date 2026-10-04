@@ -4,6 +4,7 @@ import { criarPeek } from './peek.js';
 import { pares } from './inline-edit.js';
 import { selo } from './data-table.js';
 import * as M from './agenda-model.js';
+import { duracaoPadraoMin } from './agenda-prefs.js';
 import { blocoDeLembrete, blocoDeRepeticao } from './agenda-repeticao.js';
 
 const TOM_DA_SITUACAO = { planned: 'info', done: 'success', cancelled: 'neutral' };
@@ -55,7 +56,7 @@ export function abrirEditor({ host, api, dados, tenants, evento = null, inicio =
  // Mudou o início e o fim ficou antes dele: o fim vai para uma hora depois, como nos calendários.
  comeco.addEventListener('change', () => {
   const ini = M.doCampoLocal(comeco.value), fimAtual = M.doCampoLocal(termino.value);
-  if (ini && (!fimAtual || Date.parse(fimAtual) <= Date.parse(ini))) termino.value = M.paraCampoLocal(Date.parse(ini) + 3600000);
+  if (ini && (!fimAtual || Date.parse(fimAtual) <= Date.parse(ini))) termino.value = M.paraCampoLocal(Date.parse(ini) + duracaoPadraoMin() * 60000);
   termino.min = comeco.value;
  });
 
@@ -102,7 +103,7 @@ export function abrirEditor({ host, api, dados, tenants, evento = null, inicio =
   cliente.value = tenantPadrao;
   preencher(contratacao, contratacoesDe(dados, cliente.value, GERAL), '');
   const ini = inicio ?? proximaHora();
-  comeco.value = M.paraCampoLocal(ini); termino.value = M.paraCampoLocal(fim ?? ini + 3600000);
+  comeco.value = M.paraCampoLocal(ini); termino.value = M.paraCampoLocal(fim ?? ini + duracaoPadraoMin() * 60000);
  }
  termino.min = comeco.value;
 

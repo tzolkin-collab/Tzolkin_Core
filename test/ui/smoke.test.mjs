@@ -1665,7 +1665,7 @@ test('configurações: a casca lista as seções com o escopo de cada uma e troc
  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
  await pagina.avaliar(`document.getElementById('open-settings').click()`);
  await pagina.esperar(`document.querySelector('#settings-body .cfg-item') && document.querySelector('#settings-body input[name=tema]')`);
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-item')].map(b => b.textContent)`), ['Aparência', 'Notificações', 'Aplicativo']);
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-item')].map(b => b.textContent)`), ['Aparência', 'Notificações', 'Aplicativo', 'Teclado', 'Agenda']);
  assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[aria-current=page]').textContent`), 'Aparência', 'abre na primeira seção');
  assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-escopo').textContent`), 'Só neste navegador');
  await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[data-secao=notificacoes]').click()`);
@@ -1712,7 +1712,7 @@ test('configurações: ligar, escolher assuntos, testar e desligar as notificaç
  await pagina.ir(origem + '/');
  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
  await IR_PARA_CONFIG();
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-sub')].map(h => h.textContent)`), ['Neste aparelho', 'Lembrete padrão da agenda · todo o espaço']);
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-sub')].map(h => h.textContent)`), ['Neste aparelho', 'Quando avisar']);
  // ainda não assinado: só o botão de ativar
  assert.ok(await pagina.avaliar(`!!${BOTAO_CONFIG('Ativar neste aparelho')}`));
  assert.ok(await pagina.avaliar(`!${BOTAO_CONFIG('Enviar teste')}`));
@@ -1735,12 +1735,6 @@ test('configurações: ligar, escolher assuntos, testar e desligar as notificaç
  // teste
  await pagina.avaliar(`${BOTAO_CONFIG('Enviar teste')}.click()`);
  await pagina.esperar(`window.__push.testes === 1 && document.querySelector('#settings-body .config-aviso').textContent.includes('Teste enviado')`);
- // lembrete padrão: 15 min vem marcado; marcar 1 h grava a lista (maior primeiro) com a revisão lida
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-chip input')].filter(c => c.checked).map(c => c.parentElement.textContent)`), ['15 minutos antes']);
- await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-chip')].find(l => l.textContent === '1 hora antes').querySelector('input').click()`);
- await pagina.esperar(`window.__push.prefsPuts.length === 1`);
- assert.deepEqual(await pagina.avaliar(`window.__push.prefsPuts[0]`), { revision: 1, default_reminders: [60, 15] });
- await pagina.esperar(`document.querySelector('#settings-body .config-bloco:last-child .config-ajuda').textContent.includes('1 h e 15 min antes')`);
  // desativar
  await pagina.avaliar(`${BOTAO_CONFIG('Desativar neste aparelho')}.click()`);
  await pagina.esperar(`window.__push.deletes.length === 1 && ${BOTAO_CONFIG('Ativar neste aparelho')}`);
@@ -1757,7 +1751,7 @@ test('configurações: explica por que não dá para ligar (servidor sem chaves,
  const texto = () => pagina.avaliar(`document.querySelector('#settings-body .config-notif').textContent`);
  await pagina.avaliar(`window.__push.habilitado = false; window.__push.lembretes = false`);
  await IR_PARA_CONFIG();
- assert.match(await texto(), /faltam as chaves VAPID/); assert.match(await texto(), /migração 048/);
+ assert.match(await texto(), /faltam as chaves VAPID/);
  assert.ok(await pagina.avaliar(`!${BOTAO_CONFIG('Ativar neste aparelho')}`), 'sem chaves não oferece o botão');
  await pagina.avaliar(`window.__push.habilitado = true; window.__push.permissao = 'denied'; window.__push.lembretes = true; document.getElementById('open-settings').click()`);
  await pagina.avaliar(`(() => { const b = [...document.querySelectorAll('nav button')].find(n => n.textContent.includes('Visão geral')); b?.click(); })()`);

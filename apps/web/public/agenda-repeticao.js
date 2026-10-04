@@ -1,8 +1,28 @@
 // Agenda: os dois blocos do formulário que dependem da migração 048 — "Lembrete" e "Repetir".
 // Cada um devolve um objeto com `valor()` e o nó pronto para entrar no formulário; quem monta o formulário decide o que mandar à API.
 import { el, campo } from './agenda-dom.js';
-import { caixaDeLembretes } from './notificacoes.js';
 import * as M from './agenda-model.js';
+
+/** Caixas de marcar com os tempos de lembrete (no máximo MAX_LEMBRETES). `aoMudar(minutos)` recebe a lista da maior para a menor antecedência. */
+export function caixaDeLembretes(selecionados, aoMudar) {
+ const grade = el('div', null, 'config-lembretes');
+ const marcados = new Set(selecionados);
+ const checks = [];
+ const atualizar = () => {
+  for (const c of checks) c.disabled = !c.checked && marcados.size >= M.MAX_LEMBRETES;
+ };
+ for (const [min, rotulo] of M.OPCOES_DE_LEMBRETE) {
+  const l = el('label', null, 'config-chip');
+  const c = document.createElement('input');
+  c.type = 'checkbox'; c.value = String(min); c.checked = marcados.has(min);
+  c.onchange = () => { c.checked ? marcados.add(min) : marcados.delete(min); atualizar(); aoMudar([...marcados].sort((a, b) => b - a)); };
+  checks.push(c);
+  l.append(c, el('span', rotulo));
+  grade.append(l);
+ }
+ atualizar();
+ return grade;
+}
 
 /**
  * Lembrete da atividade. Três escolhas: o padrão da agenda, não avisar, ou tempos próprios (até 3).

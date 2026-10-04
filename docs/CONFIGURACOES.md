@@ -1,6 +1,6 @@
 # Configurações — plano de arquitetura
 
-Status: **fase 1 construída** (casca, Aparência, Notificações, Aplicativo). O resto continua proposto. Decisões 1 e 2 confirmadas em 2026-10-04.
+Status: **fases 1 e 2 construídas** (casca, Aparência, Notificações, Aplicativo, Agenda, Teclado). O resto continua proposto. Decisões 1 e 2 confirmadas em 2026-10-04.
 
 ## 1. Problema
 
@@ -86,7 +86,7 @@ Preferências pessoais: tabela `operator_preferences(operator_subject, chave, va
 ## 6. Fases
 
 1. **Casca** `[FEITO]`: coluna de seções, `?secao=`, selos de escopo, Aparência e Notificações dentro dela, Aplicativo (somente leitura, botão Instalar quando o Chrome oferece). Configurações ganhou item no menu, em Administração, além do botão do rodapé.
-2. **Agenda e Teclado**: lembrete padrão e preferências da agenda saem de Notificações para a seção Agenda.
+2. **Agenda e Teclado** `[FEITO]`: seção Agenda (escopo misto, cada bloco com o seu selo): lembrete padrão (espaço, vinda de Notificações, que agora só aponta para ela), visão em que a agenda abre e duração de atividade nova (ambas neste navegador, `agenda-prefs.js`). Seção Teclado lista os atalhos da agenda (`agenda-atalhos.js`, a mesma lista da janela do `?`). Ficaram para depois, por pedirem coluna nova no banco: semana começando no domingo e fuso.
 3. **Conexões**: Google (agenda e Meet) entra aqui; Meta e processadores migram.
 4. **Financeiro e Anúncios**.
 5. **Conta e Administração**: depende da decisão D4 (IdP): sem login por pessoa, Perfil e sessões ficam limitados.
