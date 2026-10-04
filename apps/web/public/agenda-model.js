@@ -172,3 +172,43 @@ export function agruparPorDia(eventos, de, ate) {
  for (let d = de; d < ate; d = somarDias(d, 1)) { const doDia = eventosDoDia(eventos, d); if (doDia.length) grupos.push({ dia: d, eventos: doDia }); }
  return grupos;
 }
+
+// ---------- lembretes ----------
+/** O que a tela oferece (minutos antes do início). O banco aceita mais (10 min, 2 dias, 1 semana), mas estas bastam para a tela. */
+export const OPCOES_DE_LEMBRETE = Object.freeze([[0, 'Na hora'], [5, '5 minutos antes'], [15, '15 minutos antes'], [30, '30 minutos antes'], [60, '1 hora antes'], [120, '2 horas antes'], [1440, '1 dia antes']]);
+export const MAX_LEMBRETES = 3;
+const curto = m => (m === 0 ? 'na hora' : m < 60 ? `${m} min` : m < 1440 ? `${m / 60} h` : `${m / 1440} dia${m > 1440 ? 's' : ''}`);
+/** [60, 15] -> "1 h e 15 min antes"; [0] -> "Na hora"; [30, 0] -> "30 min antes e na hora"; [] -> "Não avisar". */
+export function textoDosLembretes(minutos) {
+ if (!minutos?.length) return 'Não avisar';
+ const ordem = [...new Set(minutos)].sort((a, b) => b - a);
+ const antes = ordem.filter(m => m > 0).map(curto), naHora = ordem.includes(0);
+ if (!antes.length) return 'Na hora';
+ const lista = antes.length > 1 ? antes.slice(0, -1).join(', ') + ' e ' + antes.at(-1) : antes[0];
+ return `${lista} antes${naHora ? ' e na hora' : ''}`;
+}
+/** Quais lembretes valem para a atividade: os dela, ou o padrão da agenda quando ela não escolheu (reminders nulo). */
+export const lembreteEfetivo = (evento, padrao) => (evento.reminders == null ? { origem: 'padrao', minutos: padrao ?? [] } : { origem: 'proprio', minutos: evento.reminders });
+
+// ---------- repetição ----------
+const NOMES_DOS_DIAS = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];
+export const DIAS_CURTOS = Object.freeze(['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']);
+/** Mesmo texto que o servidor devolve em `series[].descricao` (platform/recorrencia.mjs `descrever`); um teste garante que são iguais. */
+export function descreverRecorrencia(regra) {
+ const n = regra.interval_n || 1;
+ let base;
+ if (regra.frequency === 'weekly') {
+  const dias = [...new Set(regra.weekdays)].sort((a, b) => a - b), nomes = dias.map(d => NOMES_DOS_DIAS[d]);
+  const lista = nomes.length > 1 ? nomes.slice(0, -1).join(', ') + ' e ' + nomes.at(-1) : nomes[0];
+  const artigo = dias.every(d => d >= 5) ? 'Todo' : 'Toda';
+  base = n === 1 ? `${artigo} ${lista}` : `A cada ${n} semanas: ${lista}`;
+ } else {
+  base = n === 1 ? `Todo mês, no dia ${regra.month_day}` : `A cada ${n} meses, no dia ${regra.month_day}`;
+ }
+ if (regra.count_limit) base += `, ${regra.count_limit} vez${regra.count_limit === 1 ? '' : 'es'}`;
+ else if (regra.ends_on) base += `, até ${regra.ends_on.split('-').reverse().join('/')}`;
+ return base;
+}
+/** Dia da semana (0 = segunda) e dia do mês de um instante em Brasília: a repetição começa com os do evento. */
+export const diaDaSemanaDe = ms => diaDaSemana(diaDe(ms));
+export const diaDoMesDe = ms => numeroDoDia(diaDe(ms));

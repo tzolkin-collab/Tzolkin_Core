@@ -991,7 +991,7 @@ function eventosDaSemana() {
 }
 const COM_AGENDA = lista => `(() => {
  const EVENTOS = ${JSON.stringify(lista)};
- window.__agenda = { gets: [], puts: [], posts: [], tempos: [], recusar: null, semCampos: false };
+ window.__agenda = { eventos: EVENTOS, gets: [], puts: [], posts: [], tempos: [], recusar: null, semCampos: false, lembretes: false, series: [], seriesPosts: [], seriesPuts: [], seriesFins: [], padrao: [15] };
  window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
  const json = (corpo, status = 200) => Promise.resolve(new Response(JSON.stringify(corpo), { status, headers: { 'content-type': 'application/json' } }));
  window.fetch = async (url, opcoes = {}) => {
@@ -1004,7 +1004,14 @@ const COM_AGENDA = lista => `(() => {
    window.__agenda.gets.push({ from: q.get('from'), to: q.get('to'), tenant: q.get('tenant_id') });
    const de = Date.parse(q.get('from') + 'T00:00:00-03:00'), ate = Date.parse(q.get('to') + 'T00:00:00-03:00');
    const dentro = EVENTOS.filter(e => Date.parse(e.ends_at) > de && Date.parse(e.starts_at) < ate && (!q.get('tenant_id') || e.tenant_id === q.get('tenant_id')));
-   return json({ activities: dentro.map(e => ({ ...e })), logs: [], engagements: [], truncated: false, time_zone: 'America/Sao_Paulo', agenda_campos: !window.__agenda.semCampos });
+   return json({ activities: dentro.map(e => ({ ...e })), logs: [], engagements: [], truncated: false, time_zone: 'America/Sao_Paulo', agenda_campos: !window.__agenda.semCampos, agenda_lembretes: window.__agenda.lembretes, series: window.__agenda.lembretes ? window.__agenda.series : [], agenda_prefs: window.__agenda.lembretes ? { default_reminders: window.__agenda.padrao, revision: 1 } : null });
+  }
+  if (partes[3] === 'series') {
+   const a = window.__agenda;
+   if (!a.lembretes) return json({ message: 'Lembretes e repetição ainda não estão disponíveis neste banco: falta aplicar a migração 048.' }, 409);
+   if (metodo === 'POST' && partes.length === 4) { a.seriesPosts.push(corpo); return json({ series: { ...corpo, revision: 1 }, criadas: 12, repetido: false }); }
+   if (metodo === 'PUT') { a.seriesPuts.push({ id: partes[4], corpo }); return json({ series: { id: partes[4] }, atualizadas: 3 }); }
+   if (metodo === 'POST' && partes[5] === 'end') { a.seriesFins.push({ id: partes[4], corpo }); return json({ series: { id: partes[4] }, arquivadas: 5 }); }
   }
   if (metodo === 'POST' && partes.length === 3) {
    window.__agenda.posts.push(corpo);
@@ -1312,6 +1319,159 @@ test('agenda: arrastar move, esticar muda a duração, Esc cancela e recusa do s
  semExcecoes();
 });
 
+// ---- lembrete e repetição (migração 048) ----
+const CAMPO_DO_FORM = nome => `[...document.querySelectorAll('dialog.tracking-editor label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)}).querySelector('input,select,textarea')`;
+const DEFINIR = (c, v, ev = 'change') => `(() => { const c = ${c}; c.value = ${JSON.stringify(v)}; c.dispatchEvent(new Event(${JSON.stringify(ev)}, { bubbles: true })); })()`;
+const LEGENDAS = `[...document.querySelectorAll('dialog.tracking-editor legend')].map(l => l.textContent)`;
+const RECARREGAR_AGENDA = async () => { const n = await pagina.avaliar(`${NO_AGENDA}.gets.length`); await pagina.avaliar(`[...document.querySelectorAll('#view-tracking .ag-hoje')][0].click()`); await pagina.esperar(`${NO_AGENDA}.gets.length > ${n} && !document.querySelector('#view-tracking [aria-busy]')`); };
+const ABRIR_NOVA = async () => { await pagina.avaliar(`document.querySelector('#view-tracking .ag-acoes .primary').click()`); await pagina.esperar(`document.querySelector('dialog.tracking-editor[open]')`); };
+const FECHAR_TUDO = () => pagina.avaliar(`document.querySelectorAll('dialog[open]').forEach(d => d.close())`);
+const ENVIAR_FORM = () => pagina.avaliar(`document.querySelector('dialog.tracking-editor form').requestSubmit()`);
+
+test('agenda: lembrete e repetição só aparecem quando o banco tem a migração 048', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ await pagina.avaliar(`${NO_AGENDA}.lembretes = false`); await RECARREGAR_AGENDA();
+ await ABRIR_NOVA();
+ const sem = await pagina.avaliar(LEGENDAS);
+ assert.ok(!sem.includes('Lembrete') && !sem.includes('Repetir'), 'sem a 048 nenhum dos dois aparece: ' + sem);
+ await FECHAR_TUDO();
+ await pagina.avaliar(`${NO_AGENDA}.lembretes = true`); await RECARREGAR_AGENDA();
+ await ABRIR_NOVA();
+ const com = await pagina.avaliar(LEGENDAS);
+ assert.ok(com.includes('Lembrete') && com.includes('Repetir'), 'com a 048 aparecem: ' + com);
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Avisar')}.selectedOptions[0].textContent`), 'Padrão da agenda (15 min antes)');
+ await FECHAR_TUDO();
+ semExcecoes();
+});
+
+test('agenda: o lembrete vai na atividade só quando a pessoa foge do padrão', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ await pagina.avaliar(`${NO_AGENDA}.lembretes = true; ${NO_AGENDA}.posts.length = 0`); await RECARREGAR_AGENDA();
+ const preencher = titulo => pagina.avaliar(`(() => { const set = (c, v, ev = 'input') => { c.value = v; c.dispatchEvent(new Event(ev, { bubbles: true })); }; set(${CAMPO_DO_FORM('Título')}, ${JSON.stringify(titulo)}); set(${CAMPO_DO_FORM('Cliente')}, ${JSON.stringify(EMPRESA)}, 'change'); })()`);
+ // padrão: não manda `reminders` (a atividade segue o padrão da agenda)
+ await ABRIR_NOVA(); await preencher('Com o padrão');
+ await ENVIAR_FORM();
+ await pagina.esperar(`${NO_AGENDA}.posts.length === 1`);
+ assert.ok(!('reminders' in await pagina.avaliar(`${NO_AGENDA}.posts[0]`)));
+ await pagina.esperar(`!document.querySelector('dialog.tracking-editor[open]')`);
+ // não avisar = lista vazia
+ await ABRIR_NOVA(); await preencher('Sem aviso');
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Avisar'), 'nenhum'));
+ await ENVIAR_FORM();
+ await pagina.esperar(`${NO_AGENDA}.posts.length === 2`);
+ assert.deepEqual((await pagina.avaliar(`${NO_AGENDA}.posts[1]`)).reminders, []);
+ await pagina.esperar(`!document.querySelector('dialog.tracking-editor[open]')`);
+ // personalizado: 15 min (já marcado) + 1 h + 5 min; com 3 marcados os outros ficam bloqueados (máximo 3)
+ await ABRIR_NOVA(); await preencher('Com tres avisos');
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Avisar'), 'proprio'));
+ const marcar = rotulo => pagina.avaliar(`[...document.querySelectorAll('dialog.tracking-editor .config-chip')].find(l => l.textContent === ${JSON.stringify(rotulo)}).querySelector('input').click()`);
+ await marcar('1 hora antes'); await marcar('5 minutos antes');
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('dialog.tracking-editor .config-chip input')].filter(c => c.disabled).length`), 4);
+ await ENVIAR_FORM();
+ await pagina.esperar(`${NO_AGENDA}.posts.length === 3`);
+ assert.deepEqual((await pagina.avaliar(`${NO_AGENDA}.posts[2]`)).reminders, [60, 15, 5]);
+ await pagina.esperar(`!document.querySelector('dialog.tracking-editor[open]')`);
+ semExcecoes();
+});
+
+test('agenda: repetir toda semana ou todo mês cria uma série com a regra certa', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ await pagina.avaliar(`${NO_AGENDA}.lembretes = true; ${NO_AGENDA}.seriesPosts.length = 0; ${NO_AGENDA}.posts.length = 0`); await RECARREGAR_AGENDA();
+ const dia = AM.somarDias(AM.segundaDe(AM.diaDe(Date.now())), 2);   // quarta-feira desta semana
+ const base = titulo => pagina.avaliar(`(() => { const set = (c, v, ev = 'input') => { c.value = v; c.dispatchEvent(new Event(ev, { bubbles: true })); };
+  set(${CAMPO_DO_FORM('Título')}, ${JSON.stringify(titulo)}); set(${CAMPO_DO_FORM('Cliente')}, ${JSON.stringify(EMPRESA)}, 'change');
+  set(${CAMPO_DO_FORM('Início · Brasília')}, '${dia}T10:00', 'change'); set(${CAMPO_DO_FORM('Fim / prazo · Brasília')}, '${dia}T11:00', 'change'); })()`);
+ await ABRIR_NOVA(); await base('Mentoria semanal');
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Repete')}.value`), '', 'começa sem repetir');
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Repete'), 'weekly'));
+ const marcados = () => pagina.avaliar(`[...document.querySelectorAll('dialog.tracking-editor .ag-dias input')].filter(c => c.checked).map(c => c.parentElement.textContent)`);
+ assert.deepEqual(await marcados(), ['Qua'], 'o dia do evento já vem marcado');
+ await pagina.avaliar(`[...document.querySelectorAll('dialog.tracking-editor .ag-dias label')].find(l => l.textContent === 'Seg').querySelector('input').click()`);
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Termina'), 'vezes'));
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Quantidade de eventos'), '6', 'input'));
+ await ENVIAR_FORM();
+ await pagina.esperar(`${NO_AGENDA}.seriesPosts.length === 1`, { descricao: 'POST da série' });
+ const s = await pagina.avaliar(`${NO_AGENDA}.seriesPosts[0]`);
+ assert.equal(s.frequency, 'weekly'); assert.deepEqual(s.weekdays, [0, 2]); assert.equal(s.count_limit, 6); assert.equal(s.interval_n, 1);
+ assert.equal(s.start_time, '10:00'); assert.equal(s.duration_minutes, 60); assert.equal(s.starts_on, dia); assert.equal(s.title, 'Mentoria semanal');
+ assert.ok(!('reminders' in s) && !('month_day' in s) && !('ends_on' in s));
+ assert.equal(await pagina.avaliar(`${NO_AGENDA}.posts.length`), 0, 'série não cria atividade solta');
+ await pagina.esperar(`!document.querySelector('dialog.tracking-editor[open]')`);
+
+ // mensal, até uma data, sem aviso
+ await ABRIR_NOVA(); await base('Fechamento mensal');
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Repete'), 'monthly'));
+ const dm = Number(dia.slice(8));
+ assert.match(await pagina.avaliar(`document.querySelector('dialog.tracking-editor .ag-repetir .ag-nota').textContent`), new RegExp(`No dia ${dm} de cada mês`));
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Termina'), 'data'));
+ await ENVIAR_FORM();   // sem data o formulário recusa, sem ir ao servidor
+ await pagina.esperar(`document.querySelector('dialog.tracking-editor .form-error').textContent.includes('até que dia')`);
+ assert.equal(await pagina.avaliar(`${NO_AGENDA}.seriesPosts.length`), 1);
+ const fim = AM.somarDias(dia, 200);
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Data do último evento'), fim));
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Avisar'), 'nenhum'));
+ await ENVIAR_FORM();
+ await pagina.esperar(`${NO_AGENDA}.seriesPosts.length === 2`);
+ const m = await pagina.avaliar(`${NO_AGENDA}.seriesPosts[1]`);
+ assert.equal(m.frequency, 'monthly'); assert.equal(m.month_day, dm); assert.ok(!('weekdays' in m)); assert.equal(m.ends_on, fim); assert.deepEqual(m.reminders, []);
+ await pagina.esperar(`!document.querySelector('dialog.tracking-editor[open]')`);
+ semExcecoes();
+});
+
+test('agenda: evento de série mostra "Repete" e o lembrete, edita só este ou os próximos, e encerra com confirmação', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ const ID = '00000000-0000-4000-8000-000000000002';   // Revisão de código
+ const SERIE = 'aaaaaaaa-0000-4000-8000-000000000001';
+ await pagina.avaliar(`(() => { const a = ${NO_AGENDA}; a.lembretes = true; a.seriesPuts.length = 0; a.seriesFins.length = 0; a.puts.length = 0;
+  a.series = [{ id: '${SERIE}', frequency: 'weekly', interval_n: 1, weekdays: [0, 2], descricao: 'Toda segunda e quarta', revision: 4, ended_at: null }];
+  Object.assign(a.eventos.find(e => e.id === '${ID}'), { series_id: '${SERIE}', reminders: [60, 15] }); })()`);
+ await RECARREGAR_AGENDA();
+ assert.equal(await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="${ID}"] .ag-repete')?.textContent`), '↻', 'marca de série no evento');
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]').click()`);
+ await pagina.esperar(PAINEL_ABERTO);
+ const linhas = await pagina.avaliar(`Object.fromEntries([...document.querySelectorAll('#peek-agenda .ficha-dl dt')].map(dt => [dt.textContent, dt.nextElementSibling.textContent.trim()]))`);
+ assert.equal(linhas['Repete'], 'Toda segunda e quarta'); assert.equal(linhas['Lembrete'], '1 h e 15 min antes');
+
+ // "este e os próximos": só o título vai, para a série, com a revisão dela
+ await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].find(b => b.textContent.trim() === 'Editar').click()`);
+ await pagina.esperar(`document.querySelector('dialog.tracking-editor[open]')`);
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Aplicar a')}.value`), 'um');
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Aplicar a'), 'proximos'));
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Título'), 'Revisão semanal', 'input'));
+ await ENVIAR_FORM();
+ await pagina.esperar(`${NO_AGENDA}.seriesPuts.length === 1`, { descricao: 'PUT da série' });
+ assert.deepEqual(await pagina.avaliar(`${NO_AGENDA}.seriesPuts[0]`), { id: SERIE, corpo: { revision: 4, title: 'Revisão semanal' } });
+ assert.equal(await pagina.avaliar(`${NO_AGENDA}.puts.length`), 0, 'não mexeu na atividade avulsa');
+ await pagina.esperar(`!document.querySelector('dialog.tracking-editor[open]')`);
+
+ // mudar o dia só vale para "só este evento"
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]').click()`);
+ await pagina.esperar(PAINEL_ABERTO);
+ await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].find(b => b.textContent.trim() === 'Editar').click()`);
+ await pagina.esperar(`document.querySelector('dialog.tracking-editor[open]')`);
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Aplicar a'), 'proximos'));
+ const d0 = await pagina.avaliar(`${CAMPO_DO_FORM('Início · Brasília')}.value`);
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Início · Brasília'), AM.somarDias(d0.slice(0, 10), 1) + 'T' + d0.slice(11)));
+ await ENVIAR_FORM();
+ await pagina.esperar(`document.querySelector('dialog.tracking-editor .form-error').textContent.includes('Só este evento')`);
+ assert.equal(await pagina.avaliar(`${NO_AGENDA}.seriesPuts.length`), 1);
+ await FECHAR_TUDO();
+
+ // encerrar: pede confirmação e só depois envia
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]').click()`);
+ await pagina.esperar(PAINEL_ABERTO);
+ await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].find(b => b.textContent.trim() === 'Encerrar repetição').click()`);
+ assert.equal(await pagina.avaliar(`${NO_AGENDA}.seriesFins.length`), 0, 'o primeiro clique só pergunta');
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].map(b => b.textContent.trim())`), ['Voltar', 'Só os próximos a partir deste', 'Todos os próximos']);
+ await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].find(b => b.textContent.trim() === 'Todos os próximos').click()`);
+ await pagina.esperar(`${NO_AGENDA}.seriesFins.length === 1`);
+ assert.deepEqual(await pagina.avaliar(`${NO_AGENDA}.seriesFins[0]`), { id: SERIE, corpo: { revision: 4 } });
+ await pagina.avaliar(`(() => { const a = ${NO_AGENDA}; delete a.eventos.find(e => e.id === '${ID}').series_id; a.series = []; a.lembretes = false; })()`);
+ await RECARREGAR_AGENDA();
+ await FECHAR_TUDO();
+ semExcecoes();
+});
+
 test('agenda: o painel do evento mostra os detalhes, conclui, edita só o que mudou e registra tempo', { skip: PULAR }, async () => {
  await SEMANA_DE_HOJE();
  const ID = '00000000-0000-4000-8000-000000000003';      // Consultoria Beta, com descrição e link
@@ -1373,7 +1533,7 @@ test('agenda: legível no claro e no escuro em todas as visões, sem estouro de 
   const ruins = [];
   for (const el of document.querySelectorAll('#view-tracking *')) {
    if (!el.offsetParent || ![...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) continue;
-   const c = razao(getComputedStyle(el).color, fundoDe(el));
+   let c; try { c = razao(getComputedStyle(el).color, fundoDe(el)); } catch (e) { ruins.push('ERRO ' + getComputedStyle(el).color + ' | ' + fundoDe(el) + ' .' + el.className); continue; }
    if (c < 4.5) ruins.push(c + ' "' + el.textContent.trim().slice(0, 30) + '" .' + String(el.className).split(' ')[0]);
   }
   const largos = [...document.querySelectorAll('#view-tracking *')].filter(e => e.offsetParent && !e.closest('.ag-rolagem') && e.getBoundingClientRect().right > document.documentElement.clientWidth + 1).slice(0, 6).map(e => e.tagName.toLowerCase() + '.' + String(e.className).split(' ')[0] + ' direita=' + Math.round(e.getBoundingClientRect().right));
@@ -1416,6 +1576,158 @@ test('agenda: legível no claro e no escuro em todas as visões, sem estouro de 
  await pagina.avaliar(`try { localStorage.removeItem('tzolkin-agenda-visao'); } catch {}`);
  await pagina.ir(origem + '/');
  await pagina.esperar(`!document.getElementById('workspace').hidden`, { descricao: 'painel de volta ao normal' });
+ semExcecoes();
+});
+
+// ---- Configurações → Notificações ----
+const COM_PUSH = `(() => {
+ const estado = window.__push = { subs: [], puts: [], deletes: [], testes: 0, prefsPuts: [], permissao: 'default', pedidos: 0, habilitado: true, lembretes: true, padrao: [15], revisao: 1, desinscrito: 0 };
+ window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
+ const json = (corpo, status = 200) => Promise.resolve(new Response(JSON.stringify(corpo), { status, headers: { 'content-type': 'application/json' } }));
+ const assinatura = { endpoint: 'https://push.exemplo.test/abc', toJSON() { return { endpoint: this.endpoint, keys: { p256dh: 'p', auth: 'a' } }; }, unsubscribe() { estado.desinscrito++; assinatura.ativa = false; return Promise.resolve(true); }, ativa: false };
+ const registro = { pushManager: { getSubscription: () => Promise.resolve(assinatura.ativa ? assinatura : null), subscribe: opcoes => { estado.opcoes = { userVisibleOnly: opcoes.userVisibleOnly, bytes: opcoes.applicationServerKey.length }; assinatura.ativa = true; return Promise.resolve(assinatura); } } };
+ Object.defineProperty(navigator.serviceWorker, 'ready', { configurable: true, get: () => Promise.resolve(registro) });
+ Object.defineProperty(Notification, 'permission', { configurable: true, get: () => estado.permissao });
+ Notification.requestPermission = () => { estado.pedidos++; if (estado.permissao === 'default') estado.permissao = 'granted'; return Promise.resolve(estado.permissao); };
+ window.fetch = async (url, opcoes = {}) => {
+  const u = String(url), metodo = (opcoes.method || 'GET').toUpperCase(), corpo = opcoes.body ? JSON.parse(opcoes.body) : {};
+  if (u === '/api/push/config') return json({ enabled: estado.habilitado, publicKey: 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U', topics: ['commercial.lead', 'agenda.lembrete'] });
+  if (u === '/api/push/status') return json(assinatura.ativa && estado.subs.length ? { subscribed: true, id: 'dddddddd-0000-4000-8000-000000000001', topics: estado.subs[0] } : { subscribed: false });
+  if (u === '/api/push/subscriptions' && metodo === 'PUT') { estado.puts.push(corpo); estado.subs = [corpo.topics]; return json({ ok: true, id: 'dddddddd-0000-4000-8000-000000000001', topics: corpo.topics }); }
+  if (u.startsWith('/api/push/subscriptions/') && metodo === 'DELETE') { estado.deletes.push(u); estado.subs = []; return json({ ok: true }); }
+  if (u === '/api/push/test') { estado.testes++; return json({ enviados: 1, revogados: 0, falhas: 0 }); }
+  if (u === '/api/agenda/preferencias' && metodo === 'GET') return json({ disponivel: estado.lembretes, default_reminders: estado.padrao, revision: estado.revisao });
+  if (u === '/api/agenda/preferencias' && metodo === 'PUT') { estado.prefsPuts.push(corpo); estado.padrao = corpo.default_reminders; estado.revisao += 1; return json({ disponivel: true, default_reminders: estado.padrao, revision: estado.revisao }); }
+  return window.__fetchOriginal(url, opcoes);
+ };
+})()`;
+const IR_PARA_CONFIG = async () => {
+ await pagina.avaliar(`document.getElementById('open-settings').click()`);
+ await pagina.esperar(`!document.getElementById('view-settings').hidden && document.querySelector('#settings-body .config-notif')`, { descricao: 'configurações abertas' });
+ await pagina.esperar(`document.querySelector('#settings-body .config-bloco')`, { descricao: 'notificações desenhadas' });
+};
+const BOTAO_CONFIG = texto => `[...document.querySelectorAll('#settings-body button')].find(b => b.textContent.trim() === ${JSON.stringify(texto)})`;
+
+test('configurações: ligar, escolher assuntos, testar e desligar as notificações deste aparelho', { skip: PULAR }, async () => {
+ const desfazer = await pagina.injetar(COM_PUSH);
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await IR_PARA_CONFIG();
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-sub')].map(h => h.textContent)`), ['Neste aparelho', 'Lembrete padrão da agenda']);
+ // ainda não assinado: só o botão de ativar
+ assert.ok(await pagina.avaliar(`!!${BOTAO_CONFIG('Ativar neste aparelho')}`));
+ assert.ok(await pagina.avaliar(`!${BOTAO_CONFIG('Enviar teste')}`));
+ await pagina.avaliar(`${BOTAO_CONFIG('Ativar neste aparelho')}.click()`);
+ await pagina.esperar(`window.__push.puts.length === 1`, { descricao: 'assinatura enviada' });
+ const p = await pagina.avaliar(`window.__push`);
+ assert.equal(p.pedidos, 1); assert.deepEqual(p.opcoes, { userVisibleOnly: true, bytes: 65 }, 'chave VAPID decodificada em 65 bytes');
+ assert.deepEqual(p.puts[0].topics, ['commercial.lead', 'agenda.lembrete']);
+ assert.equal(p.puts[0].subscription.endpoint, 'https://push.exemplo.test/abc');
+ await pagina.esperar(`${BOTAO_CONFIG('Desativar neste aparelho')}`, { descricao: 'tela passa a oferecer desativar' });
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-opcao input[type=checkbox]')].map(c => c.checked)`), [true, true]);
+ // desligar um assunto manda a lista nova; desligar os dois é recusado na tela
+ await pagina.avaliar(`document.querySelectorAll('#settings-body .config-opcao input[type=checkbox]')[0].click()`);
+ await pagina.esperar(`window.__push.puts.length === 2`);
+ assert.deepEqual(await pagina.avaliar(`window.__push.puts[1].topics`), ['agenda.lembrete']);
+ await pagina.avaliar(`document.querySelectorAll('#settings-body .config-opcao input[type=checkbox]')[1].click()`);
+ await pagina.esperar(`document.querySelector('#settings-body .config-aviso').textContent.includes('pelo menos um')`);
+ assert.equal(await pagina.avaliar(`window.__push.puts.length`), 2, 'nada foi enviado');
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#settings-body .config-opcao input[type=checkbox]')[1].checked`), true, 'o último assunto volta marcado');
+ // teste
+ await pagina.avaliar(`${BOTAO_CONFIG('Enviar teste')}.click()`);
+ await pagina.esperar(`window.__push.testes === 1 && document.querySelector('#settings-body .config-aviso').textContent.includes('Teste enviado')`);
+ // lembrete padrão: 15 min vem marcado; marcar 1 h grava a lista (maior primeiro) com a revisão lida
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-chip input')].filter(c => c.checked).map(c => c.parentElement.textContent)`), ['15 minutos antes']);
+ await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-chip')].find(l => l.textContent === '1 hora antes').querySelector('input').click()`);
+ await pagina.esperar(`window.__push.prefsPuts.length === 1`);
+ assert.deepEqual(await pagina.avaliar(`window.__push.prefsPuts[0]`), { revision: 1, default_reminders: [60, 15] });
+ await pagina.esperar(`document.querySelector('#settings-body .config-bloco:last-child .config-ajuda').textContent.includes('1 h e 15 min antes')`);
+ // desativar
+ await pagina.avaliar(`${BOTAO_CONFIG('Desativar neste aparelho')}.click()`);
+ await pagina.esperar(`window.__push.deletes.length === 1 && ${BOTAO_CONFIG('Ativar neste aparelho')}`);
+ assert.equal(await pagina.avaliar(`window.__push.desinscrito`), 1, 'o navegador também cancelou a assinatura');
+ semExcecoes();
+ await desfazer?.();
+});
+
+test('configurações: explica por que não dá para ligar (servidor sem chaves, permissão bloqueada) e a agenda sem a 048', { skip: PULAR }, async () => {
+ const desfazer = await pagina.injetar(COM_PUSH);
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ const texto = () => pagina.avaliar(`document.querySelector('#settings-body .config-notif').textContent`);
+ await pagina.avaliar(`window.__push.habilitado = false; window.__push.lembretes = false`);
+ await IR_PARA_CONFIG();
+ assert.match(await texto(), /faltam as chaves VAPID/); assert.match(await texto(), /migração 048/);
+ assert.ok(await pagina.avaliar(`!${BOTAO_CONFIG('Ativar neste aparelho')}`), 'sem chaves não oferece o botão');
+ await pagina.avaliar(`window.__push.habilitado = true; window.__push.permissao = 'denied'; window.__push.lembretes = true; document.getElementById('open-settings').click()`);
+ await pagina.avaliar(`(() => { const b = [...document.querySelectorAll('nav button')].find(n => n.textContent.includes('Visão geral')); b?.click(); })()`);
+ await IR_PARA_CONFIG();
+ await pagina.esperar(`document.querySelector('#settings-body .config-notif').textContent.includes('bloqueadas neste navegador')`, { descricao: 'aviso de permissão bloqueada' });
+ assert.ok(await pagina.avaliar(`!${BOTAO_CONFIG('Ativar neste aparelho')}`));
+ semExcecoes();
+ await desfazer?.();
+});
+
+test('capturas: notificações em Configurações e o formulário com lembrete e repetição, claro e escuro, desktop e celular', { skip: PULAR || !process.env.UI_SCREENSHOTS }, async () => {
+ const LER = `(() => {
+  const canais = c => c.match(/[\\d.]+/g).slice(0, 3).map(Number);
+  const luz = c => { const [r, g, b] = canais(c).map(v => v / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const razao = (a, b) => { const [x, y] = [luz(a), luz(b)].sort((p, q) => q - p); return Math.round(((x + 0.05) / (y + 0.05)) * 100) / 100; };
+  const fundoDe = el => { for (let e = el; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (c && !/rgba\\(.*, 0\\)|transparent/.test(c)) return c; } return getComputedStyle(document.body).backgroundColor; };
+  const ruins = [];
+  for (const el of document.querySelectorAll('#view-tracking *, #view-settings *')) {
+   if (!el.offsetParent || ![...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) continue;
+   let c; try { c = razao(getComputedStyle(el).color, fundoDe(el)); } catch (e) { ruins.push('ERRO ' + getComputedStyle(el).color + ' | ' + fundoDe(el) + ' .' + el.className); continue; }
+   if (c < 4.5) ruins.push(c + ' "' + el.textContent.trim().slice(0, 30) + '" .' + String(el.className).split(' ')[0]);
+  }
+  return { ruins: ruins.slice(0, 8), estouro: document.documentElement.scrollWidth - document.documentElement.clientWidth };
+ })()`;
+ const sufixo = e => (e === 'dark' ? 'Escuro' : 'Claro');
+ const nomeTela = (largura) => (largura < 500 ? 'celular' : 'desktop');
+ for (const [larg, alt] of [[1280, 900], [390, 844]]) {
+  let desfazer = await pagina.injetar(COM_PUSH);
+  await pagina.tela(larg, alt);
+  await pagina.ir(origem + '/');
+  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+  await IR_PARA_CONFIG();
+  await pagina.avaliar(`${BOTAO_CONFIG('Ativar neste aparelho')}.click()`);
+  await pagina.esperar(`${BOTAO_CONFIG('Desativar neste aparelho')}`);
+  for (const esquema of ['light', 'dark']) {
+   await pagina.esquema(esquema);
+   await pagina.esperar(`document.documentElement.dataset.theme === '${esquema}'`);
+   await new Promise(r => setTimeout(r, 400));
+   const l = await pagina.avaliar(LER);
+   assert.ok(l.estouro <= 0, `${nomeTela(larg)} / ${esquema}: rolagem horizontal de ${l.estouro}px`);
+   assert.deepEqual(l.ruins, [], `${nomeTela(larg)} / ${esquema}: texto abaixo de 4,5:1`);
+   await pagina.imagem(join(ARTEFATOS, `1010-Config-notificacoes-${nomeTela(larg)}-${sufixo(esquema)}.png`));
+  }
+  await desfazer?.();
+  desfazer = await pagina.injetar(COM_AGENDA(eventosDaSemana()));
+  await pagina.ir(origem + '/');
+  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+  await IR_PARA_AGENDA();
+  await pagina.avaliar(`${NO_AGENDA}.lembretes = true`);
+  await RECARREGAR_AGENDA();
+  await ABRIR_NOVA();
+  await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Repete'), 'weekly'));
+  await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Avisar'), 'proprio'));
+  for (const esquema of ['light', 'dark']) {
+   await pagina.esquema(esquema);
+   await pagina.esperar(`document.documentElement.dataset.theme === '${esquema}'`);
+   await new Promise(r => setTimeout(r, 400));
+   await pagina.avaliar(`document.querySelector('dialog.tracking-editor .ag-repetir').scrollIntoView({ block: 'center' })`);
+   await new Promise(r => setTimeout(r, 200));
+   const l = await pagina.avaliar(LER);
+   assert.deepEqual(l.ruins, [], `${nomeTela(larg)} / ${esquema}: formulário com texto abaixo de 4,5:1`);
+   await pagina.imagem(join(ARTEFATOS, `1011-Agenda-repetir-${nomeTela(larg)}-${sufixo(esquema)}.png`));
+  }
+  await FECHAR_TUDO();
+  await desfazer?.();
+ }
+ await pagina.tela(1280, 900);
+ await pagina.esquema('light');
  semExcecoes();
 });
 

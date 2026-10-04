@@ -318,7 +318,7 @@ function switchView(view) {
  }
  $('notice').textContent = '';
  renderNav();
- if (view === 'settings') montarConfiguracoes($('settings-body'));
+ if (view === 'settings') montarConfiguracoes($('settings-body'),{api});
  if (view === 'tracking') tracking.load().catch(reportError);
  if (view === 'finance') finance.load().catch(reportError);
  if (view === 'emails') emails.load().catch(reportError);

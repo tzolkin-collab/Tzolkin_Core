@@ -197,14 +197,16 @@ export function setupTracking({ api, openTenant }) {
  }
 
  // Texto acessível do evento: o que o olho lê na grade, em uma frase.
- const descricao = e => [e.title, M.diaInteiro(e) ? 'dia inteiro' : M.intervaloTexto(e.ini, e.fim), e.tenant_name, M.ROTULOS[e.status]].filter(Boolean).join(', ');
+ const descricao = e => [e.title, M.diaInteiro(e) ? 'dia inteiro' : M.intervaloTexto(e.ini, e.fim), e.tenant_name, M.ROTULOS[e.status], e.series_id ? 'repete' : null].filter(Boolean).join(', ');
+ const marca = e => (e.series_id ? el('span', '↻', 'ag-repete') : null);   // série: a mesma atividade em outras datas
 
  function eventoNaGrade(e, dia, recorte, lay) {
   const b = el('button', null, 'ag-evento'); b.type = 'button';
   b.dataset.id = e.id; b.dataset.tom = M.TOM_DA_CATEGORIA[e.category]; b.dataset.status = e.status;
   b.setAttribute('aria-label', descricao(e));
   if (recorte.fim - recorte.ini <= MINIMO) b.classList.add('ag-curto');
-  b.append(el('strong', e.title, 'ag-ev-titulo'), el('span', `${M.hora(e.ini)} – ${M.hora(e.fim)}`, 'ag-ev-hora'), el('span', e.tenant_name, 'ag-ev-empresa'));
+  const titulo = el('strong', e.title, 'ag-ev-titulo'); if (e.series_id) titulo.prepend(marca(e));
+  b.append(titulo, el('span', `${M.hora(e.ini)} – ${M.hora(e.fim)}`, 'ag-ev-hora'), el('span', e.tenant_name, 'ag-ev-empresa'));
   const r = M.retangulo(recorte, lay, ALTURA_HORA, MINIMO);
   estilo(b, { top: r.topo + 'px', height: Math.max(r.altura - 2, 14) + 'px', left: `calc(${r.esquerda}% + 1px)`, width: `calc(${r.largura}% - 3px)`, 'z-index': String(r.z) });
   // Só o pedaço que termina neste dia tem a alça de esticar (evento que atravessa a meia-noite estica no último dia).
@@ -358,6 +360,7 @@ export function setupTracking({ api, openTenant }) {
   if (inteiro) b.classList.add('ag-chip-dia');
   b.setAttribute('aria-label', descricao(e));
   if (!inteiro && !M.diaInteiro(e)) b.append(el('span', M.hora(e.ini), 'ag-chip-hora'));
+  if (e.series_id) b.append(marca(e));
   b.append(el('span', e.title, 'ag-chip-titulo'));
   b.onclick = ev => { ev.stopPropagation(); abrirEvento(e); };
   return b;

@@ -5,8 +5,8 @@ import webpush from 'web-push';
 // Sem rede e sem banco aqui, de propósito: o envio de verdade é injetável
 // (`createSender` devolve uma função) e os testes passam um falso.
 
-/** Lista fechada de tópicos. Espelha o CHECK de push_subscriptions (migração 037). */
-export const TOPICOS = Object.freeze(['commercial.lead']);
+/** Lista fechada de tópicos. Espelha o CHECK de push_subscriptions (037; 'agenda.lembrete' entra na 048). */
+export const TOPICOS = Object.freeze(['commercial.lead', 'agenda.lembrete']);
 
 // A assinatura vem do navegador de quem a cria, e o servidor faz um POST para o
 // `endpoint` dela. Sem filtro, qualquer operador (ou uma sessão sequestrada)
@@ -110,3 +110,31 @@ export const payloadTeste = () => ({
  tag: 'teste',
  view: 'leads',
 });
+
+const FUSO = 'America/Sao_Paulo';
+const hora = ms => new Intl.DateTimeFormat('pt-BR', { timeZone: FUSO, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ms));
+
+/** "Agora", "Daqui a 15 min", "Daqui a 1 h", "Amanhã", "Em 2 dias", "Em 1 semana": quanto falta, no tom de um aviso. */
+export function textoDaAntecedencia(minutos) {
+ if (minutos === 0) return 'Agora';
+ if (minutos < 60) return `Daqui a ${minutos} min`;
+ if (minutos < 1440) return `Daqui a ${minutos / 60} h`;
+ if (minutos === 1440) return 'Amanhã';
+ if (minutos < 10080) return `Em ${minutos / 1440} dias`;
+ return 'Em 1 semana';
+}
+
+/**
+ * Lembrete de atividade da agenda. Só título, empresa e horário: o aviso passa pelo serviço de push e aparece na tela bloqueada,
+ * então não leva descrição, local nem link da reunião. Uma tag por atividade e antecedência: dois lembretes da mesma atividade
+ * (1 dia antes e 15 min antes) são duas notificações, não uma só.
+ */
+export function payloadLembrete({ titulo, empresa, inicio, minutos, atividadeId }) {
+ return {
+  title: corta(`${textoDaAntecedencia(minutos)} — ${corta(titulo, 80)}`, 120),
+  body: [corta(empresa, 80), hora(inicio)].filter(Boolean).join(' · '),
+  tag: `agenda:${corta(atividadeId, 40)}:${minutos}`,
+  // `tracking` é a tela Acompanhamento (a agenda).
+  view: 'tracking',
+ };
+}

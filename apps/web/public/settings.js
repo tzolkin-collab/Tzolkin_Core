@@ -1,5 +1,7 @@
 // Configurações: por enquanto só a aparência. O tema vive em theme-boot.js (window.TzolkinTema), que roda antes
 // do CSS; aqui só se escolhe. A escolha é deste navegador, não da conta.
+import { montarNotificacoes } from './notificacoes.js';
+
 const OPCOES = [
  ['sistema', 'Seguir o sistema', 'Claro ou escuro, como o seu aparelho estiver.'],
  ['claro', 'Claro', 'Fundo branco.'],
@@ -13,7 +15,7 @@ const no = (tag, texto, classe) => {
  return e;
 };
 
-export function montarConfiguracoes(raiz) {
+export function montarConfiguracoes(raiz, { api } = {}) {
  const tema = window.TzolkinTema;
  const atual = tema ? tema.preferencia() : 'sistema';
  const grupo = no('fieldset', undefined, 'config-grupo');
@@ -30,4 +32,5 @@ export function montarConfiguracoes(raiz) {
   grupo.append(rotulo);
  }
  raiz.replaceChildren(grupo);
+ if (api) montarNotificacoes(raiz, { api });
 }

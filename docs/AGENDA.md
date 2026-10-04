@@ -60,7 +60,26 @@ Depois de aplicar, a primeira consulta (até 1 minuto) já passa a oferecer os c
 
 - Prazo de vários dias aparece repetido em cada dia coberto (faixa "dia todo" e chips do mês), não como barra contínua.
 - Arrastar e esticar só com mouse. Por teclado, o caminho é abrir o evento e **Editar**.
-- Sem recorrência, sem convidados, sem lembretes, sem fuso por pessoa (Brasília fixo, UTC-3).
+- Sem convidados e sem fuso por pessoa (Brasília fixo, UTC-3). Repetição só semanal e mensal (sem anual nem "todo 1º dia útil"); lembrete só por push.
 - Eventos de dia inteiro de verdade (sem horário) não existem no modelo: um prazo é um intervalo de 24 h ou mais.
 - Nenhuma integração externa. Fases 1 a 3 (Google Calendar e Meet, Outlook e Teams, Zoom e iCloud) dependem de credenciais OAuth que
   precisam ser criadas no Google Cloud e no Azure.
+
+## Lembretes e repetição (migração 048, **ainda não aplicada ao banco compartilhado**)
+
+- **Lembrete por atividade.** No formulário, "Avisar": *Padrão da agenda* (não grava nada: `reminders` fica `NULL`), *Não avisar* (`[]`) ou
+  *Personalizado* (até 3 tempos: na hora, 5 min, 15 min, 30 min, 1 h, 2 h, 1 dia antes). O padrão da agenda se escolhe em **Configurações → Notificações**
+  (`/api/agenda/preferencias`, uma linha, começa em 15 min).
+- **Quem envia.** `agenda-jobs.mjs` roda a cada minuto no servidor: acha o que venceu nos últimos 20 min e manda push (tópico `agenda.lembrete`) a quem ligou esse
+  assunto. `agenda_reminders_sent` (atividade, antecedência) garante **um aviso só**, mesmo com dois ciclos ou dois servidores. Lembrete que passou de 20 min
+  (servidor parado) é descartado.
+- **Atividade recorrente (série).** "Repetir": toda semana (dias marcados, "a cada N semanas") ou todo mês (no dia do evento; em mês curto cai no último dia),
+  terminando nunca, numa data ou após N vezes. Só para eventos de até 24 h. Cada ocorrência é uma atividade comum com `series_id` (arrasta, conclui,
+  cancela e registra tempo normalmente); marca ↻ no calendário. O servidor gera 13 meses à frente e a cada 6 h estende as séries sem fim.
+- **Editar.** Mexer numa ocorrência a desliga da série (`series_detached`). Em "Aplicar a": *Só este evento* ou *Este e os próximos* (`PUT /api/tracking/series/:id`:
+  título, categoria, tipo, textos, hora, duração, lembrete; o dia não muda por aqui, e ocorrência já mexida à mão não é sobrescrita).
+- **Encerrar.** No painel, "Encerrar repetição" pede confirmação: *só os próximos a partir deste* ou *todos os próximos* (`POST /api/tracking/series/:id/end`).
+  A role do Core não apaga linha, então as futuras ainda planejadas recebem `archived_at` e somem da agenda; o passado fica.
+- **Sem a 048** o banco responde `agenda_lembretes: false`, a tela não mostra lembrete nem repetição e a API devolve 409 "falta aplicar a migração 048".
+- Arquivos: `recorrencia.mjs` (regras, testado), `agenda.mjs` (rotas), `agenda-jobs.mjs`, `agenda-recursos.mjs` (detector 047/048), `agenda-repeticao.js`
+  (blocos do formulário), `notificacoes.js` (Configurações).

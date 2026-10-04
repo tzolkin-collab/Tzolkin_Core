@@ -214,3 +214,50 @@ test('cores: toda categoria tem um tom de selo válido', () => {
  assert.deepEqual(Object.keys(A.TOM_DA_CATEGORIA).sort(), [...A.CATEGORIAS].sort(), 'sem tom sobrando nem faltando');
  assert.equal(new Set(Object.values(A.TOM_DA_CATEGORIA)).size, A.CATEGORIAS.length, 'cada categoria com uma cor própria');
 });
+
+// ---------- lembretes e repetição ----------
+import { descrever as descreverNoServidor } from '../../apps/api/src/platform/recorrencia.mjs';
+import { LEMBRETES_PERMITIDOS } from '../../apps/api/src/platform/tracking-model.mjs';
+
+test('texto dos lembretes', () => {
+ assert.equal(A.textoDosLembretes([]), 'Não avisar');
+ assert.equal(A.textoDosLembretes(undefined), 'Não avisar');
+ assert.equal(A.textoDosLembretes([15]), '15 min antes');
+ assert.equal(A.textoDosLembretes([0]), 'Na hora');
+ assert.equal(A.textoDosLembretes([60, 15]), '1 h e 15 min antes');
+ assert.equal(A.textoDosLembretes([15, 60, 1440]), '1 dia, 1 h e 15 min antes', 'sempre da maior para a menor antecedência');
+ assert.equal(A.textoDosLembretes([30, 0]), '30 min antes e na hora');
+ assert.equal(A.textoDosLembretes([120]), '2 h antes');
+ assert.equal(A.textoDosLembretes([2880]), '2 dias antes');
+});
+
+test('lembrete efetivo: o da atividade, ou o padrão da agenda quando ela não escolheu', () => {
+ assert.deepEqual(A.lembreteEfetivo({ reminders: null }, [15]), { origem: 'padrao', minutos: [15] });
+ assert.deepEqual(A.lembreteEfetivo({}, [15]), { origem: 'padrao', minutos: [15] });
+ assert.deepEqual(A.lembreteEfetivo({ reminders: [] }, [15]), { origem: 'proprio', minutos: [] }, '[] é "não avisar", não "padrão"');
+ assert.deepEqual(A.lembreteEfetivo({ reminders: [60] }, [15]), { origem: 'proprio', minutos: [60] });
+});
+
+test('opções de lembrete da tela: só valores que o servidor aceita, no máximo 3 de cada vez', () => {
+ for (const [minutos] of A.OPCOES_DE_LEMBRETE) assert.ok(LEMBRETES_PERMITIDOS.includes(minutos), minutos + ' tem de existir no banco');
+ assert.equal(A.MAX_LEMBRETES, 3);
+ assert.equal(new Set(A.OPCOES_DE_LEMBRETE.map(o => o[0])).size, A.OPCOES_DE_LEMBRETE.length);
+});
+
+test('o texto da repetição no navegador é IGUAL ao do servidor, para qualquer regra', () => {
+ const regras = [];
+ for (const weekdays of [[0], [2, 0], [0, 2, 4], [5], [5, 6], [6], [0, 1, 2, 3, 4, 5, 6], [4, 4, 0]])
+  for (const interval_n of [1, 2, 4]) for (const fim of [{}, { count_limit: 1 }, { count_limit: 8 }, { ends_on: '2027-03-09' }])
+   regras.push({ frequency: 'weekly', weekdays, interval_n, starts_on: '2026-10-05', ...fim });
+ for (const month_day of [1, 15, 31]) for (const interval_n of [1, 3]) for (const fim of [{}, { count_limit: 2 }, { ends_on: '2028-02-29' }])
+  regras.push({ frequency: 'monthly', month_day, interval_n, starts_on: '2026-10-01', ...fim });
+ assert.ok(regras.length > 100);
+ for (const r of regras) assert.equal(A.descreverRecorrencia(r), descreverNoServidor(r), JSON.stringify(r));
+});
+
+test('dia da semana e dia do mês de um instante em Brasília (a repetição nasce com os do evento)', () => {
+ assert.equal(A.diaDaSemanaDe(t('2026-10-05T13:00:00Z')), 0, 'segunda');
+ assert.equal(A.diaDaSemanaDe(t('2026-10-05T02:00:00Z')), 6, '23h de domingo ainda é domingo em Brasília');
+ assert.equal(A.diaDoMesDe(t('2026-10-31T13:00:00Z')), 31);
+ assert.equal(A.diaDoMesDe(t('2026-11-01T02:00:00Z')), 31, '23h do dia 31 em Brasília');
+});

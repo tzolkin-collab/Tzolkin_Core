@@ -91,11 +91,12 @@ Sem as três, o push fica desligado. **Guarde o par com cuidado:** trocar as cha
 
 | Item | Estado |
 |---|---|
-| Migração 037, módulo `push.mjs`, `platform/webpush.mjs`, gancho `afterCommit`, aviso no intake | `[ESCRITO, NÃO PUBLICADO]`. 20 testes unitários; suíte unitária 379/379 |
+| Migração 037 (aplicada), módulo `push.mjs`, `platform/webpush.mjs`, gancho `afterCommit`, aviso no intake | `[ESCRITO, NÃO PUBLICADO]`. 20 testes unitários; suíte unitária 379/379 |
 | Teste de integração contra PostgreSQL (assinar, religar, revogar, ordem do COMMIT) | `[PROPOSTO]`. A suíte de banco não foi rodada nesta entrega |
-| **Tela no painel** para ativar o aparelho (botão, lista de aparelhos, teste) | `[PROPOSTO]`. Hoje só a API existe |
+| **Tela no painel** (Configurações → Notificações: ativar neste aparelho, assuntos, teste, desativar; lembrete padrão da agenda) | `[ESCRITO]`. `notificacoes.js`; testada com permissão e PushManager simulados |
+| Tópico `agenda.lembrete` e envio dos lembretes (a cada minuto, um aviso só por atividade e antecedência) | `[ESCRITO, NÃO PUBLICADO]`. Pede a migração 048 (troca o CHECK de tópicos). Ver `docs/AGENDA.md` |
 | Chaves VAPID no EasyPanel | `[PROPOSTO]`. Nenhuma foi gerada para produção |
-| Aplicar a 037 no banco de produção | `[PROPOSTO]`. Pede decisão do dono |
+| Aplicar a 037 no banco | `[FEITO]`. A 048 (agenda) ainda não |
 | **Validação em aparelho real** (Android e iPhone) | `[PROPOSTO]`. Nada foi enviado a um serviço de push de verdade |
 | Preferências por produto e por serviço; tópicos além de lead novo | `[PROPOSTO]`. O CHECK e os índices comportam, o código não |
 | Aviso de falha de entrega persistente (hoje só contador) | `[PROPOSTO]` |
@@ -105,7 +106,7 @@ No iPhone, o push só funciona com o painel **instalado** (Compartilhar → Adic
 ## 8. Ordem para publicar
 
 1. Gerar as chaves e pôr as três variáveis nos segredos do EasyPanel.
-2. Aplicar a migração 037 (só cria tabela).
+2. Aplicar as migrações pendentes (`npm run db:migrate`; a 037 já está; a 048 amplia o CHECK de tópicos e cria as tabelas da agenda).
 3. Publicar o código.
 4. Em um aparelho real: abrir o painel, assinar, mandar o teste e conferir que a notificação chega e que o toque abre a tela Inbound.
 5. Só então contar com o aviso de lead novo.

@@ -167,3 +167,15 @@ input:user-invalid:focus, select:user-invalid:focus, textarea:user-invalid:focus
 .config-opcao-texto strong { font-size: var(--fs-base, 14px); font-weight: 500; }
 .config-opcao-texto small { color: var(--muted); font-size: var(--fs-sm, 13px); }
 .settings-link { justify-content: flex-start; }
+.config-notif { display: grid; gap: 20px; margin-top: 16px; }
+.config-bloco { display: grid; gap: 4px; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+.config-sub { margin: 0; font-size: var(--fs-base, 14px); font-weight: 600; color: var(--text-strong, var(--text)); }
+.config-acoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.config-aviso { min-height: 1.4em; margin: 12px 0 0; color: var(--muted); font-size: var(--fs-sm, 13px); }
+.config-aviso.erro { color: var(--danger, var(--text)); }
+.config-lembretes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.config-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: var(--fs-sm, 13px); font-weight: 400; cursor: pointer; }
+.config-chip:has(input:checked) { border-color: var(--accent, var(--text)); background: var(--accent-soft, transparent); }
+.config-chip:has(input:disabled) { opacity: .5; cursor: not-allowed; }
+.config-chip, .tracking-form .config-chip { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; width: auto; }
+.config-chip input, .tracking-form .config-chip input { width: auto; margin: 0; flex: none; }

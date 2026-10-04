@@ -48,6 +48,7 @@ const FILES = {
  '/theme.css': ['theme.css', 'text/css'],
  '/theme-boot.js': ['theme-boot.js', 'text/javascript'],
  '/settings.js': ['settings.js', 'text/javascript'],
+ '/notificacoes.js': ['notificacoes.js', 'text/javascript'],
  '/logo-tema.js': ['logo-tema.js', 'text/javascript'],
  // Inter (variável, só o subconjunto latino: cobre o português). Licença SIL OFL 1.1 em fonts/INTER-LICENSE.txt.
  '/fonts/inter-latin-wght-normal.woff2': ['fonts/inter-latin-wght-normal.woff2', 'font/woff2'],
@@ -58,6 +59,7 @@ const FILES = {
  '/agenda-model.js': ['agenda-model.js', 'text/javascript'],
  '/agenda-dom.js': ['agenda-dom.js', 'text/javascript'],
  '/agenda-evento.js': ['agenda-evento.js', 'text/javascript'],
+ '/agenda-repeticao.js': ['agenda-repeticao.js', 'text/javascript'],
  '/tracking.css': ['tracking.css', 'text/css'],
  '/finance.js': ['finance.js', 'text/javascript'],
  '/billing.js': ['billing.js', 'text/javascript'],

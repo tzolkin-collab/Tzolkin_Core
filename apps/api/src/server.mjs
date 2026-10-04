@@ -2,6 +2,7 @@
 // createCore continua exportado daqui para os testes e para embutir o Core.
 import { pathToFileURL } from 'node:url';
 import { createCore } from './app.mjs';
+import { iniciarJobsDaAgenda } from './modules/agenda-jobs.mjs';
 import { openDatabase, transportWarning, manterPoolQuente } from './platform/database.mjs';
 
 export { createCore };
@@ -27,6 +28,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   webOrigin: process.env.WEB_ORIGIN || 'http://127.0.0.1:3100' });
  server.listen(Number(process.env.API_PORT || 3102), '127.0.0.1',
   () => console.log(`TZOLKIN API: http://127.0.0.1:${server.address().port} (local only)`));
- const stop = () => { server.closeAllConnections(); server.close(() => pool.end().finally(() => process.exit(0))); };
+ // Os jobs da agenda (lembretes por push, séries sem fim) só rodam aqui se pedido: o bootstrap local usa o banco compartilhado e não deve
+ // mandar aviso de verdade nem gerar ocorrências por conta própria. Em produção eles ligam sempre (production.mjs).
+ const pararAgenda = process.env.AGENDA_JOBS === '1' ? iniciarJobsDaAgenda({ pool }) : () => {};
+ const stop = () => { pararAgenda(); server.closeAllConnections(); server.close(() => pool.end().finally(() => process.exit(0))); };
  process.on('SIGTERM',stop); process.on('SIGINT',stop);
 }

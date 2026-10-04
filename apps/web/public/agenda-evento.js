@@ -4,6 +4,7 @@ import { criarPeek } from './peek.js';
 import { pares } from './inline-edit.js';
 import { selo } from './data-table.js';
 import * as M from './agenda-model.js';
+import { blocoDeLembrete, blocoDeRepeticao } from './agenda-repeticao.js';
 
 const TOM_DA_SITUACAO = { planned: 'info', done: 'success', cancelled: 'neutral' };
 const opcoes = chaves => chaves.map(k => [k, M.ROTULOS[k]]);
@@ -66,6 +67,30 @@ export function abrirEditor({ host, api, dados, tenants, evento = null, inicio =
  const link = campo(extra, 'Link da reunião (opcional)', 'url'); link.maxLength = 500; link.placeholder = 'https://…';
  if (comCampos) form.append(extra);
 
+ // Lembrete e repetição dependem da migração 048 (dados.agenda_lembretes). Sem ela, nem aparecem.
+ const comLembretes = dados.agenda_lembretes === true;
+ const serie = evento?.series_id ? (dados.series || []).find(s => s.id === evento.series_id) : null;
+ const padrao = dados.agenda_prefs?.default_reminders ?? [15];
+ const lembrete = comLembretes ? blocoDeLembrete({ padrao, atual: evento ? evento.reminders ?? null : null }) : null;
+ const repeticao = comLembretes && !evento ? blocoDeRepeticao({ inicio: () => M.doCampoLocal(comeco.value) ? Date.parse(M.doCampoLocal(comeco.value)) : null }) : null;
+ let escopo = null;   // "só este" ou "este e os próximos", para ocorrência de série
+ if (lembrete) form.append(lembrete.no);
+ if (repeticao) {
+  form.append(repeticao.no);
+  const curto = () => { const i = M.doCampoLocal(comeco.value), f = M.doCampoLocal(termino.value); return !i || !f || Date.parse(f) - Date.parse(i) <= 86400000; };
+  const sincronizar = () => { repeticao.inicioMudou(); repeticao.limitar(curto()); };
+  comeco.addEventListener('change', sincronizar); termino.addEventListener('change', sincronizar);
+  sincronizar();
+ }
+ if (serie && !serie.ended_at) {
+  const bloco = el('fieldset', null, 'ag-bloco');
+  bloco.append(el('legend', 'Esta atividade se repete'));
+  bloco.append(el('p', `${serie.descricao}.`, 'detail'));
+  escopo = campo(bloco, 'Aplicar a', 'text', [['um', 'Só este evento'], ['proximos', 'Este e os próximos']]);
+  escopo.addEventListener('change', () => { contratacao.disabled = escopo.value === 'proximos'; });
+  form.insertBefore(bloco, form.children[1]);
+ }
+
  // Valores iniciais
  if (evento) {
   nome.value = evento.title; cliente.value = evento.tenant_id; cliente.disabled = true;
@@ -100,9 +125,38 @@ export function abrirEditor({ host, api, dados, tenants, evento = null, inicio =
   try {
    const extras = comCampos ? { description: descricao.value.trim(), location: local.value.trim(), meeting_url: link.value.trim() } : {};
    let atividade;
+   const regra = repeticao ? repeticao.valor(Date.parse(ini), Date.parse(term)) : null;   // lança com a mensagem certa se a repetição está incompleta
+   if (!evento && regra) {
+    // Atividade que se repete é uma série: o servidor cria a regra e já gera as ocorrências.
+    const corpo = { id: crypto.randomUUID(), tenant_id: cliente.value, engagement_id: contratacao.value || null, category: categoria.value, kind: tipo.value, title: nome.value, ...regra };
+    for (const [k, v] of Object.entries(extras)) if (v) corpo[k] = v;
+    const rem = lembrete.valor(); if (rem !== null) corpo.reminders = rem;
+    await api('/api/tracking/series', 'POST', corpo);
+    aoSalvar(null);
+    dialog.close();
+    return;
+   }
+   if (evento && escopo?.value === 'proximos') {
+    // "Este e os próximos": a série herda título, tipo, textos, horário (hora do dia e duração) e lembrete. O DIA não muda aqui.
+    if (M.diaDe(Date.parse(ini)) !== M.diaDe(evento.ini)) throw new Error('Para mudar o dia, escolha "Só este evento".');
+    const campos = {};
+    if (nome.value.trim() !== evento.title) campos.title = nome.value;
+    if (categoria.value !== evento.category) campos.category = categoria.value;
+    if (tipo.value !== evento.kind) campos.kind = tipo.value;
+    if (M.hora(Date.parse(ini)) !== M.hora(evento.ini)) campos.start_time = M.hora(Date.parse(ini));
+    if (Date.parse(term) - Date.parse(ini) !== evento.fim - evento.ini) campos.duration_minutes = Math.round((Date.parse(term) - Date.parse(ini)) / 60000);
+    for (const [k, v] of Object.entries(extras)) if (v !== (evento[k] || '')) campos[k] = v || null;
+    if (lembrete && JSON.stringify(lembrete.valor()) !== JSON.stringify(evento.reminders ?? null)) campos.reminders = lembrete.valor();
+    if (!Object.keys(campos).length) { dialog.close(); return; }
+    await api('/api/tracking/series/' + serie.id, 'PUT', { revision: serie.revision, ...campos });
+    aoSalvar(null);
+    dialog.close();
+    return;
+   }
    if (!evento) {
     const corpo = { id: crypto.randomUUID(), tenant_id: cliente.value, engagement_id: contratacao.value || null, category: categoria.value, kind: tipo.value, title: nome.value, starts_at: ini, ends_at: term };
     for (const [k, v] of Object.entries(extras)) if (v) corpo[k] = v;
+    if (lembrete) { const rem = lembrete.valor(); if (rem !== null) corpo.reminders = rem; }   // padrão = não manda: a atividade segue o padrão da agenda
     atividade = (await api('/api/tracking', 'POST', corpo)).activity;
    } else {
     const campos = {};
@@ -111,6 +165,7 @@ export function abrirEditor({ host, api, dados, tenants, evento = null, inicio =
     if (tipo.value !== evento.kind) campos.kind = tipo.value;
     if (Date.parse(ini) !== evento.ini || Date.parse(term) !== evento.fim) { campos.starts_at = ini; campos.ends_at = term; }
     for (const [k, v] of Object.entries(extras)) if (v !== (evento[k] || '')) campos[k] = v || null;   // vazio limpa o campo
+    if (lembrete && JSON.stringify(lembrete.valor()) !== JSON.stringify(evento.reminders ?? null)) campos.reminders = lembrete.valor();
     atividade = evento;
     if (Object.keys(campos).length) atividade = (await api('/api/tracking/' + evento.id, 'PUT', { revision: evento.revision, ...campos })).activity;
     // A contratação tem rota própria e exige a revisão que acabou de subir.
@@ -148,8 +203,10 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
   catch (falha) { erroNo.textContent = falha.message; botaoClicado.disabled = false; }
  }
 
- function detalhes(e, erroNo) {
+ function detalhes(e, erroNo, dados) {
   const painel = el('div');
+  const serie = serieDe(e, dados);
+  const efetivo = M.lembreteEfetivo(e, dados.agenda_prefs?.default_reminders);
   const linhas = [
    { rotulo: 'Quando', valor: quandoTexto(e) },
    { rotulo: 'Cliente', valor: clienteLink(e) },
@@ -160,10 +217,15 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
    { rotulo: 'Local', valor: e.location || null },
    { rotulo: 'Link da reunião', valor: e.meeting_url ? linkExterno(e.meeting_url) : null },
    { rotulo: 'Descrição', valor: e.description ? el('p', e.description, 'ag-descricao') : null },
+   ...(dados.agenda_lembretes ? [
+    { rotulo: 'Repete', valor: serie ? (serie.ended_at ? `${serie.descricao} (encerrada)` : serie.descricao) : null },
+    { rotulo: 'Lembrete', valor: `${M.textoDosLembretes(efetivo.minutos)}${efetivo.origem === 'padrao' && efetivo.minutos.length ? ' (padrão da agenda)' : ''}` },
+   ] : []),
   ];
   painel.append(pares(linhas), el('p', 'Horário de Brasília.', 'ag-nota'), erroNo);
   return painel;
  }
+ const serieDe = (e, dados) => (e.series_id ? (dados.series || []).find(s => s.id === e.series_id) || null : null);
  function quandoTexto(e) {
   const dia = maiuscula(M.titulo('dia', M.diaDe(e.ini)));
   return M.diaDe(e.ini) === M.diaDe(e.fim - 1) ? `${dia} · ${M.intervaloTexto(e.ini, e.fim)} (${M.duracaoTexto((e.fim - e.ini) / 60000)})` : M.intervaloTexto(e.ini, e.fim);
@@ -208,15 +270,28 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
  function rodape(e, erroNo) {
   const mudar = (rotulo, status, icone, classe) => { const b = botao(rotulo, icone, () => acao(b, erroNo, () => api(`/api/tracking/${e.id}/status`, 'PUT', { status, revision: e.revision })), classe); return b; };
   const nos = [botao('Editar', 'pencil', () => aoEditar(e))];
+  const serie = serieDe(e, dadosAtuais || {});
+  if (serie && !serie.ended_at) nos.push(botao('Encerrar repetição', 'close', () => confirmarEncerrar(e, serie, erroNo), 'quiet'));
   if (e.status === 'planned') nos.push(mudar('Cancelar atividade', 'cancelled', 'close', 'quiet'), mudar('Concluir', 'done', 'check', 'primary'));
   else nos.push(mudar(e.status === 'done' ? 'Reabrir' : 'Reativar', 'planned', 'clock', 'secondary'));
   return nos;
  }
 
+ // Encerrar uma série não se desfaz: pede confirmação e diz exatamente o que some.
+ function confirmarEncerrar(e, serie, erroNo) {
+  const parar = (rotulo, from) => { const b = botao(rotulo, 'close', () => acao(b, erroNo, () => api(`/api/tracking/series/${serie.id}/end`, 'POST', { revision: serie.revision, ...(from ? { from } : {}) })), 'primary'); return b; };
+  pk.pe([
+   el('p', `${serie.descricao}. Os eventos já realizados ficam; os próximos planejados saem da agenda.`, 'ag-nota'),
+   botao('Voltar', 'close', () => desenhar(e, dadosAtuais), 'secondary'),
+   parar('Só os próximos a partir deste', new Date(e.ini).toISOString()),
+   parar('Todos os próximos', null),
+  ]);
+ }
+
  function desenhar(e, dados) {
   pk.titulo(e.title, [e.tenant_name, e.engagement_label].filter(Boolean).join(' · '));
   pk.abas([
-   { key: 'detalhes', label: 'Detalhes', painel: detalhes(e, el('p', null, 'form-error')) },
+   { key: 'detalhes', label: 'Detalhes', painel: detalhes(e, el('p', null, 'form-error'), dados) },
    { key: 'tempo', label: 'Tempo', painel: tempo(e, dados, el('p', null, 'form-error')) },
   ], { ativa: ultimaAba, aoTrocar: k => { ultimaAba = k; } });
   pk.pe(rodape(e, pk.corpo.querySelector('.form-error') || el('p')));

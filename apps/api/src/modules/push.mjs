@@ -1,6 +1,6 @@
 import { fail, input, isUuid } from '../platform/http.mjs';
 import {
- TOPICOS, assinaturaValida, topicosValidos, vapidConfig, createSender, senderPadrao,
+ TOPICOS, assinaturaValida, enderecoPushValido, topicosValidos, vapidConfig, createSender, senderPadrao,
  payloadLeadNovo, payloadTeste,
 } from '../platform/webpush.mjs';
 
@@ -102,6 +102,16 @@ export function pushRoutes(router, opcoes = {}) {
     RETURNING id`,
    [operator.subject, operator.email ?? null, s.endpoint, s.keys.p256dh, s.keys.auth, topics, agente(req)]);
   return { response: { ok: true, id: r.rows[0].id, topics } };
+ }, { transactional: true, audit: false });
+
+ // "Este aparelho está assinado?": o navegador manda o endereço da assinatura que ele tem, e o servidor diz se é de quem pediu
+ // (e quais tópicos). Nunca devolve endpoint nem chaves, e só enxerga os aparelhos do próprio operador.
+ router.post('/api/push/status', async ({ client, body, operator }) => {
+  input(body, ['endpoint']);
+  if (!enderecoPushValido(body.endpoint)) throw fail(400, 'Endereço de assinatura inválido.');
+  const r = await client.query(
+   'SELECT id,topics FROM push_subscriptions WHERE endpoint=$1 AND operator_subject=$2 AND revoked_at IS NULL', [body.endpoint, operator.subject]);
+  return { response: r.rows[0] ? { subscribed: true, id: r.rows[0].id, topics: r.rows[0].topics } : { subscribed: false } };
  }, { transactional: true, audit: false });
 
  // Desliga um aparelho. Só o dono desliga (por sujeito, nunca por e-mail digitado).

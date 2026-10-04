@@ -47,8 +47,9 @@ test('a assinatura exige endpoint válido e chaves base64url do tamanho certo', 
 });
 
 test('tópicos: só os da lista fechada, sem repetição, e vazio é erro', () => {
- assert.deepEqual(TOPICOS, ['commercial.lead']);
+ assert.deepEqual(TOPICOS, ['commercial.lead', 'agenda.lembrete']);   // agenda.lembrete entra com a migração 048
  assert.deepEqual(topicosValidos(['commercial.lead', 'commercial.lead']), ['commercial.lead']);
+ assert.deepEqual(topicosValidos(['agenda.lembrete', 'commercial.lead']), ['agenda.lembrete', 'commercial.lead']);
  for (const ruim of [[], ['outro'], ['commercial.lead', 'outro'], 'commercial.lead', null, undefined]) assert.equal(topicosValidos(ruim), null);
 });
 
@@ -140,11 +141,11 @@ test('lead novo: push desligado não faz nada; ligado manda com o nome do produt
 test('config do push: informa se está ligado e devolve só a chave pública', async () => {
  const ligado = roteador(); pushRoutes(ligado, { config: CONFIG });
  let r = resposta(); await ligado.rotas['GET /api/push/config'].fn({ reply: r.reply });
- assert.deepEqual(r.body, { enabled: true, publicKey: 'pub', topics: ['commercial.lead'] });
+ assert.deepEqual(r.body, { enabled: true, publicKey: 'pub', topics: ['commercial.lead', 'agenda.lembrete'] });
  assert.ok(!JSON.stringify(r.body).includes('priv'));
  const desligado = roteador(); pushRoutes(desligado, { config: null });
  r = resposta(); await desligado.rotas['GET /api/push/config'].fn({ reply: r.reply });
- assert.deepEqual(r.body, { enabled: false, publicKey: null, topics: ['commercial.lead'] });
+ assert.deepEqual(r.body, { enabled: false, publicKey: null, topics: ['commercial.lead', 'agenda.lembrete'] });
 });
 
 test('assinar: exige push ligado, assinatura válida e tópico válido; grava por endpoint e nunca devolve chaves', async () => {

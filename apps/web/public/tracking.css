@@ -204,3 +204,18 @@
  .tracking-row { flex-direction: column; align-items: stretch; }
 }
 @media (prefers-reduced-motion: reduce) { #view-tracking * { transition: none !important; } }
+
+/* Lembrete e repetição no formulário; ↻ nos eventos de série. */
+.tracking-form .ag-bloco { grid-column: 1 / -1; display: grid; gap: 12px; min-width: 0; margin: 0; padding: 16px 0 0; border: 0; border-top: 1px solid var(--line); }
+.tracking-form .ag-bloco legend { padding: 0 8px 0 0; font-size: 12px; color: var(--muted); }
+.ag-lembrete-caixa[hidden], .ag-repetir-detalhe[hidden], .ag-dias[hidden] { display: none; }
+.ag-repetir-detalhe { display: grid; gap: 12px; }
+.ag-dias, .ag-lembrete-caixa .config-lembretes { display: flex; flex-wrap: wrap; gap: 6px; }
+.ag-cada { display: flex; align-items: center; gap: 8px; }
+.ag-cada input { width: 4.5em; }
+.ag-repete { margin-right: 4px; font-weight: 700; opacity: .85; }
+.tracking-form .ag-cada { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.tracking-form .ag-cada input { width: 4.5em; flex: none; }
+.tracking-form label.ag-cada { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.tracking-form label.ag-cada > span { flex: none; white-space: nowrap; }
+.tracking-form label.ag-cada > input { width: 5em; max-width: 5em; flex: none; }

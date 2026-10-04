@@ -18,6 +18,8 @@ import { infrastructureRoutes } from './modules/infrastructure.mjs';
 import { deliveryRoutes } from './modules/delivery.mjs';
 import { platformOperationsRoutes } from './modules/platform-operations.mjs';
 import { trackingRoutes } from './modules/tracking.mjs';
+import { agendaRoutes } from './modules/agenda.mjs';
+import { criarDetector } from './platform/agenda-recursos.mjs';
 import { financeRoutes } from './modules/finance.mjs';
 import { paymentSalesRoutes } from './modules/payment-sales.mjs';
 import { billingRoutes } from './modules/billing.mjs';
@@ -52,7 +54,7 @@ import { commercialAutomationRoutes } from './modules/commercial-automations.mjs
 import { commercialGateRoutes } from './modules/commercial-gates.mjs';
 
 const MODULES = [
- identityRoutes, workspaceRoutes, catalogRoutes, trackingRoutes, billingRoutes, emailRoutes, emailTemplateRoutes, productFaviconRoutes, productDeployBindingRoutes, productResourceBindingRoutes, serviceDeployBindingRoutes, managementRoutes, productPaymentRoutes, productTopologyRoutes,
+ identityRoutes, workspaceRoutes, catalogRoutes, billingRoutes, emailRoutes, emailTemplateRoutes, productFaviconRoutes, productDeployBindingRoutes, productResourceBindingRoutes, serviceDeployBindingRoutes, managementRoutes, productPaymentRoutes, productTopologyRoutes,
  checkoutTemplateRoutes, directoryRoutes, contractsRoutes, accessRoutes, productConsoleRoutes, commercialIntakeRoutes, commercialKeyRoutes, commercialWorkspaceRoutes, portfolioRoutes,
 ];
 
@@ -63,6 +65,10 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  const sessions = identity||createSessionStore({ adminPassword, clock });
  const router = createRouter();
  for (const register of MODULES) register(router);
+ // Agenda: o detector (as migrações 047 e 048 já estão no banco?) é um só, compartilhado entre as rotas de atividade, as de série e os jobs.
+ const detectorAgenda = criarDetector();
+ trackingRoutes(router, { detector: detectorAgenda });
+ agendaRoutes(router, { detector: detectorAgenda, relogio: clock });
  // Integrações externas são opcionais e injetáveis: os testes passam um registro
  // apontado para um stub local, e nunca tocam num provedor de verdade.
  deploysRoutes(router, { registry: deployRegistry ?? buildRegistry(), clock });

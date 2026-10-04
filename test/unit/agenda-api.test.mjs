@@ -79,7 +79,7 @@ const corpo=b=>({headers:{'content-type':'application/json'},async *[Symbol.asyn
 test('PUT /api/tracking/:id grava só os campos enviados, sobe a revisão e audita',async()=>{
  const sqls=[];let resposta,auditoria;
  const pool={async connect(){return{async query(sql,params=[]){sqls.push({sql,params});
-  if(sql.includes('information_schema'))return{rows:[{n:3}]};
+  if(sql.includes('information_schema'))return{rows:[{campos:3,colunas:0,tabelas:0}]};
   if(sql.startsWith('UPDATE service_activities'))return{rows:[{...base,id,revision:4,title:'Novo título'}]};
   if(sql.startsWith('INSERT INTO service_activity_audit')){auditoria=params;}return{rows:[]};},release(){}};}};
  await rotas()['PUT /api/tracking/:id']({pool,params:{id},req:corpo({revision:3,title:'Novo título',location:'Sala 9'}),operator:{email:'op@x.com'},reply(s,b){resposta=[s,b];}});
@@ -109,7 +109,7 @@ test('PUT: id inválido e corpo inválido nem chegam ao banco',async()=>{
 
 test('POST: o INSERT leva só as colunas do evento; as novas aparecem quando preenchidas',async()=>{
  const inserts=[];
- const pool={async connect(){return{async query(sql,params=[]){if(sql.includes('information_schema'))return{rows:[{n:3}]};if(sql.startsWith('INSERT INTO service_activities')){inserts.push(sql);return{rows:[{...base}]};}return{rows:[]};},release(){}};}};
+ const pool={async connect(){return{async query(sql,params=[]){if(sql.includes('information_schema'))return{rows:[{campos:3,colunas:0,tabelas:0}]};if(sql.startsWith('INSERT INTO service_activities')){inserts.push(sql);return{rows:[{...base}]};}return{rows:[]};},release(){}};}};
  const post=rotas()['POST /api/tracking'];
  await post({pool,req:corpo(base),reply(){}});
  await post({pool,req:corpo({...base,id:'00000000-0000-4000-8000-000000000002',meeting_url:'https://meet.google.com/x',description:'Pauta'}),reply(){}});
@@ -122,7 +122,7 @@ test('GET aceita o intervalo e repassa as datas à consulta',async()=>{
  const pool={async query(sql,params){consultas.push(params);return{rows:[]};}};
  let corpoResp;
  await rotas()['GET /api/tracking']({pool,url:new URL('http://x/api/tracking?from=2026-08-24&to=2026-08-31'),reply(s,b){corpoResp=b;}});
- assert.deepEqual(consultas[0].slice(0,2),['2026-08-24','2026-08-31']);
+ assert.deepEqual(consultas.find(p=>p[0]==='2026-08-24').slice(0,2),['2026-08-24','2026-08-31']);
  assert.deepEqual(corpoResp.activities,[]);
  await assert.rejects(rotas()['GET /api/tracking']({pool,url:new URL('http://x/api/tracking?from=2026-08-24'),reply(){}}),e=>e.status===400);
 });
@@ -131,7 +131,7 @@ test('sem a migração 047: GET avisa, e criar/editar COM descrição/local/link
  const consultas=[];const sqlsCliente=[];
  const banco={
   async query(sql){consultas.push(sql);return{rows:[]};},
-  async connect(){return{async query(sql,params=[]){sqlsCliente.push(sql);if(sql.includes('information_schema'))return{rows:[{n:2}]};return{rows:[]};},release(){}};},
+  async connect(){return{async query(sql,params=[]){sqlsCliente.push(sql);if(sql.includes('information_schema'))return{rows:[{campos:2,colunas:0,tabelas:0}]};return{rows:[]};},release(){}};},
  };
  const r=rotas();let resp;
  await r['GET /api/tracking']({pool:banco,url:new URL('http://x/api/tracking?month=2026-08'),reply(s,b){resp=b;}});
@@ -141,19 +141,19 @@ test('sem a migração 047: GET avisa, e criar/editar COM descrição/local/link
  assert.ok(!sqlsCliente.some(q=>q.startsWith('INSERT INTO service_activities')||q.startsWith('UPDATE service_activities')),'nada foi gravado');
 });
 
-test('sem a migração, criar e editar SEM os campos novos continua funcionando e nem pergunta ao banco',async()=>{
+test('sem a migração, criar e editar SEM os campos novos continua funcionando',async()=>{
  const sqls=[];
  const pool={async connect(){return{async query(sql){sqls.push(sql);if(sql.startsWith('INSERT INTO service_activities'))return{rows:[{...base}]};if(sql.startsWith('UPDATE service_activities'))return{rows:[{...base,revision:2}]};return{rows:[]};},release(){}};}};
  const r=rotas();
  await r['POST /api/tracking']({pool,req:corpo(base),reply(){}});
  await r['PUT /api/tracking/:id']({pool,params:{id},req:corpo({revision:1,title:'Só o título'}),reply(){}});
- assert.ok(!sqls.some(q=>q.includes('information_schema')),'sem campo novo, não há consulta extra');
+ assert.equal(sqls.filter(q=>q.includes('information_schema')).length,1,'só o PUT pergunta ao banco (uma vez), para saber se marca a ocorrência como mexida à mão; o POST sem campo novo nem pergunta');
  assert.ok(sqls.some(q=>q.startsWith('INSERT INTO service_activities'))&&sqls.some(q=>q.startsWith('UPDATE service_activities')));
 });
 
 test('a verificação das colunas é lembrada: verdadeiro fica; falso só é reverificado depois de um minuto',async()=>{
  let perguntas=0,n=3;
- const banco={async query(sql){if(sql.includes('information_schema')){perguntas++;return{rows:[{n}]};}return{rows:[]};}};
+ const banco={async query(sql){if(sql.includes('information_schema')){perguntas++;return{rows:[{campos:n,colunas:0,tabelas:0}]};}return{rows:[]};}};
  const verdadeiro=rotas();
  for(let i=0;i<3;i++)await verdadeiro['GET /api/tracking']({pool:banco,url:new URL('http://x/api/tracking?month=2026-08'),reply(){}});
  assert.equal(perguntas,1,'com as colunas, pergunta uma vez só');
