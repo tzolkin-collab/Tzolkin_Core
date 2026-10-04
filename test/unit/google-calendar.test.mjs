@@ -83,13 +83,13 @@ function montar({ env = ENV, fetcher, disponivel = true, linhas = {} } = {}) {
 const chamar = async (h, ctx) => { let saida; const r = await h({ reply: (s, c) => { saida = { s, c }; }, ...ctx }); return saida || r; };
 test('status: sem a migração 049 diz indisponível; com ela, mostra se há conta conectada e o e-mail, sem token', async () => {
  const sem = montar({ disponivel: false });
- assert.deepEqual((await chamar(sem.rotas['GET /api/google/calendar/status'], { pool: sem.db, operator: OPERADOR })).c, { cliente: true, chave: true, migracao: false, disponivel: false, conectado: false });
+ assert.deepEqual((await chamar(sem.rotas['GET /api/google/calendar/status'], { pool: sem.db, operator: OPERADOR, url: new URL('http://127.0.0.1:3100/x') })).c, { cliente: true, chave: true, migracao: false, retorno: 'https://core.exemplo.test/api/google/calendar/callback', disponivel: false, conectado: false });
  const com = montar({ linhas: { google_calendar_connections: () => ({ rows: [{ email: 'eu@exemplo.test', connected_at: '2026-10-04T12:00:00Z', token_ciphertext: Buffer.from('x') }] }) } });
- const r = (await chamar(com.rotas['GET /api/google/calendar/status'], { pool: com.db, operator: OPERADOR })).c;
+ const r = (await chamar(com.rotas['GET /api/google/calendar/status'], { pool: com.db, operator: OPERADOR, url: new URL('http://127.0.0.1:3100/x') })).c;
  assert.deepEqual([r.disponivel, r.conectado, r.email], [true, true, 'eu@exemplo.test']);
  assert.ok(!JSON.stringify(r).includes('ciphertext') && !JSON.stringify(r).includes('token'));
  const semChave = montar({ env: { ...ENV, CORE_SECRETS_KEY: '' } });
- assert.equal((await chamar(semChave.rotas['GET /api/google/calendar/status'], { pool: semChave.db, operator: OPERADOR })).c.disponivel, false, 'sem a chave de cifra não dá para guardar o token');
+ assert.equal((await chamar(semChave.rotas['GET /api/google/calendar/status'], { pool: semChave.db, operator: OPERADOR, url: new URL('http://127.0.0.1:3100/x') })).c.disponivel, false, 'sem a chave de cifra não dá para guardar o token');
 });
 
 test('conectar: grava só o hash do state, usa PKCE e o endereço de retorno do PUBLIC_ORIGIN', async () => {

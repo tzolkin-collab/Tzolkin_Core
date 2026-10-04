@@ -58,9 +58,10 @@ export function googleCalendarRoutes(router, { env = process.env, fetcher = fetc
   }
  }
 
- router.get('/api/google/calendar/status', async ({ pool, operator, reply }) => {
+ router.get('/api/google/calendar/status', async ({ pool, operator, reply, url }) => {
   const migracao = await detector(pool);
-  const base = { cliente: configurado(), chave: temChave(env), migracao };
+  // `retorno`: o endereço EXATO que o Google compara com os cadastrados no Cloud (erro redirect_uri_mismatch = este texto não está lá).
+  const base = { cliente: configurado(), chave: temChave(env), migracao, retorno: origem(env, url) + G.ENDERECO_DE_RETORNO };
   if (!migracao) return reply(200, { ...base, disponivel: false, conectado: false });
   const c = await conexao(pool, operator.subject);
   reply(200, { ...base, disponivel: base.cliente && base.chave, conectado: Boolean(c), email: c?.email ?? null, desde: c?.connected_at ?? null });

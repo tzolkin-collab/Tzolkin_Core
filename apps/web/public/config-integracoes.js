@@ -158,6 +158,8 @@ function blocoDoGoogle(api, retorno) {
   const topo = no('div', undefined, 'cfg-integracao-topo');
   topo.append(no('strong', 'Sua conta Google'));
   t.append(topo, no('small', 'Cria a sala do Meet junto com a atividade, na SUA agenda, e acompanha mudança de horário e cancelamento. Só pede permissão para eventos.'));
+  // Endereço que o Google exige cadastrado, para copiar sem errar (erro redirect_uri_mismatch).
+  if (s.retorno) { const r = no('small', 'Endereço de retorno a cadastrar no Google Cloud (URIs de redirecionamento autorizados): ', 'cfg-faltando'); const code = no('code', s.retorno, 'cfg-codigo'); r.append(code); t.append(r); }
   if (!s.migracao) { topo.append(selo('Indisponível', 'neutral')); t.append(no('small', 'Disponível assim que a atualização do banco (migração 049) for aplicada.', 'cfg-faltando')); return; }
   if (!s.cliente || !s.chave) {
    topo.append(selo('Incompleto', 'warning'));

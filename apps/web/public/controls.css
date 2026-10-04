@@ -232,3 +232,4 @@ input:user-invalid:focus, select:user-invalid:focus, textarea:user-invalid:focus
 .cfg-cred-form .config-aviso { margin: 0; }
 .cfg-integracao > .cfg-linha-texto { flex: 1 1 0; }
 .cfg-integracao > button { flex: none; }
+.cfg-codigo { display: inline-block; margin-top: 2px; padding: 2px 6px; border-radius: 5px; background: var(--surface-hover); color: var(--text); font-size: 12px; user-select: all; word-break: break-all; }
