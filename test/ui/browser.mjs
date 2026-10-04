@@ -97,6 +97,15 @@ export async function abrirNavegador() {
    async tela(largura, altura) {
     await chamar('Emulation.setDeviceMetricsOverride', { width: largura, height: altura, deviceScaleFactor: 1, mobile: largura < 500 });
    },
+   // Preferência de cor do SISTEMA (o que o aparelho diz ao navegador): 'light' | 'dark'
+   // Roda um script em TODA página nova (inclusive depois de recarregar), antes do app. Devolve quem desfaz.
+   async injetar(codigo) {
+    const { identifier } = await chamar('Page.addScriptToEvaluateOnNewDocument', { source: codigo });
+    return () => chamar('Page.removeScriptToEvaluateOnNewDocument', { identifier });
+   },
+   async esquema(cor) {
+    await chamar('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: cor }] });
+   },
    async imagem(arquivo) {
     const { data } = await chamar('Page.captureScreenshot', { format: 'png' });
     mkdirSync(dirname(arquivo), { recursive: true });

@@ -9,7 +9,7 @@
   border: 1px solid var(--line, #e4e4e7);
   border-radius: 12px;
   border-color: var(--line, #e4e4e7);
-  background: #fff;
+  background: var(--surface);
 }
 
 .overview-kicker {
@@ -17,7 +17,7 @@
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 1.25px;
-  color: #406a87;
+  color: var(--focus-ring);
 }
 
 .overview-hero h2 {
@@ -41,11 +41,11 @@
   padding: 7px 10px;
   border: 1px solid var(--line, #e4e4e7);
   border-radius: 999px;
-  background: #fff;
+  background: var(--surface);
   font-size: 12px;
   white-space: nowrap;
-  border-color: #d8e1e8;
-  color: #355a75;
+  border-color: var(--line-strong);
+  color: var(--focus-ring);
 }
 
 .overview-kpis {
@@ -62,13 +62,13 @@
   text-align: left;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: #fff;
-  color: #1a1a1a;
+  background: var(--surface);
+  color: var(--text);
 }
 
 .overview-kpi:hover {
-  border-color: #c4c4c4;
-  background: #fdfdfd;
+  border-color: var(--line-hover);
+  background: var(--surface);
 }
 
 .overview-kpi>span {
@@ -99,7 +99,7 @@
   padding: 22px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--surface);
 }
 
 .overview-panel-title {
@@ -133,20 +133,20 @@
   padding: 12px;
   border: 1px solid var(--line, #e4e4e7);
   border-radius: 8px;
-  background: #fafafa;
+  background: var(--surface-muted);
   text-align: left;
-  color: #282828;
+  color: var(--text);
 }
 
 .overview-action:hover {
-  border-color: #d9e1e6;
-  background: #f7f9fa;
+  border-color: var(--line-strong);
+  background: var(--surface-subtle);
 }
 
 .overview-action>.delivery-icon {
   width: 17px;
   height: 17px;
-  color: #406a87;
+  color: var(--focus-ring);
 }
 
 .overview-action>span {
@@ -212,7 +212,7 @@
 .overview-integration-mark .provider-logo:not(.wide) { width: 100%; height: 100%; }
 
 /* Ícone genérico (sem logo): esse sim mantém o fundo, para não flutuar solto. */
-.overview-integration-mark:has(> svg) { background: #f4f4f4; }
+.overview-integration-mark:has(> svg) { background: var(--surface-hover); }
 
 .overview-integration-mark:has(.provider-logo.wide) {
   width: auto;
@@ -248,14 +248,14 @@
   padding: 13px;
   border: 1px solid var(--line, #e4e4e7);
   border-radius: 8px;
-  background: #fff;
+  background: var(--surface);
   text-align: left;
-  color: #282828;
+  color: var(--text);
 }
 
 .overview-product:hover {
-  background: #fafafa;
-  border-color: #cccccc;
+  background: var(--surface-muted);
+  border-color: var(--line-hover);
 }
 
 .overview-product>span:nth-child(2) {

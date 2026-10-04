@@ -4,89 +4,89 @@
    A única ênfase deliberada é o cartão "SEM DONO" — gasto não atribuído é a
    pendência que esta tela existe para cobrar, e precisa saltar aos olhos. */
 
-.campaign-hero{margin-bottom:20px}
-.campaign-hero h2{margin:4px 0 6px;font-size:24px;letter-spacing:-.5px}
-.campaign-hero p{margin:0;color:var(--muted, #646469);font-size:13px;max-width:66ch}
+.campaign-hero{margin-bottom: 20px}
+.campaign-hero h2{margin: 4px 0 6px;font-size: 24px;letter-spacing: -.5px}
+.campaign-hero p{margin: 0;color: var(--muted, var(--muted));font-size: 13px;max-width: 66ch}
 
 /* --- credencial --- */
-.campaign-credential{border:1px solid var(--line, #e4e4e7);border-radius:10px;background:#fff;padding:18px;margin-bottom:22px}
-.campaign-credential.empty{display:flex;gap:14px;align-items:flex-start;background:#fafafd;border-style:dashed}
-.campaign-credential.empty svg{width:20px;flex:0 0 auto;color:#8a7fc4;margin-top:2px}
-.campaign-credential.empty h3{margin:0 0 6px;font-size:15px}
-.campaign-credential.empty p{margin:0 0 10px;color:var(--muted, #646469);font-size:13px;line-height:1.6}
-.campaign-credential.empty small{display:block;margin-top:8px;color:var(--faint, #6e6e76);font-size:12px}
-.campaign-cmd{display:inline-block;border:1px solid var(--line, #e4e4e7);border-radius:6px;background:#f5f5f9;
- padding:7px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#44444f}
-.campaign-credential-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
-.campaign-credential-head strong{font-size:15px}
-.campaign-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px 20px;margin:0 0 14px}
-.campaign-facts dt{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint, #6e6e76);margin-bottom:3px}
-.campaign-facts dd{margin:0;font-size:13px;color:#333;overflow-wrap:anywhere}
-.campaign-actions{display:flex;gap:8px;flex-wrap:wrap}
+.campaign-credential{border: 1px solid var(--line, var(--line));border-radius: 10px;background: var(--surface);padding: 18px;margin-bottom: 22px}
+.campaign-credential.empty{display: flex;gap: 14px;align-items: flex-start;background: var(--surface-muted);border-style: dashed}
+.campaign-credential.empty svg{width: 20px;flex: 0 0 auto;color: var(--badge-info-fg);margin-top: 2px}
+.campaign-credential.empty h3{margin: 0 0 6px;font-size: 15px}
+.campaign-credential.empty p{margin: 0 0 10px;color: var(--muted, var(--muted));font-size: 13px;line-height: 1.6}
+.campaign-credential.empty small{display: block;margin-top: 8px;color: var(--faint, var(--muted));font-size: 12px}
+.campaign-cmd{display: inline-block;border: 1px solid var(--line, var(--line));border-radius: 6px;background: var(--surface-muted);
+ padding: 7px 10px;font-family: ui-monospace,SFMono-Regular,Menlo,monospace;font-size: 12px;color: #44444f}
+.campaign-credential-head{display: flex;gap: 10px;align-items: center;flex-wrap: wrap;margin-bottom: 14px}
+.campaign-credential-head strong{font-size: 15px}
+.campaign-facts{display: grid;grid-template-columns: repeat(auto-fit,minmax(180px,1fr));gap: 12px 20px;margin: 0 0 14px}
+.campaign-facts dt{font-size: 12px;text-transform: uppercase;letter-spacing: .04em;color: var(--faint, var(--muted));margin-bottom: 3px}
+.campaign-facts dd{margin: 0;font-size: 13px;color: var(--text);overflow-wrap: anywhere}
+.campaign-actions{display: flex;gap: 8px;flex-wrap: wrap}
 /* Saída para a expiração no modo clássico: informação, não alarme. */
-.campaign-login-hint{margin:0 0 12px;color:var(--muted, #646469);font-size:12px;line-height:1.55;max-width:74ch}
+.campaign-login-hint{margin: 0 0 12px;color: var(--muted, var(--muted));font-size: 12px;line-height: 1.55;max-width: 74ch}
 
 /* --- resumo --- */
-.campaign-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:22px}
-.campaign-kpi{border:1px solid var(--line, #e4e4e7);border-radius:10px;background:#fff;padding:14px 16px}
-.campaign-kpi strong{display:block;font-size:22px;letter-spacing:-.5px;margin:6px 0 2px}
-.campaign-kpi small{display:block;color:var(--faint, #6e6e76);font-size:12px;line-height:1.5}
+.campaign-summary{display: grid;grid-template-columns: repeat(auto-fit,minmax(160px,1fr));gap: 12px;margin-bottom: 22px}
+.campaign-kpi{border: 1px solid var(--line, var(--line));border-radius: 10px;background: var(--surface);padding: 14px 16px}
+.campaign-kpi strong{display: block;font-size: 22px;letter-spacing: -.5px;margin: 6px 0 2px}
+.campaign-kpi small{display: block;color: var(--faint, var(--muted));font-size: 12px;line-height: 1.5}
 /* Gasto sem dono não pode passar despercebido. */
-.campaign-kpi.warn{border-color:#f0d9a8;background:#fffcf5}
-.campaign-kpi.warn strong{color:#8a6d1f}
+.campaign-kpi.warn{border-color: color-mix(in srgb, var(--badge-warning-dot) 35%, transparent);background: var(--surface-muted)}
+.campaign-kpi.warn strong{color: var(--badge-warning-fg)}
 
 /* --- lista --- */
-.campaign-group{margin-bottom:26px}
-.campaign-group h3{margin:0;font-size:15px}
-.campaign-group>p.detail{margin:0 0 12px;color:var(--faint, #6e6e76);font-size:12px}
-.campaign-row{border:1px solid var(--line, #e4e4e7);border-radius:10px;background:#fff;padding:14px 16px;margin-bottom:8px}
-.campaign-row-head{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}
-.campaign-row-head strong{font-size:14px;overflow-wrap:anywhere}
-.campaign-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;
- padding-bottom:12px;border-bottom:1px solid var(--line-soft, #efeff2)}
-.campaign-metrics .detail{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint, #6e6e76)}
-.campaign-metrics strong{font-size:14px}
-.campaign-row-foot{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding-top:11px}
-.campaign-binding{display:inline-flex;gap:6px;align-items:center;font-size:12px;color:#6550bb}
-.campaign-binding svg{width:15px}
-.link-button{border:0;background:none;color:#6550bb;font:inherit;font-size:12px;padding:0;cursor:pointer;text-decoration:underline}
+.campaign-group{margin-bottom: 26px}
+.campaign-group h3{margin: 0;font-size: 15px}
+.campaign-group>p.detail{margin: 0 0 12px;color: var(--faint, var(--muted));font-size: 12px}
+.campaign-row{border: 1px solid var(--line, var(--line));border-radius: 10px;background: var(--surface);padding: 14px 16px;margin-bottom: 8px}
+.campaign-row-head{display: flex;gap: 10px;align-items: center;justify-content: space-between;margin-bottom: 10px}
+.campaign-row-head strong{font-size: 14px;overflow-wrap: anywhere}
+.campaign-metrics{display: grid;grid-template-columns: repeat(auto-fit,minmax(110px,1fr));gap: 10px;
+ padding-bottom: 12px;border-bottom: 1px solid var(--line-soft, var(--line))}
+.campaign-metrics .detail{display: block;font-size: 12px;text-transform: uppercase;letter-spacing: .04em;color: var(--faint, var(--muted))}
+.campaign-metrics strong{font-size: 14px}
+.campaign-row-foot{display: flex;gap: 10px;align-items: center;justify-content: space-between;flex-wrap: wrap;padding-top: 11px}
+.campaign-binding{display: inline-flex;gap: 6px;align-items: center;font-size: 12px;color: var(--badge-info-fg)}
+.campaign-binding svg{width: 15px}
+.link-button{border: 0;background: none;color: var(--badge-info-fg);font: inherit;font-size: 12px;padding: 0;cursor: pointer;text-decoration: underline}
 
 /* Sugestão fica visualmente distinta do vínculo confirmado: é palpite. */
-.campaign-suggestion{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
- border:1px dashed #ded8f5;border-radius:7px;background:#faf8ff;
- padding:9px 11px;margin:0 0 4px;color:#5d4fa8;font-size:12px;line-height:1.55}
+.campaign-suggestion{display: flex;gap: 8px;align-items: center;flex-wrap: wrap;
+ border: 1px dashed color-mix(in srgb, var(--badge-info-dot) 35%, transparent);border-radius: 7px;background: var(--surface-muted);
+ padding: 9px 11px;margin: 0 0 4px;color: var(--badge-info-fg);font-size: 12px;line-height: 1.55}
 
-.service-card-actions{display:flex;gap:8px;flex-wrap:wrap}
+.service-card-actions{display: flex;gap: 8px;flex-wrap: wrap}
 
 @media(max-width:700px){
- .campaign-hero h2{font-size:21px}
- .campaign-row-head{flex-direction:column;align-items:flex-start;gap:6px}
- .campaign-row-foot{flex-direction:column;align-items:stretch}
+ .campaign-hero h2{font-size: 21px}
+ .campaign-row-head{flex-direction: column;align-items: flex-start;gap: 6px}
+ .campaign-row-foot{flex-direction: column;align-items: stretch}
 }
 
 /* Chave de cifragem ausente: bloqueia a conexão, então precisa ser explícito. */
-.campaign-key-missing{border:1px solid #f0d9a8;border-radius:8px;background:#fffcf5;
- padding:11px 13px;margin:10px 0}
-.campaign-key-missing strong{display:block;font-size:13px;color:#8a6d1f;margin-bottom:4px}
-.campaign-key-missing p{margin:0 0 8px;font-size:12px;color:#7a6430;line-height:1.55}
-#marketing-credential-form details{border:1px solid var(--line, #e4e4e7);border-radius:7px;padding:10px 12px}
-#marketing-credential-form details summary{font-size:12px;cursor:pointer;color:var(--muted, #646469)}
-#marketing-credential-form details small{display:block;margin:8px 0;color:var(--faint, #6e6e76);font-size:12px;line-height:1.55}
-#marketing-credential-form code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.campaign-key-missing{border: 1px solid color-mix(in srgb, var(--badge-warning-dot) 35%, transparent);border-radius: 8px;background: var(--surface-muted);
+ padding: 11px 13px;margin: 10px 0}
+.campaign-key-missing strong{display: block;font-size: 13px;color: var(--badge-warning-fg);margin-bottom: 4px}
+.campaign-key-missing p{margin: 0 0 8px;font-size: 12px;color: var(--badge-warning-fg);line-height: 1.55}
+#marketing-credential-form details{border: 1px solid var(--line, var(--line));border-radius: 7px;padding: 10px 12px}
+#marketing-credential-form details summary{font-size: 12px;cursor: pointer;color: var(--muted, var(--muted))}
+#marketing-credential-form details small{display: block;margin: 8px 0;color: var(--faint, var(--muted));font-size: 12px;line-height: 1.55}
+#marketing-credential-form code{font-family: ui-monospace,SFMono-Regular,Menlo,monospace;font-size: 12px}
 
 /* Cabecalho de grupo: o subtotal a direita e o que permite comparar produtos. */
-.campaign-group-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:10px}
-.campaign-group-head .overview-kicker{display:block;margin-bottom:3px}
-.campaign-group-total{text-align:right;flex:0 0 auto}
-.campaign-group-total strong{display:block;font-size:17px;letter-spacing:-.3px}
-.campaign-group-total small{display:block;color:var(--faint, #6e6e76);font-size:12px;margin-top:2px}
+.campaign-group-head{display: flex;justify-content: space-between;align-items: flex-start;gap: 16px;margin-bottom: 10px}
+.campaign-group-head .overview-kicker{display: block;margin-bottom: 3px}
+.campaign-group-total{text-align: right;flex: 0 0 auto}
+.campaign-group-total strong{display: block;font-size: 17px;letter-spacing: -.3px}
+.campaign-group-total small{display: block;color: var(--faint, var(--muted));font-size: 12px;margin-top: 2px}
 /* Grupo sem dono: pendencia, nao resultado. */
-.campaign-group.pendente{border-left:3px solid #f0d9a8;padding-left:13px}
-.campaign-group.pendente .campaign-group-total strong{color:#8a6d1f}
-@media(max-width:700px){.campaign-group-head{flex-direction:column}.campaign-group-total{text-align:left}}
+.campaign-group.pendente{border-left: 3px solid color-mix(in srgb, var(--badge-warning-dot) 35%, transparent);padding-left: 13px}
+.campaign-group.pendente .campaign-group-total strong{color: var(--badge-warning-fg)}
+@media(max-width:700px){.campaign-group-head{flex-direction: column}.campaign-group-total{text-align: left}}
 
 /* Retorno do OAuth: aparece uma vez, no topo. */
-.campaign-flash{border:1px solid;border-radius:8px;padding:10px 13px;margin:0 0 16px;font-size:13px;line-height:1.55}
-.campaign-flash.ok{border-color:#cfe8d6;background:#f4fbf6;color:#2f6b43}
-.campaign-flash.warn{border-color:#f0d9a8;background:#fffcf5;color:#7a6430}
-.campaign-flash.error{border-color:#f0c9c9;background:#fff6f6;color:#8a2f2f}
+.campaign-flash{border: 1px solid;border-radius: 8px;padding: 10px 13px;margin: 0 0 16px;font-size: 13px;line-height: 1.55}
+.campaign-flash.ok{border-color: color-mix(in srgb, var(--badge-success-dot) 35%, transparent);background: var(--surface-muted);color: var(--badge-success-fg)}
+.campaign-flash.warn{border-color: color-mix(in srgb, var(--badge-warning-dot) 35%, transparent);background: var(--surface-muted);color: var(--badge-warning-fg)}
+.campaign-flash.error{border-color: color-mix(in srgb, var(--badge-danger-dot) 35%, transparent);background: var(--surface-muted);color: var(--badge-danger-fg)}

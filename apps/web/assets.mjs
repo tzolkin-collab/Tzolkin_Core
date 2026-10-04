@@ -45,6 +45,10 @@ const FILES = {
  '/inline-edit.js': ['inline-edit.js', 'text/javascript'],
  '/peek.css': ['peek.css', 'text/css'],
  '/badge.css': ['badge.css', 'text/css'],
+ '/theme.css': ['theme.css', 'text/css'],
+ '/theme-boot.js': ['theme-boot.js', 'text/javascript'],
+ '/settings.js': ['settings.js', 'text/javascript'],
+ '/logo-tema.js': ['logo-tema.js', 'text/javascript'],
  // Inter (variável, só o subconjunto latino: cobre o português). Licença SIL OFL 1.1 em fonts/INTER-LICENSE.txt.
  '/fonts/inter-latin-wght-normal.woff2': ['fonts/inter-latin-wght-normal.woff2', 'font/woff2'],
  '/management-workspace.js': ['management-workspace.js', 'text/javascript'],

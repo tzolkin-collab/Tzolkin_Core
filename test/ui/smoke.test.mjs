@@ -711,6 +711,266 @@ test('capturas: galeria de selos, etiquetas e contagens', { skip: PULAR || !proc
  semExcecoes();
 });
 
+// Tema: "sistema" é o padrão e acompanha o aparelho ao vivo; Configurações troca; a escolha sobrevive a recarregar.
+const TEMA = `(() => ({ tema: document.documentElement.dataset.theme, pref: document.documentElement.dataset.themePref,
+ fundo: getComputedStyle(document.body).backgroundColor, guardado: (() => { try { return localStorage.getItem('tzolkin-tema'); } catch { return 'erro'; } })() }))()`;
+
+test('tema: segue o sistema por padrão, ao vivo', { skip: PULAR }, async () => {
+ await pagina.esquema('light');
+ await pagina.avaliar(`localStorage.removeItem('tzolkin-tema'); window.TzolkinTema.aplicar()`);
+ let t = await pagina.avaliar(TEMA);
+ assert.deepEqual([t.tema, t.pref, t.guardado], ['light', 'sistema', null]);
+ await pagina.esquema('dark');
+ await pagina.esperar(`document.documentElement.dataset.theme === 'dark'`, { descricao: 'o sistema foi para escuro e o Core acompanhou' });
+ t = await pagina.avaliar(TEMA);
+ assert.equal(t.fundo, 'rgb(17, 17, 17)', 'fundo do escuro é o #111 medido no ChatGPT');
+ assert.equal(await pagina.avaliar(`getComputedStyle(document.documentElement).colorScheme`), 'dark', 'barras e campos nativos também escurecem');
+ semExcecoes();
+});
+
+test('tema: Configurações escolhe claro/escuro/sistema e a escolha sobrevive a recarregar', { skip: PULAR }, async () => {
+ await pagina.avaliar(`document.getElementById('open-settings').click()`);
+ await pagina.esperar(`!document.getElementById('view-settings').hidden && document.querySelectorAll('#settings-body input[name=tema]').length === 3`, { descricao: 'tela de Configurações' });
+ const marcado = () => pagina.avaliar(`document.querySelector('#settings-body input[name=tema]:checked')?.value`);
+ const escolher = valor => pagina.avaliar(`(() => { const r = document.querySelector('#settings-body input[value=${valor}]'); r.click(); })()`);
+ assert.equal(await marcado(), 'sistema');
+ // sistema está escuro; escolher Claro vence o sistema
+ await escolher('claro');
+ let t = await pagina.avaliar(TEMA);
+ assert.deepEqual([t.tema, t.pref, t.guardado], ['light', 'claro', 'claro']);
+ assert.equal(t.fundo, 'rgb(255, 255, 255)');
+ await pagina.esquema('light');
+ await escolher('escuro');
+ t = await pagina.avaliar(TEMA);
+ assert.deepEqual([t.tema, t.pref, t.guardado], ['dark', 'escuro', 'escuro'], 'Escuro vence o sistema claro');
+ // recarrega: o script do <head> já aplica antes do app carregar, sem piscar claro
+ pagina.limparProblemas();
+ await pagina.ir(origem + '/');
+ assert.equal(await pagina.avaliar(`document.documentElement.dataset.theme`), 'dark');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`, { descricao: 'painel depois de recarregar' });
+ await pagina.avaliar(`document.getElementById('open-settings').click()`);
+ await pagina.esperar(`document.querySelectorAll('#settings-body input[name=tema]').length === 3`);
+ assert.equal(await marcado(), 'escuro', 'a opção marcada reflete a escolha guardada');
+ // volta ao padrão: remove a escolha guardada
+ await escolher('sistema');
+ t = await pagina.avaliar(TEMA);
+ assert.deepEqual([t.tema, t.pref, t.guardado], ['light', 'sistema', null]);
+ semExcecoes();
+});
+
+test('tema escuro: texto, texto apagado e selos mantêm o contraste legível nas telas principais', { skip: PULAR }, async () => {
+ await pagina.esquema('dark');
+ await pagina.esperar(`document.documentElement.dataset.theme === 'dark'`);
+ await pagina.tela(1280, 800);
+ const LER = `(() => {
+  const canais = c => c.match(/[\\d.]+/g).slice(0, 3).map(Number);
+  const luz = c => { const [r, g, b] = canais(c).map(v => v / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const razao = (a, b) => { const [x, y] = [luz(a), luz(b)].sort((p, q) => q - p); return Math.round(((x + 0.05) / (y + 0.05)) * 100) / 100; };
+  // o fundo de verdade: sobe pela árvore até achar uma cor opaca
+  const fundoDe = el => { for (let e = el; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (c && !/rgba\\(.*, 0\\)|transparent/.test(c)) return c; } return 'rgb(17, 17, 17)'; };
+  const par = el => ({ texto: el.textContent.trim().slice(0, 24), cor: razao(getComputedStyle(el).color, fundoDe(el)) });
+  const pegar = (seletor, n = 3) => [...document.querySelectorAll(seletor)].filter(e => e.textContent.trim() && e.offsetParent).slice(0, n).map(par);
+  return { titulo: pegar('h1'), menu: pegar('.nav-item'), cabecalho: pegar('#client-table th, .tbl th', 2), nomes: pegar('.cell-name strong, .tbl td strong', 2),
+   apagado: pegar('.cell-name small, .tbl td small, .page-desc', 2), selos: pegar('#tenants .status', 3), abas: pegar('#client-tabs .tab-count', 2) };
+ })()`;
+ for (const tela of ['Clientes', 'Empresas', 'Pessoas']) {
+  await pagina.avaliar(CLICAR_NO_MENU(tela));
+  await pagina.esperar(`document.querySelectorAll('.view:not([hidden]) .tbl tbody tr').length > 0`, { descricao: `linhas de ${tela}` });
+  const lido = await pagina.avaliar(LER);
+  for (const [grupo, itens] of Object.entries(lido)) for (const item of itens) {
+   assert.ok(item.cor >= 4.5, `${tela} / ${grupo} "${item.texto}": contraste ${item.cor}:1 no escuro (mínimo 4,5)`);
+  }
+  assert.ok(lido.titulo.length > 0 && lido.menu.length > 0, `${tela}: nada foi medido (seletor desatualizado?)`);
+ }
+ await pagina.esquema('light');
+ semExcecoes();
+});
+
+test('tema escuro: logo escura e neutra inverte; colorida e clara ficam como estão', { skip: PULAR }, async () => {
+ await pagina.esquema('dark');
+ await pagina.esperar(`document.documentElement.dataset.theme === 'dark'`);
+ await pagina.avaliar(CLICAR_NO_MENU('Conexões'));
+ await pagina.esperar(`document.querySelectorAll('.view:not([hidden]) img.provider-logo').length >= 3`, { descricao: 'logos dos provedores' });
+ const LER = `new Promise(ok => setTimeout(() => ok(Object.fromEntries([...document.querySelectorAll('.view:not([hidden]) img.provider-logo')].map(i => [i.src.split('/').pop(), { marcada: i.getAttribute('data-logo-escura'), filtro: getComputedStyle(i).filter }]))), 600))`;
+ const escuro = await pagina.avaliar(LER);
+ assert.equal(escuro['github.svg']?.marcada, 'neutra', 'GitHub (#1b1f23) é escura');
+ assert.equal(escuro['vercel.svg']?.marcada, 'neutra', 'Vercel (preta) é escura');
+ assert.equal(escuro['easypanel.svg']?.marcada, null, 'EasyPanel é colorido e legível: não inverte');
+ assert.match(escuro['github.svg'].filtro, /invert\(1\)/, 'no escuro a logo escura é invertida');
+ assert.equal(escuro['easypanel.svg'].filtro, 'none');
+ await pagina.esquema('light');
+ await pagina.esperar(`document.documentElement.dataset.theme === 'light'`);
+ const claro = await pagina.avaliar(LER);
+ assert.equal(claro['github.svg'].filtro, 'none', 'no claro nada é invertido');
+ semExcecoes();
+});
+
+// Aba Vercel com dados: o fixture não tem token, então a página recebe uma resposta de /api/deploys montada aqui,
+// com um projeto em cada estado que a tela sabe desenhar.
+const DEPLOYS_DE_EXEMPLO = JSON.stringify((() => {
+ const d = (state, label, extra = {}) => ({ id: 'dpl_' + Math.random().toString(36).slice(2, 8), state, state_label: label, target: 'production', url: 'https://site-exemplo.vercel.app', inspector_url: 'https://vercel.com/x/y', branch: 'main', commit: 'a1b2c3d', commit_message: 'feat(site): nova página de preços', created_at: new Date(Date.now() - 3600e3).toISOString(), ready_substate: null, ...extra });
+ const p = (nome, deployments, extra = {}) => ({ provider: 'vercel', project_id: 'prj_' + nome, project: nome, git_connected: true, deployments, ...extra });
+ return {
+  configured: true, checked_at: new Date().toISOString(),
+  providers: [{ provider: 'vercel', status: 'ok', message: null, truncated: 0, incomplete: false }],
+  projects: [
+   p('tzolkin-site', [d('READY', 'pronto'), d('READY', 'pronto', { commit: 'f00ba12', commit_message: 'fix(mobile): trava zoom' }), d('ERROR', 'falhou', { commit: '9e8d7c6', commit_message: 'chore: atualiza dependências' })]),
+   p('tzolkin-core', [d('BUILDING', 'em construção', { target: 'preview', branch: 'ci/testes-automaticos' })]),
+   p('educare', [d('ERROR', 'falhou', { commit_message: 'refactor: troca o provedor de e-mail' })]),
+   p('landing-antiga', [d('CANCELED', 'cancelado', { target: 'preview' })], { git_connected: false }),
+   p('projeto-parado', []),
+   p('projeto-parcial', [], { partial: true }),
+  ],
+ };
+})());
+
+const FAVICON_DE_EXEMPLO = 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="#2f9d58"/></svg>').toString('base64');
+// /api/deploys e /api/product-favicon respondem aqui, sem rede. Só o projeto "tzolkin-site" tem favicon; os outros
+// recebem {href: null}, como o Core responde quando não acha ícone.
+const COM_DEPLOYS = `(() => {
+ const DEPLOYS = ${DEPLOYS_DE_EXEMPLO};
+ const FAVICON = ${JSON.stringify(FAVICON_DE_EXEMPLO)};
+ window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
+ const json = corpo => Promise.resolve(new Response(JSON.stringify(corpo), { status: 200, headers: { 'content-type': 'application/json' } }));
+ window.fetch = (url, opcoes) => {
+  const u = String(url);
+  if (u.startsWith('/api/deploys')) return json(DEPLOYS);
+  if (u.startsWith('/api/product-favicon')) return json({ href: u.includes('tzolkin-site') ? FAVICON : null });
+  return window.__fetchOriginal(url, opcoes);
+ };
+})()`;
+
+test('Vercel com dados: cada estado aparece, cabe na tela e o texto é legível nos dois temas', { skip: PULAR }, async () => {
+ const desfazer = await pagina.injetar(COM_DEPLOYS);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`, { descricao: 'painel recarregado com a Vercel de exemplo' });
+ await pagina.tela(1280, 900);
+ for (const esquema of ['light', 'dark']) {
+  await pagina.esquema(esquema);
+  await pagina.esperar(`document.documentElement.dataset.theme === '${esquema}'`);
+  await pagina.avaliar(CLICAR_NO_MENU('Visão geral'));
+  await pagina.avaliar(CLICAR_NO_MENU('Vercel'));
+  await pagina.esperar(`document.querySelectorAll('#deploys-list .deploy-card').length === 6`, { descricao: 'seis projetos da Vercel' });
+  const lido = await pagina.avaliar(`(() => {
+   const canais = c => c.match(/[\\d.]+/g).slice(0, 3).map(Number);
+   const luz = c => { const [r, g, b] = canais(c).map(v => v / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+   const razao = (a, b) => { const [x, y] = [luz(a), luz(b)].sort((p, q) => q - p); return Math.round(((x + 0.05) / (y + 0.05)) * 100) / 100; };
+   const fundoDe = el => { for (let e = el; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (c && !/rgba\\(.*, 0\\)|transparent/.test(c)) return c; } return getComputedStyle(document.body).backgroundColor; };
+   const ruins = [];
+   for (const el of document.querySelectorAll('#view-vercel *')) {
+    if (!el.offsetParent || ![...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) continue;
+    const cor = razao(getComputedStyle(el).color, fundoDe(el));
+    if (cor < 4.5) ruins.push({ texto: el.textContent.trim().slice(0, 40), classe: el.className, cor });
+   }
+   const secao = document.getElementById('view-vercel');
+   return { ruins, estouro: document.documentElement.scrollWidth - document.documentElement.clientWidth, cartoes: secao.querySelectorAll('.deploy-card').length, selos: [...secao.querySelectorAll('.status')].map(s => s.textContent.trim()) };
+  })()`);
+  assert.equal(lido.estouro <= 0, true, `${esquema}: a tela não pode ter rolagem horizontal`);
+  // Encaixe: cabeçalho, linha de dono, deploy e histórico de cada cartão entram pela mesma margem; cartões da mesma fila têm a mesma altura.
+  const encaixe = await pagina.avaliar(`(() => [...document.querySelectorAll('#deploys-list .deploy-card')].map(c => {
+   const cr = c.getBoundingClientRect(), borda = el => el ? Math.round(el.getBoundingClientRect().left - cr.left) : null;
+   const sum = c.querySelector('details.deploy-history > summary');
+   return { nome: c.querySelector('h3').textContent, esq: [borda(c.querySelector('header .deploy-head')), borda(c.querySelector('.own-line > *')), borda(c.querySelector('.deploy-row > div > *')), sum ? borda(sum) + Math.round(parseFloat(getComputedStyle(sum).paddingLeft)) : null].filter(v => v !== null), topo: Math.round(cr.top), alt: Math.round(cr.height) };
+  }))()`);
+  for (const c of encaixe) assert.ok(Math.max(...c.esq) - Math.min(...c.esq) <= 1, `${esquema}: "${c.nome}" começa em pontos diferentes da esquerda: ${c.esq}`);
+  const filas = new Map(); for (const c of encaixe) filas.set(c.topo, [...(filas.get(c.topo) || []), c.alt]);
+  for (const [topo, alturas] of filas) assert.ok(Math.max(...alturas) - Math.min(...alturas) <= 1, `${esquema}: fila em ${topo}px com alturas diferentes: ${alturas}`);
+  assert.deepEqual(lido.ruins, [], `${esquema}: texto com contraste abaixo de 4,5:1 na aba Vercel`);
+  // Favicon: o projeto que tem ícone mostra o favicon do site; quem não tem fica com a logo da Vercel.
+  const icones = await pagina.avaliar(`(() => Object.fromEntries([...document.querySelectorAll('#deploys-list .deploy-card')].map(c => [c.querySelector('h3').textContent, c.querySelector('.deploy-project-mark img')?.className || 'nenhum'])))()`);
+  assert.match(icones['tzolkin-site'], /product-favicon/, `${esquema}: tzolkin-site devia mostrar o favicon do site: ${JSON.stringify(icones)}`);
+  assert.match(icones['educare'], /provider-logo/, `${esquema}: educare sem favicon devia ficar com a logo da Vercel: ${JSON.stringify(icones)}`);
+  if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, `990-Vercel-${esquema}.png`));
+ }
+ // Em largura média (sidebar aberta) o cartão não pode ficar espremido: abaixo de 340px o botão, o ambiente e o criador quebram em várias linhas.
+ await pagina.tela(1024, 800);
+ await pagina.esperar(`document.querySelectorAll('#deploys-list .deploy-card').length === 6`);
+ const larguras = await pagina.avaliar(`[...document.querySelectorAll('#deploys-list .deploy-card')].map(c => Math.round(c.getBoundingClientRect().width))`);
+ assert.ok(larguras.every(l => l >= 340), 'cartões da Vercel espremidos em 1024px: ' + larguras);
+ await pagina.tela(1280, 900);
+ await desfazer();
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden`);
+ await pagina.esquema('light');
+ semExcecoes();
+});
+
+test('capturas: modo escuro nas fichas (espaço, lead, empresa, pessoa)', { skip: PULAR || !process.env.UI_SCREENSHOTS }, async () => {
+ await pagina.esquema('dark');
+ await pagina.esperar(`document.documentElement.dataset.theme === 'dark'`);
+ await pagina.tela(1280, 800);
+ const foto = nome => pagina.imagem(join(ARTEFATOS, `985-Escuro-${nome}.png`));
+ const fechar = `document.querySelectorAll('dialog[open]').forEach(d => d.close()); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`;
+ // lead
+ await pagina.avaliar(CLICAR_NO_MENU('Inbound'));
+ await pagina.esperar(`document.querySelectorAll('#inbound-panel-leads tbody .tbl-name').length > 0`);
+ await pagina.avaliar(`document.querySelector('#inbound-panel-leads tbody .tbl-name').click()`);
+ await pagina.esperar(`document.querySelector('#peek-lead .funnel-panel')`);
+ await new Promise(r => setTimeout(r, 400));
+ await foto('Ficha_do_lead');
+ await pagina.avaliar(fechar);
+ // empresa
+ await pagina.avaliar(CLICAR_NO_MENU('Empresas'));
+ await pagina.esperar(`document.querySelectorAll('.view:not([hidden]) .tbl tbody .tbl-name').length > 0`);
+ await pagina.avaliar(`document.querySelector('.view:not([hidden]) .tbl tbody .tbl-name').click()`);
+ await pagina.esperar(`document.querySelector('#client-detail .ficha-dl')`);
+ await new Promise(r => setTimeout(r, 700));
+ await foto('Ficha_da_empresa');
+ await pagina.avaliar(fechar);
+ // pessoa
+ await pagina.avaliar(CLICAR_NO_MENU('Pessoas'));
+ await pagina.esperar(`document.querySelectorAll('.view:not([hidden]) .tbl tbody .tbl-name').length > 0`);
+ await pagina.avaliar(`document.querySelector('.view:not([hidden]) .tbl tbody .tbl-name').click()`);
+ await new Promise(r => setTimeout(r, 700));
+ await foto('Ficha_da_pessoa');
+ await pagina.avaliar(fechar);
+ // espaço (Portfólio -> abrir gestão)
+ await pagina.avaliar(CLICAR_NO_MENU('Portfólio'));
+ await pagina.esperar(`document.querySelectorAll('#product-catalog tbody .tbl-name').length >= 2`);
+ await pagina.avaliar(`[...document.querySelectorAll('#product-catalog tbody .tbl-name')].find(b => b.textContent === 'Plataforma A').click()`);
+ await pagina.esperar(`document.getElementById('page-title').textContent.trim() !== 'Portfólio'`);
+ await new Promise(r => setTimeout(r, 700));
+ await foto('Ficha_do_espaco');
+ await pagina.avaliar(`(() => { const c = document.getElementById('context-select'); c.value = ''; c.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+ await pagina.esquema('light');
+ semExcecoes();
+});
+
+test('capturas: modo escuro nas telas principais', { skip: PULAR || !process.env.UI_SCREENSHOTS }, async () => {
+ await pagina.esquema('dark');
+ await pagina.esperar(`document.documentElement.dataset.theme === 'dark'`);
+ await pagina.tela(1280, 800);
+ for (const [tela, arquivo] of [['Clientes', '970-Escuro-Clientes.png'], ['Empresas', '971-Escuro-Empresas.png'], ['Pessoas', '972-Escuro-Pessoas.png'], ['Financeiro', '973-Escuro-Financeiro.png'], ['Visão geral', '974-Escuro-VisaoGeral.png']]) {
+  await pagina.avaliar(CLICAR_NO_MENU(tela));
+  await new Promise(r => setTimeout(r, 500));
+  await pagina.imagem(join(ARTEFATOS, arquivo));
+ }
+ await pagina.avaliar(`document.getElementById('open-settings').click()`);
+ await new Promise(r => setTimeout(r, 300));
+ await pagina.imagem(join(ARTEFATOS, '975-Escuro-Configuracoes.png'));
+ await pagina.esquema('light');
+ semExcecoes();
+});
+
+test('capturas: modo escuro nos formulários e diálogos', { skip: PULAR || !process.env.UI_SCREENSHOTS }, async () => {
+ await pagina.esquema('dark');
+ await pagina.esperar(`document.documentElement.dataset.theme === 'dark'`);
+ await pagina.tela(1280, 900);
+ for (const [tela, arquivo] of [['Portfólio', '977-Escuro-Portfolio.png'], ['Serviços', '978-Escuro-Servicos.png'], ['Acompanhamento', '979-Escuro-Acompanhamento.png'], ['Conexões', '980-Escuro-Conexoes.png'], ['Vercel', '981-Escuro-Vercel.png'], ['DNS', '982-Escuro-DNS.png'], ['Banco de dados', '983-Escuro-Banco.png'], ['Inbound', '984-Escuro-Inbound.png']]) {
+  await pagina.avaliar(CLICAR_NO_MENU(tela));
+  await new Promise(r => setTimeout(r, 500));
+  await pagina.imagem(join(ARTEFATOS, arquivo));
+ }
+ for (const id of ['tenant-dialog', 'stakeholder-dialog', 'engagement-dialog', 'space-dialog', 'member-dialog']) {
+  await pagina.avaliar(`document.querySelectorAll('dialog[open]').forEach(d => d.close()); document.getElementById('${id}').showModal()`);
+  await new Promise(r => setTimeout(r, 250));
+  await pagina.imagem(join(ARTEFATOS, `976-Escuro-${id}.png`));
+ }
+ await pagina.avaliar(`document.querySelectorAll('dialog[open]').forEach(d => d.close())`);
+ await pagina.esquema('light');
+ semExcecoes();
+});
+
 test('controle: o detector de defeitos de tela enxerga o que deve enxergar', { skip: PULAR }, async () => {
  await pagina.tela(1280, 800);
  await pagina.avaliar(`(() => {

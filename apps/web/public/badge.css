@@ -76,7 +76,7 @@
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
-.tab.active .tab-count { background: var(--brand, #29292c); color: #fff; }
+.tab.active .tab-count { background: var(--brand, #29292c); color: var(--on-brand, #fff); }
 
 /* Selos de preparo de conexões ("Pronto", "Parcial") na mesma paleta */
 .check-pill { height: 22px; padding: 0 9px; border-radius: 6px; font-size: 12px; font-weight: 500; line-height: 1; }
@@ -89,3 +89,13 @@
 
 /* Selo dentro de linha de tabela e de lista alinha no centro da linha */
 .tbl td .status, .tbl td .badge, .detail-row .status { vertical-align: middle; }
+
+/* Escuro: fundo do selo escuro e quase da mesma matiz, texto claro. Mesmos pisos de contraste (testados). */
+:root[data-theme="dark"] {
+  --badge-neutral-bg: #2a2a2a; --badge-neutral-fg: #c8c8c8; --badge-neutral-dot: #8e8e8e;
+  --badge-success-bg: #12301f; --badge-success-fg: #7fd6a0; --badge-success-dot: #3fb56f;
+  --badge-warning-bg: #3a2c0f; --badge-warning-fg: #f0c060; --badge-warning-dot: #e0a030;
+  --badge-danger-bg:  #3d1820; --badge-danger-fg:  #ff9aa8; --badge-danger-dot:  #ec5a70;
+  --badge-info-bg:    #14283f; --badge-info-fg:    #8fc2ff; --badge-info-dot:    #4a95f0;
+  --badge-accent-bg:  #2a2147; --badge-accent-fg:  #b9a6ff; --badge-accent-dot:  #8c6cf5;
+}

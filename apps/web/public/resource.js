@@ -3,6 +3,8 @@ import {providerLogo} from './icons.js';
 import {easyTabs,setupEasypanel} from './easypanel.js';
 const tabs={overview:['Visão geral','layers'],deployments:['Deploys','cloud'],configuration:['Configuração','settings'],domains:['Domínios','frontend'],...easyTabs};
 const fields={path:'Pasta raiz',stack:'Stack',runtime:'Runtime',build:'Build',start:'Inicialização',output:'Pasta de saída',branch:'Branch'};
+// Cor do selo = estado do build: no ar é verde, falha é vermelha, em curso é azul, o resto é neutro.
+const stateTone={READY:'success',SUCCEEDED:'success',ERROR:'danger',BUILDING:'info',QUEUED:'info',INITIALIZING:'info'};
 const states={READY:'Pronto',SUCCEEDED:'Concluído',ERROR:'Falhou',BUILDING:'Em build',QUEUED:'Na fila',INITIALIZING:'Iniciando',CANCELED:'Cancelado',UNKNOWN:'Desconhecido'};
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!=null)n.textContent=text;if(cls)n.className=cls;return n;};
 const button=(label,icon,fn)=>{const b=el('button',null,'secondary');b.type='button';b.append(deliveryIcon(icon),document.createTextNode(label));b.onclick=fn;return b;};
@@ -52,7 +54,7 @@ export function setupResource({api,activate,canOpen,back}) {
    panel.append(el('p',data.deployments.scope || 'Até 20 deploys recentes deste projeto, de todos os ambientes. “Pronto” é o estado do build, não uma verificação de tráfego em produção.','detail'));
    if(current.deployment&&!data.deployments.items.some(d=>d.id===current.deployment))panel.append(el('p','O deploy selecionado não está nesta consulta recente.','notice-inline'));
    if(!data.deployments.items.length)panel.append(el('p','Nenhum deploy retornado.','empty-list'));
-   for(const d of data.deployments.items){const card=el('article',null,'delivery-component');if(d.id===current.deployment)card.classList.add('resource-selected');card.append(el('span',states[d.state]||'Desconhecido','status'),el('h3',d.id),el('p',[d.target||'Ambiente não informado',d.branch,d.commit].filter(Boolean).join(' · '),'detail'),el('small',d.created_label || (d.created_at?new Date(d.created_at).toLocaleString('pt-BR'):'Data não informada')));
+   for(const d of data.deployments.items){const card=el('article',null,'delivery-component');if(d.id===current.deployment)card.classList.add('resource-selected');card.append(el('span',states[d.state]||'Desconhecido','status '+(stateTone[d.state]||'neutral')),el('h3',d.id),el('p',[d.target||'Ambiente não informado',d.branch,d.commit].filter(Boolean).join(' · '),'detail'),el('small',d.created_label || (d.created_at?new Date(d.created_at).toLocaleString('pt-BR'):'Data não informada')));
     if(data.provider==='easypanel'){
      const output=el('div');const targetId=data.target.id;const read=button('Ver saída da ação','worker',async()=>{read.disabled=true;output.textContent='Consultando saída…';try{const result=await api('/api/platforms/easypanel/section?'+new URLSearchParams({target_id:targetId,section:'action',action_id:d.id}));if(!output.isConnected)return;output.replaceChildren(el('p',result.scope||result.message,'detail'));if(result.status==='ok')output.append(el('pre',result.text||'Sem saída registrada.','easy-logs'));if(result.partial)output.append(el('p','Saída parcial: limite de tamanho atingido.','detail'));}catch(error){if(output.isConnected)output.textContent=error.message;}finally{read.disabled=false;}});
      card.append(read,output);

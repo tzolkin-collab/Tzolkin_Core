@@ -290,10 +290,10 @@ test('A credencial exposta ao painel nunca contém o token', async t => {
   assert.equal(rotuloValidade({ configured: false }), null);
 
   // Classe sem regra no CSS cai no cinza neutro de .status: a urgência some da tela.
-  const css = readFileSync(new URL('../../apps/web/public/design.css', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../../apps/web/public/badge.css', import.meta.url), 'utf8');
   for (const classe of [classePermanente, classeLonge, classePerto, classeVencida]) {
    const variante = classe.split(' ')[1];
-   assert.match(css, new RegExp(`\\.status\\.${variante}\\s*\\{`), `.status.${variante} precisa existir em design.css`);
+   assert.match(css, new RegExp('\\.' + variante + '\\b'), '.' + variante + ' precisa ter regra em badge.css (os selos moram lá)');
   }
   assert.notEqual(classePerto, classeLonge, 'perto de vencer não pode ter a mesma cor de faltar muito');
  });

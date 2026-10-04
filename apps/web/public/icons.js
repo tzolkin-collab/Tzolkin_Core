@@ -46,6 +46,9 @@ export function providerLogo(name){
 const faviconLookups=new Map();
 const lookupFavicon=url=>{if(!faviconLookups.has(url))faviconLookups.set(url,fetch('/api/product-favicon?'+new URLSearchParams({url})).then(response=>response.ok?response.json():null).then(result=>result?.href||null).catch(()=>null));return faviconLookups.get(url);};
 
+// Favicon do site de um projeto: o mesmo endpoint e a mesma memória de productFavicon, devolvendo o endereço (ou null).
+export const faviconDoSite=lookupFavicon;
+
 export function productFavicon(url){
  if(!url)return createIcon('package');
  if(typeof url==='string'&&url.startsWith('/product-favicons/')){const img=document.createElement('img');img.src=url;img.alt='';img.width=24;img.height=24;img.className='product-favicon';img.setAttribute('aria-hidden','true');return img;}

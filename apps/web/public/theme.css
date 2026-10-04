@@ -1,0 +1,53 @@
+/* Tema escuro. Cores medidas na interface escura do ChatGPT (captura de tela de 2026-10):
+     fundo #111111 · menu #161616 · cartão e barra #212121 · hover #282828 · caixa elevada #2f2f2f
+     divisória #323232 · texto #dadada (títulos #fcfcfc) · secundário #acacac · azul #66b5ff · laranja #ff8549
+
+   Como funciona: theme-boot.js põe data-theme="dark" no <html>. Aqui só se redefinem TOKENS (as variáveis de
+   style.css); nenhuma tela decide cor por conta própria. Cor fixa em CSS de tela é o que quebra no escuro:
+   o teste test/unit/theme.test.mjs impede que apareça cor fixa nova nos arquivos já migrados.
+
+   Fora do ChatGPT: o texto apagado dele (#626262) dá 3:1 sobre #111, abaixo do nosso piso de 4,5:1.
+   Aqui --faint é #9a9a9a (piso 4,5:1 até sobre o item de menu ativo, #2f2f2f). */
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg: #111111;
+  --surface: #212121;
+  --surface-subtle: #161616;   /* menu lateral */
+  --surface-muted: #1b1b1b;
+  --surface-hover: #282828;
+  --text: #dadada;
+  --text-strong: #fcfcfc;
+  --muted: #acacac;
+  --faint: #9a9a9a;
+  --line: #323232;
+  --line-soft: #262626;
+  --line-strong: #3d3d3d;
+  --line-hover: #5a5a5a;
+
+  /* No escuro o botão primário inverte: fundo claro, texto escuro (como o botão de enviar do ChatGPT). */
+  --brand: #ececec;
+  --brand-ink: #ececec;
+  --brand-soft: #262626;
+  --brand-hover: #ffffff;
+  --on-brand: #111111;
+  --nav-active: #2f2f2f;
+
+  --focus-ring: #66b5ff;
+  --success: #5cc4a8;
+  --warning: #e3b04b;
+  --danger: #f07878;
+
+  --scrollbar: #3d3d3d; --scrollbar-hover: #565656;
+  --scrim: #000000a0;
+  --scrim-peek: rgba(0, 0, 0, .55);
+  --shadow-pop: 0 12px 30px #0009;
+  --shadow-side: 8px 0 28px #0009;
+  --shadow-peek: -16px 0 48px rgba(0, 0, 0, .5);
+}
+
+/* Logos escuras e neutras (detectadas por logo-tema.js) viram claras no escuro. */
+:root[data-theme="dark"] img[data-logo-escura="neutra"] { filter: invert(1); }
+/* Colorida e escura: placa clara por trás (as marcas foram desenhadas para fundo branco). box-shadow não muda o tamanho. */
+:root[data-theme="dark"] img[data-logo-escura="cor"] { background: var(--brand); border-radius: 4px; box-shadow: 0 0 0 3px var(--brand); }

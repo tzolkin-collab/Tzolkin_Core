@@ -8,7 +8,7 @@
   display: block;
   margin-top: 5px;
   font-size: 12px;
-  color: var(--muted, #646469);
+  color: var(--muted, var(--muted));
 }
 
 #product-orgs td:nth-child(2) .client-slug {
@@ -27,8 +27,8 @@
 .client-summary article {
   padding: 16px 18px;
   border: 1px solid var(--line);
-  background: #fff;
-  border-color: var(--line, #e4e4e7);
+  background: var(--surface);
+  border-color: var(--line, var(--line));
   border-radius: 12px;
   box-shadow: none;
 }
@@ -36,7 +36,7 @@
 .client-summary span {
   display: block;
   font-size: 12px;
-  color: var(--muted, #646469);
+  color: var(--muted, var(--muted));
 }
 
 .client-summary strong {
@@ -52,7 +52,7 @@
 
 .client-toolbar .detail {
   margin-top: 5px;
-  color: var(--muted, #646469);
+  color: var(--muted, var(--muted));
   font-size: 12px;
   max-width: 560px;
   line-height: 1.55;
@@ -73,21 +73,21 @@
   margin: 2px 5px 2px 0;
   padding: 4px 7px;
   border-radius: 5px;
-  background: #f6f6f6;
-  color: var(--muted, #646469);
+  background: var(--surface-muted);
+  color: var(--muted, var(--muted));
   font-size: 12px;
   white-space: nowrap;
 }
 
 .client-chip.outline {
-  background: #fafafa;
-  border: 1px solid var(--line, #e4e4e7);
-  color: var(--muted, #646469);
+  background: var(--surface-muted);
+  border: 1px solid var(--line, var(--line));
+  color: var(--muted, var(--muted));
 }
 
 .client-muted {
   font-size: 12px;
-  color: var(--faint, #6e6e76);
+  color: var(--faint, var(--muted));
 }
 
 .client-count {
@@ -108,7 +108,7 @@
   display: grid;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: #fff;
+  background: var(--surface);
   gap: 15px;
   padding: 18px;
   transition: border-color .16s ease,box-shadow .16s ease,transform .16s ease;
@@ -148,8 +148,8 @@
   place-items: center;
   flex-shrink: 0;
   border-radius: 9px;
-  background: #f3f3f3;
-  color: var(--muted, #646469);
+  background: var(--surface-hover);
+  color: var(--muted, var(--muted));
   font-weight: 700;
 }
 
@@ -160,8 +160,8 @@
   place-items: center;
   flex-shrink: 0;
   border-radius: 9px;
-  background: #f3f3f3;
-  color: var(--muted, #646469);
+  background: var(--surface-hover);
+  color: var(--muted, var(--muted));
   font-weight: 700;
 }
 
@@ -175,7 +175,7 @@
 .client-card-facts {
   display: grid;
   grid-template-columns: 1.2fr 1.2fr .6fr;
-  border-block: 1px solid var(--line-soft, #efeff2);
+  border-block: 1px solid var(--line-soft, var(--line));
   padding-block: 13px;
   gap: 10px;
 }
@@ -185,7 +185,7 @@
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: .7px;
-  color: var(--faint, #6e6e76);
+  color: var(--faint, var(--muted));
 }
 
 .client-card-facts strong {
@@ -197,9 +197,9 @@
 
 .client-card>.secondary {
   justify-self: start;
-  border: 1px solid var(--line, #e4e4e7);
-  color: var(--faint, #6e6e76);
-  background: #fcfcfc;
+  border: 1px solid var(--line, var(--line));
+  color: var(--faint, var(--muted));
+  background: var(--surface);
 }
 
 .client-back {
@@ -211,7 +211,7 @@
   padding: 24px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: linear-gradient(135deg,#fcfcfc,#fff);
+  background: linear-gradient(135deg,var(--surface),var(--surface));
 }
 
 .client-detail-hero>div {
@@ -236,7 +236,7 @@
   padding: 21px;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: #fff;
+  background: var(--surface);
 }
 
 .client-detail-panel>h3 {
@@ -256,7 +256,7 @@
   align-items: center;
   gap: 11px;
   padding: 13px 0;
-  border-top: 1px solid var(--line-soft, #efeff2);
+  border-top: 1px solid var(--line-soft, var(--line));
 }
 
 .detail-row>div {
@@ -271,7 +271,7 @@
 .client-access-count {
   display: block;
   padding-top: 13px;
-  border-top: 1px solid var(--line-soft, #efeff2);
+  border-top: 1px solid var(--line-soft, var(--line));
 }
 
 /* Ficha da empresa: cabeçalho com ação, contratações em largura total. */
@@ -307,7 +307,7 @@
   display: grid;
   gap: 10px;
   padding: 14px 0;
-  border-top: 1px solid var(--line-soft, #efeff2);
+  border-top: 1px solid var(--line-soft, var(--line));
 }
 
 .client-engagement>header {
@@ -344,7 +344,7 @@
   gap: 8px 12px;
   padding: 9px 11px;
   border-radius: 7px;
-  background: #fafafa;
+  background: var(--surface-muted);
   min-width: 0;
 }
 
@@ -378,7 +378,7 @@
   gap: 12px;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: #fff;
+  background: var(--surface);
   padding: 16px;
   transition: border-color .16s ease,box-shadow .16s ease,transform .16s ease;
 }
@@ -390,7 +390,7 @@
 .person-company {
   padding: 0;
   background: transparent;
-  color: var(--faint, #6e6e76);
+  color: var(--faint, var(--muted));
   font-size: 12px;
 }
 
@@ -403,20 +403,20 @@
 }
 
 .client-card:hover {
-  border-color: var(--line, #e4e4e7);
+  border-color: var(--line, var(--line));
   box-shadow: 0 8px 24px rgba(42,28,77,.07);
   transform: translateY(-1px);
 }
 
 .person-card:hover {
-  border-color: var(--line, #e4e4e7);
+  border-color: var(--line, var(--line));
   box-shadow: 0 8px 24px rgba(42,28,77,.07);
   transform: translateY(-1px);
 }
 
 .client-card>.secondary:hover {
-  background: #f3f3f3;
-  border-color: #d5d5d5;
+  background: var(--surface-hover);
+  border-color: var(--line-strong);
 }
 
 @media (max-width:600px) {
@@ -529,7 +529,7 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .7px;
-    color: var(--faint, #6e6e76);
+    color: var(--faint, var(--muted));
   }
 
   .clients-table td:nth-child(3)::before {
@@ -539,7 +539,7 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .7px;
-    color: var(--faint, #6e6e76);
+    color: var(--faint, var(--muted));
   }
 
   .clients-table td:nth-child(4)::before {
@@ -549,7 +549,7 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .7px;
-    color: var(--faint, #6e6e76);
+    color: var(--faint, var(--muted));
   }
 
   .clients-table td:nth-child(5)::before {
@@ -559,7 +559,7 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .7px;
-    color: var(--faint, #6e6e76);
+    color: var(--faint, var(--muted));
   }
 
   .clients-table td:last-child {
@@ -572,12 +572,12 @@
 
 }
 
-.is-clickable{cursor:pointer}
-.is-clickable:hover{border-color:var(--line-strong,#c9ccd1)}
-.is-clickable:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+.is-clickable{cursor: pointer}
+.is-clickable:hover{border-color: var(--line-strong,var(--line-strong))}
+.is-clickable:focus-visible{outline: 2px solid currentColor;outline-offset: 2px}
 
-.client-group-label{grid-column:1/-1;margin:12px 0 0;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted,#6b7280)}
-.client-group-label:first-child{margin-top:0}
+.client-group-label{grid-column: 1/-1;margin: 12px 0 0;font-size: 12px;font-weight: 600;letter-spacing: .04em;text-transform: uppercase;color: var(--muted,#6b7280)}
+.client-group-label:first-child{margin-top: 0}
 
 .person-card .person-no-contact {
   font-style: italic;
@@ -601,7 +601,7 @@
 }
 .tbl td {
   padding: 14px 16px; font-size: 14px; line-height: 1.45; color: var(--text);
-  border-bottom: 1px solid var(--line-soft, #efeff2); vertical-align: middle;
+  border-bottom: 1px solid var(--line-soft, var(--line)); vertical-align: middle;
 }
 .tbl th:first-child, .tbl td:first-child { padding-left: 6px; }
 .tbl tr:last-child td { border-bottom: 1px solid var(--line); }
@@ -624,7 +624,7 @@
 
 .tbl .num { text-align: right; padding-right: 10px; font-variant-numeric: tabular-nums; }
 .tbl-wrap-text { max-width: 300px; }
-.tbl-empty-cell { color: var(--faint, #6e6e76); }
+.tbl-empty-cell { color: var(--faint, var(--muted)); }
 
 /* rodapé: contagem à esquerda, paginação à direita */
 .tbl-foot {
@@ -658,10 +658,10 @@
 .tbl .tbl-link:hover { text-decoration-color: currentColor; }
 .tbl .tbl-stack { display: grid; gap: 8px; }
 .tbl .tbl-stack small { display: block; margin-top: 1px; }
-.tbl .table-action { padding: 6px 10px; border: 1px solid var(--line-strong, #d4d4d8); border-radius: 6px; background: var(--surface, #fff); color: var(--text); font-size: 13px; }
-.tbl .table-action:hover { background: var(--surface-hover, #f4f4f5); }
+.tbl .table-action { padding: 6px 10px; border: 1px solid var(--line-strong, var(--line-strong)); border-radius: 6px; background: var(--surface, var(--surface)); color: var(--text); font-size: 13px; }
+.tbl .table-action:hover { background: var(--surface-hover, var(--surface-muted)); }
 .tbl td:empty::after, .tbl th:empty::after { content: ""; }
-.tbl-summary { margin: 0; color: var(--muted, #646469); font-size: 13px; line-height: 1.5; }
+.tbl-summary { margin: 0; color: var(--muted, var(--muted)); font-size: 13px; line-height: 1.5; }
 .tbl-summary strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
 .tbl-bar #services-summary { margin-left: auto; }
 
@@ -669,7 +669,7 @@
 .tbl .tbl-who .product-mark { flex: 0 0 auto; }
 .tbl .tbl-actions { text-align: right; white-space: nowrap; }
 .tbl .tbl-actions-row { display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; }
-.tbl .quiet-action { border-color: transparent; background: transparent; color: var(--muted, #646469); }
+.tbl .quiet-action { border-color: transparent; background: transparent; color: var(--muted, var(--muted)); }
 .tbl .tbl-actions .product-live-link { font-size: 13px; }
 .tbl-bar-end { display: flex; justify-content: flex-end; margin: 0 0 4px; }
 
@@ -685,7 +685,7 @@
 /* Pessoas: contato com link, empresa no celular */
 .tbl .tbl-contact { color: var(--text); text-decoration: none; }
 .tbl .tbl-contact:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
-.tbl .tbl-contact-sub { color: var(--muted, #646469); font-size: 13px; }
+.tbl .tbl-contact-sub { color: var(--muted, var(--muted)); font-size: 13px; }
 .tbl .tbl-only-narrow { display: none; }
 @media (max-width: 700px) {
   .tbl .tbl-only-narrow { display: block; }
@@ -696,15 +696,15 @@
    Ficha da empresa sem cartões: botões no alto, seções com divisória.
    O nome e o tipo já estão no título e na descrição da página.
    ========================================================================== */
-.client-back { margin: 0 0 14px; padding: 0; border: 0; background: transparent; color: var(--muted, #646469); font-size: 13px; }
+.client-back { margin: 0 0 14px; padding: 0; border: 0; background: transparent; color: var(--muted, var(--muted)); font-size: 13px; }
 .client-back:hover { color: var(--text); background: transparent; }
 .client-detail-hero { margin-bottom: 4px; padding: 0; border: 0; border-radius: 0; background: transparent; justify-content: flex-end; }
 .client-detail-grid { gap: 40px 56px; margin-top: 28px; }
 .client-detail-panel { padding: 0; border: 0; border-radius: 0; background: transparent; }
-.client-detail-panel > h3, .photo-panel > h3 { padding-bottom: 12px; border-bottom: 1px solid var(--line, #e4e4e7); font-size: var(--fs-lg, 16px); }
+.client-detail-panel > h3, .photo-panel > h3 { padding-bottom: 12px; border-bottom: 1px solid var(--line, var(--line)); font-size: var(--fs-lg, 16px); }
 .client-detail-panel > .detail { margin: 10px 0 2px; }
-.detail-row { border-top: 0; border-bottom: 1px solid var(--line-soft, #efeff2); }
-.client-engagement { border-top: 0; border-bottom: 1px solid var(--line-soft, #efeff2); }
+.detail-row { border-top: 0; border-bottom: 1px solid var(--line-soft, var(--line)); }
+.client-engagement { border-top: 0; border-bottom: 1px solid var(--line-soft, var(--line)); }
 @media (max-width: 900px) { .client-detail-grid { gap: 32px; } }
 
 /* Links da contratação alinhados (a ficha agora é o painel lateral: ver peek.css) */

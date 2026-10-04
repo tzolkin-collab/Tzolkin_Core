@@ -7,7 +7,7 @@ import {photoPanel} from './media.js';
 // e regras de negócio ficam no servidor: nada aqui decide o que o operador pode ver.
 import { setupDelivery, deliveryIcon } from './delivery.js';
 import { setupResource } from './resource.js';
-import {providerLogo,createIcon,productFavicon} from './icons.js';
+import {providerLogo,createIcon,productFavicon,faviconDoSite} from './icons.js';
 import {paymentInstitution} from './finance-model.js';
 import {setupEmails} from './emails.js';
 import {setupTracking} from './tracking.js';
@@ -24,6 +24,8 @@ import {vinculoNaLista} from './owner-link.js';
 import {mountTabs} from './tabs.js';
 import {tabela, celulaNome, selo, resumo, botaoEditar, tomDoEstado} from './data-table.js';
 import {criarPeek} from './peek.js';
+import {montarConfiguracoes} from './settings.js';
+import {vigiarLogos} from './logo-tema.js';
 import {slugDoNome, mountTagInput} from './space-form.js';
 // Ficha da empresa por callback: os módulos não importam app.js (evita ciclo).
 const commercial=setupCommercial({api,openTenant:id=>openClient(id)});
@@ -119,6 +121,8 @@ const CONTEXTS = {
    'product-receivables': { title: 'Recebimentos', section: 'view-product-receivables', metrics:false },
    'product-emails': { title: 'E-mails', section: 'view-product-emails', metrics:false },
    // Campanhas do item mora dentro de Inbound, como uma aba (montarInbound).
+   // Oculta do menu; o botão Configurações do rodapé abre em qualquer contexto.
+   settings: { title: 'Configurações', section: 'view-settings', metrics:false, hidden:true },
   },
  },
 };
@@ -314,6 +318,7 @@ function switchView(view) {
  }
  $('notice').textContent = '';
  renderNav();
+ if (view === 'settings') montarConfiguracoes($('settings-body'));
  if (view === 'tracking') tracking.load().catch(reportError);
  if (view === 'finance') finance.load().catch(reportError);
  if (view === 'emails') emails.load().catch(reportError);
@@ -1202,7 +1207,7 @@ function renderDeploys(data) {
   const card = node('article', undefined, 'deploy-card');
   const topo = node('header');
   const identidade = node('div', undefined, 'deploy-head');
-  const mark=node('span',undefined,'deploy-project-mark');const vercelMark=providerLogo('vercel');vercelMark.alt='Vercel';vercelMark.setAttribute('aria-label','Vercel');mark.append(vercelMark);identidade.append(mark,node('h3', projeto.project || 'Projeto sem nome'));
+  const mark=node('span',undefined,'deploy-project-mark');mark.append(faviconDoProjeto(projeto.project,mark));identidade.append(mark,node('h3', projeto.project || 'Projeto sem nome'));
   // Sem repositório não há commit, não há rollback por commit e não dá para criar Deploy Hook.
   if (projeto.git_connected === false) identidade.append(node('span', 'sem repositório', 'status'));
   const actions=node('div',undefined,'deploy-project-actions');actions.append(node('span', projeto.provider, 'ecosystem-category'));
@@ -1222,6 +1227,21 @@ function renderDeploys(data) {
   }
   $('deploys-list').append(card);
  }
+}
+
+// O ícone do cartão é o favicon do próprio site (alias de produção <projeto>.vercel.app: a URL de cada deploy fica atrás do
+// login da Vercel e não responde). Enquanto busca, mostra a logo da Vercel; sem favicon, ela fica.
+function faviconDoProjeto(nome,mark){
+ const vercelMark=()=>{const logo=providerLogo('vercel');logo.alt='Vercel';logo.setAttribute('aria-label','Vercel');return logo;};
+ if(!nome)return vercelMark();
+ faviconDoSite('https://'+nome+'.vercel.app').then(href=>{
+  if(!href||!mark.isConnected)return;
+  const img=document.createElement('img');img.className='product-favicon';img.alt='';img.setAttribute('aria-hidden','true');
+  img.onload=()=>mark.replaceChildren(img);
+  img.onerror=()=>{};
+  img.src=href;
+ });
+ return vercelMark();
 }
 
 function deployEmpty(title,message){const box=node('div',undefined,'empty-state');const icon=node('span',undefined,'empty-symbol');icon.append(deliveryIcon('cloud'));box.append(icon,node('h3',title),node('p',message));return box;}
@@ -1733,6 +1753,8 @@ $('refresh').onclick = async () => {
  try { await load(); if(state.view==='resource') await resource.refresh(); $('notice').textContent = 'Atualizado.'; }
  catch (error) { reportError(error); } finally { $('refresh').disabled = false; }
 };
+vigiarLogos();
+$('open-settings').onclick = () => {switchView('settings');closeNavigation();};
 $('logout').onclick = async () => {
  try { const result=await api('/api/logout', 'POST', {});if(result.logout_url){location.assign(result.logout_url);return;}signedOut(); $('login-notice').textContent = ''; }
  catch (error) { $('notice').textContent = error.message; }

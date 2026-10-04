@@ -10,13 +10,13 @@
   flex-direction: column;
   background: var(--surface, #fff);
   border-left: 1px solid var(--line, #e4e4e7);
-  box-shadow: -16px 0 48px rgba(16, 16, 20, .10);
+  box-shadow: var(--shadow-peek, -16px 0 48px rgba(16, 16, 20, .10));
   animation: peek-entra .18s ease-out;
   outline: 0;
 }
 .peek-side[hidden] { display: none; }
 .peek-side.peek-wide { width: min(980px, 100vw); }
-.peek-scrim { position: fixed; inset: 0; z-index: 69; background: rgba(18, 19, 23, .28); animation: peek-escurece .18s ease-out; }
+.peek-scrim { position: fixed; inset: 0; z-index: 69; background: var(--scrim-peek, rgba(18, 19, 23, .28)); animation: peek-escurece .18s ease-out; }
 
 .peek-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 24px 4px; }
 .peek-titles { min-width: 0; }

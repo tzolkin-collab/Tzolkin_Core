@@ -8,7 +8,7 @@
   gap: 12px;
   min-width: 0;
   font-size: 13px;
-  color: #424242;
+  color: var(--text);
   border-radius: 6px;
   padding: 16px;
 }
@@ -37,7 +37,7 @@
   border: 1px solid var(--line);
   overflow: hidden;
   min-width: 0;
-  border-color: var(--line, #e4e4e7);
+  border-color: var(--line, var(--line));
   border-radius: 12px;
   box-shadow: none;
 }
@@ -71,7 +71,7 @@
 }
 
 .deploy-row.principal {
-  background: #fafafa;
+  background: var(--surface-muted);
 }
 
 .deploy-head {
@@ -100,7 +100,7 @@
 .deploy-message {
   display: block;
   font-size: 12px;
-  color: #4f4f4f;
+  color: var(--text);
   margin-top: 5px;
   overflow-wrap: anywhere;
 }
@@ -108,7 +108,7 @@
 .deploy-error {
   display: block;
   font-size: 12px;
-  color: #ad2541;
+  color: var(--badge-danger-fg);
   margin-top: 5px;
   overflow-wrap: anywhere;
 }
@@ -188,7 +188,7 @@
   gap: 14px;
   overflow-wrap: anywhere;
   min-width: 0;
-  border-color: var(--line, #e4e4e7);
+  border-color: var(--line, var(--line));
   border-radius: 12px;
   box-shadow: none;
 }
@@ -219,7 +219,7 @@
 }
 
 .delivery-issues {
-  color: #8d6130;
+  color: var(--badge-warning-fg);
   padding-left: 20px;
   margin: 0;
   line-height: 1.7;
@@ -228,7 +228,7 @@
 
 .delivery-component .detail {
   font-size: 13px;
-  color: var(--muted, #646469);
+  color: var(--muted, var(--muted));
 }
 
 .delivery-comparison {
@@ -314,8 +314,8 @@
   padding: 7px 11px;
   border-radius: 6px;
   font-size: 12px;
-  background: #fafafa;
-  color: var(--muted, #646469);
+  background: var(--surface-muted);
+  color: var(--muted, var(--muted));
 }
 
 .delivery-provider .delivery-icon {
@@ -324,7 +324,7 @@
 }
 
 .delivery-provider.connected .delivery-icon {
-  color: #39754b;
+  color: var(--badge-success-fg);
 }
 
 .delivery-repo-panel {
@@ -333,7 +333,7 @@
   border: 1px solid var(--line);
   margin-bottom: 32px;
   min-width: 0;
-  border-color: var(--line, #e4e4e7);
+  border-color: var(--line, var(--line));
   border-radius: 12px;
   box-shadow: none;
 }
@@ -365,8 +365,8 @@
   place-items: center;
   flex-shrink: 0;
   border-radius: 6px;
-  background: #fafafa;
-  color: var(--muted, #646469);
+  background: var(--surface-muted);
+  color: var(--muted, var(--muted));
 }
 
 .delivery-repo-body {
@@ -383,12 +383,12 @@
 
 .delivery-repo-body .detail {
   font-size: 13px;
-  color: var(--muted, #646469);
+  color: var(--muted, var(--muted));
 }
 
 .delivery-repo-row .primary {
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--brand);
+  color: var(--on-brand);
 }
 
 .delivery-repo-row .primary:hover {
@@ -402,7 +402,7 @@
   flex-wrap: wrap;
   background: var(--brand-soft);
   color: var(--brand);
-  border: 1px solid var(--line, #e4e4e7);
+  border: 1px solid var(--line, var(--line));
   border-radius: 10px;
   padding: 15px;
   overflow-wrap: anywhere;
@@ -437,8 +437,8 @@
 
 .delivery-step-button.selected {
   font-weight: 600;
-  background: #1a1a1a;
-  color: #fff;
+  background: var(--brand);
+  color: var(--on-brand);
 }
 
 .delivery-step {
@@ -451,81 +451,81 @@
 }
 
 .delivery-dialog input:not([type=checkbox]) {
-  border: 1px solid var(--line, #e4e4e7);
+  border: 1px solid var(--line, var(--line-strong));
   transition: border-color .15s,box-shadow .15s;
   font-size: 14px;
-  border-color: #d6d6d6;
+  border-color: var(--line-strong);
   border-radius: 6px;
   min-height: 42px;
-  background: #fff;
+  background: var(--surface);
   padding: 10px 12px;
   box-shadow: none;
 }
 
 .delivery-dialog select {
-  border: 1px solid var(--line, #e4e4e7);
+  border: 1px solid var(--line, var(--line-strong));
   transition: border-color .15s,box-shadow .15s;
   font-size: 14px;
-  border-color: #d6d6d6;
+  border-color: var(--line-strong);
   border-radius: 6px;
   min-height: 42px;
-  background: #fff;
+  background: var(--surface);
   padding: 10px 12px;
   box-shadow: none;
 }
 
 .delivery-search input {
-  border: 1px solid var(--line, #e4e4e7);
+  border: 1px solid var(--line, var(--line-strong));
   transition: border-color .15s,box-shadow .15s;
   font-size: 14px;
-  border-color: #d6d6d6;
+  border-color: var(--line-strong);
   border-radius: 6px;
   min-height: 42px;
-  background: #fff;
+  background: var(--surface);
   padding: 10px 12px;
   box-shadow: none;
 }
 
 .delivery-dialog input:hover {
-  border-color: #c1c1c1;
+  border-color: var(--line-hover);
 }
 
 .delivery-dialog select:hover {
-  border-color: #c1c1c1;
+  border-color: var(--line-hover);
 }
 
 .delivery-search input:hover {
-  border-color: #c1c1c1;
+  border-color: var(--line-hover);
 }
 
 .delivery-dialog input:focus {
-  outline: 2px solid #565656;
+  outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
-  border-color: #565656;
+  border-color: var(--focus-ring);
   box-shadow: none;
 }
 
 .delivery-dialog select:focus {
-  outline: 2px solid #565656;
+  outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
-  border-color: #565656;
+  border-color: var(--focus-ring);
   box-shadow: none;
 }
 
 .delivery-search input:focus {
-  outline: 2px solid #565656;
+  outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
-  border-color: #565656;
+  border-color: var(--focus-ring);
   box-shadow: none;
 }
 
 .delivery-dialog input:user-invalid {
-  border-color: #ad2541;
+  border-color: var(--danger);
 }
 
 .delivery-dialog label {
   font-size: 13px;
-  color: #424242;
+  color: var(--text);
   gap: 8px;
 }
 
@@ -559,7 +559,7 @@
 .delivery-config-summary {
   line-height: 1.6;
   font-size: 13px;
-  color: var(--muted, #646469);
+  color: var(--muted, var(--muted));
 }
 
 .delivery-kind-picker {
@@ -575,7 +575,7 @@
   gap: 6px 10px;
   text-align: left;
   justify-content: start;
-  border: 1px dashed #dbdbdb;
+  border: 1px dashed var(--line);
   background: var(--surface);
   padding: 16px;
   color: var(--text);
@@ -628,7 +628,7 @@
   display: grid;
   gap: 10px;
   margin-top: 14px;
-  border-color: var(--line, #e4e4e7);
+  border-color: var(--line, var(--line));
   border-radius: 12px;
   box-shadow: none;
 }
@@ -717,7 +717,7 @@
 .delivery-review-card .detail {
   overflow-wrap: anywhere;
   font-size: 13px;
-  color: var(--muted, #646469);
+  color: var(--muted, var(--muted));
 }
 
 .resource-panel {
@@ -725,7 +725,7 @@
   background: var(--surface);
   border: 1px solid var(--line);
   padding: 24px;
-  border-color: var(--line, #e4e4e7);
+  border-color: var(--line, var(--line));
   border-radius: 12px;
   box-shadow: none;
 }
@@ -769,13 +769,13 @@
 }
 
 .easy-danger {
-  color: #a42b42;
-  border-color: #e4b9c2;
+  color: var(--badge-danger-fg);
+  border-color: color-mix(in srgb, var(--badge-danger-dot) 35%, transparent);
 }
 
 .easy-settings summary {
   font-size: 14px;
-  color: #282828;
+  color: var(--text);
   padding-block: 8px;
 }
 
@@ -786,7 +786,7 @@
   border: 1px solid var(--line);
   resize: vertical;
   font-size: 13px;
-  border-color: #d6d6d6;
+  border-color: var(--line-strong);
   border-radius: 6px;
 }
 
@@ -796,7 +796,7 @@
 }
 
 .easy-warning {
-  color: #8a5216;
+  color: var(--badge-warning-fg);
   line-height: 1.7;
 }
 
@@ -805,7 +805,7 @@
   overflow-wrap: anywhere;
   max-height: 480px;
   overflow: auto;
-  background: #1b1b1b;
+  background: var(--brand);
   color: #e8e8e8;
   padding: 20px;
   border-radius: 10px;
@@ -870,13 +870,13 @@
   align-items: center;
   gap: 9px;
   font-size: 13px;
-  color: var(--muted, #646469);
+  color: var(--muted, var(--muted));
 }
 
 .deploy-summary .delivery-icon {
   width: 17px;
   height: 17px;
-  color: var(--muted, #646469);
+  color: var(--muted, var(--muted));
 }
 
 .deploy-summary strong {
@@ -924,18 +924,18 @@
 }
 
 #deploys-list .deploy-card {
-  border-color: var(--line, #e4e4e7);
+  border-color: var(--line, var(--line));
   border-radius: 12px;
   box-shadow: none;
 }
 
-#deploys-list.deploy-grid { grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; }
+#deploys-list.deploy-grid { grid-template-columns: repeat(auto-fill,minmax(min(100%,380px),1fr)); align-items: start; }
 #deploys-list .deploy-card { height: 100%; }
 
 #deploys-list .deploy-card>header {
   border-bottom: 0;
   padding: 20px 24px;
-  background: #fff;
+  background: var(--surface);
 }
 
 .deploy-project-mark {
@@ -985,8 +985,8 @@
 .deploy-source code {
   padding: 3px 6px;
   border-radius: 5px;
-  background: #f0f0f0;
-  color: var(--muted, #646469);
+  background: var(--surface-hover);
+  color: var(--muted, var(--muted));
   font-size: 12px;
 }
 
@@ -1082,8 +1082,8 @@
 
 .resource-tabs [aria-current=page] {
   border-color: var(--brand);
-  color: #1a1a1a;
-  border-bottom-color: #1a1a1a;
+  color: var(--text);
+  border-bottom-color: var(--brand);
   background: transparent;
 }
 
@@ -1097,7 +1097,7 @@
 .resource-fact dt {
   margin-bottom: 8px;
   font-size: 13px;
-  color: var(--muted, #646469);
+  color: var(--muted, var(--muted));
 }
 
 .resource-fact dd {
@@ -1139,15 +1139,15 @@
   box-shadow: none;
   border-radius: 0;
   background: transparent;
-  color: var(--muted, #646469);
+  color: var(--muted, var(--muted));
   padding: 12px 14px;
   min-height: 46px;
   font-size: 13px;
 }
 
 .resource-tabs .secondary:hover {
-  background: #fafafa;
-  color: #1a1a1a;
+  background: var(--surface-muted);
+  color: var(--text);
 }
 
 .resource-panel>small {
@@ -1175,7 +1175,7 @@
 }
 
 .card-services .delivery-service-line {
-  background: #fafafa;
+  background: var(--surface-muted);
   border-radius: 6px;
 }
 
@@ -1212,7 +1212,7 @@
 }
 
 .infra-service-row+.infra-service-row {
-  border-top: 1px solid var(--line-soft, #efeff2);
+  border-top: 1px solid var(--line-soft, var(--line));
 }
 
 #easypanel-inventory .deploy-card>.card-tags {
@@ -1622,7 +1622,7 @@
   gap: 10px;
   background: var(--brand-soft);
   color: var(--brand);
-  border: 1px solid var(--line, #e4e4e7);
+  border: 1px solid var(--line, var(--line));
   border-radius: 10px;
   padding: 14px 15px;
   font-size: 13px;
@@ -1632,3 +1632,24 @@
 .delivery-review-owner {
   margin: 14px 0 6px;
 }
+
+/* O selo de estado dentro do cartão de deploy tem o tamanho do texto; sem isto a grade o estica na largura toda. */
+.delivery-component > .status { justify-self: start; }
+
+/* Cartão da Vercel: uma margem só. Cabeçalho, linha de dono, deploy e histórico começavam em pontos diferentes da
+   esquerda (9, 25, 39 e 43px); agora todos entram pela mesma. */
+#deploys-list .deploy-card { --inset: 24px; }
+#deploys-list .deploy-card > header { padding-inline: var(--inset); }
+#deploys-list .deploy-card > .own-line { margin: 0; padding: 0 var(--inset) 14px; background: var(--surface); }
+#deploys-list .deploy-card .deploy-row { padding-inline: var(--inset); }
+#deploys-list .deploy-card .deploy-history > summary { padding-inline: var(--inset); }
+@media (max-width: 680px) { #deploys-list .deploy-card { --inset: 16px; } }
+/* Cartões da mesma fila com a mesma altura (antes cada um tinha a sua, e a fila ficava serrilhada). */
+#deploys-list.deploy-grid { align-items: stretch; }
+/* Linha de deploy: o texto do commit nunca fica abaixo de ~260px; se o botão não couber ao lado, desce para a linha de baixo. */
+#deploys-list .deploy-card .deploy-row { flex-wrap: wrap; row-gap: 12px; }
+#deploys-list .deploy-card .deploy-row > div:first-child { flex: 1 1 260px; }
+#deploys-list .deploy-card .deploy-row > :not(:first-child) { margin-left: auto; }
+
+/* Favicon do site no cartão: ladrilho neutro com margem, para o ícone caber e aparecer em qualquer fundo. */
+.deploy-project-mark img.product-favicon { width: 100%; height: 100%; padding: 5px; box-sizing: border-box; object-fit: contain; background: var(--surface-muted); border: 1px solid var(--line); border-radius: 8px; }

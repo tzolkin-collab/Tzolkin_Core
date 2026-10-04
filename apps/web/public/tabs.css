@@ -5,8 +5,8 @@
 .tab:hover { color: var(--ink, #1c1c1e); }
 .tab.active { color: var(--brand, #29292c); border-bottom-color: var(--brand, #29292c); }
 .tab:focus-visible { outline: 2px solid var(--brand, #29292c); outline-offset: 2px; border-radius: 4px; }
-.tab-count { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: #f1f2f4; color: var(--muted, #6b7280); font-size: 12px; font-weight: 600; }
-.tab.active .tab-count { background: var(--brand, #29292c); color: #fff; }
+.tab-count { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: var(--brand-soft, #f1f2f4); color: var(--muted, #6b7280); font-size: 12px; font-weight: 600; }
+.tab.active .tab-count { background: var(--brand, #29292c); color: var(--on-brand, #fff); }
 .tab-panel[hidden] { display: none; }
 
 @media (max-width: 720px) {

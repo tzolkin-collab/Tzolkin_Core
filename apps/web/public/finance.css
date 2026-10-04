@@ -1,11 +1,11 @@
 /* Finance owns its components. The app shell owns the page background and inset. */
 .fin {
-  --fin-positive: #287264;
-  --fin-negative: #b42318;
-  --fin-warning: #8b651e;
-  --fin-chart: #406a87;
-  --fin-chart-fill: #eef3f7;
-  --fin-outgoing: #ccd6de;
+  --fin-positive: var(--badge-success-fg);
+  --fin-negative: var(--badge-danger-fg);
+  --fin-warning: var(--badge-warning-fg);
+  --fin-chart: var(--focus-ring);
+  --fin-chart-fill: var(--badge-info-bg);
+  --fin-outgoing: var(--line-strong);
   min-width: 0;
   padding: 0;
   color: var(--text);
@@ -66,7 +66,7 @@
 }
 
 .fin :is(input, select):hover:not(:focus) {
-  border-color: var(--line-strong, #b7b7bc);
+  border-color: var(--line-strong, var(--line-hover));
 }
 .fin :is(input, select):focus {
   border-color: var(--focus-ring);
@@ -90,7 +90,7 @@
 }
 
 .fin .fin-button:hover:not(:disabled) {
-  background: var(--surface-muted, #f7f7f8);
+  background: var(--surface-muted, var(--surface-muted));
 }
 .fin button:disabled {
   opacity: .5;
@@ -366,11 +366,11 @@
 
 .fin-processor-card.is-muted {
   color: var(--muted);
-  background: var(--surface-muted, #f7f7f8);
+  background: var(--surface-muted, var(--surface-muted));
 }
 .fin-processor-card.is-error {
-  border-color: #ead8b6;
-  background: #fffbf4;
+  border-color: color-mix(in srgb, var(--badge-warning-dot) 35%, transparent);
+  background: var(--badge-warning-bg);
 }
 .fin-processor-state {
   color: var(--muted);
@@ -397,7 +397,7 @@
 
 /* Provider colors identify the provider, never transaction direction. */
 .fin-processor-mark.is-stripe {
-  background: #f0effb;
+  background: var(--badge-info-bg);
 }
 .fin-processor-mark.is-stripe img {
   width: 19px;
@@ -430,7 +430,7 @@
   padding: 5px 8px;
   border-radius: 5px;
   color: var(--muted);
-  background: var(--surface-muted, #f7f7f8);
+  background: var(--surface-muted, var(--surface-muted));
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
@@ -445,11 +445,11 @@
 }
 .fin-status-received {
   color: var(--fin-positive);
-  background: #eaf6f1;
+  background: var(--badge-success-bg);
 }
 .fin-status-pending {
   color: var(--fin-warning);
-  background: #fff6df;
+  background: var(--badge-warning-bg);
 }
 .fin-status-refunded,
 .fin-status-partial_refund {
@@ -458,7 +458,7 @@
 }
 .fin-status-failed {
   color: var(--fin-negative);
-  background: #fbecec;
+  background: var(--badge-danger-bg);
 }
 
 /* Forecasts */
@@ -526,7 +526,7 @@
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: var(--surface-muted, #f7f7f8);
+  background: var(--surface-muted, var(--surface-muted));
 }
 .fin-forecast-form label {
   display: flex;
@@ -676,7 +676,7 @@
   vertical-align: top;
 }
 .fin tbody tr:hover {
-  background: var(--surface-muted, #f7f7f8);
+  background: var(--surface-muted, var(--surface-muted));
 }
 .fin th:first-child,
 .fin td:first-child {
@@ -721,7 +721,7 @@
   padding: 12px;
   border-radius: 6px;
   color: var(--muted);
-  background: var(--surface-muted, #f7f7f8);
+  background: var(--surface-muted, var(--surface-muted));
   font-size: 12px;
 }
 .fin-transaction-detail p + p {
@@ -796,12 +796,12 @@
 }
 
 .fin-account-card:hover {
-  background: var(--surface-muted, #f7f7f8);
-  border-color: var(--line-strong, #b7b7bc);
+  background: var(--surface-muted, var(--surface-muted));
+  border-color: var(--line-strong, var(--line-hover));
 }
 .fin-account-card[aria-pressed="true"] {
   border-color: var(--text);
-  background: var(--surface-muted, #f7f7f8);
+  background: var(--surface-muted, var(--surface-muted));
 }
 .fin-account-title {
   display: flex;
@@ -905,10 +905,10 @@
   gap: 12px;
   margin-bottom: 20px;
   padding: 13px;
-  border: 1px solid #ead8b6;
+  border: 1px solid color-mix(in srgb, var(--badge-warning-dot) 35%, transparent);
   border-radius: 7px;
-  color: #76572d;
-  background: #fffbf4;
+  color: var(--badge-warning-fg);
+  background: var(--badge-warning-bg);
   font-size: 12px;
 }
 .fin-warning > svg {
@@ -1170,23 +1170,23 @@
 /* ==========================================================================
    Faixas de números sem moldura (mesmo padrão da Visão geral): dois fios e divisórias verticais.
    ========================================================================== */
-.fin-sales-metrics { gap: 0; overflow: visible; border: 0; border-block: 1px solid var(--line, #e4e4e7); border-radius: 0; background: transparent; }
+.fin-sales-metrics { gap: 0; overflow: visible; border: 0; border-block: 1px solid var(--line, var(--line)); border-radius: 0; background: transparent; }
 .fin-sales-metric { padding: 18px 24px 18px 0; background: transparent; }
-.fin-sales-metric + .fin-sales-metric { padding-left: 24px; border-left: 1px solid var(--line, #e4e4e7); }
+.fin-sales-metric + .fin-sales-metric { padding-left: 24px; border-left: 1px solid var(--line, var(--line)); }
 
-.fin-projection-grid { gap: 0; border-block: 1px solid var(--line, #e4e4e7); }
+.fin-projection-grid { gap: 0; border-block: 1px solid var(--line, var(--line)); }
 .fin-projection-card { padding: 16px 24px 16px 0; border: 0; border-radius: 0; background: transparent; }
-.fin-projection-card + .fin-projection-card { padding-left: 24px; border-left: 1px solid var(--line, #e4e4e7); }
+.fin-projection-card + .fin-projection-card { padding-left: 24px; border-left: 1px solid var(--line, var(--line)); }
 .fin-projection-card span, .fin-projection-card small { font-size: 13px; }
 
 /* o gráfico acumulado: a área entre a curva e o zero fica mais leve para a linha ser o que se lê */
 .fin-area { fill-opacity: .55; }
 
 /* extrato: o apoio da descrição (tipo · estabelecimento) legível */
-.fin-description small { font-size: 13px; color: var(--muted, #646469); }
+.fin-description small { font-size: 13px; color: var(--muted, var(--muted)); }
 
 @media (max-width: 760px) {
   .fin-sales-metrics, .fin-projection-grid { grid-template-columns: 1fr; }
   .fin-sales-metric, .fin-projection-card { padding: 14px 0; }
-  .fin-sales-metric + .fin-sales-metric, .fin-projection-card + .fin-projection-card { padding-left: 0; border-left: 0; border-top: 1px solid var(--line, #e4e4e7); }
+  .fin-sales-metric + .fin-sales-metric, .fin-projection-card + .fin-projection-card { padding-left: 0; border-left: 0; border-top: 1px solid var(--line, var(--line)); }
 }
