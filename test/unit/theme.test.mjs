@@ -127,7 +127,7 @@ test('index.html: o script do tema roda antes de qualquer CSS e theme.css vem lo
 // ---- guarda: sem cor fixa nos CSS já migrados -------------------------------------------------------------
 // Cor fixa em CSS de tela é o que não vira escuro. Valem só: tokens (linhas "--x: valor"), fallback de var(--x, #fff),
 // comentários. Os arquivos da lista abaixo foram migrados; ao migrar outro, ponha na lista.
-const MIGRADOS = ['style.css', 'controls.css', 'peek.css', 'tabs.css', 'theme.css', 'badge.css', 'overview.css'];
+const MIGRADOS = ['style.css', 'controls.css', 'peek.css', 'tabs.css', 'theme.css', 'badge.css', 'overview.css', 'tracking.css'];
 const semPermitidos = css => css
  .replace(/\/\*[\s\S]*?\*\//g, '')
  .replace(/var\(\s*--[\w-]+\s*,(?:[^()]|\([^()]*\))*\)/g, 'var(--x)') // fallback dentro de var()

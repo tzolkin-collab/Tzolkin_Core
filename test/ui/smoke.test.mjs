@@ -13,6 +13,7 @@ import { createCore } from '../../apps/api/src/app.mjs';
 import { serveAsset } from '../../apps/web/assets.mjs';
 import { abrirNavegador, acharNavegador } from './browser.mjs';
 import { SENHA, EMPRESA, PESSOA_FISICA, ANA, PNG_1X1, bancoFalso, r2Falso } from './fixtures.mjs';
+import * as AM from '../../apps/web/public/agenda-model.js';
 
 const PULAR = acharNavegador() ? false : 'Chrome/Edge não encontrado (defina CHROME_PATH)';
 const ARTEFATOS = fileURLToPath(new URL('./artifacts/', import.meta.url));
@@ -937,6 +938,507 @@ test('capturas: modo escuro nas fichas (espaço, lead, empresa, pessoa)', { skip
  await foto('Ficha_do_espaco');
  await pagina.avaliar(`(() => { const c = document.getElementById('context-select'); c.value = ''; c.dispatchEvent(new Event('change', { bubbles: true })); })()`);
  await pagina.esquema('light');
+ semExcecoes();
+});
+
+// ============================== Agenda (Acompanhamento) ==============================
+// A agenda é desenhada pelo navegador a partir de /api/tracking. O fixture de tela não tem atividades, então a página
+// recebe uma agenda montada aqui (uma semana com sobreposição, evento curto, atravessando a meia-noite, dia inteiro,
+// concluído e cancelado) e um /api/tracking simulado que registra o que a tela grava (PUT/POST) e aplica na lista.
+const ALTURA_HORA = 48;
+function eventosDaSemana() {
+ const seg = AM.segundaDe(AM.diaDe(Date.now()));
+ const em = (n, hhmm) => new Date(Date.parse(`${AM.somarDias(seg, n)}T${hhmm}:00-03:00`)).toISOString();
+ const base = { tenant_id: EMPRESA, tenant_name: 'Empresa Alfa', engagement_id: null, engagement_label: null, status: 'planned', revision: 1 };
+ const id = n => `00000000-0000-4000-8000-0000000000${String(n).padStart(2, '0')}`;
+ return [
+  { ...base, id: id(1), title: 'Mentoria Alfa — sessão 1', category: 'mentoria', kind: 'sessao', starts_at: em(0, '09:00'), ends_at: em(0, '10:00'), location: 'Sala 2' },
+  { ...base, id: id(2), title: 'Revisão de código', category: 'software', kind: 'tarefa', starts_at: em(0, '09:30'), ends_at: em(0, '10:30') },
+  { ...base, id: id(3), title: 'Consultoria Beta', category: 'consultoria', kind: 'sessao', starts_at: em(1, '14:00'), ends_at: em(1, '15:30'), description: 'Pauta:\n1. Metas', meeting_url: 'https://meet.google.com/abc-defg-hij' },
+  { ...base, id: id(4), title: 'Daily', category: 'outro', kind: 'tarefa', starts_at: em(2, '08:00'), ends_at: em(2, '08:15') },
+  { ...base, id: id(5), title: 'Deploy noturno', category: 'software', kind: 'feature', starts_at: em(2, '23:00'), ends_at: em(3, '01:00') },
+  { ...base, id: id(6), title: 'Entrega do site', category: 'software', kind: 'entregavel', starts_at: em(1, '00:00'), ends_at: em(5, '00:00') },
+  { ...base, id: id(7), title: 'Workshop', category: 'educacional', kind: 'sessao', status: 'done', starts_at: em(4, '16:00'), ends_at: em(4, '17:00') },
+  { ...base, id: id(8), title: 'Reunião cancelada', category: 'outro', kind: 'sessao', status: 'cancelled', starts_at: em(5, '10:00'), ends_at: em(5, '11:00') },
+ ];
+}
+const COM_AGENDA = lista => `(() => {
+ const EVENTOS = ${JSON.stringify(lista)};
+ window.__agenda = { gets: [], puts: [], posts: [], tempos: [], recusar: null, semCampos: false };
+ window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
+ const json = (corpo, status = 200) => Promise.resolve(new Response(JSON.stringify(corpo), { status, headers: { 'content-type': 'application/json' } }));
+ window.fetch = async (url, opcoes = {}) => {
+  const u = String(url), metodo = (opcoes.method || 'GET').toUpperCase();
+  if (!u.startsWith('/api/tracking')) return window.__fetchOriginal(url, opcoes);
+  const [caminho, consulta] = u.split('?'), partes = caminho.split('/');
+  const corpo = opcoes.body ? JSON.parse(opcoes.body) : {};
+  if (metodo === 'GET') {
+   const q = new URLSearchParams(consulta);
+   window.__agenda.gets.push({ from: q.get('from'), to: q.get('to'), tenant: q.get('tenant_id') });
+   const de = Date.parse(q.get('from') + 'T00:00:00-03:00'), ate = Date.parse(q.get('to') + 'T00:00:00-03:00');
+   const dentro = EVENTOS.filter(e => Date.parse(e.ends_at) > de && Date.parse(e.starts_at) < ate && (!q.get('tenant_id') || e.tenant_id === q.get('tenant_id')));
+   return json({ activities: dentro.map(e => ({ ...e })), logs: [], engagements: [], truncated: false, time_zone: 'America/Sao_Paulo', agenda_campos: !window.__agenda.semCampos });
+  }
+  if (metodo === 'POST' && partes.length === 3) {
+   window.__agenda.posts.push(corpo);
+   const novo = { status: 'planned', revision: 1, tenant_name: 'Empresa Alfa', engagement_label: null, location: null, description: null, meeting_url: null, ...corpo };
+   EVENTOS.push(novo); return json({ activity: { ...novo } });
+  }
+  if (metodo === 'POST' && partes[4] === 'time') { window.__agenda.tempos.push({ id: partes[3], corpo }); return json({ log: { ...corpo, activity_id: partes[3] } }); }
+  if (metodo === 'PUT') {
+   const e = EVENTOS.find(x => x.id === partes[3]);
+   if (!e || window.__agenda.recusar === partes[3]) return json({ message: 'Registro alterado ou inexistente. Atualize a agenda.' }, 409);
+   window.__agenda.puts.push({ id: partes[3], sub: partes[4] || null, corpo });
+   if (partes[4] === 'status') e.status = corpo.status;
+   else if (partes[4] === 'engagement') e.engagement_id = corpo.engagement_id;
+   else { const { revision, ...campos } = corpo; Object.assign(e, campos); }
+   e.revision += 1; return json({ activity: { ...e } });
+  }
+  return window.__fetchOriginal(url, opcoes);
+ };
+})()`;
+let desfazerAgenda = null;
+const NO_AGENDA = `window.__agenda`;
+// O painel lateral é position:fixed (offsetParent é sempre null nele): aberto = existe no DOM e tem largura. Fechar o remove do DOM.
+const PAINEL_ABERTO = `(() => { const p = document.getElementById('peek-agenda'); return !!p && p.getBoundingClientRect().width > 0; })()`;
+const BOTAO_VISAO = v => `[...document.querySelectorAll('#view-tracking .ag-visoes button')].find(b => b.dataset.visao === ${JSON.stringify(v)})`;
+const VISAO_ATIVA = `[...document.querySelectorAll('#view-tracking .ag-visoes button')].find(b => b.getAttribute('aria-pressed') === 'true')?.dataset.visao`;
+const IR_PARA_AGENDA = async () => {
+ await pagina.avaliar(CLICAR_NO_MENU('Acompanhamento'));
+ await pagina.esperar(`document.querySelectorAll('#view-tracking .ag-visoes button').length === 4 && !document.querySelector('#view-tracking [aria-busy]')`, { descricao: 'agenda carregada' });
+};
+const VISOES_ESPERAM = v => `${VISAO_ATIVA} === ${JSON.stringify(v)}`;
+// Volta para a semana de hoje antes de cada teste: um teste que falha não pode arrastar os seguintes na visão em que parou.
+const SEMANA_DE_HOJE = async () => {
+ await pagina.avaliar(`document.querySelectorAll('dialog[open]').forEach(d => d.close())`);
+ await pagina.avaliar(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+ await pagina.avaliar(`(() => { const b = ${BOTAO_VISAO('semana')}; if (b.getAttribute('aria-pressed') !== 'true') b.click(); else [...document.querySelectorAll('#view-tracking .ag-hoje')][0].click(); })()`);
+ await pagina.esperar(`${VISAO_ATIVA} === 'semana' && !document.querySelector('#view-tracking [aria-busy]') && document.querySelector('#view-tracking .ag-coluna[data-hoje]') && document.querySelectorAll('#view-tracking .ag-evento').length >= 6`, { descricao: 'semana de hoje' });
+};
+const clique = (seletor, extra = '') => pagina.avaliar(`(() => { const n = ${seletor}; n.dispatchEvent(new MouseEvent('click', { bubbles: true, ${extra} })); })()`);
+
+test('agenda: a semana põe cada evento no horário certo, com sobreposição, evento curto, virada de dia, faixa de dia inteiro e linha do agora', { skip: PULAR }, async () => {
+ desfazerAgenda = await pagina.injetar(COM_AGENDA(eventosDaSemana()));
+ await pagina.avaliar(`try { localStorage.removeItem('tzolkin-agenda-visao'); } catch {}`);
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`, { descricao: 'painel recarregado com a agenda de exemplo' });
+ await IR_PARA_AGENDA();
+ await pagina.esperar(`document.querySelectorAll('#view-tracking .ag-evento').length >= 6`, { descricao: 'eventos na grade' });
+ assert.equal(await pagina.avaliar(VISAO_ATIVA), 'semana', 'no desktop a agenda abre na semana');
+ const g = await pagina.avaliar(`(() => {
+  const todos = [...document.querySelectorAll('#view-tracking .ag-evento')];
+  const med = b => { const r = b.getBoundingClientRect(), c = b.parentElement.getBoundingClientRect(); return { topo: Math.round(r.top - c.top), alt: Math.round(r.height), esq: Math.round(r.left - c.left), larg: Math.round(r.width), coluna: Math.round(c.width), dia: b.parentElement.dataset.dia, curto: b.classList.contains('ag-curto'), status: b.dataset.status, tom: b.dataset.tom }; };
+  const por = t => todos.filter(b => b.querySelector('.ag-ev-titulo').textContent === t).map(med);
+  return { sessao: por('Mentoria Alfa — sessão 1'), revisao: por('Revisão de código'), daily: por('Daily'), deploy: por('Deploy noturno'), cancelada: por('Reunião cancelada'), feito: por('Workshop'), consultoria: por('Consultoria Beta'),
+   inteiro: [...document.querySelectorAll('#view-tracking .ag-diainteiro .ag-chip')].map(c => c.textContent), naGrade: todos.map(b => b.querySelector('.ag-ev-titulo').textContent),
+   agora: !!document.querySelector('#view-tracking .ag-coluna[data-hoje] .ag-agora'), titulo: document.querySelector('#view-tracking .ag-titulo').textContent, colunas: document.querySelectorAll('#view-tracking .ag-coluna').length,
+   cabecalhos: [...document.querySelectorAll('#view-tracking .ag-dia-cab')].map(c => c.dataset.dia),
+   camadas: { sessao: Number(todos.find(b => b.querySelector('.ag-ev-titulo').textContent === 'Mentoria Alfa — sessão 1').style.zIndex), revisao: Number(todos.find(b => b.querySelector('.ag-ev-titulo').textContent === 'Revisão de código').style.zIndex) } };
+ })()`);
+ const perto = (a, b, tol = 2) => assert.ok(Math.abs(a - b) <= tol, `${a} deveria estar a ${tol}px de ${b}`);
+ assert.equal(g.colunas, 7);
+ assert.deepEqual(g.cabecalhos, AM.semanaDe(AM.diaDe(Date.now())), 'sete dias, de segunda a domingo, incluindo hoje');
+ // 09:00 -> 9h * 48px; 10:00 e 09:30 sobrepõem e dividem a coluna ao meio
+ const [s] = g.sessao, [r] = g.revisao;
+ perto(s.topo, 9 * ALTURA_HORA); perto(s.alt, ALTURA_HORA - 2);
+ perto(r.topo, 9.5 * ALTURA_HORA);
+ // 09:00 e 09:30 começam em horas diferentes: cascata (o segundo recua e fica por cima), os dois legíveis, nenhuma fatia estreita
+ assert.ok(s.larg > s.coluna * 0.9, `o primeiro usa a largura toda: ${s.larg} de ${s.coluna}`);
+ assert.ok(r.larg > s.coluna * 0.6 && r.larg < s.larg, `o segundo é largo o bastante para ler: ${r.larg} de ${s.coluna}`);
+ assert.ok(r.esq - s.esq > s.coluna * 0.15, 'o segundo recua para a direita');
+ assert.ok(g.camadas.revisao > g.camadas.sessao, 'o que começa depois fica por cima');
+ // sem sobreposição, largura inteira
+ assert.ok(g.consultoria[0].larg > g.consultoria[0].coluna * 0.9, 'evento sozinho usa a largura toda');
+ perto(g.consultoria[0].topo, 14 * ALTURA_HORA); perto(g.consultoria[0].alt, 1.5 * ALTURA_HORA - 2);
+ // evento de 15 min: curto, mas legível (altura mínima)
+ assert.equal(g.daily[0].curto, true); assert.ok(g.daily[0].alt >= 14, 'não some: ' + g.daily[0].alt);
+ // atravessa a meia-noite: um pedaço na quarta (23h até o fim) e outro na quinta (0h a 1h)
+ assert.equal(g.deploy.length, 2); assert.notEqual(g.deploy[0].dia, g.deploy[1].dia);
+ perto(g.deploy[0].topo, 23 * ALTURA_HORA); perto(g.deploy[1].topo, 0); perto(g.deploy[1].alt, ALTURA_HORA - 2);
+ // situação e cor por categoria
+ assert.equal(g.cancelada[0].status, 'cancelled'); assert.equal(g.feito[0].status, 'done');
+ assert.equal(g.sessao[0].tom, 'accent'); assert.equal(g.revisao[0].tom, 'success'); assert.equal(g.consultoria[0].tom, 'info');
+ // prazo de vários dias não ocupa a grade de horas: vai para a faixa de dia inteiro, uma vez em cada dia coberto
+ assert.ok(!g.naGrade.includes('Entrega do site'));
+ assert.equal(g.inteiro.length, 4); assert.ok(g.inteiro.every(t => t === 'Entrega do site'));
+ assert.equal(g.agora, true, 'linha do horário atual na coluna de hoje');
+ assert.match(g.titulo, /20\d\d/);
+ semExcecoes();
+});
+
+test('agenda: visões e navegação (botões, atalhos, mini-calendário) pedem a janela certa ao servidor', { skip: PULAR }, async () => {
+ const hojeDia = AM.diaDe(Date.now());
+ const ultimaJanela = () => pagina.avaliar(`${NO_AGENDA}.gets.at(-1)`);
+ const conta = () => pagina.avaliar(`${NO_AGENDA}.gets.length`);
+ const mudarVisao = async v => { const antes = await conta(); await pagina.avaliar(`${BOTAO_VISAO(v)}.click()`); await pagina.esperar(`${NO_AGENDA}.gets.length > ${antes} && ${VISOES_ESPERAM(v)} && !document.querySelector('#view-tracking [aria-busy]')`, { descricao: 'visão ' + v }); };
+ const esperarNova = async antes => pagina.esperar(`${NO_AGENDA}.gets.length > ${antes} && !document.querySelector('#view-tracking [aria-busy]')`, { descricao: 'nova consulta' });
+
+ await mudarVisao('dia');
+ assert.deepEqual(await ultimaJanela(), { from: hojeDia, to: AM.somarDias(hojeDia, 1), tenant: null });
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#view-tracking .ag-coluna').length`), 1);
+ await mudarVisao('mes');
+ const mes = AM.janela('mes', hojeDia);
+ assert.deepEqual(await ultimaJanela(), { from: mes.from, to: mes.to, tenant: null });
+ const celulas = await pagina.avaliar(`document.querySelectorAll('#view-tracking .ag-celula').length`);
+ assert.ok(celulas % 7 === 0 && celulas >= 28 && celulas <= 42, 'semanas inteiras: ' + celulas);
+ assert.ok(await pagina.avaliar(`[...document.querySelectorAll('#view-tracking .ag-chip-titulo')].some(c => c.textContent === 'Mentoria Alfa — sessão 1')`), 'chip do evento no mês');
+ await mudarVisao('agenda');
+ const ag = AM.janela('agenda', hojeDia);
+ assert.deepEqual(await ultimaJanela(), { from: ag.from, to: ag.to, tenant: null });
+ // A agenda lista a partir do dia em foco. Os eventos de exemplo são da semana de hoje (que pode já ter passado, se hoje é domingo):
+ // aponta o foco para a segunda-feira pelo mini-calendário.
+ let ant = await conta();
+ await pagina.avaliar(`(() => { const l = document.querySelector('#view-tracking .ag-lateral'); let b = l.querySelector('.ag-mini-dia[data-dia="${AM.segundaDe(hojeDia)}"]'); if (!b) { l.querySelectorAll('.ag-mini-cab button')[0].click(); b = l.querySelector('.ag-mini-dia[data-dia="${AM.segundaDe(hojeDia)}"]'); } b.click(); })()`);
+ await esperarNova(ant);
+ const lista = await pagina.avaliar(`({ grupos: document.querySelectorAll('#view-tracking .ag-grupo').length, linhas: [...document.querySelectorAll('#view-tracking .ag-linha-hora')].map(h => h.textContent) })`);
+ assert.ok(lista.grupos >= 5, 'dias com evento aparecem agrupados: ' + lista.grupos);
+ assert.ok(lista.linhas.includes('Dia todo'), 'prazo de vários dias aparece como "Dia todo"');
+ await mudarVisao('semana');
+ await SEMANA_DE_HOJE();
+
+ // atalhos de teclado: valem fora de campo, e não valem digitando
+ let antes = await conta();
+ await pagina.avaliar(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))`);
+ await esperarNova(antes);
+ const proxima = AM.janela('semana', AM.navegar('semana', hojeDia, 1));
+ assert.deepEqual(await ultimaJanela(), { from: proxima.from, to: proxima.to, tenant: null }, 'seta direita = semana seguinte');
+ antes = await conta();
+ await pagina.avaliar(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 't', bubbles: true }))`);
+ await esperarNova(antes);
+ assert.equal((await ultimaJanela()).from, AM.segundaDe(hojeDia), 't volta para hoje');
+ antes = await conta();
+ await pagina.avaliar(`(() => { const campo = document.querySelector('#view-tracking .ag-busca input'); campo.focus(); campo.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true })); })()`);
+ await new Promise(r => setTimeout(r, 300));
+ assert.equal(await pagina.avaliar(VISAO_ATIVA), 'semana', 'digitar "m" na busca não troca a visão');
+ assert.equal(await conta(), antes);
+ await pagina.avaliar(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true }))`);
+ await pagina.esperar(VISOES_ESPERAM('mes'), { descricao: 'atalho m' });
+ await pagina.avaliar(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'w', bubbles: true }))`);
+ await pagina.esperar(VISOES_ESPERAM('semana'), { descricao: 'atalho w' });
+
+ // mini-calendário: clicar num dia leva a semana para ele
+ const alvo = AM.somarDias(hojeDia, 14);
+ antes = await conta();
+ await pagina.avaliar(`(() => { const lateral = document.querySelector('#view-tracking .ag-lateral'); let b = lateral.querySelector('.ag-mini-dia[data-dia="${alvo}"]'); if (!b) { lateral.querySelectorAll('.ag-mini-cab button')[1].click(); b = lateral.querySelector('.ag-mini-dia[data-dia="${alvo}"]'); } b.click(); })()`);
+ await esperarNova(antes);
+ assert.equal((await ultimaJanela()).from, AM.segundaDe(alvo));
+ assert.equal(await pagina.avaliar(`document.querySelector('#view-tracking .ag-mini-dia[aria-current="date"]').dataset.dia`), alvo);
+ antes = await conta();
+ await pagina.avaliar(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 't', bubbles: true }))`);
+ await esperarNova(antes);
+
+ // filtros do lado do cliente: categoria e busca não vão ao servidor
+ await pagina.esperar(`document.querySelectorAll('#view-tracking .ag-evento').length >= 6`);
+ const titulosNaGrade = () => pagina.avaliar(`[...document.querySelectorAll('#view-tracking .ag-evento .ag-ev-titulo')].map(t => t.textContent).sort()`);
+ const consultasAntes = await conta();
+ await pagina.avaliar(`(() => { const c = document.querySelector('#view-tracking .ag-categoria input[data-categoria="software"]'); c.checked = false; c.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+ const semSoftware = await titulosNaGrade();
+ assert.ok(!semSoftware.includes('Revisão de código') && !semSoftware.includes('Deploy noturno'), 'categoria desmarcada some da grade: ' + semSoftware);
+ assert.ok(semSoftware.includes('Mentoria Alfa — sessão 1'));
+ await pagina.avaliar(`(() => { const c = document.querySelector('#view-tracking .ag-categoria input[data-categoria="software"]'); c.checked = true; c.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+ assert.ok((await titulosNaGrade()).includes('Revisão de código'), 'marcar de novo traz de volta');
+ await pagina.avaliar(`(() => { const b = document.querySelector('#view-tracking .ag-busca input'); b.value = 'REVISAO'; b.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+ assert.deepEqual(await titulosNaGrade(), ['Revisão de código'], 'busca sem acento e sem caixa');
+ await pagina.avaliar(`(() => { const b = document.querySelector('#view-tracking .ag-busca input'); b.value = ''; b.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+ assert.equal(await conta(), consultasAntes, 'filtrar no cliente não faz nova consulta');
+ // filtro de cliente vai ao servidor
+ await pagina.avaliar(`(() => { const s = [...document.querySelectorAll('#view-tracking .ag-filtros label')].find(l => l.firstChild.textContent === 'Cliente').querySelector('select'); s.value = ${JSON.stringify(PESSOA_FISICA)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+ await esperarNova(consultasAntes);
+ assert.equal((await ultimaJanela()).tenant, PESSOA_FISICA);
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#view-tracking .ag-evento').length`), 0, 'a outra empresa não tem eventos');
+ await pagina.avaliar(`(() => { const s = [...document.querySelectorAll('#view-tracking .ag-filtros label')].find(l => l.firstChild.textContent === 'Cliente').querySelector('select'); s.value = ''; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+ await pagina.esperar(`document.querySelectorAll('#view-tracking .ag-evento').length >= 6`, { descricao: 'eventos de volta' });
+ semExcecoes();
+});
+
+test('agenda: clicar numa hora vazia abre o formulário com a hora; criar manda o horário de Brasília e só os campos preenchidos', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ const dia = AM.somarDias(AM.segundaDe(AM.diaDe(Date.now())), 2);
+ await pagina.avaliar(`document.querySelectorAll('dialog[open]').forEach(d => d.close())`);
+ // 10h20 numa coluna vazia: o clique arredonda para a meia hora de baixo (10h00) e dá 1h
+ await clique(`(() => { const c = document.querySelector('#view-tracking .ag-coluna[data-dia="${dia}"]'); window.__y = c.getBoundingClientRect().top + (10 * 60 + 20) / 60 * ${ALTURA_HORA}; return c; })()`, `clientY: window.__y`);
+ await pagina.esperar(`document.querySelector('dialog.tracking-editor[open]')`, { descricao: 'formulário aberto pelo clique' });
+ const campoDe = nome => `[...document.querySelectorAll('dialog.tracking-editor label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)}).querySelector('input,select,textarea')`;
+ assert.equal(await pagina.avaliar(`${campoDe('Início · Brasília')}.value`), `${dia}T10:00`);
+ assert.equal(await pagina.avaliar(`${campoDe('Fim / prazo · Brasília')}.value`), `${dia}T11:00`);
+ // início depois do fim: o fim acompanha (mais 1h), como nos calendários
+ await pagina.avaliar(`(() => { const i = ${campoDe('Início · Brasília')}; i.value = '${dia}T15:30'; i.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+ assert.equal(await pagina.avaliar(`${campoDe('Fim / prazo · Brasília')}.value`), `${dia}T16:30`);
+ await pagina.avaliar(`(() => { const set = (c, v, ev = 'input') => { c.value = v; c.dispatchEvent(new Event(ev, { bubbles: true })); };
+  set(${campoDe('Título')}, 'Kickoff do projeto'); set(${campoDe('Cliente')}, ${JSON.stringify(EMPRESA)}, 'change'); set(${campoDe('Descrição (opcional)')}, 'Alinhar escopo');
+  set(${campoDe('Link da reunião (opcional)')}, 'https://zoom.us/j/123'); document.querySelector('dialog.tracking-editor form').requestSubmit(); })()`);
+ await pagina.esperar(`${NO_AGENDA}.posts.length === 1`, { descricao: 'POST enviado' });
+ const post = await pagina.avaliar(`${NO_AGENDA}.posts[0]`);
+ assert.equal(post.title, 'Kickoff do projeto'); assert.equal(post.tenant_id, EMPRESA); assert.equal(post.category, 'mentoria');
+ assert.equal(post.starts_at, new Date(`${dia}T15:30:00-03:00`).toISOString(), 'horário de Brasília convertido para UTC');
+ assert.equal(post.ends_at, new Date(`${dia}T16:30:00-03:00`).toISOString());
+ assert.equal(post.description, 'Alinhar escopo'); assert.equal(post.meeting_url, 'https://zoom.us/j/123');
+ assert.ok(!('location' in post), 'campo vazio não é enviado');
+ assert.match(post.id, /^[0-9a-f-]{36}$/);
+ await pagina.esperar(`!document.querySelector('dialog.tracking-editor[open]')`, { descricao: 'formulário fechou' });
+ await pagina.esperar(`[...document.querySelectorAll('#view-tracking .ag-ev-titulo')].some(t => t.textContent === 'Kickoff do projeto')`, { descricao: 'evento novo na grade' });
+ const topo = await pagina.avaliar(`(() => { const b = [...document.querySelectorAll('#view-tracking .ag-evento')].find(b => b.querySelector('.ag-ev-titulo').textContent === 'Kickoff do projeto'); return Math.round(b.getBoundingClientRect().top - b.parentElement.getBoundingClientRect().top); })()`);
+ assert.ok(Math.abs(topo - 15.5 * ALTURA_HORA) <= 2, 'aparece às 15h30: ' + topo);
+ // fim antes do início é recusado na tela, sem ir ao servidor
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-acoes .primary').click()`);
+ await pagina.esperar(`document.querySelector('dialog.tracking-editor[open]')`);
+ await pagina.avaliar(`(() => { const set = (c, v, ev = 'input') => { c.value = v; c.dispatchEvent(new Event(ev, { bubbles: true })); }; set(${campoDe('Título')}, 'Sem sentido'); set(${campoDe('Cliente')}, ${JSON.stringify(EMPRESA)}, 'change'); set(${campoDe('Início · Brasília')}, '${dia}T10:00', 'change'); const f = ${campoDe('Fim / prazo · Brasília')}; f.removeAttribute('min'); f.value = '${dia}T09:00'; document.querySelector('dialog.tracking-editor form').requestSubmit(); })()`);
+ await pagina.esperar(`document.querySelector('dialog.tracking-editor .form-error').textContent.includes('depois do início')`, { descricao: 'aviso de fim antes do início' });
+ assert.equal(await pagina.avaliar(`${NO_AGENDA}.posts.length`), 1, 'nada foi enviado');
+ await pagina.avaliar(`document.querySelectorAll('dialog[open]').forEach(d => d.close())`);
+ semExcecoes();
+});
+
+test('agenda: sem a migração 047 o formulário não oferece descrição, local nem link (e volta quando o banco os tem)', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ const rotulos = () => pagina.avaliar(`[...document.querySelectorAll('dialog.tracking-editor label')].map(l => l.firstChild.textContent)`);
+ const recarregar = async () => { const n = await pagina.avaliar(`${NO_AGENDA}.gets.length`); await pagina.avaliar(`[...document.querySelectorAll('#view-tracking .ag-hoje')][0].click()`); await pagina.esperar(`${NO_AGENDA}.gets.length > ${n} && !document.querySelector('#view-tracking [aria-busy]')`); };
+ const abrirEFechar = async () => { await pagina.avaliar(`document.querySelector('#view-tracking .ag-acoes .primary').click()`); await pagina.esperar(`document.querySelector('dialog.tracking-editor[open]')`); const r = await rotulos(); await pagina.avaliar(`document.querySelectorAll('dialog[open]').forEach(d => d.close())`); return r; };
+ await pagina.avaliar(`${NO_AGENDA}.semCampos = true`);
+ await recarregar();
+ const sem = await abrirEFechar();
+ assert.ok(sem.includes('Título') && sem.includes('Início · Brasília'), 'o resto do formulário segue igual: ' + sem);
+ for (const campo of ['Descrição (opcional)', 'Local (opcional)', 'Link da reunião (opcional)']) assert.ok(!sem.includes(campo), campo + ' não pode aparecer sem a migração');
+ await pagina.avaliar(`${NO_AGENDA}.semCampos = false`);
+ await recarregar();
+ const com = await abrirEFechar();
+ for (const campo of ['Descrição (opcional)', 'Local (opcional)', 'Link da reunião (opcional)']) assert.ok(com.includes(campo), campo + ' aparece quando o banco tem as colunas');
+ semExcecoes();
+});
+
+test('agenda: arrastar move, esticar muda a duração, Esc cancela e recusa do servidor desfaz', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ const ID = '00000000-0000-4000-8000-000000000001';       // Mentoria Alfa, segunda 09:00-10:00
+ const medir = () => pagina.avaliar(`(() => { const b = document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]'); const r = b.getBoundingClientRect(), c = b.parentElement.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top, topo: Math.round(r.top - c.top), alt: Math.round(r.height), bottom: r.bottom, dia: b.parentElement.dataset.dia, coluna: c.width, classes: b.className }; })()`);
+ const mouse = (tipo, x, y, alvo = 'document') => pagina.avaliar(`${alvo}.dispatchEvent(new PointerEvent('${tipo}', { bubbles: true, clientX: ${x}, clientY: ${y}, button: 0, pointerType: 'mouse', pointerId: 7 }))`);
+ const aguardarPut = async n => pagina.esperar(`${NO_AGENDA}.puts.length === ${n}`, { descricao: `PUT nº ${n}` });
+ const ultimoPut = () => pagina.avaliar(`${NO_AGENDA}.puts.at(-1)`);
+ const iso = (dia, hhmm) => new Date(`${dia}T${hhmm}:00-03:00`).toISOString();
+ const segunda = AM.segundaDe(AM.diaDe(Date.now()));
+ const puts0 = await pagina.avaliar(`${NO_AGENDA}.puts.length`);
+
+ // mover 2h para baixo: 96px a 48px/h, grudando de 15 em 15
+ let m = await medir(); assert.ok(Math.abs(m.topo - 9 * ALTURA_HORA) <= 2);
+ await mouse('pointerdown', m.x, m.y + 8, `document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]')`);
+ await mouse('pointermove', m.x, m.y + 8 + 2 * ALTURA_HORA);
+ assert.match((await medir()).classes, /ag-arrastando/, 'mostra o evento sendo arrastado');
+ await mouse('pointerup', m.x, m.y + 8 + 2 * ALTURA_HORA);
+ await aguardarPut(puts0 + 1);
+ let put = await ultimoPut();
+ assert.deepEqual(put.corpo, { revision: 1, starts_at: iso(segunda, '11:00'), ends_at: iso(segunda, '12:00') }, 'só o horário vai, com a revisão lida');
+ await pagina.esperar(`document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]').style.top === '${11 * ALTURA_HORA}px'`, { descricao: 'evento na nova posição' });
+ assert.ok(!(await pagina.avaliar(PAINEL_ABERTO)), 'arrastar não abre o painel');
+
+ // grudar de 15 em 15: 20px (~25 min) vira 30 min
+ m = await medir();
+ await mouse('pointerdown', m.x, m.y + 8, `document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]')`);
+ await mouse('pointermove', m.x, m.y + 8 + 20);
+ await mouse('pointerup', m.x, m.y + 8 + 20);
+ await aguardarPut(puts0 + 2);
+ put = await ultimoPut();
+ assert.equal(put.corpo.revision, 2, 'a revisão subiu com a gravação anterior');
+ assert.equal(put.corpo.starts_at, iso(segunda, '11:30'));
+
+ // mover para a coluna do dia seguinte: +1 dia, mesma hora
+ m = await medir();
+ await mouse('pointerdown', m.x, m.y + 8, `document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]')`);
+ await mouse('pointermove', m.x + m.coluna, m.y + 8);
+ await mouse('pointerup', m.x + m.coluna, m.y + 8);
+ await aguardarPut(puts0 + 3);
+ put = await ultimoPut();
+ assert.equal(put.corpo.starts_at, iso(AM.somarDias(segunda, 1), '11:30'));
+ assert.equal((await medir()).dia, AM.somarDias(segunda, 1), 'caiu na terça');
+
+ // esticar o fim 1h (alça de baixo): só o fim muda
+ m = await medir();
+ await mouse('pointerdown', m.x, m.bottom - 3, `document.querySelector('#view-tracking .ag-evento[data-id="${ID}"] .ag-alca')`);
+ await mouse('pointermove', m.x, m.bottom - 3 + ALTURA_HORA);
+ assert.match((await medir()).classes, /ag-esticando/);
+ await mouse('pointerup', m.x, m.bottom - 3 + ALTURA_HORA);
+ await aguardarPut(puts0 + 4);
+ put = await ultimoPut();
+ assert.equal(put.corpo.starts_at, iso(AM.somarDias(segunda, 1), '11:30'), 'o início fica');
+ assert.equal(put.corpo.ends_at, iso(AM.somarDias(segunda, 1), '13:30'), 'o fim ganhou 1h (12:30 -> 13:30)');
+
+ // Esc no meio do arraste: nada é gravado e o evento volta
+ // (e o ouvinte de teclado do arraste tem de sair: já vazou uma vez e engolia o Esc da página toda)
+ m = await medir();
+ await mouse('pointerdown', m.x, m.y + 8, `document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]')`);
+ await mouse('pointermove', m.x, m.y + 8 + 3 * ALTURA_HORA);
+ await pagina.avaliar(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+ await mouse('pointerup', m.x, m.y + 8 + 3 * ALTURA_HORA);
+ await new Promise(r => setTimeout(r, 200));
+ assert.equal(await pagina.avaliar(`${NO_AGENDA}.puts.length`), puts0 + 4, 'Esc cancelou: nenhuma gravação');
+ assert.ok(!(await medir()).classes.includes('ag-arrastando'));
+
+ // servidor recusa (409): a tela avisa e o evento volta ao lugar de antes
+ const antes = await medir();
+ await pagina.avaliar(`${NO_AGENDA}.recusar = ${JSON.stringify(ID)}`);
+ await mouse('pointerdown', antes.x, antes.y + 8, `document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]')`);
+ await mouse('pointermove', antes.x, antes.y + 8 + 2 * ALTURA_HORA);
+ await mouse('pointerup', antes.x, antes.y + 8 + 2 * ALTURA_HORA);
+ await pagina.esperar(`document.querySelector('#view-tracking .ag-aviso')`, { descricao: 'aviso de recusa' });
+ assert.match(await pagina.avaliar(`document.querySelector('#view-tracking .ag-aviso').textContent`), /alterar o horário.*alterado ou inexistente/);
+ assert.equal((await medir()).topo, antes.topo, 'voltou para onde estava');
+ await pagina.avaliar(`${NO_AGENDA}.recusar = null`);
+ semExcecoes();
+});
+
+test('agenda: o painel do evento mostra os detalhes, conclui, edita só o que mudou e registra tempo', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ const ID = '00000000-0000-4000-8000-000000000003';      // Consultoria Beta, com descrição e link
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]').click()`);
+ await pagina.esperar(PAINEL_ABERTO, { descricao: 'painel aberto' });
+ const painel = await pagina.avaliar(`(() => { const p = document.getElementById('peek-agenda'); const dl = p.querySelector('.ficha-dl'); return { titulo: p.querySelector('h2').textContent, abas: [...p.querySelectorAll('[role=tab]')].map(t => t.textContent.trim()), linhas: Object.fromEntries([...dl.querySelectorAll('dt')].map(dt => [dt.textContent, dt.nextElementSibling.textContent.trim()])), link: dl.querySelector('a')?.outerHTML, botoes: [...p.querySelectorAll('footer button')].map(b => b.textContent.trim()) }; })()`);
+ assert.equal(painel.titulo, 'Consultoria Beta');
+ assert.deepEqual(painel.abas.map(t => t.replace(/\d+$/, '')), ['Detalhes', 'Tempo']);
+ assert.match(painel.linhas['Quando'], /14:00 – 15:30 \(1 h 30 min\)/);
+ assert.equal(painel.linhas['Cliente'], 'Empresa Alfa'); assert.equal(painel.linhas['Categoria'], 'Consultoria'); assert.equal(painel.linhas['Situação'], 'Planejado');
+ assert.equal(painel.linhas['Descrição'], 'Pauta:\n1. Metas', 'a descrição mantém as quebras de linha');
+ assert.match(painel.link, /href="https:\/\/meet\.google\.com\/abc-defg-hij"/); assert.match(painel.link, /rel="noopener noreferrer"/); assert.match(painel.link, /target="_blank"/);
+ assert.ok(!('Local' in painel.linhas), 'campo sem valor não aparece');
+ assert.deepEqual(painel.botoes, ['Editar', 'Cancelar atividade', 'Concluir']);
+
+ // concluir: PUT de situação com a revisão lida; o painel passa a oferecer "Reabrir"
+ const puts0 = await pagina.avaliar(`${NO_AGENDA}.puts.length`);
+ await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].find(b => b.textContent.trim() === 'Concluir').click()`);
+ await pagina.esperar(`${NO_AGENDA}.puts.length === ${puts0 + 1}`, { descricao: 'PUT de situação' });
+ assert.deepEqual(await pagina.avaliar(`${NO_AGENDA}.puts.at(-1)`), { id: ID, sub: 'status', corpo: { status: 'done', revision: 1 } });
+ await pagina.esperar(`[...document.querySelectorAll('#peek-agenda footer button')].some(b => b.textContent.trim() === 'Reabrir')`, { descricao: 'painel mostra Reabrir' });
+ assert.equal(await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]').dataset.status`), 'done', 'a grade também mudou');
+
+ // editar: o formulário vem preenchido, a empresa fica travada e só o campo alterado vai
+ await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].find(b => b.textContent.trim() === 'Editar').click()`);
+ await pagina.esperar(`document.querySelector('dialog.tracking-editor[open]')`, { descricao: 'formulário de edição' });
+ const campoDe = nome => `[...document.querySelectorAll('dialog.tracking-editor label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)}).querySelector('input,select,textarea')`;
+ assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor h2').textContent`), 'Editar atividade');
+ assert.equal(await pagina.avaliar(`${campoDe('Título')}.value`), 'Consultoria Beta');
+ assert.equal(await pagina.avaliar(`${campoDe('Cliente')}.disabled`), true);
+ assert.equal(await pagina.avaliar(`${campoDe('Link da reunião (opcional)')}.value`), 'https://meet.google.com/abc-defg-hij');
+ await pagina.avaliar(`(() => { const t = ${campoDe('Título')}; t.value = 'Consultoria Beta — revisão'; t.dispatchEvent(new Event('input', { bubbles: true })); document.querySelector('dialog.tracking-editor form').requestSubmit(); })()`);
+ await pagina.esperar(`${NO_AGENDA}.puts.length === ${puts0 + 2}`, { descricao: 'PUT de edição' });
+ assert.deepEqual(await pagina.avaliar(`${NO_AGENDA}.puts.at(-1)`), { id: ID, sub: null, corpo: { revision: 2, title: 'Consultoria Beta — revisão' } }, 'só o título muda, com a revisão que subiu ao concluir');
+ await pagina.esperar(`document.querySelector('#peek-agenda h2').textContent === 'Consultoria Beta — revisão'`, { descricao: 'painel com o título novo' });
+
+ // tempo: aba própria, formulário inline
+ await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda [role=tab]')].find(t => t.textContent.startsWith('Tempo')).click()`);
+ await pagina.avaliar(`(() => { const f = document.querySelector('#peek-agenda .ag-tempo'); const set = (rotulo, v) => { const c = [...f.querySelectorAll('label')].find(l => l.firstChild.textContent === rotulo).querySelector('input'); c.value = v; c.dispatchEvent(new Event('input', { bubbles: true })); }; set('Minutos trabalhados', '45'); set('Descrição do trabalho', 'Revisão da proposta'); f.requestSubmit(); })()`);
+ await pagina.esperar(`${NO_AGENDA}.tempos.length === 1`, { descricao: 'apontamento enviado' });
+ const tempo = await pagina.avaliar(`${NO_AGENDA}.tempos[0]`);
+ assert.equal(tempo.id, ID); assert.equal(tempo.corpo.minutes, 45); assert.equal(tempo.corpo.note, 'Revisão da proposta'); assert.match(tempo.corpo.worked_on, /^\d{4}-\d{2}-\d{2}$/);
+ // Esc fecha o painel e devolve o foco
+ const antesDoEsc = await pagina.avaliar(`({ dialogos: document.querySelectorAll('dialog[open]').length, paineis: [...document.querySelectorAll('.peek-side')].map(p => p.id || p.className), ativo: document.activeElement?.tagName + '.' + document.activeElement?.className })`);
+ assert.equal(antesDoEsc.dialogos, 0, 'nenhum diálogo aberto antes do Esc: ' + JSON.stringify(antesDoEsc));
+ await pagina.avaliar(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+ await new Promise(r => setTimeout(r, 400));
+ const depoisDoEsc = await pagina.avaliar(`({ painel: !!document.getElementById('peek-agenda'), scrims: document.querySelectorAll('.peek-scrim').length, paineisNaPagina: [...document.querySelectorAll('.peek-side')].map(p => p.id) })`);
+ assert.equal(depoisDoEsc.painel, false, 'o painel deveria ter fechado: ' + JSON.stringify(depoisDoEsc));
+ semExcecoes();
+});
+
+test('agenda: legível no claro e no escuro em todas as visões, sem estouro de largura no celular', { skip: PULAR }, async () => {
+ const LER = `(() => {
+  const canais = c => c.match(/[\\d.]+/g).slice(0, 3).map(Number);
+  const luz = c => { const [r, g, b] = canais(c).map(v => v / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const razao = (a, b) => { const [x, y] = [luz(a), luz(b)].sort((p, q) => q - p); return Math.round(((x + 0.05) / (y + 0.05)) * 100) / 100; };
+  const fundoDe = el => { for (let e = el; e; e = e.parentElement) { const c = getComputedStyle(e).backgroundColor; if (c && !/rgba\\(.*, 0\\)|transparent/.test(c)) return c; } return getComputedStyle(document.body).backgroundColor; };
+  const ruins = [];
+  for (const el of document.querySelectorAll('#view-tracking *')) {
+   if (!el.offsetParent || ![...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) continue;
+   const c = razao(getComputedStyle(el).color, fundoDe(el));
+   if (c < 4.5) ruins.push(c + ' "' + el.textContent.trim().slice(0, 30) + '" .' + String(el.className).split(' ')[0]);
+  }
+  const largos = [...document.querySelectorAll('#view-tracking *')].filter(e => e.offsetParent && !e.closest('.ag-rolagem') && e.getBoundingClientRect().right > document.documentElement.clientWidth + 1).slice(0, 6).map(e => e.tagName.toLowerCase() + '.' + String(e.className).split(' ')[0] + ' direita=' + Math.round(e.getBoundingClientRect().right));
+  return { ruins: ruins.slice(0, 8), estouro: document.documentElement.scrollWidth - document.documentElement.clientWidth, largos };
+ })()`;
+ await pagina.tela(1280, 900);
+ for (const esquema of ['light', 'dark']) {
+  await pagina.esquema(esquema);
+  await pagina.esperar(`document.documentElement.dataset.theme === '${esquema === 'dark' ? 'dark' : 'light'}'`);
+  for (const visao of ['semana', 'dia', 'mes', 'agenda']) {
+   await pagina.avaliar(`${BOTAO_VISAO(visao)}.click()`);
+   await pagina.esperar(`${VISOES_ESPERAM(visao)} && !document.querySelector('#view-tracking [aria-busy]')`);
+   await new Promise(r => setTimeout(r, 450));   // transições de cor (.15s) assentam antes de medir
+   const l = await pagina.avaliar(LER);
+   assert.deepEqual(l.ruins, [], `${esquema} / ${visao}: texto abaixo de 4,5:1`);
+   assert.ok(l.estouro <= 0, `${esquema} / ${visao}: rolagem horizontal de ${l.estouro}px; estouram: ${l.largos.join(' | ')}`);
+  }
+ }
+ await pagina.esquema('light');
+ // celular: abre no dia, cabe na tela, e a semana também cabe
+ await pagina.avaliar(`try { localStorage.removeItem('tzolkin-agenda-visao'); } catch {}`);
+ await pagina.tela(390, 844);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden`);
+ await IR_PARA_AGENDA();
+ await pagina.esperar(`document.querySelectorAll('#view-tracking .ag-coluna').length >= 1`);
+ assert.equal(await pagina.avaliar(VISAO_ATIVA), 'dia', 'no celular abre na visão Dia');
+ for (const visao of ['dia', 'semana', 'mes', 'agenda']) {
+  await pagina.avaliar(`${BOTAO_VISAO(visao)}.click()`);
+  await pagina.esperar(`${VISOES_ESPERAM(visao)} && !document.querySelector('#view-tracking [aria-busy]')`);
+  await new Promise(r => setTimeout(r, 300));
+  const l = await pagina.avaliar(LER);
+  assert.ok(l.estouro <= 0, `celular / ${visao}: rolagem horizontal de ${l.estouro}px; estouram: ${l.largos.join(' | ')}`);
+  assert.deepEqual(l.ruins, [], `celular / ${visao}: texto abaixo de 4,5:1`);
+ }
+ const alturaDosBotoes = await pagina.avaliar(`[...document.querySelectorAll('#view-tracking .ag-visoes button, #view-tracking .ag-acoes .primary')].map(b => Math.round(b.getBoundingClientRect().height))`);
+ assert.ok(alturaDosBotoes.every(h => h >= 40), 'alvo de toque de pelo menos 40px: ' + alturaDosBotoes);
+ await pagina.tela(1280, 900);
+ await desfazerAgenda?.();
+ await pagina.avaliar(`try { localStorage.removeItem('tzolkin-agenda-visao'); } catch {}`);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden`, { descricao: 'painel de volta ao normal' });
+ semExcecoes();
+});
+
+test('capturas: a agenda (semana, dia, mês, agenda, painel e formulário) em claro e escuro, desktop e celular', { skip: PULAR || !process.env.UI_SCREENSHOTS }, async () => {
+ const sufixo = e => (e === 'dark' ? 'Escuro' : 'Claro');
+ const desfazer = await pagina.injetar(COM_AGENDA(eventosDaSemana()));
+ await pagina.avaliar(`try { localStorage.removeItem('tzolkin-agenda-visao'); } catch {}`);
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await IR_PARA_AGENDA();
+ for (const esquema of ['light', 'dark']) {
+  await pagina.esquema(esquema);
+  await pagina.esperar(`document.documentElement.dataset.theme === '${esquema}'`);
+  for (const visao of ['semana', 'dia', 'mes', 'agenda']) {
+   await pagina.avaliar(`${BOTAO_VISAO(visao)}.click()`);
+   await pagina.esperar(`${VISOES_ESPERAM(visao)} && !document.querySelector('#view-tracking [aria-busy]')`);
+   await new Promise(r => setTimeout(r, 500));
+   await pagina.imagem(join(ARTEFATOS, `1000-Agenda-${visao}-${sufixo(esquema)}.png`));
+  }
+  await pagina.avaliar(`${BOTAO_VISAO('semana')}.click()`);
+  await pagina.esperar(`${VISOES_ESPERAM('semana')} && document.querySelectorAll('#view-tracking .ag-evento').length >= 6`);
+  await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="00000000-0000-4000-8000-000000000003"]').click()`);
+  await pagina.esperar(PAINEL_ABERTO);
+  await new Promise(r => setTimeout(r, 400));
+  await pagina.imagem(join(ARTEFATOS, `1001-Agenda-painel-${sufixo(esquema)}.png`));
+  await pagina.avaliar(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+  await pagina.avaliar(`document.querySelector('#view-tracking .ag-acoes .primary').click()`);
+  await pagina.esperar(`document.querySelector('dialog.tracking-editor[open]')`);
+  await new Promise(r => setTimeout(r, 300));
+  await pagina.imagem(join(ARTEFATOS, `1002-Agenda-formulario-${sufixo(esquema)}.png`));
+  await pagina.avaliar(`document.querySelectorAll('dialog[open]').forEach(d => d.close())`);
+ }
+ await pagina.tela(390, 844);
+ for (const esquema of ['light', 'dark']) {
+  await pagina.esquema(esquema);
+  await pagina.esperar(`document.documentElement.dataset.theme === '${esquema}'`);
+  for (const visao of ['dia', 'agenda', 'mes']) {
+   await pagina.avaliar(`${BOTAO_VISAO(visao)}.click()`);
+   await pagina.esperar(`${VISOES_ESPERAM(visao)} && !document.querySelector('#view-tracking [aria-busy]')`);
+   await new Promise(r => setTimeout(r, 500));
+   await pagina.imagem(join(ARTEFATOS, `1003-Agenda-celular-${visao}-${sufixo(esquema)}.png`));
+  }
+ }
+ await pagina.esquema('light');
+ await pagina.tela(1280, 900);
+ await desfazer();
+ await pagina.avaliar(`try { localStorage.removeItem('tzolkin-agenda-visao'); } catch {}`);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden`);
  semExcecoes();
 });
 
