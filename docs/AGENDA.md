@@ -83,3 +83,14 @@ Depois de aplicar, a primeira consulta (até 1 minuto) já passa a oferecer os c
 - **Sem a 048** o banco responde `agenda_lembretes: false`, a tela não mostra lembrete nem repetição e a API devolve 409 "falta aplicar a migração 048".
 - Arquivos: `recorrencia.mjs` (regras, testado), `agenda.mjs` (rotas), `agenda-jobs.mjs`, `agenda-recursos.mjs` (detector 047/048), `agenda-repeticao.js`
   (blocos do formulário), `notificacoes.js` (Configurações).
+
+## Google Meet (migração 049, **ainda não aplicada ao banco compartilhado**)
+
+- **Conta por operador.** Em Configurações → Integrações → *Google Agenda e Meet*, cada pessoa conecta a PRÓPRIA conta Google (OAuth com o cliente do login, escopo só de eventos do Calendar). O Core guarda só o *refresh token*, **cifrado** (AES-256-GCM, chave `CORE_SECRETS_KEY` fora do banco). Token de acesso nunca é gravado.
+- **Criar a sala.** No formulário (atividade avulsa): *Sala → Criar sala do Google Meet*, com convidados opcionais (e-mails; o Google manda o convite). Ou, no painel de uma atividade existente, *Criar sala do Meet*. O evento nasce na agenda de quem clicou, o link do Meet vai para "Link da reunião" e `google_event_id` fica na atividade. Uma sala por atividade; repetir o pedido devolve a mesma (o `requestId` é estável).
+- **Acompanha.** Mudar horário, título ou textos atualiza o evento no Google; cancelar a atividade apaga o evento (e avisa os convidados). Melhor esforço: se o Google falhar, a atividade muda do mesmo jeito e o erro vai para o log.
+- **Se o Google falhar ao criar.** A atividade fica salva e a tela avisa que a sala não foi criada (sem duplicar); dá para tentar de novo pelo painel.
+- **Conexão expirada ou revogada** (`invalid_grant`): a conexão é marcada como revogada e a tela pede para conectar de novo.
+- **Não vale para séries** (atividade que se repete): a sala é por evento avulso.
+- **Sem a 049**: a tela diz "indisponível", não oferece a sala, e a API devolve 409 com a mensagem. Endereço de retorno a cadastrar no Google Cloud: `<PUBLIC_ORIGIN>/api/google/calendar/callback`.
+- Arquivos: `platform/google-calendar.mjs` (conversa com o Google), `modules/google-calendar.mjs` (rotas, detector, sincronização), `config-integracoes.js` (conexão), blocos "Videoconferência" em `agenda-evento.js`.

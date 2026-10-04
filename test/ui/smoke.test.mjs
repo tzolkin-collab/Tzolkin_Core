@@ -991,7 +991,7 @@ function eventosDaSemana() {
 }
 const COM_AGENDA = lista => `(() => {
  const EVENTOS = ${JSON.stringify(lista)};
- window.__agenda = { eventos: EVENTOS, gets: [], puts: [], posts: [], tempos: [], recusar: null, semCampos: false, lembretes: false, series: [], seriesPosts: [], seriesPuts: [], seriesFins: [], padrao: [15] };
+ window.__agenda = { eventos: EVENTOS, gets: [], puts: [], posts: [], tempos: [], recusar: null, semCampos: false, lembretes: false, series: [], seriesPosts: [], seriesPuts: [], seriesFins: [], padrao: [15], meet: false, meets: [], meetFalha: false };
  window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
  const json = (corpo, status = 200) => Promise.resolve(new Response(JSON.stringify(corpo), { status, headers: { 'content-type': 'application/json' } }));
  window.fetch = async (url, opcoes = {}) => {
@@ -1004,7 +1004,7 @@ const COM_AGENDA = lista => `(() => {
    window.__agenda.gets.push({ from: q.get('from'), to: q.get('to'), tenant: q.get('tenant_id') });
    const de = Date.parse(q.get('from') + 'T00:00:00-03:00'), ate = Date.parse(q.get('to') + 'T00:00:00-03:00');
    const dentro = EVENTOS.filter(e => Date.parse(e.ends_at) > de && Date.parse(e.starts_at) < ate && (!q.get('tenant_id') || e.tenant_id === q.get('tenant_id')));
-   return json({ activities: dentro.map(e => ({ ...e })), logs: [], engagements: [], truncated: false, time_zone: 'America/Sao_Paulo', agenda_campos: !window.__agenda.semCampos, agenda_lembretes: window.__agenda.lembretes, series: window.__agenda.lembretes ? window.__agenda.series : [], agenda_prefs: window.__agenda.lembretes ? { default_reminders: window.__agenda.padrao, revision: 1 } : null });
+   return json({ activities: dentro.map(e => ({ ...e })), logs: [], engagements: [], truncated: false, time_zone: 'America/Sao_Paulo', agenda_campos: !window.__agenda.semCampos, agenda_lembretes: window.__agenda.lembretes, series: window.__agenda.lembretes ? window.__agenda.series : [], agenda_prefs: window.__agenda.lembretes ? { default_reminders: window.__agenda.padrao, revision: 1 } : null, google_meet: window.__agenda.meet });
   }
   if (partes[3] === 'series') {
    const a = window.__agenda;
@@ -1017,6 +1017,13 @@ const COM_AGENDA = lista => `(() => {
    window.__agenda.posts.push(corpo);
    const novo = { status: 'planned', revision: 1, tenant_name: 'Empresa Alfa', engagement_label: null, location: null, description: null, meeting_url: null, ...corpo };
    EVENTOS.push(novo); return json({ activity: { ...novo } });
+  }
+  if (metodo === 'POST' && partes[4] === 'meet') {
+   const e = EVENTOS.find(x => x.id === partes[3]);
+   window.__agenda.meets.push({ id: partes[3], corpo });
+   if (window.__agenda.meetFalha) return json({ message: 'O Google não respondeu como esperado. Tente de novo.' }, 502);
+   Object.assign(e, { meeting_url: 'https://meet.google.com/abc-defg-hij', google_event_id: 'ev-' + partes[3], revision: e.revision + 1 });
+   return json({ activity: { ...e }, meet: e.meeting_url });
   }
   if (metodo === 'POST' && partes[4] === 'time') { window.__agenda.tempos.push({ id: partes[3], corpo }); return json({ log: { ...corpo, activity_id: partes[3] } }); }
   if (metodo === 'PUT') {
@@ -1521,6 +1528,65 @@ test('agenda: teclado move e estica o evento focado, Ctrl+Z e "Desfazer" devolve
  semExcecoes();
 });
 
+test('agenda: com a conta Google conectada o formulário oferece a sala do Meet; sem ela, não', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ await pagina.avaliar(`${NO_AGENDA}.lembretes = true; ${NO_AGENDA}.meet = false; ${NO_AGENDA}.meets.length = 0; ${NO_AGENDA}.posts.length = 0`); await RECARREGAR_AGENDA();
+ await ABRIR_NOVA();
+ assert.ok(!(await pagina.avaliar(LEGENDAS)).includes('Videoconferência'), 'sem conta conectada não aparece');
+ await FECHAR_TUDO();
+ await pagina.avaliar(`${NO_AGENDA}.meet = true`); await RECARREGAR_AGENDA();
+ await ABRIR_NOVA();
+ assert.ok((await pagina.avaliar(LEGENDAS)).includes('Videoconferência'));
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Sala')}.value`), '', 'começa sem sala');
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Convidados (e-mails, separados por vírgula)')}.parentElement.hidden`), true, 'convidados só depois de escolher a sala');
+ await pagina.avaliar(`(() => { const set = (c, v, ev = 'input') => { c.value = v; c.dispatchEvent(new Event(ev, { bubbles: true })); }; set(${CAMPO_DO_FORM('Título')}, 'Reunião com Meet'); set(${CAMPO_DO_FORM('Cliente')}, ${JSON.stringify(EMPRESA)}, 'change'); })()`);
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Sala'), 'meet'));
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Convidados (e-mails, separados por vírgula)')}.parentElement.hidden`), false);
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Convidados (e-mails, separados por vírgula)'), 'ana@empresa.com, bia@empresa.com', 'input'));
+ // com repetição escolhida a sala sai (vale para atividade avulsa)
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Repete'), 'weekly'));
+ assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor .ag-meet').hidden`), true);
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Repete'), ''));
+ assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor .ag-meet').hidden`), false);
+ await ENVIAR_FORM();
+ await pagina.esperar(`${NO_AGENDA}.meets.length === 1`, { descricao: 'pedido da sala' });
+ const post = await pagina.avaliar(`${NO_AGENDA}.posts[0]`);
+ assert.equal(post.title, 'Reunião com Meet'); assert.ok(!('meeting_url' in post), 'o link vem do Google, não do formulário');
+ assert.deepEqual(await pagina.avaliar(`${NO_AGENDA}.meets[0].corpo`), { convidados: 'ana@empresa.com, bia@empresa.com' });
+ assert.equal(await pagina.avaliar(`${NO_AGENDA}.meets[0].id`), post.id, 'a sala é criada para a atividade que acabou de ser gravada');
+ await pagina.esperar(`!document.querySelector('dialog.tracking-editor[open]')`);
+ semExcecoes();
+});
+
+test('agenda: se o Google falhar depois de salvar, a atividade fica e a tela avisa; o painel oferece criar a sala depois', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ await pagina.avaliar(`${NO_AGENDA}.lembretes = true; ${NO_AGENDA}.meet = true; ${NO_AGENDA}.meetFalha = true; ${NO_AGENDA}.meets.length = 0; ${NO_AGENDA}.posts.length = 0`); await RECARREGAR_AGENDA();
+ await ABRIR_NOVA();
+ await pagina.avaliar(`(() => { const set = (c, v, ev = 'input') => { c.value = v; c.dispatchEvent(new Event(ev, { bubbles: true })); }; set(${CAMPO_DO_FORM('Título')}, 'Sala que falha'); set(${CAMPO_DO_FORM('Cliente')}, ${JSON.stringify(EMPRESA)}, 'change'); })()`);
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Sala'), 'meet'));
+ await ENVIAR_FORM();
+ await pagina.esperar(`document.querySelector('#view-tracking .ag-aviso')?.textContent.includes('a sala do Meet não foi criada')`, { descricao: 'aviso de falha do Meet' });
+ assert.match(await pagina.avaliar(`document.querySelector('#view-tracking .ag-aviso').textContent`), /A atividade foi salva/);
+ assert.equal(await pagina.avaliar(`${NO_AGENDA}.posts.length`), 1, 'a atividade foi gravada uma vez só');
+ // painel: botão "Criar sala do Meet" quando há conta e a atividade ainda não tem
+ await pagina.avaliar(`${NO_AGENDA}.meetFalha = false`);
+ const ID = '00000000-0000-4000-8000-000000000004';   // Daily
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]').click()`);
+ await pagina.esperar(PAINEL_ABERTO);
+ assert.ok(await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].some(b => b.textContent.trim() === 'Criar sala do Meet')`));
+ assert.ok(!(await pagina.avaliar(`document.querySelector('#peek-agenda').textContent`)).includes('Google Agenda'), 'sem sala não há linha do Google Agenda');
+ const antes = await pagina.avaliar(`${NO_AGENDA}.meets.length`);
+ await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].find(b => b.textContent.trim() === 'Criar sala do Meet').click()`);
+ await pagina.esperar(`${NO_AGENDA}.meets.length === ${antes + 1}`);
+ await pagina.esperar(`document.querySelector('#peek-agenda').textContent.includes('Evento criado e sincronizado')`, { descricao: 'painel mostra a sincronização' });
+ assert.ok(!(await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].some(b => b.textContent.trim() === 'Criar sala do Meet')`)), 'depois de criada, o botão some');
+ assert.ok((await pagina.avaliar(`document.querySelector('#peek-agenda a')?.href`)).includes('meet.google.com'), 'o link do Meet aparece nos detalhes');
+ await pagina.avaliar(`(() => { const a = ${NO_AGENDA}; a.meet = false; const e = a.eventos.find(x => x.id === '${ID}'); delete e.google_event_id; delete e.meeting_url; e.revision = 1; })()`);
+ await RECARREGAR_AGENDA();
+ await FECHAR_TUDO();
+ semExcecoes();
+});
+
 test('agenda: o painel do evento mostra os detalhes, conclui, edita só o que mudou e registra tempo', { skip: PULAR }, async () => {
  await SEMANA_DE_HOJE();
  const ID = '00000000-0000-4000-8000-000000000003';      // Consultoria Beta, com descrição e link
@@ -1755,6 +1821,58 @@ test('configurações → Agenda: lembrete padrão (espaço) e preferências des
  await desfazer?.();
 });
 
+const COM_GOOGLE = estado => `(() => {
+ window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
+ window.__google = { estado: ${JSON.stringify(estado)}, authorize: 0, disconnect: 0 };
+ const json = (c, s = 200) => new Response(JSON.stringify(c), { status: s, headers: { 'content-type': 'application/json' } });
+ window.fetch = async (url, o = {}) => {
+  const u = String(url);
+  if (u === '/api/google/calendar/status') return json(sessionStorage.getItem('__gdisc') ? { ...window.__google.estado, conectado: false } : window.__google.estado);
+  if (u === '/api/google/calendar/authorize') { window.__google.authorize++; return json({ url: '/?secao=integracoes&google=ok' }); }
+  if (u === '/api/google/calendar/disconnect') { sessionStorage.setItem('__gdisc', '1'); return json({ ok: true }); }
+  if (u === '/api/integrations/status') return json({ integracoes: [] });
+  return window.__fetchOriginal(url, o);
+ };
+})()`;
+
+test('configurações → Integrações → Google: explica o que falta, conecta, mostra a conta e desconecta', { skip: PULAR }, async () => {
+ const textoDoBloco = () => pagina.avaliar(`document.querySelector('#settings-body .cfg-google').textContent`);
+ const abrir = async estado => {
+  await pagina.avaliar(`try { sessionStorage.removeItem('__gdisc'); } catch {}`);
+  const d = await pagina.injetar(COM_GOOGLE(estado));
+  await pagina.tela(1280, 900);
+  await pagina.ir(origem + '/');
+  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+  await ABRIR_SECAO('integracoes');
+  await pagina.esperar(`document.querySelector('#settings-body .cfg-google .cfg-linha-texto strong')`, { descricao: 'bloco do Google' });
+  return d;
+ };
+ let d = await abrir({ cliente: true, chave: true, migracao: false, disponivel: false, conectado: false });
+ assert.match(await textoDoBloco(), /Indisponível/); assert.match(await textoDoBloco(), /migração 049/);
+ await d?.();
+ d = await abrir({ cliente: false, chave: false, migracao: true, disponivel: false, conectado: false });
+ assert.match(await textoDoBloco(), /Incompleto/); assert.match(await textoDoBloco(), /GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET e CORE_SECRETS_KEY/);
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#settings-body .cfg-google button').length`), 0);
+ await d?.();
+ // pronto e não conectada: o botão pede o endereço e navega; na volta (google=ok) a tela avisa
+ d = await abrir({ cliente: true, chave: true, migracao: true, disponivel: true, conectado: false });
+ assert.match(await textoDoBloco(), /Não conectada/);
+ await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-google button')].find(b => b.textContent === 'Conectar conta Google').click()`);
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelector('#settings-body .cfg-google .config-aviso')?.textContent.includes('Conta Google conectada')`, { descricao: 'aviso de retorno do Google' });
+ assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-titulo-secao').textContent`), 'Integrações', 'a volta abre a seção certa');
+ assert.ok(!(await pagina.avaliar(`location.search`)).includes('google'), 'o código sai da barra de endereço');
+ await d?.();
+ // conectada: mostra o e-mail e desconecta
+ d = await abrir({ cliente: true, chave: true, migracao: true, disponivel: true, conectado: true, email: 'eu@exemplo.test' });
+ assert.match(await textoDoBloco(), /Conectada como eu@exemplo\.test/);
+ assert.ok(!(await textoDoBloco()).includes('token'), 'nenhum token na tela');
+ await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-google button')].find(b => b.textContent === 'Desconectar').click()`);
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-google')?.textContent.includes('Não conectada')`, { descricao: 'depois de desconectar volta a oferecer conectar' });
+ assert.ok(!(await textoDoBloco()).includes('eu@exemplo.test'));
+ semExcecoes();
+ await d?.();
+});
+
 test('configurações → Agenda sem a migração 048 explica; Notificações aponta para o padrão da agenda; Teclado lista os atalhos', { skip: PULAR }, async () => {
  const desfazer = await pagina.injetar(COM_PUSH);
  await pagina.tela(1280, 900);
@@ -1806,7 +1924,7 @@ test('configurações → Integrações: estado de cada serviço, o que falta e 
  await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-integracao').length === 7`, { descricao: 'sete integrações' });
  assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-escopo').textContent`), 'Todo o espaço');
  assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-resumo').textContent`), '4 de 7 integrações ligadas.');
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-grupo-integracao h3')].map(h => h.textContent)`), ['Acesso', 'Cobrança', 'Marketing', 'Tecnologia', 'Avisos']);
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-grupo-integracao h3')].map(h => h.textContent)`), ['Google Agenda e Meet', 'Acesso', 'Cobrança', 'Marketing', 'Tecnologia', 'Avisos']);
  const linha = id => pagina.avaliar(`(() => { const c = document.querySelector('#settings-body .cfg-integracao[data-integracao=${id}]'); return { estado: c.dataset.estado, selo: c.querySelector('.status').textContent, texto: c.textContent, botao: !!c.querySelector('button') }; })()`);
  const asaas = await linha('asaas');
  assert.equal(asaas.selo, 'Não configurado'); assert.match(asaas.texto, /Falta definir no EasyPanel: ASAAS_API_KEY\./); assert.equal(asaas.botao, true);

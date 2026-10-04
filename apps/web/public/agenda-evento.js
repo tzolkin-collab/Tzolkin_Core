@@ -76,11 +76,27 @@ export function abrirEditor({ host, api, dados, tenants, evento = null, inicio =
  const repeticao = comLembretes && !evento ? blocoDeRepeticao({ inicio: () => M.doCampoLocal(comeco.value) ? Date.parse(M.doCampoLocal(comeco.value)) : null }) : null;
  let escopo = null;   // "só este" ou "este e os próximos", para ocorrência de série
  if (lembrete) form.append(lembrete.no);
+ // Videoconferência: só para quem conectou a conta Google (Configurações → Integrações). A sala é criada no Google Agenda da pessoa.
+ const comMeet = dados.google_meet === true && !(evento && evento.status === 'cancelled');
+ let meet = null, convidados = null, blocoMeet = null;
+ if (comMeet) {
+  blocoMeet = el('fieldset', null, 'ag-bloco ag-meet');
+  blocoMeet.append(el('legend', 'Videoconferência'));
+  if (evento?.google_event_id) {
+   blocoMeet.append(el('p', 'A sala do Meet já foi criada no seu Google Agenda. Mudanças de horário, título e cancelamento acompanham aqui.', 'detail'));
+  } else {
+   meet = campo(blocoMeet, 'Sala', 'text', [['', 'Sem videoconferência'], ['meet', 'Criar sala do Google Meet']]);
+   convidados = campo(blocoMeet, 'Convidados (e-mails, separados por vírgula)', 'text'); convidados.placeholder = 'ana@empresa.com, bia@empresa.com'; convidados.maxLength = 1000;
+   const rotuloConvidados = convidados.parentElement; rotuloConvidados.hidden = true;
+   meet.addEventListener('change', () => { rotuloConvidados.hidden = meet.value !== 'meet'; });
+  }
+  form.append(blocoMeet);
+ }
  if (repeticao) {
   form.append(repeticao.no);
   const curto = () => { const i = M.doCampoLocal(comeco.value), f = M.doCampoLocal(termino.value); return !i || !f || Date.parse(f) - Date.parse(i) <= 86400000; };
-  const sincronizar = () => { repeticao.inicioMudou(); repeticao.limitar(curto()); };
-  comeco.addEventListener('change', sincronizar); termino.addEventListener('change', sincronizar);
+  const sincronizar = () => { repeticao.inicioMudou(); repeticao.limitar(curto()); if (blocoMeet) blocoMeet.hidden = repeticao.escolhida(); };
+  comeco.addEventListener('change', sincronizar); termino.addEventListener('change', sincronizar); repeticao.no.addEventListener('change', sincronizar);
   sincronizar();
  }
  if (serie && !serie.ended_at) {
@@ -173,9 +189,15 @@ export function abrirEditor({ host, api, dados, tenants, evento = null, inicio =
     if ((contratacao.value || null) !== (evento.engagement_id || null))
      atividade = (await api(`/api/tracking/${evento.id}/engagement`, 'PUT', { engagement_id: contratacao.value || null, revision: atividade.revision })).activity;
    }
+   // Sala do Meet: depois de a atividade estar gravada. Se o Google falhar, a atividade fica e a pessoa é avisada (sem criar duas vezes).
+   let extra = null;
+   if (meet?.value === 'meet') {
+    try { atividade = (await api(`/api/tracking/${atividade.id}/meet`, 'POST', { convidados: convidados.value.trim() })).activity; }
+    catch (falha) { extra = { aviso: `A atividade foi salva, mas a sala do Meet não foi criada: ${falha.message}` }; }
+   }
    const emp = (dados.engagements || []).find(x => x.id === atividade.engagement_id);
    const empresa = tenants.find(t => t.id === atividade.tenant_id);
-   aoSalvar({ ...(evento || {}), ...atividade, tenant_name: evento?.tenant_name || empresa?.name || '', engagement_label: emp?.label || null, engagement_service_model: emp?.service_model || null });
+   aoSalvar({ ...(evento || {}), ...atividade, tenant_name: evento?.tenant_name || empresa?.name || '', engagement_label: emp?.label || null, engagement_service_model: emp?.service_model || null }, extra);
    dialog.close();
   } catch (falha) {
    erro.textContent = falha.message; erro.focus();
@@ -217,6 +239,7 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
    { rotulo: 'Situação', valor: selo(M.ROTULOS[e.status], TOM_DA_SITUACAO[e.status] || 'neutral') },
    { rotulo: 'Local', valor: e.location || null },
    { rotulo: 'Link da reunião', valor: e.meeting_url ? linkExterno(e.meeting_url) : null },
+   { rotulo: 'Google Agenda', valor: e.google_event_id ? 'Evento criado e sincronizado' : null },
    { rotulo: 'Descrição', valor: e.description ? el('p', e.description, 'ag-descricao') : null },
    ...(dados.agenda_lembretes ? [
     { rotulo: 'Repete', valor: serie ? (serie.ended_at ? `${serie.descricao} (encerrada)` : serie.descricao) : null },
@@ -272,6 +295,7 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
   const mudar = (rotulo, status, icone, classe) => { const b = botao(rotulo, icone, () => acao(b, erroNo, () => api(`/api/tracking/${e.id}/status`, 'PUT', { status, revision: e.revision })), classe); return b; };
   const nos = [botao('Editar', 'pencil', () => aoEditar(e))];
   const serie = serieDe(e, dadosAtuais || {});
+  if (dadosAtuais?.google_meet && !e.google_event_id && e.status !== 'cancelled') { const m = botao('Criar sala do Meet', 'plus', () => acao(m, erroNo, () => api(`/api/tracking/${e.id}/meet`, 'POST', {})), 'secondary'); nos.push(m); }
   if (serie && !serie.ended_at) nos.push(botao('Encerrar repetição', 'close', () => confirmarEncerrar(e, serie, erroNo), 'quiet'));
   if (e.status === 'planned') nos.push(mudar('Cancelar atividade', 'cancelled', 'close', 'quiet'), mudar('Concluir', 'done', 'check', 'primary'));
   else nos.push(mudar(e.status === 'done' ? 'Reabrir' : 'Reativar', 'planned', 'clock', 'secondary'));

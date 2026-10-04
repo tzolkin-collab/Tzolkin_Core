@@ -9,8 +9,8 @@ const diferente=(gravado,pedido)=>Array.isArray(pedido)?JSON.stringify(gravado)!
 //
 // `detector` diz se as migrações 047 (descrição, local, link) e 048 (lembretes, séries) já estão no banco. Enquanto não estão, a tela
 // esconde o recurso e a API recusa o uso com mensagem clara, e o resto funciona como antes (ver platform/agenda-recursos.mjs).
-export function trackingRoutes(router,{detector=criarDetector()}={}){
- router.get('/api/tracking',async({pool,url,reply})=>{
+export function trackingRoutes(router,{detector=criarDetector(),google=null}={}){
+ router.get('/api/tracking',async({pool,url,reply,operator})=>{
   const {start,end,tenant,engagement}=trackingRange(url.searchParams);
   const rec=await detector(pool);
   const params=[start,end,tenant,engagement];
@@ -31,7 +31,10 @@ export function trackingRoutes(router,{detector=criarDetector()}={}){
    if(ids.length)series=(await pool.query("SELECT id,frequency,interval_n,weekdays,month_day,to_char(start_time,'HH24:MI') AS start_time,duration_minutes,starts_on::text AS starts_on,ends_on::text AS ends_on,count_limit,ended_at,revision FROM service_activity_series WHERE id=ANY($1)",[ids])).rows.map(r=>({...r,descricao:descrever(r)}));   // o texto ("Toda segunda e quarta") sai pronto do servidor: a regra de escrita fica num lugar só
    prefs=(await pool.query('SELECT default_reminders,revision FROM agenda_preferences WHERE id')).rows[0]||{default_reminders:[15],revision:1};
   }
-  reply(200,{activities:activities.rows.slice(0,500),logs:logs.rows.slice(0,500),engagements:engagements.rows,truncated:activities.rows.length>500||logs.rows.length>500,time_zone:'America/Sao_Paulo',agenda_campos:rec.campos,agenda_lembretes:rec.lembretes,series,agenda_prefs:prefs});
+  // Google (Meet): só diz se a pessoa pode criar sala; o resto fica em /api/google/calendar/status.
+  let meet=false;
+  if(google&&operator&&await google.detector(pool).catch(()=>false))meet=Boolean((await pool.query('SELECT 1 FROM google_calendar_connections WHERE operator_subject=$1 AND revoked_at IS NULL',[operator.subject])).rows.length);
+  reply(200,{activities:activities.rows.slice(0,500),logs:logs.rows.slice(0,500),engagements:engagements.rows,truncated:activities.rows.length>500||logs.rows.length>500,time_zone:'America/Sao_Paulo',agenda_campos:rec.campos,agenda_lembretes:rec.lembretes,series,agenda_prefs:prefs,google_meet:meet});
  });
  async function transaction(pool,fn){const c=await pool.connect();try{await c.query('BEGIN');const result=await fn(c);await c.query('COMMIT');return result;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}
  const audit=(c,id,action,details,operator)=>c.query('INSERT INTO service_activity_audit(activity_id,action,actor,details) VALUES($1,$2,$3,$4)',[id,action,operator?.email||operator?.subject||'unknown',details]);
@@ -76,7 +79,9 @@ export function trackingRoutes(router,{detector=criarDetector()}={}){
    if(!result)throw fail(409,'Registro alterado ou inexistente. Atualize a agenda.');
    await audit(c,params.id,'updated',{revision,campos},operator);
    return result;
-  });reply(200,{activity:row});
+  });
+  google?.sincronizar(pool,row,'atualizar');   // melhor esforço, sem esperar: a resposta não depende do Google
+  reply(200,{activity:row});
  });
  router.put('/api/tracking/:id/status',async({pool,params,req,reply,operator})=>{
   const b=await json(req);input(b,['status','revision']);
@@ -85,7 +90,9 @@ export function trackingRoutes(router,{detector=criarDetector()}={}){
    const result=(await c.query('UPDATE service_activities SET status=$1,revision=revision+1,updated_at=now() WHERE id=$2 AND revision=$3 RETURNING *',[b.status,params.id,b.revision])).rows[0];
    if(!result)throw fail(409,'Registro alterado ou inexistente. Atualize a agenda.');
    await audit(c,params.id,'status_changed',b,operator);return result;
-  });reply(200,{activity:row});
+  });
+  if(row.status==='cancelled')google?.sincronizar(pool,row,'cancelar');   // cancelou aqui, apaga o evento (e avisa os convidados) lá
+  reply(200,{activity:row});
  });
  // Troca (ou tira) a contratação de uma atividade já criada. Mesma regra do cadastro: da mesma empresa e não arquivada.
  router.put('/api/tracking/:id/engagement',async({pool,params,req,reply,operator})=>{

@@ -220,3 +220,4 @@ input:user-invalid:focus, select:user-invalid:focus, textarea:user-invalid:focus
 .cfg-integracao-topo { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
 .cfg-faltando { color: var(--muted); }
 .cfg-resumo { margin: 0; }
+.cfg-google .config-aviso { margin: 8px 0 0; }

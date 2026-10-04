@@ -105,6 +105,8 @@ export function blocoDeRepeticao({ inicio }) {
 
  return {
   no: bloco,
+  /** Há repetição escolhida? (a sala do Meet vale para atividade avulsa, não para série) */
+  escolhida: () => Boolean(freq.value),
   /** O formulário avisa quando o início muda, para o texto do dia do mês acompanhar. */
   inicioMudou: atualizar,
   /** Repetição só para eventos de até 24 h (um evento de vários dias não "repete toda semana" de forma que faça sentido). */

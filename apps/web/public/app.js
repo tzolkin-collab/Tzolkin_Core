@@ -50,7 +50,7 @@ const $ = id => document.getElementById(id);
 fetch('/api/auth/mode').then(r=>r.ok?r.json():null).then(auth=>{const oidc=auth?.mode==='google-oidc';$('login-form').hidden=oidc;$('google-login').hidden=!oidc;if(oidc&&new URLSearchParams(location.search).has('auth_error'))$('login-notice').textContent='Conta Google não autorizada ou login expirado.';}).catch(()=>{$('login-notice').textContent='Não foi possível verificar o modo de acesso. Atualize a página.';});
 $('plan-help').textContent='Use o slug de uma oferta deste produto. Ele identifica as condições comerciais copiadas para o contrato.';
 
-const state = { context: '', view: 'overview', overview: null, product: null, catalog: [], deploys: [], resourceBindings: [], infrastructure: null, management: null, dns: null, topology: null, security: null, selectedTenant: null, clientSummary: null, clientBack: 'clients', inboundTab: 'leads', configSecao: '', portfolioTab: 'all', clientTab: 'all', clientPage: 0, empresaAba: 'geral' };
+const state = { context: '', view: 'overview', overview: null, product: null, catalog: [], deploys: [], resourceBindings: [], infrastructure: null, management: null, dns: null, topology: null, security: null, selectedTenant: null, clientSummary: null, clientBack: 'clients', inboundTab: 'leads', configSecao: '', configRetorno: '', portfolioTab: 'all', clientTab: 'all', clientPage: 0, empresaAba: 'geral' };
 // Painel lateral da ficha da empresa (criado na primeira abertura; ver peekDaEmpresa).
 let peekEmpresa = null;
 // Painel lateral da ficha da pessoa (criado na primeira abertura; ver abrirPessoa).
@@ -318,7 +318,7 @@ function switchView(view) {
  }
  $('notice').textContent = '';
  renderNav();
- if (view === 'settings') montarConfiguracoes($('settings-body'),{api,secao:state.configSecao,aoMudar:id=>{state.configSecao=id;},abrirTela:v=>{switchView(v);closeNavigation();}});
+ if (view === 'settings') {const retorno=state.configRetorno;state.configRetorno='';montarConfiguracoes($('settings-body'),{api,secao:state.configSecao,retorno,aoMudar:id=>{state.configSecao=id;},abrirTela:v=>{switchView(v);closeNavigation();}});};
  if (view === 'tracking') tracking.load().catch(reportError);
  if (view === 'finance') finance.load().catch(reportError);
  if (view === 'emails') emails.load().catch(reportError);
@@ -1790,10 +1790,12 @@ const delivery = setupDelivery({ api,openResource:resource.open,onSaved:()=>load
  if (pedida === 'campaigns') { state.view = 'leads'; state.inboundTab = 'campaigns'; }
  const secao = params.get('secao');
  if (secao && /^[a-z]{2,20}$/.test(secao)) { state.configSecao = secao; if (!pedida) state.view = 'settings'; }
+ const google = params.get('google');   // volta do OAuth do Google: código curto, mostrado em Configurações → Integrações
+ if (google && /^[a-z]{2,12}$/.test(google)) { state.configRetorno = google; if (!pedida) state.view = 'settings'; }
  const meta = params.get('meta');
  if (meta && /^[a-z]{2,12}$/.test(meta)) { campaigns.flash(meta); state.view = 'leads'; state.inboundTab = 'campaigns'; }
- if (params.has('view') || params.has('meta') || params.has('secao')) {
-  params.delete('view'); params.delete('meta'); params.delete('secao');
+ if (params.has('view') || params.has('meta') || params.has('secao') || params.has('google')) {
+  params.delete('view'); params.delete('meta'); params.delete('secao'); params.delete('google');
   const resto = params.toString();
   history.replaceState(null, '', location.pathname + (resto ? '?' + resto : '') + location.hash);
  }

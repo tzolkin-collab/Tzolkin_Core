@@ -49,9 +49,65 @@ function cartao(i, abrirTela) {
  return c;
 }
 
-export function montar(raiz, { api, abrirTela }) {
+const RETORNO_GOOGLE = {
+ ok: ['Conta Google conectada. Agora dá para criar salas do Meet nas atividades.', false],
+ denied: ['A autorização foi cancelada no Google. Nada foi gravado.', true],
+ expired: ['O pedido de conexão expirou. Tente conectar de novo.', true],
+ scope: ['A permissão de criar eventos na agenda não foi concedida. Conecte de novo e deixe essa opção marcada.', true],
+ config: ['O servidor não está pronto para guardar a conexão (faltam variáveis). Veja abaixo o que falta.', true],
+ error: ['Não foi possível concluir a conexão com o Google. Tente de novo.', true],
+};
+
+/** Google Agenda e Meet: a conta é do OPERADOR (cada um conecta a sua); o Core guarda só o token de uso contínuo, cifrado. */
+function blocoDoGoogle(api, retorno) {
+ const bloco = no('section', undefined, 'cfg-grupo-integracao cfg-google');
+ bloco.append(no('h3', 'Google Agenda e Meet', 'config-sub'));
+ const linha = no('div', undefined, 'cfg-linha');
+ const t = no('div', undefined, 'cfg-linha-texto');
+ const aviso = no('p', '', 'config-aviso'); aviso.setAttribute('role', 'status');
+ const dizer = (texto, erro = false) => { aviso.textContent = texto; aviso.classList.toggle('erro', erro); };
+ if (retorno && RETORNO_GOOGLE[retorno]) dizer(...RETORNO_GOOGLE[retorno]);
+ linha.append(t);
+ bloco.append(linha, aviso);
+ (async () => {
+  let s;
+  try { s = await api('/api/google/calendar/status'); } catch (e) { t.append(no('small', e.message)); return; }
+  const topo = no('div', undefined, 'cfg-integracao-topo');
+  topo.append(no('strong', 'Sua conta Google'));
+  t.append(topo, no('small', 'Cria a sala do Meet junto com a atividade, na SUA agenda, e acompanha mudança de horário e cancelamento. Só pede permissão para eventos.'));
+  if (!s.migracao) { topo.append(selo('Indisponível', 'neutral')); t.append(no('small', 'Disponível assim que a atualização do banco (migração 049) for aplicada.', 'cfg-faltando')); return; }
+  if (!s.cliente || !s.chave) {
+   topo.append(selo('Incompleto', 'warning'));
+   const falta = [!s.cliente && 'GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET', !s.chave && 'CORE_SECRETS_KEY'].filter(Boolean).join(' e ');
+   t.append(no('small', `Falta definir no EasyPanel: ${falta}.`, 'cfg-faltando'));
+   return;
+  }
+  if (s.conectado) {
+   topo.append(selo('Conectada', 'success'));
+   t.append(no('small', s.email ? `Conectada como ${s.email}.` : 'Conta conectada.', 'cfg-faltando'));
+   const b = no('button', 'Desconectar', 'secondary'); b.type = 'button';
+   b.onclick = async () => {
+    b.disabled = true;
+    try { await api('/api/google/calendar/disconnect', 'POST', {}); location.assign('/?secao=integracoes'); } catch (e) { dizer(e.message, true); b.disabled = false; }
+   };
+   linha.append(b);
+   return;
+  }
+  topo.append(selo('Não conectada', 'neutral'));
+  const b = no('button', 'Conectar conta Google', 'primary'); b.type = 'button';
+  b.onclick = async () => {
+   b.disabled = true;
+   try { const r = await api('/api/google/calendar/authorize', 'POST', {}); location.assign(r.url); } catch (e) { dizer(e.message, true); b.disabled = false; }
+  };
+  linha.append(b);
+ })();
+ return bloco;
+}
+
+export function montar(raiz, { api, abrirTela, retorno }) {
  const corpo = no('div', undefined, 'cfg-integracoes');
  raiz.append(corpo);
+ corpo.append(blocoDoGoogle(api, retorno));
  (async () => {
   let dados;
   try { dados = await api('/api/integrations/status'); } catch (e) { corpo.append(no('p', e.message, 'config-ajuda')); return; }

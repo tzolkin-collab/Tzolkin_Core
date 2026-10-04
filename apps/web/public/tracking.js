@@ -73,11 +73,13 @@ export function setupTracking({ api, openTenant }) {
  }
 
  // ---------- edição ----------
+ // `extra.aviso`: algo que deu errado DEPOIS de salvar (a sala do Meet, por exemplo): a atividade existe, e a pessoa precisa saber do resto.
+ function depoisDeSalvar(_atividade, extra) { if (extra?.aviso) aviso = extra.aviso; carregar({ silencioso: true }); }
  function novo(inicio = null, fim = null) {
-  abrirEditor({ host, api, dados, tenants, inicio, fim, tenantPadrao: estado.tenant, aoSalvar: () => carregar({ silencioso: true }) });
+  abrirEditor({ host, api, dados, tenants, inicio, fim, tenantPadrao: estado.tenant, aoSalvar: depoisDeSalvar });
  }
  function editar(evento) {
-  abrirEditor({ host, api, dados, tenants, evento, aoSalvar: () => carregar({ silencioso: true }) });
+  abrirEditor({ host, api, dados, tenants, evento, aoSalvar: depoisDeSalvar });
  }
  /** Grava só o horário (arrastar/esticar): mostra o resultado já, confirma com o servidor e desfaz se ele recusar. */
  // Depois de mover ou esticar, um aviso de 8 s oferece "Desfazer" (e Ctrl/Cmd+Z): grava de volta o horário anterior.

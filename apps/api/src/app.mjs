@@ -47,6 +47,7 @@ import { portfolioRoutes } from './modules/portfolio.mjs';
 import { tenantSummaryRoutes } from './modules/tenant-summary.mjs';
 import { pushRoutes } from './modules/push.mjs';
 import { integrationsStatusRoutes } from './modules/integrations-status.mjs';
+import { googleCalendarRoutes } from './modules/google-calendar.mjs';
 import { mediaRoutes } from './modules/media.mjs';
 import { commercialPipelineRoutes } from './modules/commercial-pipelines.mjs';
 import { commercialLeadflowRoutes } from './modules/commercial-leadflow.mjs';
@@ -61,14 +62,16 @@ const MODULES = [
 
 // `security` é o estado do transporte do banco medido por platform/database.mjs.
 // Ausente = não medido; os endpoints reportam 'unknown' em vez de fingir segurança.
-export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, hostingerDnsOptions, webOrigin,serveAsset, mediaOptions, webhookEnv, catalogAdapter, checkoutOptions, marketingOptions, pushOptions} = {}) {
+export function createCore({ pool, adminPassword, identity, clock = Date.now, security = null, deployRegistry, infrastructureOptions, deliveryOptions, platformOptions, financeOptions, salesOptions, hostingerDnsOptions, webOrigin,serveAsset, mediaOptions, webhookEnv, catalogAdapter, checkoutOptions, marketingOptions, pushOptions, googleOptions} = {}) {
  if (webOrigin && !(/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(webOrigin)||/^https:\/\/[a-z0-9.-]+(?::[1-9][0-9]{0,4})?$/.test(webOrigin))) throw new Error('Use an explicit HTTP loopback or HTTPS web origin.');
  const sessions = identity||createSessionStore({ adminPassword, clock });
  const router = createRouter();
  for (const register of MODULES) register(router);
  // Agenda: o detector (as migrações 047 e 048 já estão no banco?) é um só, compartilhado entre as rotas de atividade, as de série e os jobs.
  const detectorAgenda = criarDetector();
- trackingRoutes(router, { detector: detectorAgenda });
+ // Google Agenda/Meet: conexão por operador, criação da sala e sincronização (migração 049). A atividade avisa o Google quando muda.
+ const google = googleCalendarRoutes(router, { clock, ...(webhookEnv ? { env: webhookEnv } : {}), ...googleOptions });
+ trackingRoutes(router, { detector: detectorAgenda, google });
  agendaRoutes(router, { detector: detectorAgenda, relogio: clock });
  // Integrações externas são opcionais e injetáveis: os testes passam um registro
  // apontado para um stub local, e nunca tocam num provedor de verdade.
