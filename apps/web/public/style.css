@@ -171,3 +171,14 @@ body[data-view=database] .content { max-width: none; padding: 0; }
 /* Descrição de uma linha sob o título da página. Cada tela diz o que é em uma frase. */
 .page-desc { margin-top: 6px; max-width: 70ch; color: var(--muted); font-size: var(--fs-base); line-height: 1.5; }
 .page-desc[hidden] { display: none; }
+
+/* Celular: sem zoom (pinça e toque duplo) e sem rolagem lateral da PÁGINA.
+   - touch-action: pan-y só libera rolar para cima e para baixo. O iOS ignora user-scalable=no, e é isto que segura o zoom lá.
+     Quem precisa rolar de lado (abas, tabelas, grade da agenda) é um contêiner de rolagem próprio, e dentro dele continua rolando.
+   - overflow-x: clip corta o que vazar sem criar contêiner de rolagem (position: sticky segue funcionando).
+   - Campo com menos de 16px faz o iOS dar zoom ao focar; abaixo de 900px todo campo de texto tem 16px (!important de propósito:
+     várias telas fixam o próprio tamanho com seletor mais forte). */
+html, body { max-width: 100%; overflow-x: clip; touch-action: pan-y; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media (max-width: 900px) {
+ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), select, textarea { font-size: 16px !important; }
+}

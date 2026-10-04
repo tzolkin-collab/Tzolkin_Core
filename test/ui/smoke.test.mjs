@@ -131,6 +131,33 @@ for (const [largura, altura] of [[1280, 800], [390, 844]]) {
  });
 }
 
+test('celular: sem zoom e sem rolagem lateral da página, em todas as telas', { skip: PULAR }, async () => {
+ await pagina.tela(390, 844);
+ const base = await pagina.avaliar(`(() => ({
+  meta: document.querySelector('meta[name=viewport]').content,
+  html: { toque: getComputedStyle(document.documentElement).touchAction, x: getComputedStyle(document.documentElement).overflowX },
+  corpo: { toque: getComputedStyle(document.body).touchAction, x: getComputedStyle(document.body).overflowX },
+ }))()`);
+ assert.match(base.meta, /maximum-scale=1/); assert.match(base.meta, /user-scalable=no/);
+ assert.deepEqual([base.html.toque, base.corpo.toque], ['pan-y', 'pan-y'], 'só rolagem vertical na página: sem pinça nem arrasto lateral');
+ assert.deepEqual([base.html.x, base.corpo.x], ['clip', 'clip']);
+ // Mesmo que algo estoure a largura, a página não anda para o lado
+ const andou = await pagina.avaliar(`(() => { const p = document.createElement('div'); p.style.cssText = 'width:3000px;height:10px'; document.body.append(p); window.scrollTo(600, 0); document.documentElement.scrollLeft = 600; document.body.scrollLeft = 600; const x = [window.scrollX, document.documentElement.scrollLeft, document.body.scrollLeft]; p.remove(); return x; })()`);
+ assert.deepEqual(andou, [0, 0, 0], 'conteúdo largo demais não pode mover a página para o lado');
+ // Campo com menos de 16px faz o iOS dar zoom ao focar
+ const pequenos = [];
+ for (const nome of MENU_ESPERADO) {
+  await pagina.avaliar(CLICAR_NO_MENU(nome));
+  await pagina.esperar(`(${SECAO}) && (${SECAO}).innerText.trim().length > 20`, { descricao: `tela ${nome}` });
+  await new Promise(ok => setTimeout(ok, 250));
+  const achados = await pagina.avaliar(`[...document.querySelectorAll('input, select, textarea')].filter(c => c.offsetParent && !/^(checkbox|radio|range|color|file|hidden)$/.test(c.type) && parseFloat(getComputedStyle(c).fontSize) < 16).map(c => (c.name || c.id || c.type || c.tagName) + ' ' + getComputedStyle(c).fontSize)`);
+  if (achados.length) pequenos.push(nome + ': ' + achados.join(', '));
+ }
+ assert.deepEqual(pequenos, [], 'campos com menos de 16px (o iOS dá zoom ao focar)');
+ await pagina.tela(1280, 800);
+ semExcecoes();
+});
+
 test('Clientes: tabela com abas por situação, ação própria e linha clicável (Empresas e Pessoas seguem telas irmãs)', { skip: PULAR }, async () => {
  await pagina.tela(1280, 800);
  await pagina.avaliar(CLICAR_NO_MENU('Clientes'));
