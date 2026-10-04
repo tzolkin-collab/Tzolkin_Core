@@ -2088,6 +2088,11 @@ test('capturas: a agenda (semana, dia, mês, agenda, painel e formulário) em cl
   await new Promise(r => setTimeout(r, 300));
   await pagina.imagem(join(ARTEFATOS, `1002-Agenda-formulario-${sufixo(esquema)}.png`));
   await pagina.avaliar(`document.querySelectorAll('dialog[open]').forEach(d => d.close())`);
+  await pagina.avaliar(`document.dispatchEvent(new KeyboardEvent('keydown', { key: '?', shiftKey: true, bubbles: true }))`);
+  await pagina.esperar(`document.querySelector('dialog.ag-atalhos[open]')`);
+  await new Promise(r => setTimeout(r, 300));
+  await pagina.imagem(join(ARTEFATOS, `1004-Agenda-atalhos-${sufixo(esquema)}.png`));
+  await pagina.avaliar(`document.querySelectorAll('dialog[open]').forEach(d => d.close())`);
  }
  await pagina.tela(390, 844);
  for (const esquema of ['light', 'dark']) {

@@ -94,6 +94,26 @@ Preferências pessoais: tabela `operator_preferences(operator_subject, chave, va
 
 Cada fase termina com teste de tela (claro, escuro, celular), teste de "indisponível" e atualização desta página.
 
+## 6b. Fase 4 — credenciais pela tela, em vez do `.env` `[PROPOSTO]`
+
+Objetivo: ligar, trocar e remover cada integração em Configurações → Integrações, sem editar variável de ambiente nem reiniciar.
+
+**Onde ficam os valores.** Tabela `integration_credentials(provider, nome, valor cifrado, impressão digital, quem e quando)`, cifrada com `CORE_SECRETS_KEY` (o mesmo mecanismo do token do Google). A tela **nunca** mostra o valor depois de salvo: só "configurada", a data, quem salvou e a impressão digital (para responder "trocaram a chave?"). Remover marca como revogada (a role do Core não apaga linha).
+
+**Quem vence.** O valor da tela vence o do `.env`; se não houver valor na tela, vale o `.env` (compatível: nada para de funcionar no dia em que isto sair). O card diz de onde vem: "pela tela" ou "pelo servidor".
+
+**O que continua só no ambiente** (é o que o Core precisa para subir ou para se proteger, antes de qualquer tela):
+`DATABASE_URL`, `DATABASE_SSL`, `CORE_RUNTIME_DB_PASSWORD`, `CORE_SECRETS_KEY`, `PUBLIC_ORIGIN`, `WEB_ORIGIN`, `PORT`, `API_PORT`, `NODE_ENV`,
+`GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` (o login com Google precisa deles antes de existir sessão) e `CORE_ALLOWED_EMAILS` (porta de emergência).
+
+**O que migra** (tudo o que hoje é variável de uma integração): Stripe (chave, segredo do webhook, chave pública), Asaas (chave, token do webhook, ambiente), Pluggy (id, segredo, itens), Meta (app id, segredo, configuração de login), Vercel (token, time), GitHub (token), EasyPanel (endereço, token), Hostinger (chave, zona), e-mail (provedor, chave) e push (as chaves VAPID, que a própria tela **gera**).
+
+**Cada card ganha:** formulário com campos de senha, **Testar** (faz uma chamada de leitura ao provedor e só grava se responder), **Salvar**, **Remover**, e o histórico de quem mudou e quando (sem valores).
+
+**O que muda no código.** Hoje os módulos leem `env.X` ao subir. Passam a pedir a um resolvedor (`credencial(provedor, nome)`: tela, depois ambiente), com cache curto que a gravação invalida, para a troca valer na hora. Uma integração por vez, cada uma com teste de "tela vence ambiente" e de "sem nenhum dos dois".
+
+**Ordem proposta.** 1) infraestrutura (tabela, cifra, resolvedor, formulário e Testar) com Vercel, GitHub, EasyPanel e Hostinger, que são só leitura; 2) e-mail e push (gerar VAPID pela tela); 3) Stripe e Asaas (mexem com dinheiro e webhooks: cada troca de segredo de webhook pede confirmação); 4) Pluggy; 5) Meta (a conta conectada continua no produto, só app id e segredo vêm para cá).
+
 ## 7. Decisões em aberto
 
 1. **Configurações no menu.** `[DECIDIDO]` Item em Administração, além do rodapé.
