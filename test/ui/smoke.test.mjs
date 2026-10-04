@@ -1472,6 +1472,55 @@ test('agenda: evento de série mostra "Repete" e o lembrete, edita só este ou o
  semExcecoes();
 });
 
+test('agenda: teclado move e estica o evento focado, Ctrl+Z e "Desfazer" devolvem o horário, ? abre os atalhos e / busca', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ const ID = '00000000-0000-4000-8000-000000000003';   // Consultoria Beta, terça 14:00–15:30
+ await pagina.avaliar(`${NO_AGENDA}.puts.length = 0`);
+ const tecla = (alvo, key, extra = '') => pagina.avaliar(`(() => { const n = ${alvo}; n.focus(); n.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true, ${extra} })); })()`);
+ const EV = `document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]')`;
+ const horario = () => pagina.avaliar(`(() => { const p = ${NO_AGENDA}.puts.at(-1); return p && [p.corpo.starts_at, p.corpo.ends_at]; })()`);
+ const ini0 = Date.parse(await pagina.avaliar(`${NO_AGENDA}.eventos.find(e => e.id === '${ID}').starts_at`));
+ const fim0 = Date.parse(await pagina.avaliar(`${NO_AGENDA}.eventos.find(e => e.id === '${ID}').ends_at`));
+ // ↓ move 15 min
+ await tecla(EV, 'ArrowDown');
+ await pagina.esperar(`${NO_AGENDA}.puts.length === 1`);
+ assert.deepEqual(await horario(), [new Date(ini0 + 15 * 60000).toISOString(), new Date(fim0 + 15 * 60000).toISOString()]);
+ await pagina.esperar(`document.querySelector('#view-tracking .ag-toast')`, { descricao: 'aviso com Desfazer' });
+ assert.equal(await pagina.avaliar(`document.activeElement?.dataset?.id`), ID, 'o foco volta para o evento depois de gravar');
+ // → move 1 dia; Shift+↓ estica o fim
+ await tecla(EV, 'ArrowRight');
+ await pagina.esperar(`${NO_AGENDA}.puts.length === 2`);
+ assert.deepEqual(await horario(), [new Date(ini0 + 15 * 60000 + 86400000).toISOString(), new Date(fim0 + 15 * 60000 + 86400000).toISOString()]);
+ await tecla(EV, 'ArrowDown', 'shiftKey: true');
+ await pagina.esperar(`${NO_AGENDA}.puts.length === 3`);
+ assert.deepEqual(await horario(), [new Date(ini0 + 15 * 60000 + 86400000).toISOString(), new Date(fim0 + 30 * 60000 + 86400000).toISOString()]);
+ // Ctrl+Z devolve o horário anterior (só a última mudança)
+ await pagina.avaliar(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }))`);
+ await pagina.esperar(`${NO_AGENDA}.puts.length === 4`);
+ assert.deepEqual(await horario(), [new Date(ini0 + 15 * 60000 + 86400000).toISOString(), new Date(fim0 + 15 * 60000 + 86400000).toISOString()]);
+ assert.equal(await pagina.avaliar(`!!document.querySelector('#view-tracking .ag-toast')`), false, 'desfazer não oferece desfazer de novo');
+ // botão Desfazer
+ await tecla(EV, 'ArrowUp');
+ await pagina.esperar(`${NO_AGENDA}.puts.length === 5 && document.querySelector('#view-tracking .ag-toast')`);
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-toast button').click()`);
+ await pagina.esperar(`${NO_AGENDA}.puts.length === 6`);
+ // volta ao original para não vazar para os outros testes
+ await tecla(EV, 'ArrowLeft'); await pagina.esperar(`${NO_AGENDA}.puts.length === 7`);
+ await tecla(EV, 'ArrowUp'); await pagina.esperar(`${NO_AGENDA}.puts.length === 8`);
+ assert.deepEqual(await horario(), [new Date(ini0).toISOString(), new Date(fim0).toISOString()]);
+ await pagina.avaliar(`${NO_AGENDA}.eventos.find(e => e.id === '${ID}').revision = 1`);   // os outros testes esperam a revisão de origem
+
+ // atalhos: ? abre a ajuda, Esc fecha; / foca a busca
+ await pagina.avaliar(`document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown', { key: '?', shiftKey: true, bubbles: true }))`);
+ await pagina.esperar(`document.querySelector('dialog.ag-atalhos[open]')`);
+ assert.ok((await pagina.avaliar(`document.querySelector('dialog.ag-atalhos').textContent`)).includes('Desfazer a última mudança'));
+ await pagina.avaliar(`document.querySelector('dialog.ag-atalhos').close()`);
+ await pagina.avaliar(`document.dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }))`);
+ assert.equal(await pagina.avaliar(`document.activeElement.type`), 'search');
+ await pagina.avaliar(`document.activeElement.blur()`);
+ semExcecoes();
+});
+
 test('agenda: o painel do evento mostra os detalhes, conclui, edita só o que mudou e registra tempo', { skip: PULAR }, async () => {
  await SEMANA_DE_HOJE();
  const ID = '00000000-0000-4000-8000-000000000003';      // Consultoria Beta, com descrição e link

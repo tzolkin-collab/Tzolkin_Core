@@ -78,7 +78,19 @@ export function setupTracking({ api, openTenant }) {
   abrirEditor({ host, api, dados, tenants, evento, aoSalvar: () => carregar({ silencioso: true }) });
  }
  /** Grava só o horário (arrastar/esticar): mostra o resultado já, confirma com o servidor e desfaz se ele recusar. */
- async function gravarHorario(evento, campos) {
+ // Depois de mover ou esticar, um aviso de 8 s oferece "Desfazer" (e Ctrl/Cmd+Z): grava de volta o horário anterior.
+ let toast = null, toastTimer = 0;
+ function avisarDesfazer(texto, de, id) {
+  clearTimeout(toastTimer); toast = { texto, de, id };
+  toastTimer = setTimeout(() => { toast = null; if (dados && partes.principal?.isConnected) desenharPrincipal(); }, 8000);
+ }
+ function desfazerUltimo() {
+  if (!toast) return;
+  const { de, id } = toast; toast = null; clearTimeout(toastTimer);
+  const atual = eventos.find(x => x.id === id);
+  if (atual) gravarHorario(atual, de, { registrar: false }); else desenharPrincipal();
+ }
+ async function gravarHorario(evento, campos, { registrar = true } = {}) {
   if (salvando.has(evento.id)) return;
   salvando.add(evento.id);
   const anterior = eventos;
@@ -87,6 +99,8 @@ export function setupTracking({ api, openTenant }) {
   try {
    const r = await api('/api/tracking/' + evento.id, 'PUT', { revision: evento.revision, ...campos });
    eventos = eventos.map(x => x.id === evento.id ? M.normalizar({ ...x, ...r.activity }) : x);
+   if (registrar) avisarDesfazer('Horário alterado.', { starts_at: new Date(evento.ini).toISOString(), ends_at: new Date(evento.fim).toISOString() }, evento.id);
+   else aviso = '';
   } catch (falha) {
    eventos = anterior; aviso = `Não foi possível alterar o horário: ${falha.message}`;
   } finally { salvando.delete(evento.id); }
@@ -117,7 +131,8 @@ export function setupTracking({ api, openTenant }) {
    b.onclick = () => { if (v !== estado.visao) irPara({ visao: v }); };
    visoes.append(b);
   }
-  acoes.append(busca, visoes, botao('Nova atividade', 'plus', () => novo(), 'primary'));
+  const ajuda = botao('?', null, ajudaDeAtalhos, 'quiet ag-icone ag-ajuda-botao'); ajuda.setAttribute('aria-label', 'Atalhos do teclado'); ajuda.title = 'Atalhos do teclado (?)';
+  acoes.append(busca, visoes, ajuda, botao('Nova atividade', 'plus', () => novo(), 'primary'));
   topo.append(nav, acoes);
  }
 
@@ -185,6 +200,7 @@ export function setupTracking({ api, openTenant }) {
   clearInterval(relogio);
   principal.replaceChildren();
   if (aviso) { const a = el('p', aviso, 'ag-aviso'); a.setAttribute('role', 'alert'); principal.append(a); }
+  if (toast) { const t = el('div', null, 'ag-toast'); t.setAttribute('role', 'status'); t.append(el('span', toast.texto), botao('Desfazer', null, desfazerUltimo, 'quiet')); principal.append(t); }
   if (dados.truncated) principal.append(el('p', 'Limite de registros atingido: a lista pode estar incompleta. Filtre por cliente.', 'security-banner'));
   const lista = visiveis();
   if (estado.visao === 'agenda') principal.append(desenharAgenda(lista));
@@ -203,8 +219,20 @@ export function setupTracking({ api, openTenant }) {
  function eventoNaGrade(e, dia, recorte, lay) {
   const b = el('button', null, 'ag-evento'); b.type = 'button';
   b.dataset.id = e.id; b.dataset.tom = M.TOM_DA_CATEGORIA[e.category]; b.dataset.status = e.status;
-  b.setAttribute('aria-label', descricao(e));
+  b.setAttribute('aria-label', descricao(e)); b.title = descricao(e);
   if (recorte.fim - recorte.ini <= MINIMO) b.classList.add('ag-curto');
+  // Teclado: setas movem (↑↓ 15 min, ←→ 1 dia), Shift+↑↓ esticam o fim. Enter abre (é um botão).
+  b.addEventListener('keydown', k => {
+   if (k.altKey || k.ctrlKey || k.metaKey) return;
+   const passo = { ArrowUp: -PASSO, ArrowDown: PASSO }[k.key], dias = { ArrowLeft: -1, ArrowRight: 1 }[k.key];
+   if (!passo && !dias) return;
+   if (k.shiftKey && !passo) return;
+   const atual = eventos.find(x => x.id === e.id);
+   k.preventDefault(); k.stopPropagation();
+   if (!atual || salvando.has(e.id)) return;
+   const campos = k.shiftKey ? M.redimensionar(atual, atual.fim + passo * 60000, PASSO) : M.mover(atual, (passo || 0) + (dias || 0) * 1440);
+   gravarHorario(atual, campos).then(() => document.querySelector(`#view-tracking .ag-evento[data-id="${e.id}"]`)?.focus());
+  });
   const titulo = el('strong', e.title, 'ag-ev-titulo'); if (e.series_id) titulo.prepend(marca(e));
   b.append(titulo, el('span', `${M.hora(e.ini)} – ${M.hora(e.fim)}`, 'ag-ev-hora'), el('span', e.tenant_name, 'ag-ev-empresa'));
   const r = M.retangulo(recorte, lay, ALTURA_HORA, MINIMO);
@@ -249,7 +277,7 @@ export function setupTracking({ api, openTenant }) {
   corpo.append(horas);
   const colunas = [];
   for (const d of dias) {
-   const col = el('div', null, 'ag-coluna'); col.dataset.dia = d; if (d === hojeDia) col.dataset.hoje = '';
+   const col = el('div', null, 'ag-coluna'); col.dataset.dia = d; if (d === hojeDia) col.dataset.hoje = ''; if (M.diaDaSemana(d) >= 5) col.dataset.fim = '';
    const doDia = M.eventosDoDia(lista, d).filter(e => !M.diaInteiro(e));
    const itens = doDia.map(e => ({ id: e.id, ...M.recorteDoDia(e, d) }));
    const lay = M.layoutColunas(itens, MINIMO);
@@ -358,7 +386,7 @@ export function setupTracking({ api, openTenant }) {
  function chip(e, inteiro = false) {
   const b = el('button', null, 'ag-chip'); b.type = 'button'; b.dataset.id = e.id; b.dataset.tom = M.TOM_DA_CATEGORIA[e.category]; b.dataset.status = e.status;
   if (inteiro) b.classList.add('ag-chip-dia');
-  b.setAttribute('aria-label', descricao(e));
+  b.setAttribute('aria-label', descricao(e)); b.title = descricao(e);
   if (!inteiro && !M.diaInteiro(e)) b.append(el('span', M.hora(e.ini), 'ag-chip-hora'));
   if (e.series_id) b.append(marca(e));
   b.append(el('span', e.title, 'ag-chip-titulo'));
@@ -464,23 +492,50 @@ export function setupTracking({ api, openTenant }) {
   host.append(app);
  }
 
+ const ATALHOS = [
+  ['Navegar', [['t', 'Hoje'], ['← →  ou  p n', 'Período anterior / próximo'], ['d  w  m  a', 'Dia, semana, mês, agenda'], ['/', 'Buscar']]],
+  ['Atividades', [['c', 'Nova atividade'], ['Enter', 'Abrir o evento focado'], ['↑ ↓', 'Mover o evento focado 15 min'], ['← →', 'Mover o evento focado 1 dia'], ['Shift + ↑ ↓', 'Esticar ou encurtar o fim'], ['Ctrl/⌘ + Z', 'Desfazer a última mudança de horário'], ['Esc', 'Cancelar um arraste ou fechar']]],
+ ];
+ function ajudaDeAtalhos() {
+  if (document.querySelector('dialog.ag-atalhos[open]')) return;
+  const anterior = document.activeElement;
+  const dialog = el('dialog', null, 'tracking-editor ag-atalhos'); dialog.setAttribute('aria-labelledby', 'ag-atalhos-titulo');
+  const topo = el('header', null, 'tracking-editor-heading');
+  const titulo = el('h2', 'Atalhos do teclado'); titulo.id = 'ag-atalhos-titulo';
+  topo.append(titulo, botao('Fechar', 'close', () => dialog.close()));
+  dialog.append(topo);
+  for (const [grupo, itens] of ATALHOS) {
+   const dl = el('dl', null, 'ag-atalhos-lista'); dl.append(el('h3', grupo));
+   for (const [teclas, texto] of itens) { const linha = el('div'); const dt = el('dt'); for (const t of teclas.split(/(\s{2}ou\s{2}|\s\+\s)/)) dt.append(/^\s/.test(t) ? document.createTextNode(t.trim() === '+' ? ' + ' : ' ou ') : el('kbd', t.trim())); linha.append(dt, el('dd', texto)); dl.append(linha); }
+   dialog.append(dl);
+  }
+  dialog.onclose = () => { dialog.remove(); if (anterior?.isConnected) anterior.focus(); };
+  host.append(dialog); dialog.showModal();
+ }
+
  // Atalhos como no Google Calendar: t hoje, d/w/m/a visão, ←/→ período, c nova atividade. Não valem digitando, com diálogo ou painel abertos.
  document.addEventListener('keydown', ev => {
-  if (host.hidden || !dados || ev.ctrlKey || ev.metaKey || ev.altKey) return;
-  if (/^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName) || ev.target.isContentEditable || document.querySelector('dialog[open]') || painel.aberto()) return;
+  if (host.hidden || !dados) return;
+  const digitando = /^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName) || ev.target.isContentEditable;
+  if ((ev.ctrlKey || ev.metaKey) && !ev.altKey && ev.key.toLowerCase() === 'z' && toast && !digitando && !document.querySelector('dialog[open]')) { ev.preventDefault(); desfazerUltimo(); return; }
+  if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  if (digitando || document.querySelector('dialog[open]') || painel.aberto()) return;
   const k = ev.key.toLowerCase();
   const visoes = { d: 'dia', w: 'semana', m: 'mes', a: 'agenda' };
   if (k === 't') irPara({ dia: hoje() });
   else if (visoes[k]) irPara({ visao: visoes[k] });
   else if (k === 'arrowleft') irPara({ dia: M.navegar(estado.visao, estado.dia, -1) });
-  else if (k === 'arrowright') irPara({ dia: M.navegar(estado.visao, estado.dia, 1) });
+  else if (k === 'arrowright' || k === 'n' || k === 'j') irPara({ dia: M.navegar(estado.visao, estado.dia, 1) });
+  else if (k === 'p' || k === 'k') irPara({ dia: M.navegar(estado.visao, estado.dia, -1) });
+  else if (k === '/') partes.entrada?.focus();
+  else if (k === '?') ajudaDeAtalhos();
   else if (k === 'c') novo();
   else return;
   ev.preventDefault();
  });
 
  const limpar = () => {
-  geracao++; clearInterval(relogio); painel.fechar();
+  geracao++; clearInterval(relogio); painel.fechar(); toast = null; clearTimeout(toastTimer);
   host.replaceChildren();
   dados = null; eventos = []; tenants = []; aviso = ''; rolagem = null;
   Object.assign(estado, { tenant: '', texto: '', categorias: new Set(), status: '', dia: hoje(), miniMes: hoje() });
