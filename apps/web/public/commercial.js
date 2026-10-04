@@ -2,9 +2,13 @@ import {photoPanel} from './media.js';
 import {dataPanel,fieldsManager} from './space-fields.js';
 import {tasksPanel,automationsManager} from './automations.js';
 import {blockersNotice,requirementsManager} from './stage-requirements.js';
+import {tabela,celulaNome,selo,tomDoEstado} from './data-table.js';
+import {criarPeek} from './peek.js';
+import {campoInline} from './inline-edit.js';
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;if(cls)e.className=cls;return e;};
 const labels={open:'Novo',qualified:'Qualificado',won:'Ganho',lost:'Perdido',archived:'Arquivado'};
 const date=v=>v?new Date(v).toLocaleString('pt-BR'):'—';
+const modelos={on_demand:'Sob demanda',education:'Mentoria',consulting:'Consultoria',advisory:'Assessoria',product:'Produto TZOLKIN',unclassified:'A classificar'};
 function field(label,type='text',value=''){const wrap=el('label',label),input=el(type==='textarea'?'textarea':'input');if(type!=='textarea')input.type=type;input.value=value??'';wrap.append(input);return{wrap,input};}
 function select(label,options,value=''){const wrap=el('label',label),input=el('select');for(const [v,t]of options){const o=el('option',t);o.value=v;input.append(o);}input.value=value;if(input.selectedIndex<0&&input.options.length)input.selectedIndex=0;wrap.append(input);return{wrap,input};}
 function button(label,fn){const b=el('button',label,'secondary');b.type='button';b.onclick=async()=>{b.disabled=true;try{await fn();}catch(e){const msg=el('p',e.message,'notice-inline');msg.setAttribute('role','alert');b.parentElement?.append(msg);}finally{b.disabled=false;}};return b;}
@@ -12,10 +16,15 @@ function submit(form,label,fn){const b=el('button',label,'primary');b.type='subm
 // openTenant abre a ficha da empresa; vem de app.js por callback para este módulo não importá-lo.
 export function setupCommercial({api,openTenant}) {
  let epoch=0,product='',offset=0,status='',query='',pipelineId='',stageId='',notice=null,detailNotice=null;
+ // A ficha do lead é o painel lateral (peek.js) sobre a lista. Contador próprio: abrir a ficha não pode
+ // invalidar o carregamento da lista que fica por baixo.
+ let epochLead=0,peekLead=null,leadAberto=null,abaLead='geral';
+ const peekDoLead=()=>peekLead||=criarPeek({id:'peek-lead',prefixo:'lead',rotulo:'Ficha do lead',aoFechar:()=>fecharLead()});
+ function fecharLead(){peekLead?.fechar();leadAberto=null;epochLead++;load(product,false).catch(()=>{});}
  const stageInfo=new Map();
  const brl=minor=>(Number(minor||0)/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
  const root=()=>document.getElementById('inbound-panel-leads');
- function clear(){epoch++;root()?.replaceChildren();document.getElementById('view-product-keys')?.replaceChildren();}
+ function clear(){epoch++;epochLead++;peekLead?.fechar();leadAberto=null;root()?.replaceChildren();document.getElementById('view-product-keys')?.replaceChildren();}
 // Funil por espaço: seletor (quando há mais de um funil) e as etapas com a contagem de leads e oportunidades.
  // Clicar numa etapa filtra a lista; clicar de novo limpa. Sem funil ativo, a barra não aparece.
  function funnelBar(r,pipelines,p){
@@ -48,10 +57,17 @@ export function setupCommercial({api,openTenant}) {
   funnelBar(r,funis.pipelines||[],p);
   // Etapa aberta, ganha ou perdida: o que está nela são oportunidades, não leads.
   if(stageId&&stageInfo.get(stageId)&&stageInfo.get(stageId).kind!=='LEAD'){await opportunityList(r,ticket);return;}
-  const filters=el('form',null,'commercial-form'),search=field('Buscar por nome, e-mail ou empresa','search',query),stage=select('Estágio',[['','Todos'],...Object.entries(labels)],status);filters.append(search.wrap,stage.wrap);submit(filters,'Filtrar',async()=>{query=search.input.value;status=stage.input.value;await load(product);});
+  const filters=el('form',null,'commercial-form tbl-filter'),search=field('Buscar por nome, e-mail ou empresa','search',query),stage=select('Estágio',[['','Todos'],...Object.entries(labels)],status);filters.append(search.wrap,stage.wrap);submit(filters,'Filtrar',async()=>{query=search.input.value;status=stage.input.value;await load(product);});
   const filtered=Boolean(query||status||stageId||pipelineId);if(data.leads.length||filtered)r.append(filters);
   if(!data.leads.length)r.append(el('p',filtered?'Nada com estes filtros.':'Ainda não chegou nenhum.','empty-list'));
-  const list=el('div',null,'commercial-list');for(const l of data.leads){const row=el('article',null,'context-card');row.append(el('h3',l.name||l.organization_name),el('p',`${l.stage_name&&l.status==='open'?l.stage_name:labels[l.status]} · ${l.product_id||'Sem produto'} · ${l.interest||'Contato'}`),el('p',`${l.email||l.whatsapp||''} · Responsável: ${l.owner_name||l.owner_email||'Não atribuído'}`),el('small',`${l.source_system||'Origem desconhecida'} · ${date(l.source_created_at||l.created_at)}`),button('Abrir detalhe',()=>detail(l.id)));list.append(row);}r.append(list);
+  if(data.leads.length)r.append(tabela({legenda:'Leads',linhas:data.leads,aoAbrir:l=>detail(l.id),colunas:[
+   {titulo:'Lead',celula:l=>celulaNome({nome:l.name||l.organization_name,apoio:l.email||l.whatsapp||'',aoAbrir:()=>detail(l.id)})},
+   {titulo:'Etapa',celula:l=>selo(l.stage_name&&l.status==='open'?l.stage_name:labels[l.status],tomDoEstado(l.status))},
+   {titulo:'Interesse',celula:l=>[l.interest||'Contato',l.product_id].filter(Boolean).join(' · ')},
+   {titulo:'Responsável',celula:l=>l.owner_name||l.owner_email||'Não atribuído'},
+   {titulo:'Origem',celula:l=>l.source_system||'Origem desconhecida'},
+   {titulo:'Recebido',num:true,celula:l=>date(l.source_created_at||l.created_at).slice(0,10)}
+  ]}));
   const nav=el('div',null,'commercial-actions');if(offset)nav.append(button('Anterior',async()=>{offset=Math.max(0,offset-25);await load(product,false);}));if(data.has_more)nav.append(button('Próxima',async()=>{offset+=25;await load(product,false);}));r.append(nav);
   // Campos próprios do espaço: definir o que cada espaço guarda do lead, da oportunidade e da contratação.
   const espacos=[...new Map((funis.pipelines||[]).filter(x=>x.is_active).map(x=>[x.space_id,{id:x.space_id,name:x.space_name}])).values()];
@@ -104,20 +120,58 @@ export function setupCommercial({api,openTenant}) {
   }
   return box;
  }
- async function detail(id){const ticket=++epoch,r=root();r.replaceChildren(el('p','Carregando detalhe…'));const [d,o,rs]=await Promise.all([api('/api/commercial/leads/'+id),api('/api/commercial/owners'),api('/api/commercial/lost-reasons')]);if(ticket!==epoch)return;const l=d.lead;
-  r.replaceChildren(button('← Voltar à lista',()=>load(product,false)),el('h2',l.name||'Lead'));
+ async function detail(id){const ticket=++epochLead,pk=peekDoLead();pk.abrir();if(leadAberto!==id){pk.titulo('Lead');pk.mensagem('Carregando detalhe…');}leadAberto=id;const [d,o,rs]=await Promise.all([api('/api/commercial/leads/'+id),api('/api/commercial/owners'),api('/api/commercial/lost-reasons')]);if(ticket!==epochLead)return;const l=d.lead;
+  pk.el.classList.add('lead-ficha');
+  const etapaAtual=(d.stages||[]).find(x=>x.id===(d.opportunity?.stage_id||l.stage_id))?.name||labels[l.status];
+  const subtituloDoLead=[l.organization_name,etapaAtual,'recebido em '+date(l.source_created_at||l.created_at).slice(0,10)].filter(Boolean).join(' · ');
+  pk.titulo(l.name||'Lead',subtituloDoLead);
+  // Uma coluna por aba. `r` aponta para a aba que está sendo montada.
+  const geral=el('div'),tarefas=el('div'),historico=el('div'),contratos=el('div');let r=geral;
   if(detailNotice){r.append(blockersNotice(detailNotice));detailNotice=null;}
-  const facts=el('div',null,'context-card');facts.append(el('p',`${l.organization_name} · ${l.email||''} · ${l.whatsapp||''}`),el('p',l.message||'Sem mensagem.'),el('p',`${l.interest||''} · ${l.service_model}`),el('p',`Origem: ${l.source_system} / ${l.source_ref} · ${date(l.source_created_at||l.created_at)}`),el('p',`Preferência de contato registrada: ${l.privacy?.contact_allowed?'Sim':'Não informada ou não autorizada'}`));if(d.attribution)facts.append(el('p',`Campanha: ${d.attribution.utm_campaign||'—'} · Canal: ${d.attribution.channel||'—'}`));if(openTenant&&l.tenant_id){const company=el('button',`Abrir ficha de ${l.organization_name||'empresa'} →`,'secondary');company.type='button';company.onclick=()=>openTenant(l.tenant_id);facts.append(company);}r.append(facts);r.append(el('h3','Fotos'),photoPanel({type:'lead',id}));
+  const fatos=el('dl',null,'ficha-dl');
+  const par=(rotulo,valor,vazio)=>{if(valor==null||valor==='')valor=vazio;if(valor==null)return;const dt=el('dt',rotulo),dd=el('dd');if(valor instanceof Node)dd.append(valor);else{dd.textContent=valor;if(vazio&&valor===vazio)dd.className='ficha-vazio';}fatos.append(dt,dd);};
+  const ligacao=(texto,href)=>{const a=el('a',texto,'ficha-link');a.href=href;return a;};
+// Dados de contato: cada um se edita no lugar (PUT /api/commercial/leads/:id com a versão atual; o servidor devolve a
+  // próxima). O lead precisa manter e-mail ou WhatsApp: o servidor recusa tirar os dois e a mensagem aparece no campo.
+  const salvarLead=async campos=>{
+   const res=await api('/api/commercial/leads/'+id,'PUT',{version:l.version,...campos});
+   l.version=res?.version??l.version+1;
+   if(typeof campos.email==='string')campos.email=campos.email.toLowerCase();
+   if(typeof campos.whatsapp==='string')campos.whatsapp=campos.whatsapp.replace(/[\s()+.-]/g,'');
+   Object.assign(l,campos);
+   if('name' in campos)pk.titulo(l.name||'Lead',subtituloDoLead);
+  };
+  const campoLead=(rotulo,campo,extra={})=>campoInline({valor:l[campo],rotulo,salvar:async v=>{await salvarLead({[campo]:v});return l[campo];},...extra});
+  par('Nome',campoLead('Nome','name',{obrigatorio:true,validar:v=>v.length<2?'Use ao menos 2 caracteres.':v.length>200?'Use no máximo 200 caracteres.':null}));
+  par('E-mail',campoLead('E-mail','email',{tipo:'email',validar:v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)?null:'E-mail inválido.'}));
+  par('WhatsApp',campoLead('WhatsApp','whatsapp',{tipo:'tel',validar:v=>/^\d{10,15}$/.test(v.replace(/[\s()+.-]/g,''))?null:'WhatsApp inválido: use DDD e número, com 10 a 15 dígitos.'}));
+  par('Mensagem',campoLead('Mensagem','message',{tipo:'longo',vazio:'Sem mensagem'}));
+  par('Interesse',[l.interest,modelos[l.service_model]||l.service_model].filter(Boolean).filter((v,i,x)=>x.findIndex(y=>String(y).toLocaleLowerCase('pt-BR')===String(v).toLocaleLowerCase('pt-BR'))===i).join(' · '));
+  par('Origem',[l.source_system,l.source_ref&&('ref. '+l.source_ref)].filter(Boolean).join(' · ')||'Origem desconhecida');
+  if(d.attribution){par('Campanha',d.attribution.utm_campaign);par('Canal',d.attribution.channel);}
+  par('Pode ser contatado',l.privacy?.contact_allowed?'Sim':'Não informado');
+  if(openTenant&&l.tenant_id){const empresa=el('button',`Abrir ficha de ${l.organization_name||'empresa'} →`,'edit-action');empresa.type='button';empresa.onclick=()=>openTenant(l.tenant_id);const barra=el('div',null,'ficha-barra');barra.append(empresa);geral.append(barra);}
+  r.append(fatos);
   if(l.pipeline_id)r.append(funnelPanel(id,l,d,rs.lost_reasons));
   const dados=dataPanel({api,lead:l,detail:d,onSaved:()=>detail(id)});if(dados)r.append(dados);
-  r.append(tasksPanel({api,lead:l,detail:d,owners:o.owners,onChange:()=>detail(id)}));
+  tarefas.append(tasksPanel({api,lead:l,detail:d,owners:o.owners,onChange:()=>detail(id)}));
   const funnel=Boolean(l.pipeline_id);
-  const form=el('form',null,'commercial-form'),stage=select('Estágio',Object.entries(labels),l.status),responsible=select('Responsável comercial',[['','Não atribuído'],...o.owners.map(x=>[x.id,x.name||x.email])],l.owner_id||''),loss=field('Motivo de perda','text',l.loss_reason||'');form.append(...(funnel?[responsible.wrap]:[stage.wrap,responsible.wrap,loss.wrap]));submit(form,'Salvar acompanhamento',async()=>{await api('/api/commercial/leads/'+id,'PUT',funnel?{version:l.version,owner_id:responsible.input.value||null}:{version:l.version,status:stage.input.value,owner_id:responsible.input.value||null,loss_reason:loss.input.value});await detail(id);});r.append(form);
-  r.append(el('h3','Timeline'));const activityForm=el('form',null,'commercial-form'),kind=select('Tipo',[['note','Nota'],['call','Ligação'],['meeting','Reunião'],['email','E-mail registrado']]),content=field('Atividade','textarea');content.input.required=true;activityForm.append(kind.wrap,content.wrap);submit(activityForm,'Registrar atividade',async()=>{await api('/api/commercial/leads/'+id+'/activities','POST',{kind:kind.input.value,note:content.input.value});await detail(id);});r.append(activityForm);
-  const timeline=el('ol',null,'commercial-timeline');function appendActivities(items){for(const a of items){const li=el('li');li.append(el('strong',({received:'Lead recebido',updated:'Acompanhamento atualizado',stage_changed:'Mudou de etapa',custom_data_changed:'Dados do espaço alterados',qualified:'Qualificado',discarded:'Descartado',restored:'Restaurado',opportunity_moved:'Oportunidade mudou de etapa',engagement_created:'Contratação criada',contract_created:'Contrato criado',contract_status:'Status do contrato alterado',note:'Nota',call:'Ligação',meeting:'Reunião',email:'E-mail registrado'})[a.kind]||a.kind),el('small',`${date(a.created_at)} · ${a.actor_email||a.actor_subject}`));if(a.note)li.append(el('p',a.note));if(a.kind==='stage_changed')li.append(el('p',`${a.details.from?.name||'—'} → ${a.details.to?.name||'—'}`));if(a.kind==='opportunity_moved')li.append(el('p',`Agora em ${a.details.stage_name}`));if(a.kind==='engagement_created')li.append(el('p',a.details.label));if(a.details?.after)li.append(el('p',`Estágio: ${labels[a.details.after.status]}${a.details.after.loss_reason?' · '+a.details.after.loss_reason:''} · Responsável: ${o.owners.find(x=>x.id===a.details.after.owner_id)?.email||'Não atribuído'}`));timeline.append(li);}}appendActivities(d.activities);r.append(timeline);let activityOffset=d.activities.length;if(d.activities.length===100)r.append(button('Mais atividades',async()=>{const more=await api('/api/commercial/leads/'+id+'/activities?offset='+activityOffset);appendActivities(more.activities);activityOffset+=more.activities.length;}));
-  r.append(el('h3','Contratos comerciais'),el('p','O contrato registra o escopo e o aceite. Sua ativação não concede acesso automaticamente.'));
+  const form=el('form',null,'commercial-form'),stage=select('Estágio',Object.entries(labels),l.status),responsible=select('Responsável comercial',[['','Não atribuído'],...o.owners.map(x=>[x.id,x.name||x.email])],l.owner_id||''),loss=field('Motivo de perda','text',l.loss_reason||'');form.append(...(funnel?[responsible.wrap]:[stage.wrap,responsible.wrap,loss.wrap]));submit(form,'Salvar acompanhamento',async()=>{await api('/api/commercial/leads/'+id,'PUT',funnel?{version:l.version,owner_id:responsible.input.value||null}:{version:l.version,status:stage.input.value,owner_id:responsible.input.value||null,loss_reason:loss.input.value});await detail(id);});r.append(el('h3','Acompanhamento'),form);
+  r=historico;r.append(el('h3','Timeline'));const activityForm=el('form',null,'commercial-form'),kind=select('Tipo',[['note','Nota'],['call','Ligação'],['meeting','Reunião'],['email','E-mail registrado']]),content=field('Atividade','textarea');content.input.required=true;activityForm.append(kind.wrap,content.wrap);submit(activityForm,'Registrar atividade',async()=>{await api('/api/commercial/leads/'+id+'/activities','POST',{kind:kind.input.value,note:content.input.value});await detail(id);});r.append(activityForm);
+  const timeline=el('ol',null,'commercial-timeline');function appendActivities(items){for(const a of items){const li=el('li');li.append(el('strong',({received:'Lead recebido',updated:'Acompanhamento atualizado',stage_changed:'Mudou de etapa',custom_data_changed:'Dados do espaço alterados',qualified:'Qualificado',discarded:'Descartado',restored:'Restaurado',opportunity_moved:'Oportunidade mudou de etapa',engagement_created:'Contratação criada',contract_created:'Contrato criado',contract_status:'Status do contrato alterado',note:'Nota',call:'Ligação',meeting:'Reunião',email:'E-mail registrado'})[a.kind]||a.kind),el('small',`${date(a.created_at)} · ${a.actor_email||a.actor_subject}`));if(a.note)li.append(el('p',a.note));if(a.kind==='stage_changed')li.append(el('p',`${a.details.from?.name||'—'} → ${a.details.to?.name||'—'}`));if(a.kind==='opportunity_moved')li.append(el('p',`Agora em ${a.details.stage_name}`));if(a.kind==='engagement_created')li.append(el('p',a.details.label));if(a.details?.after){const b=a.details.before,f=a.details.after;if(!b||b.status!==f.status||b.owner_id!==f.owner_id||b.loss_reason!==f.loss_reason)li.append(el('p',`Estágio: ${labels[f.status]}${f.loss_reason?' · '+f.loss_reason:''} · Responsável: ${o.owners.find(x=>x.id===f.owner_id)?.email||'Não atribuído'}`));}
+   if(a.details?.changed?.length)li.append(el('p','Dados alterados: '+a.details.changed.map(k=>({name:'nome',email:'e-mail',whatsapp:'WhatsApp',message:'mensagem'})[k]||k).join(', ')));timeline.append(li);}}appendActivities(d.activities);r.append(timeline);let activityOffset=d.activities.length;if(d.activities.length===100)r.append(button('Mais atividades',async()=>{const more=await api('/api/commercial/leads/'+id+'/activities?offset='+activityOffset);appendActivities(more.activities);activityOffset+=more.activities.length;}));
+  r=contratos;r.append(el('h3','Contratos comerciais'),el('p','O contrato registra o escopo e o aceite. Sua ativação não concede acesso automaticamente.'));
   for(const c of d.contracts){const card=el('article',null,'context-card');card.append(el('h4',c.title),el('p',c.scope),el('p',`${c.status} · ${(Number(c.amount_minor)/100).toLocaleString('pt-BR',{style:'currency',currency:c.currency})} · ${c.starts_on?.slice(0,10)||'Sem início'} até ${c.ends_on?.slice(0,10)||'Sem término'}`));if(c.acceptance_reference)card.append(el('p','Aceite: '+c.acceptance_reference));if(c.status==='draft'){const accept=field('Referência do aceite (documento ou registro)');card.append(accept.wrap,button('Ativar com aceite registrado',async()=>{await api('/api/commercial/contracts/'+c.id+'/status','PUT',{version:c.version,status:'active',acceptance_reference:accept.input.value});await detail(id);}));}if(c.status==='active')card.append(button('Concluir contrato',async()=>{await api('/api/commercial/contracts/'+c.id+'/status','PUT',{version:c.version,status:'completed'});await detail(id);}));if(['draft','active'].includes(c.status))card.append(button('Cancelar contrato',async()=>{if(!confirm('Cancelar este contrato? O histórico será preservado.'))return;await api('/api/commercial/contracts/'+c.id+'/status','PUT',{version:c.version,status:'canceled'});await detail(id);}));r.append(card);}
   const contractForm=el('form',null,'commercial-form'),title=field('Título do contrato'),scope=field('Escopo e entregas','textarea'),amount=field('Valor total (R$)','number','0'),start=field('Início','date'),end=field('Término','date');amount.input.min='0';amount.input.step='0.01';title.input.required=scope.input.required=true;contractForm.append(title.wrap,scope.wrap,amount.wrap,start.wrap,end.wrap);submit(contractForm,'Criar contrato em rascunho',async()=>{await api('/api/commercial/contracts','POST',{lead_id:id,title:title.input.value,scope:scope.input.value,amount_minor:Math.round(Number(amount.input.value)*100),currency:'BRL',starts_on:start.input.value||null,ends_on:end.input.value||null,owner_id:l.owner_id});await detail(id);});r.append(contractForm);
+  // Fotos do lead são anexo: ficam por último, depois do que se trabalha na ficha.
+  // Fotos são anexo: no fim da Visão geral.
+  geral.append(el('h3','Fotos'),photoPanel({type:'lead',id}));
+  pk.abas([
+   {key:'geral',label:'Visão geral',painel:geral},
+   {key:'tarefas',label:'Tarefas',painel:tarefas},
+   {key:'historico',label:'Histórico',painel:historico},
+   {key:'contratos',label:'Contratos',count:d.contracts.length||undefined,painel:contratos}
+  ],{ativa:abaLead,aoTrocar:k=>{abaLead=k;}});
  }
  async function keys(p){
   const ticket=++epoch,r=document.getElementById('view-product-keys');

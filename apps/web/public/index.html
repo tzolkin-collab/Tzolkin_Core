@@ -28,6 +28,9 @@
 <link rel="stylesheet" href="/product-emails.css">
 <link rel="stylesheet" href="/checkout-editor.css">
 <link rel="stylesheet" href="/product-icons.css">
+<link rel="stylesheet" href="/controls.css">
+<link rel="stylesheet" href="/peek.css">
+<link rel="stylesheet" href="/badge.css">
 <script src="/app.js" type="module"></script>
 </head>
 <body>
@@ -50,13 +53,13 @@
 <div class="app-main">
 <header class="topbar"><span id="context-crumb"><strong id="crumb-context">TZOLKIN</strong> <span class="crumb-divider">/</span> <strong id="breadcrumb">Clientes</strong></span><button id="refresh" class="quiet">Atualizar <span aria-hidden="true">↻</span></button></header>
 <main class="content">
-<div class="page-heading"><div><p class="eyebrow" id="eyebrow">TZOLKIN CORE</p><h1 id="page-title">Clientes</h1></div><button id="new-record" class="primary"><span aria-hidden="true">+</span> <span id="new-record-label">Novo cliente</span></button></div>
+<div class="page-heading"><div><p class="eyebrow" id="eyebrow">TZOLKIN CORE</p><h1 id="page-title">Clientes</h1><p id="page-desc" class="page-desc" hidden></p></div><button id="new-record" class="primary"><span aria-hidden="true">+</span> <span id="new-record-label">Novo cliente</span></button></div>
 <p id="security-banner" class="security-banner" role="alert" hidden></p>
 <p id="notice" class="notice" role="status" aria-live="polite"></p>
 <div id="metrics" class="metrics"></div>
 
 <section id="view-overview" class="view" hidden aria-label="Visão geral">
-<div class="overview-hero"><div><span class="overview-kicker">OPERAÇÃO TZOLKIN</span><h2>Hoje na operação</h2><p id="overview-summary">Consolidando os dados já salvos no Core.</p></div><div class="overview-hero-actions"><span id="overview-period" class="overview-period"></span><button class="primary-action" type="button" data-overview-view="clients">Abrir carteira <span aria-hidden="true">↗</span></button></div></div>
+<div class="overview-hero"><div><p id="overview-summary">Consolidando os dados já salvos no Core.</p></div><div class="overview-hero-actions"><span id="overview-period" class="overview-period"></span><button class="primary-action" type="button" data-overview-view="clients">Abrir carteira <span aria-hidden="true">↗</span></button></div></div>
 <div id="overview-kpis" class="overview-kpis"></div>
 <div class="overview-layout"><section class="overview-panel overview-attention"><div class="overview-panel-title"><div><span class="overview-kicker">PRÓXIMAS DECISÕES</span><h3>O que merece atenção</h3></div></div><div id="overview-alerts"></div></section><section class="overview-panel"><div class="overview-panel-title"><div><span class="overview-kicker">SISTEMA</span><h3>Conexões essenciais</h3></div><button class="table-action" type="button" data-overview-view="finance">Revisar financeiro →</button></div><div id="overview-integrations" class="overview-integrations"></div></section></div>
 <section class="overview-panel overview-products"><div class="overview-panel-title"><div><span class="overview-kicker">PORTFÓLIO</span><h3>Portfólio e clientes ligados</h3></div><button class="table-action" type="button" data-overview-view="products">Ver portfólio →</button></div><div id="overview-product-list" class="overview-product-list"></div></section>
@@ -64,27 +67,31 @@
 </section>
 
 <section id="view-clients" class="view">
-<div id="client-summary" class="client-summary"></div>
-<div class="section-toolbar client-toolbar"><p class="detail">Quem a TZOLKIN atende e o que cada um contratou.</p><label class="search-label"><span class="sr-only">Buscar cliente</span><input id="client-search" type="search" placeholder="Buscar cliente…"></label></div>
-<div id="tenants" class="client-grid"></div><div id="clients-empty" class="empty-state" hidden><span class="empty-symbol" aria-hidden="true">＋</span><h3>Sua carteira começa aqui.</h3><p>Cadastre o primeiro cliente.</p><button class="secondary" data-open="tenant-dialog">Adicionar cliente</button></div><p id="search-empty" class="empty-list" hidden>Nenhum cliente encontrado.</p>
+<div id="client-tabs"></div>
+<div class="tbl-bar"><label class="search-label"><span class="sr-only">Buscar cliente</span><input id="client-search" type="search" placeholder="Buscar cliente…"></label></div>
+<div id="client-panel" class="tab-panel" role="tabpanel">
+<div class="table-container tbl-wrap"><table class="tbl"><thead><tr><th scope="col">Cliente</th><th scope="col">Status</th><th scope="col">Contratação</th><th scope="col">Oferta</th><th scope="col" class="num">Pessoas</th></tr></thead><tbody id="tenants"></tbody></table></div>
+<div class="tbl-foot" id="client-foot"><span id="client-count" aria-live="polite"></span><div class="tbl-pager"><label class="tbl-size">Por página <select id="client-pagesize"><option>10</option><option selected>25</option><option>50</option></select></label><span id="client-pageinfo" class="tbl-pageinfo"></span><button id="client-prev" class="tbl-step" type="button" aria-label="Página anterior">‹</button><button id="client-next" class="tbl-step" type="button" aria-label="Próxima página">›</button></div></div>
+</div>
+<div id="clients-empty" class="empty-state" hidden><span class="empty-symbol" aria-hidden="true">＋</span><h3>Sua carteira começa aqui.</h3><p>Cadastre o primeiro cliente.</p><button class="secondary" data-open="tenant-dialog">Adicionar cliente</button></div><p id="search-empty" class="empty-list" hidden>Nenhum cliente encontrado.</p>
 </section>
 
 <section id="view-leads" class="view" hidden aria-label="Leads">
-<div class="section-toolbar client-toolbar"><div><h2>Leads</h2><p class="detail">Oportunidades em prospecção.</p></div><label class="search-label"><span class="sr-only">Buscar lead</span><input id="lead-search" type="search" placeholder="Buscar lead…"></label></div>
-<div id="leads" class="client-grid"></div><p id="leads-empty" class="empty-list" hidden>Nenhum lead encontrado.</p>
+<div class="tbl-bar"><label class="search-label"><span class="sr-only">Buscar lead</span><input id="lead-search" type="search" placeholder="Buscar lead…"></label></div>
+<div id="leads"></div><p id="leads-empty" class="empty-list" hidden>Nenhum lead encontrado.</p>
 </section>
 
 <section id="view-companies" class="view" hidden aria-label="Empresas">
-<div class="section-toolbar client-toolbar"><p class="detail">Cadastro das organizações, sejam ou não clientes.</p><label class="search-label"><span class="sr-only">Buscar empresa</span><input id="company-search" type="search" placeholder="Buscar empresa…"></label></div>
-<div id="companies" class="client-grid"></div><p id="companies-empty" class="empty-list" hidden>Nenhuma empresa encontrada.</p>
+<div class="tbl-bar"><label class="search-label"><span class="sr-only">Buscar empresa</span><input id="company-search" type="search" placeholder="Buscar empresa…"></label></div>
+<div id="companies"></div><p id="companies-empty" class="empty-list" hidden>Nenhuma empresa encontrada.</p>
 </section>
 
 <section id="view-client" class="view" hidden aria-label="Detalhes do cliente"><button id="client-back" class="table-action client-back" type="button">← Voltar para clientes</button><div id="client-detail"></div></section>
 
-<section id="view-people" class="view" hidden aria-label="Pessoas"><div class="section-toolbar"><p class="detail">Pessoas do relacionamento comercial, separadas dos acessos aos produtos.</p><label class="search-label"><span class="sr-only">Buscar pessoa</span><input id="people-search" type="search" placeholder="Buscar pessoa ou empresa…"></label></div><div id="stakeholder-directory" class="people-grid"></div><p id="people-empty" class="empty-list" hidden>Nenhum stakeholder encontrado.</p></section>
+<section id="view-people" class="view" hidden aria-label="Pessoas"><div class="tbl-bar"><label class="search-label"><span class="sr-only">Buscar pessoa</span><input id="people-search" type="search" placeholder="Buscar pessoa ou empresa…"></label></div><div id="stakeholder-directory"></div><p id="people-empty" class="empty-list" hidden>Nenhum stakeholder encontrado.</p></section>
 
-<section id="view-products" class="view" hidden><div class="section-toolbar"><p class="catalog-caption">O que a TZOLKIN vende e opera. O tipo de cada espaço diz o que ele pode fazer; rascunho ainda não opera.</p><button id="products-services-link" class="secondary" type="button">Serviços contratados →</button></div><div id="portfolio-tabs"></div><div id="portfolio-note" class="portfolio-note"></div><div id="product-catalog" class="space-grid" role="tabpanel"></div><h2 class="section-title contracts-title">Clientes vinculados</h2><div id="contracts" class="list-panel"></div></section>
-<section id="view-services" class="view" hidden aria-label="Serviços"><div class="section-toolbar"><div><p class="catalog-caption">Toda contratação de serviço: mentoria, consultoria, assessoria, sob demanda e o que ainda não foi classificado. Elas pertencem ao cliente e não viram produto por causa de um deploy.</p></div><label class="search-label"><span class="sr-only">Filtrar por tipo de serviço</span><select id="services-filter"></select></label></div><div id="services-summary" class="deploy-summary" aria-label="Resumo dos serviços"></div><div id="services-list" class="service-grid"></div></section>
+<section id="view-products" class="view" hidden><div class="section-toolbar tbl-bar-end"><button id="products-services-link" class="secondary" type="button">Serviços contratados →</button></div><div id="portfolio-tabs"></div><div id="portfolio-note" class="portfolio-note"></div><div id="product-catalog" role="tabpanel"></div><h2 class="section-title contracts-title">Clientes vinculados</h2><div id="contracts" class="list-panel"></div></section>
+<section id="view-services" class="view" hidden aria-label="Serviços"><div class="tbl-bar"><label class="search-label"><span class="sr-only">Filtrar por tipo de serviço</span><select id="services-filter"></select></label><div id="services-summary" aria-label="Resumo dos serviços"></div></div><div id="services-list"></div></section>
 
 <section id="view-access" class="view" hidden><p class="catalog-caption">Quem tem acesso a qual produto, separado do cadastro de pessoas.</p><div id="members" class="list-panel"></div></section>
 <section id="view-settings" class="view" hidden aria-label="Configurações"><div class="section-toolbar"><p class="detail">Preferências operacionais e integrações do Core.</p></div><div class="empty-state"><h3>Em breve</h3><p>Em breve: preferências, integrações e regras padrão.</p></div></section>
@@ -103,7 +110,7 @@
      por nome. As três listas são estados diferentes da mesma pergunta: quem já tem
      dono, o que o provedor mostra e ninguém reclamou, e o que ficou para trás. -->
 <section id="view-connections" class="view" hidden aria-label="Conexões">
-<div class="section-toolbar"><div><p class="catalog-caption">O que está ligado a cada cliente, contratação ou item do portfólio, e o que provavelmente deveria estar. O inventário completo de cada provedor fica nas abas Vercel, GitHub e EasyPanel.</p></div><div class="connections-tools"><label class="search-label"><span class="sr-only">Buscar cliente, item ou recurso</span><input id="connections-search" type="search" placeholder="Buscar cliente, item ou recurso…"></label><button id="connections-refresh" class="secondary" type="button">Atualizar inventário</button></div></div>
+<div class="section-toolbar"><div class="connections-tools"><label class="search-label"><span class="sr-only">Buscar cliente, item ou recurso</span><input id="connections-search" type="search" placeholder="Buscar cliente, item ou recurso…"></label><button id="connections-refresh" class="secondary" type="button">Atualizar inventário</button></div></div>
 <p id="connections-message" class="notice" role="status"></p>
 <p id="delivery-message" class="notice" role="status"></p>
 <div id="connections-providers" class="delivery-chips" aria-label="Inventário dos provedores"></div>

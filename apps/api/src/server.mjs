@@ -2,7 +2,7 @@
 // createCore continua exportado daqui para os testes e para embutir o Core.
 import { pathToFileURL } from 'node:url';
 import { createCore } from './app.mjs';
-import { openDatabase, transportWarning } from './platform/database.mjs';
+import { openDatabase, transportWarning, manterPoolQuente } from './platform/database.mjs';
 
 export { createCore };
 
@@ -15,7 +15,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   mode: process.env.DATABASE_SSL || 'require',
   max: 5,
   connectionTimeoutMillis: 8000,
+  // Conexão ociosa dura 5 min (padrão: 10 s); manterPoolQuente a usa antes disso.
+  idleTimeoutMillis: 300_000,
  });
+ await manterPoolQuente(pool);
 
  const warning = transportWarning(security);
  if (warning) console.warn(warning);

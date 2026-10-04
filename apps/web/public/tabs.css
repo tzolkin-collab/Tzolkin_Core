@@ -1,5 +1,5 @@
 /* Abas horizontais sublinhadas (estilo Stripe): texto simples, sublinhado na ativa. */
-.tabs { display: flex; gap: 28px; margin: 4px 0 20px; border-bottom: 1px solid var(--line, #e3e5e8); overflow-x: auto; scrollbar-width: none; }
+.tabs { display: flex; gap: 28px; margin: 4px 0 20px; border-bottom: 1px solid var(--line, var(--line, #e4e4e7)); overflow-x: auto; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
 .tab { position: relative; flex: 0 0 auto; margin-bottom: -1px; padding: 10px 0; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--muted, #6b7280); font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .tab:hover { color: var(--ink, #1c1c1e); }

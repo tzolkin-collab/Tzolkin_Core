@@ -49,6 +49,61 @@ export function directoryRoutes(router) {
   return { tenant: body.tenant_id, type: 'stakeholder.created' };
  }, { transactional: true });
 
+ // Edita uma pessoa. Parte é DELA (nome, e-mail, telefone) e parte é do VÍNCULO com esta empresa (papel, cargo,
+ // contato principal, pode ser contatada): uma pessoa pode estar em mais de uma empresa, então o vínculo é por
+ // empresa e o tenant_id vem junto. Parcial: só muda o que for enviado; null ou "" limpa e-mail, telefone e cargo.
+ // E-mail repetido de OUTRA pessoa é 409 (o e-mail identifica a pessoa, e o intake do site a reaproveita por ele).
+ // Na trilha ficam os valores de nome, papel, cargo e flags; e-mail e telefone entram só como "valor anterior" e
+ // "valor novo": dado de contato não deve ser copiado para o histórico da empresa.
+ router.put('/api/stakeholders', async ({ client, body }) => {
+  input(body, ['tenant_id', 'stakeholder_id', 'name', 'email', 'phone', 'role', 'title', 'is_primary', 'contact_allowed']);
+  if (!isUuid(body.tenant_id) || !isUuid(body.stakeholder_id)) throw fail(400, 'Pessoa inválida.');
+  const CAMPOS = ['name', 'email', 'phone', 'role', 'title', 'is_primary', 'contact_allowed'];
+  const enviados = CAMPOS.filter(k => body[k] !== undefined);
+  if (!enviados.length) throw fail(400, 'Informe o que mudar.');
+  const vazio = v => v === null || v === '';
+  const novo = {};
+  if (body.name !== undefined) novo.name = text(body.name, 2, 160);
+  if (body.email !== undefined) {
+   novo.email = vazio(body.email) ? null : text(body.email, 3, 320).toLowerCase();
+   if (novo.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(novo.email)) throw fail(400, 'E-mail inválido.');
+  }
+  if (body.phone !== undefined) {
+   // Não passa por text(): um telefone curto demais cairia em "Texto inválido.", que não diz o que corrigir.
+   novo.phone = vazio(body.phone) ? null : (typeof body.phone === 'string' ? body.phone.trim().replace(/[\s()+.-]/g, '') : '');
+   if (novo.phone && !/^\d{10,15}$/.test(novo.phone)) throw fail(400, 'Telefone inválido: use DDD e número, com 10 a 15 dígitos.');
+   if (novo.phone === '') throw fail(400, 'Telefone inválido: use DDD e número, com 10 a 15 dígitos.');
+  }
+  if (body.role !== undefined) {
+   if (!['owner', 'decision_maker', 'champion', 'finance', 'technical', 'operational', 'student', 'contact'].includes(body.role)) throw fail(400, 'Papel inválido.');
+   novo.role = body.role;
+  }
+  if (body.title !== undefined) novo.title = vazio(body.title) ? null : text(body.title, 2, 120);
+  for (const k of ['is_primary', 'contact_allowed']) if (body[k] !== undefined) {
+   if (typeof body[k] !== 'boolean') throw fail(400, 'Valor inválido.');
+   novo[k] = body[k];
+  }
+  const antes = (await client.query(
+   `SELECT s.id, s.name, s.email, s.phone, os.role, os.title, os.is_primary, os.contact_allowed
+      FROM stakeholders s JOIN organization_stakeholders os ON os.stakeholder_id = s.id
+     WHERE s.id = $1 AND os.tenant_id = $2 FOR UPDATE OF s, os`, [body.stakeholder_id, body.tenant_id])).rows[0];
+  if (!antes) throw fail(404, 'Pessoa não encontrada nesta empresa.');
+  const depois = { ...antes, ...novo };
+  const mudou = Object.keys(novo).filter(k => depois[k] !== antes[k]);
+  if (!mudou.length) return { tenant: body.tenant_id, type: 'stakeholder.updated' };
+  if (depois.email && depois.email !== antes.email &&
+      (await client.query('SELECT 1 FROM stakeholders WHERE lower(email)=$1 AND id<>$2', [depois.email, antes.id])).rowCount)
+   throw fail(409, 'Já existe outra pessoa com este e-mail.');
+  if (mudou.some(k => ['name', 'email', 'phone'].includes(k)))
+   await client.query('UPDATE stakeholders SET name=$2, email=$3, phone=$4 WHERE id=$1', [antes.id, depois.name, depois.email, depois.phone]);
+  if (mudou.some(k => ['role', 'title', 'is_primary', 'contact_allowed'].includes(k)))
+   await client.query('UPDATE organization_stakeholders SET role=$3, title=$4, is_primary=$5, contact_allowed=$6 WHERE tenant_id=$1 AND stakeholder_id=$2',
+    [body.tenant_id, antes.id, depois.role, depois.title, depois.is_primary, depois.contact_allowed]);
+  const SENSIVEL = ['email', 'phone'];
+  const registro = (origem, lado) => Object.fromEntries(mudou.map(k => [k, SENSIVEL.includes(k) ? (origem[k] ? (lado === 'antes' ? 'valor anterior' : 'valor novo') : null) : origem[k]]));
+  return { tenant: body.tenant_id, type: 'stakeholder.updated', details: { before: registro(antes, 'antes'), after: registro(depois, 'depois') } };
+ }, { transactional: true });
+
  // Altera o que a organização é: situação (ativa/suspensa), nome e a classificação (relacionamento, ciclo de vida, tipo).
  // O identificador (slug) não muda: ele está em links e integrações. A organização interna não se reclassifica, e
  // "interna" só vale para ela. O que mudou fica na trilha (antes e depois), não só o fato de ter mudado.

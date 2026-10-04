@@ -144,6 +144,22 @@ export async function openDatabase({ connectionString, mode = 'require', ...pool
  return { pool: new Pool({ ...poolOptions, connectionString: normalized, ssl }), security };
 }
 
+/**
+ * Mantém conexões já abertas com o banco. Cada conexão nova a um Postgres remoto custa ~1 s (TCP + TLS +
+ * autenticação) contra ~120 ms de uma consulta numa conexão quente. O pool fecha conexão ociosa em 10 s
+ * por padrão do `pg`, então quase toda visita ao painel pagava o 1 s, e a leva de requisições simultâneas
+ * depois do bootstrap pagava de novo. Aqui o pool abre `conexoes` conexões na partida e as usa a cada
+ * `intervaloMs` para o servidor do banco, o proxy ou o firewall não as fecharem por ociosidade.
+ * Devolve a função que para o intervalo. Falha de uma consulta aqui nunca derruba o serviço.
+ */
+export async function manterPoolQuente(pool, { conexoes = 3, intervaloMs = 120_000 } = {}) {
+ const ping = () => Promise.allSettled(Array.from({ length: conexoes }, () => pool.query('SELECT 1')));
+ await ping();
+ const timer = setInterval(ping, intervaloMs);
+ timer.unref?.();
+ return () => clearInterval(timer);
+}
+
 export function assertVerifiedTransport(security) {
  if (!security?.tls || !security?.verified)
   throw new Error('Rotação cancelada: exige TLS com certificado e hostname verificados, inclusive em loopback.');

@@ -45,15 +45,26 @@ export function commercialWorkspaceRoutes(router) {
   const rows=(await pool.query('SELECT * FROM commercial_activities WHERE lead_id=$1 ORDER BY created_at DESC,id DESC LIMIT 101 OFFSET $2',[params.id,offset])).rows;return reply(200,{activities:rows.slice(0,100),has_more:rows.length>100});
  });
  router.put('/api/commercial/leads/:id',async({client,params,body,operator})=>{
-  await commercialPermission(client,operator,true);uuid(params.id);input(body,['version','status','owner_id','loss_reason']);
+  await commercialPermission(client,operator,true);uuid(params.id);input(body,['version','status','owner_id','loss_reason','name','email','whatsapp','message']);
   const old=(await client.query('SELECT * FROM commercial_leads WHERE id=$1 FOR UPDATE',[params.id])).rows[0];if(!old)throw fail(404,'Lead não encontrado.');
   if(body.version!==old.version)throw fail(409,'Lead alterado em outra sessão. Reabra o detalhe.');
+  // Dados de contato do lead (mesmas regras do intake). null ou "" limpa e-mail, WhatsApp e mensagem; o lead
+  // precisa manter ao menos um meio de contato. Só muda o que foi enviado.
+  const vazio=v=>v===null||v==='';const contato={};
+  if(body.name!==undefined)contato.name=text(body.name,2,200);
+  if(body.email!==undefined){contato.email=vazio(body.email)?null:text(body.email,3,320).toLowerCase();if(contato.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contato.email))throw fail(400,'E-mail inválido.');}
+  if(body.whatsapp!==undefined){contato.whatsapp=vazio(body.whatsapp)?null:(typeof body.whatsapp==='string'?body.whatsapp.trim().replace(/[\s()+.-]/g,''):'');if(contato.whatsapp!==null&&!/^\d{10,15}$/.test(contato.whatsapp))throw fail(400,'WhatsApp inválido: use DDD e número, com 10 a 15 dígitos.');}
+  if(body.message!==undefined){const m=body.message;if(!vazio(m)&&(typeof m!=='string'||m.length>5000||/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(m)))throw fail(400,'Mensagem inválida.');contato.message=vazio(m)||!m.trim()?null:m.trim();}
+  const novoContato={name:old.name,email:old.email,whatsapp:old.whatsapp,message:old.message,...contato};
+  if(!novoContato.email&&!novoContato.whatsapp)throw fail(400,'O lead precisa de e-mail ou WhatsApp.');
+  const mudouContato=Object.keys(contato).filter(k=>contato[k]!==old[k]);
   const status=body.status??old.status;if(!STAGES.includes(status))throw fail(400,'Estágio inválido.');
   const responsible=Object.hasOwn(body,'owner_id')?await owner(client,body.owner_id):old.owner_id;
   const loss=status==='lost'?text(body.loss_reason??old.loss_reason,2,1000):null;
-  await client.query('UPDATE commercial_leads SET status=$2,owner_id=$3,loss_reason=$4,version=version+1,updated_at=now() WHERE id=$1',[old.id,status,responsible,loss]);
-  await recordActivity(client,old.id,'updated',operator,null,{before:{status:old.status,owner_id:old.owner_id,loss_reason:old.loss_reason},after:{status,owner_id:responsible,loss_reason:loss}});
-  return{body:{ok:true}};
+  await client.query('UPDATE commercial_leads SET status=$2,owner_id=$3,loss_reason=$4,name=$5,email=$6,whatsapp=$7,message=$8,version=version+1,updated_at=now() WHERE id=$1',[old.id,status,responsible,loss,novoContato.name,novoContato.email,novoContato.whatsapp,novoContato.message]);
+  // Na trilha: quais dados de contato mudaram (só os nomes dos campos, não os valores).
+  await recordActivity(client,old.id,'updated',operator,null,{before:{status:old.status,owner_id:old.owner_id,loss_reason:old.loss_reason},after:{status,owner_id:responsible,loss_reason:loss},...(mudouContato.length?{changed:mudouContato}:{})});
+  return{body:{ok:true,version:old.version+1}};
  },{transactional:true,audit:false});
  router.post('/api/commercial/leads/:id/activities',async({client,params,body,operator})=>{
   await commercialPermission(client,operator,true);uuid(params.id);input(body,['note','kind']);if(!['note','call','meeting','email'].includes(body.kind))throw fail(400,'Tipo inválido.');

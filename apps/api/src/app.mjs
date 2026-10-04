@@ -98,7 +98,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
    const origin = webOrigin || `http://127.0.0.1:${server.address().port}`;
    const url = new URL(req.url, origin);
    if (!['GET', 'POST', 'PUT', 'DELETE'].includes(req.method)) throw fail(405, 'Método não permitido.');
-   if(req.method==='GET'&&serveAsset?.(url.pathname,res))return;
+   if(req.method==='GET'&&serveAsset?.(url.pathname,res,req))return;
 
    const matched = router.match(req.method, url.pathname);
    // CSRF: mutação só a partir da origem exata do bootstrap.

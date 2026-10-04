@@ -22,7 +22,7 @@ export function createWeb({ apiOrigin = 'http://127.0.0.1:3102' } = {}) {
    const isApi = url.pathname === '/health' || url.pathname.startsWith('/api/') || url.pathname.startsWith('/v1/') || url.pathname.startsWith('/c/');
    if (!isApi) {
     if(req.method !== 'GET') return error(405,'Método não permitido.');
-    if(serveAsset(url.pathname,res)) return;
+    if(serveAsset(url.pathname,res,req)) return;
     return error(404,'Arquivo não encontrado.');
    }
    // DELETE encaminhado porque a API tem rotas de exclusão (delivery/projects,

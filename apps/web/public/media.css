@@ -8,7 +8,7 @@
 .photo-status.photo-error{color:#b42318}
 .photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px}
 .photo-grid:empty{display:none}
-.photo-card{margin:0;border:1px solid var(--line,#e5e7eb);border-radius:10px;overflow:hidden;display:grid}
+.photo-card{margin:0;border:1px solid var(--line,var(--line, #e4e4e7));border-radius:10px;overflow:hidden;display:grid}
 .photo-card.is-primary{border-color:currentColor}
 .photo-card a{display:block;aspect-ratio:1;background:rgba(127,127,127,.08)}
 .photo-card img{width:100%;height:100%;object-fit:cover;display:block}

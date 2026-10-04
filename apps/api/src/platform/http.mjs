@@ -1,3 +1,5 @@
+import { gzipSync } from 'node:zlib';
+
 // Validação de entrada, erros e serialização HTTP.
 // Fonte única das regras de formato usadas por todos os módulos.
 
@@ -44,9 +46,19 @@ export function securityHeaders(res) {
  res.setHeader('Strict-Transport-Security','max-age=31536000; includeSubDomains');
 }
 
+// Acima de 2 KB e com o navegador aceitando gzip, a resposta JSON vai comprimida (o painel recebe
+// dezenas de KB de JSON por carregamento, e JSON comprime ~80%). Sem `res.req` (testes, scripts), não comprime.
 export const replier = res => (status, body) => {
- res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
- res.end(JSON.stringify(body));
+ const texto = JSON.stringify(body);
+ const cabecalhos = { 'Content-Type': 'application/json; charset=utf-8' };
+ if (texto.length > 2048 && /\bgzip\b/.test(String(res.req?.headers?.['accept-encoding'] || ''))) {
+  const comprimido = gzipSync(texto);
+  res.writeHead(status, { ...cabecalhos, 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding', 'Content-Length': comprimido.length });
+  res.end(comprimido);
+  return;
+ }
+ res.writeHead(status, cabecalhos);
+ res.end(texto);
 };
 
 // Traduz erros de integridade do PostgreSQL sem vazar detalhes internos.

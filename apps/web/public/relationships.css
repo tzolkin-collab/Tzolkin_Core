@@ -8,7 +8,7 @@
   display: block;
   margin-top: 5px;
   font-size: 12px;
-  color: #626269;
+  color: var(--muted, #646469);
 }
 
 #product-orgs td:nth-child(2) .client-slug {
@@ -28,7 +28,7 @@
   padding: 16px 18px;
   border: 1px solid var(--line);
   background: #fff;
-  border-color: #eaeaea;
+  border-color: var(--line, #e4e4e7);
   border-radius: 12px;
   box-shadow: none;
 }
@@ -36,7 +36,7 @@
 .client-summary span {
   display: block;
   font-size: 12px;
-  color: #626269;
+  color: var(--muted, #646469);
 }
 
 .client-summary strong {
@@ -52,7 +52,7 @@
 
 .client-toolbar .detail {
   margin-top: 5px;
-  color: #626269;
+  color: var(--muted, #646469);
   font-size: 12px;
   max-width: 560px;
   line-height: 1.55;
@@ -74,20 +74,20 @@
   padding: 4px 7px;
   border-radius: 5px;
   background: #f6f6f6;
-  color: #5e5e5e;
-  font-size: 11px;
+  color: var(--muted, #646469);
+  font-size: 12px;
   white-space: nowrap;
 }
 
 .client-chip.outline {
   background: #fafafa;
-  border: 1px solid #e6e6e6;
-  color: #565656;
+  border: 1px solid var(--line, #e4e4e7);
+  color: var(--muted, #646469);
 }
 
 .client-muted {
   font-size: 12px;
-  color: #7c7c7c;
+  color: var(--faint, #6e6e76);
 }
 
 .client-count {
@@ -149,7 +149,7 @@
   flex-shrink: 0;
   border-radius: 9px;
   background: #f3f3f3;
-  color: #686868;
+  color: var(--muted, #646469);
   font-weight: 700;
 }
 
@@ -161,7 +161,7 @@
   flex-shrink: 0;
   border-radius: 9px;
   background: #f3f3f3;
-  color: #686868;
+  color: var(--muted, #646469);
   font-weight: 700;
 }
 
@@ -175,17 +175,17 @@
 .client-card-facts {
   display: grid;
   grid-template-columns: 1.2fr 1.2fr .6fr;
-  border-block: 1px solid #efefef;
+  border-block: 1px solid var(--line-soft, #efeff2);
   padding-block: 13px;
   gap: 10px;
 }
 
 .client-card-facts span {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: .7px;
-  color: #969696;
+  color: var(--faint, #6e6e76);
 }
 
 .client-card-facts strong {
@@ -197,8 +197,8 @@
 
 .client-card>.secondary {
   justify-self: start;
-  border: 1px solid #e8e8e8;
-  color: #717171;
+  border: 1px solid var(--line, #e4e4e7);
+  color: var(--faint, #6e6e76);
   background: #fcfcfc;
 }
 
@@ -256,7 +256,7 @@
   align-items: center;
   gap: 11px;
   padding: 13px 0;
-  border-top: 1px solid #f1f1f1;
+  border-top: 1px solid var(--line-soft, #efeff2);
 }
 
 .detail-row>div {
@@ -271,7 +271,7 @@
 .client-access-count {
   display: block;
   padding-top: 13px;
-  border-top: 1px solid #f1f1f1;
+  border-top: 1px solid var(--line-soft, #efeff2);
 }
 
 /* Ficha da empresa: cabeçalho com ação, contratações em largura total. */
@@ -307,7 +307,7 @@
   display: grid;
   gap: 10px;
   padding: 14px 0;
-  border-top: 1px solid #f1f1f1;
+  border-top: 1px solid var(--line-soft, #efeff2);
 }
 
 .client-engagement>header {
@@ -390,7 +390,7 @@
 .person-company {
   padding: 0;
   background: transparent;
-  color: #717171;
+  color: var(--faint, #6e6e76);
   font-size: 12px;
 }
 
@@ -403,13 +403,13 @@
 }
 
 .client-card:hover {
-  border-color: #dfdfdf;
+  border-color: var(--line, #e4e4e7);
   box-shadow: 0 8px 24px rgba(42,28,77,.07);
   transform: translateY(-1px);
 }
 
 .person-card:hover {
-  border-color: #dfdfdf;
+  border-color: var(--line, #e4e4e7);
   box-shadow: 0 8px 24px rgba(42,28,77,.07);
   transform: translateY(-1px);
 }
@@ -526,40 +526,40 @@
     content: "Contratação";
     display: block;
     margin-bottom: 5px;
-    font-size: 10px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .7px;
-    color: #969696;
+    color: var(--faint, #6e6e76);
   }
 
   .clients-table td:nth-child(3)::before {
     content: "Oferta / marca";
     display: block;
     margin-bottom: 5px;
-    font-size: 10px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .7px;
-    color: #969696;
+    color: var(--faint, #6e6e76);
   }
 
   .clients-table td:nth-child(4)::before {
     content: "Stakeholders";
     display: block;
     margin-bottom: 5px;
-    font-size: 10px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .7px;
-    color: #969696;
+    color: var(--faint, #6e6e76);
   }
 
   .clients-table td:nth-child(5)::before {
     content: "Situação";
     display: block;
     margin-bottom: 5px;
-    font-size: 10px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: .7px;
-    color: #969696;
+    color: var(--faint, #6e6e76);
   }
 
   .clients-table td:last-child {
@@ -583,3 +583,146 @@
   font-style: italic;
   opacity: 0.7;
 }
+
+/* ==========================================================================
+   Clientes como tabela (estilo Stripe): sem cartões, linhas finas, texto legível.
+   Escopo: só o que tem .tbl-* ou .tbl. Não mexe em .client-grid/.client-card,
+   que Leads, Empresas e Pessoas ainda usam.
+   ========================================================================== */
+.tbl-bar { display: flex; align-items: center; gap: 12px; margin: 4px 0 8px; }
+.tbl-bar .search-label { width: min(100%, 320px); }
+
+/* sem moldura em volta: o que separa as linhas é o fio, como na Stripe */
+.tbl-wrap { border: 0; border-radius: 0; background: transparent; overflow-x: auto; }
+.tbl { white-space: normal; font-size: 14px; letter-spacing: -.003em; }
+.tbl th {
+  padding: 10px 16px; font-size: 13px; font-weight: 500; color: var(--muted);
+  background: transparent; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+.tbl td {
+  padding: 14px 16px; font-size: 14px; line-height: 1.45; color: var(--text);
+  border-bottom: 1px solid var(--line-soft, #efeff2); vertical-align: middle;
+}
+.tbl th:first-child, .tbl td:first-child { padding-left: 6px; }
+.tbl tr:last-child td { border-bottom: 1px solid var(--line); }
+.tbl tbody tr { transition: background-color .12s ease; }
+.tbl tbody tr.is-clickable { cursor: pointer; }
+.tbl tbody tr:hover { background: var(--surface-subtle); }
+
+.tbl-who { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.tbl .client-avatar {
+  width: 32px; height: 32px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  background: var(--brand-soft); color: var(--text);
+}
+.tbl .tbl-name {
+  display: inline; min-height: 0; padding: 0; border: 0; background: none;
+  color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer;
+}
+.tbl .tbl-name:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.tbl .tbl-name:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 3px; }
+.tbl small { display: block; margin-top: 1px; font-size: 13px; line-height: 1.4; color: var(--muted); }
+
+.tbl .num { text-align: right; padding-right: 10px; font-variant-numeric: tabular-nums; }
+.tbl-wrap-text { max-width: 300px; }
+.tbl-empty-cell { color: var(--faint, #6e6e76); }
+
+/* rodapé: contagem à esquerda, paginação à direita */
+.tbl-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-top: 14px; padding-inline: 6px; font-size: 13px; color: var(--muted);
+}
+.tbl-pager { display: flex; align-items: center; gap: 10px; }
+.tbl-size { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); font-weight: 400; }
+.tbl-size select { width: auto; min-height: 32px; padding: 4px 26px 4px 10px; font-size: 13px; border-radius: 6px; }
+.tbl-pageinfo { min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
+.tbl-step {
+  width: 32px; height: 32px; min-height: 32px; padding: 0; display: grid; place-items: center;
+  border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface);
+  color: var(--text); font-size: 17px; line-height: 1;
+}
+.tbl-step:not(:disabled):hover { background: var(--surface-hover); }
+.tbl-step:disabled { opacity: .4; }
+
+@media (max-width: 860px) {
+  .tbl th:nth-child(4), .tbl td:nth-child(4) { display: none; }
+}
+@media (max-width: 600px) {
+  .tbl th:nth-child(3), .tbl td:nth-child(3) { display: none; }
+  .tbl-foot { flex-wrap: wrap; }
+}
+.tbl .status { white-space: nowrap; }
+
+/* Tabelas das demais listas (Empresas, Pessoas, Serviços...) */
+.tbl .tbl-name-plain { font-weight: 600; color: var(--text); cursor: default; }
+.tbl .tbl-link { display: inline; min-height: 0; padding: 0; border: 0; background: none; color: var(--text); font: inherit; text-align: left; text-decoration: underline; text-decoration-color: var(--line-strong, #d4d4d8); text-underline-offset: 3px; cursor: pointer; }
+.tbl .tbl-link:hover { text-decoration-color: currentColor; }
+.tbl .tbl-stack { display: grid; gap: 8px; }
+.tbl .tbl-stack small { display: block; margin-top: 1px; }
+.tbl .table-action { padding: 6px 10px; border: 1px solid var(--line-strong, #d4d4d8); border-radius: 6px; background: var(--surface, #fff); color: var(--text); font-size: 13px; }
+.tbl .table-action:hover { background: var(--surface-hover, #f4f4f5); }
+.tbl td:empty::after, .tbl th:empty::after { content: ""; }
+.tbl-summary { margin: 0; color: var(--muted, #646469); font-size: 13px; line-height: 1.5; }
+.tbl-summary strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.tbl-bar #services-summary { margin-left: auto; }
+
+/* Portfólio em tabela */
+.tbl .tbl-who .product-mark { flex: 0 0 auto; }
+.tbl .tbl-actions { text-align: right; white-space: nowrap; }
+.tbl .tbl-actions-row { display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tbl .quiet-action { border-color: transparent; background: transparent; color: var(--muted, #646469); }
+.tbl .tbl-actions .product-live-link { font-size: 13px; }
+.tbl-bar-end { display: flex; justify-content: flex-end; margin: 0 0 4px; }
+
+/* Retoques */
+.tbl-bar-end { margin: 0 0 -42px; position: relative; z-index: 1; }
+.tbl .tbl-actions-row { flex-wrap: nowrap; }
+.commercial-form.tbl-filter label { flex: 0 1 auto; }
+.commercial-form.tbl-filter label:first-child { width: min(100%, 340px); }
+.commercial-form.tbl-filter input[type=search] { min-width: 0; width: 100%; }
+.commercial-form.tbl-filter select { min-width: 0; width: 180px; }
+@media (max-width: 860px) { .tbl-bar-end { margin: 0 0 8px; } }
+
+/* Pessoas: contato com link, empresa no celular */
+.tbl .tbl-contact { color: var(--text); text-decoration: none; }
+.tbl .tbl-contact:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.tbl .tbl-contact-sub { color: var(--muted, #646469); font-size: 13px; }
+.tbl .tbl-only-narrow { display: none; }
+@media (max-width: 700px) {
+  .tbl .tbl-only-narrow { display: block; }
+  .tbl th.tbl-col-wide, .tbl td.tbl-col-wide { display: none; }
+}
+
+/* ==========================================================================
+   Ficha da empresa sem cartões: botões no alto, seções com divisória.
+   O nome e o tipo já estão no título e na descrição da página.
+   ========================================================================== */
+.client-back { margin: 0 0 14px; padding: 0; border: 0; background: transparent; color: var(--muted, #646469); font-size: 13px; }
+.client-back:hover { color: var(--text); background: transparent; }
+.client-detail-hero { margin-bottom: 4px; padding: 0; border: 0; border-radius: 0; background: transparent; justify-content: flex-end; }
+.client-detail-grid { gap: 40px 56px; margin-top: 28px; }
+.client-detail-panel { padding: 0; border: 0; border-radius: 0; background: transparent; }
+.client-detail-panel > h3, .photo-panel > h3 { padding-bottom: 12px; border-bottom: 1px solid var(--line, #e4e4e7); font-size: var(--fs-lg, 16px); }
+.client-detail-panel > .detail { margin: 10px 0 2px; }
+.detail-row { border-top: 0; border-bottom: 1px solid var(--line-soft, #efeff2); }
+.client-engagement { border-top: 0; border-bottom: 1px solid var(--line-soft, #efeff2); }
+@media (max-width: 900px) { .client-detail-grid { gap: 32px; } }
+
+/* Links da contratação alinhados (a ficha agora é o painel lateral: ver peek.css) */
+.client-engagement-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.client-engagement-links .table-action { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; margin-left: -8px; }
+.client-engagement-links .table-action svg { width: 16px; height: 16px; }
+.client-engagement > header strong { font-size: 14px; }
+
+/* Fotos são anexo: último bloco da ficha, largura total, caixa de soltar compacta */
+.client-detail-grid > .client-photos { order: 99; grid-column: 1 / -1; }
+.photo-zone { padding: 12px 14px; font-size: 13px; }
+
+/* Ficha da empresa dentro do painel lateral (peek.js): uma coluna por aba, sem o cabeçalho de página */
+.peek-side .client-detail-grid { display: block; margin: 0; }
+.peek-side .client-detail-panel + .client-detail-panel { margin-top: 32px; }
+.peek-side .client-detail-panel > h3, .peek-side .photo-panel > h3 { margin-top: 0; }
+.peek-side .client-detail-panel:first-child > h3 { padding-top: 12px; }
+.peek-side .client-detail-wide, .peek-side .client-photos { grid-column: auto; order: 0; }
+.peek-side .client-engagement-links { margin-top: 4px; }
+.peek-foot .edit-action.grande { height: 38px; min-height: 38px; }
+.peek-foot .primary { min-height: 38px; }

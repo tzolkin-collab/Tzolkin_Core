@@ -1,0 +1,81 @@
+/* Painel lateral das fichas (ver peek.js). */
+.peek-side {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 70;
+  width: min(560px, 100vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface, #fff);
+  border-left: 1px solid var(--line, #e4e4e7);
+  box-shadow: -16px 0 48px rgba(16, 16, 20, .10);
+  animation: peek-entra .18s ease-out;
+  outline: 0;
+}
+.peek-side[hidden] { display: none; }
+.peek-side.peek-wide { width: min(980px, 100vw); }
+.peek-scrim { position: fixed; inset: 0; z-index: 69; background: rgba(18, 19, 23, .28); animation: peek-escurece .18s ease-out; }
+
+.peek-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 24px 4px; }
+.peek-titles { min-width: 0; }
+.peek-head h2 { margin: 0; font-size: 20px; line-height: 1.3; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.peek-sub { margin-top: 4px; color: var(--muted, #646469); font-size: 14px; }
+.peek-head-actions { display: flex; gap: 2px; flex: none; margin: -4px -8px 0 0; }
+.peek-icon { width: 34px; height: 34px; min-height: 34px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--muted, #646469); }
+.peek-icon:hover { background: var(--surface-hover, #f4f4f5); color: var(--text); }
+.peek-icon:focus-visible { outline: 0; box-shadow: 0 0 0 3px var(--field-ring, rgba(64, 106, 135, .2)); }
+.peek-icon[aria-pressed="true"] { color: var(--text); background: var(--surface-hover, #f4f4f5); }
+
+.peek-tabs { padding: 0 24px; }
+.peek-tabs .tabs { margin: 12px 0 0; gap: 22px; }
+.peek-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 24px 28px; overscroll-behavior: contain; }
+.peek-panel[hidden] { display: none; }
+.peek-foot { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding: 12px 24px; border-top: 1px solid var(--line, #e4e4e7); background: var(--surface, #fff); }
+
+@keyframes peek-entra { from { transform: translateX(28px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes peek-escurece { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .peek-side, .peek-scrim { animation: none; } }
+@media (max-width: 700px) {
+  .peek-side, .peek-side.peek-wide { width: 100vw; border-left: 0; }
+  .peek-head, .peek-tabs, .peek-body, .peek-foot { padding-left: 16px; padding-right: 16px; }
+}
+/* Os dois botões do pé do painel na mesma altura */
+.peek-foot .edit-action.grande, .peek-foot .primary { height: 38px; min-height: 38px; padding-top: 0; padding-bottom: 0; }
+
+/* ==========================================================================
+   Pares rótulo/valor das fichas e edição no lugar (inline-edit.js)
+   ========================================================================== */
+.ficha-dl { display: grid; grid-template-columns: 160px minmax(0, 1fr); margin: 0; border-top: 1px solid var(--line, #e4e4e7); }
+.ficha-dl dt, .ficha-dl dd { margin: 0; padding: 10px 0; border-bottom: 1px solid var(--line-soft, #efeff2); font-size: 14px; line-height: 1.5; }
+.ficha-dl dt { padding-top: 12px; color: var(--muted, #646469); }
+.ficha-dl dd { min-width: 0; color: var(--text); overflow-wrap: anywhere; }
+.ficha-section-title { margin: 28px 0 0; padding-bottom: 12px; border-bottom: 1px solid var(--line, #e4e4e7); font-size: var(--fs-lg, 16px); }
+.ficha-section-title + .ficha-dl { border-top: 0; }
+
+.inline-field { position: relative; min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.inline-value {
+  display: block; flex: 1 1 auto; min-width: 0; width: auto; min-height: 0;
+  margin: -3px -8px; padding: 3px 8px; border: 1px solid transparent; border-radius: 6px;
+  background: transparent; color: inherit; font: inherit; text-align: left; cursor: text; overflow-wrap: anywhere; white-space: pre-line;
+}
+.inline-value:hover { border-color: var(--line-strong, #d4d4d8); background: var(--surface-subtle, #fafafa); }
+.inline-value:focus-visible { outline: 0; border-color: var(--focus-ring, #406a87); box-shadow: 0 0 0 3px var(--field-ring, rgba(64, 106, 135, .2)); }
+.inline-vazio { color: var(--faint, #6e6e76); }
+.inline-input { flex: 1 1 100%; width: 100%; min-height: 34px; margin: -4px 0; padding: 5px 10px; font-size: 14px; }
+select.inline-input { padding-right: 34px; }
+textarea.inline-input { margin: 0; min-height: 96px; resize: vertical; line-height: 1.5; }
+.inline-erro { flex: 1 1 100%; margin: 2px 0 0; color: var(--danger, #a44848); font-size: 13px; }
+.inline-ok { color: var(--success, #287264); font-size: 13px; font-weight: 500; animation: inline-some 1.6s ease forwards; }
+@keyframes inline-some { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+.inline-field[aria-busy="true"] .inline-input { opacity: .6; }
+@media (max-width: 700px) { .ficha-dl { grid-template-columns: 1fr; } .ficha-dl dt { padding-bottom: 0; border-bottom: 0; font-size: 13px; } .ficha-dl dd { padding-top: 2px; } }
+
+/* nomes que abrem uma ficha (pessoa), dentro de linhas de lista, e destaque de campo editável */
+.link-nome { display: inline; min-height: 0; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.link-nome:hover { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.link-nome:focus-visible { outline: 2px solid var(--focus-ring, #406a87); outline-offset: 2px; border-radius: 3px; }
+.inline-forte .inline-value { font-weight: 600; }
+.client-engagement > header { align-items: flex-start; }
+.client-engagement > header .inline-field { flex-wrap: nowrap; }

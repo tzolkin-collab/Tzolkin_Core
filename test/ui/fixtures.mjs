@@ -8,6 +8,8 @@ export const SENHA = 'senha-sintetica-de-teste-de-tela-123';
 export const EMPRESA = '11111111-1111-4111-8111-111111111111';
 export const PESSOA_FISICA = '22222222-2222-4222-8222-222222222222';
 export const ENCERRADA = '33333333-3333-4333-8333-333333333333';
+export const ANA = '2aaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
+export const BRUNO = '2bbbbbb2-bbbb-4bbb-8bbb-bbbbbbbbbbb2';
 
 const ago = '2026-09-01T12:00:00.000Z';
 const tenant = (id, name, organization_type, lifecycle_status) =>
@@ -30,8 +32,8 @@ export const DADOS = {
   { id: 'e2', label: 'Assessoria Gama', status: 'completed', revision: 1, tenant_id: ENCERRADA, created_at: ago, product_id: 'mentorias', source_ref: 'y', updated_at: ago, archived_at: null, service_model: 'advisory', source_system: 'fixture' },
  ],
  stakeholders: [
-  { id: 's1', name: 'Ana Contato', role: 'decision_maker', title: 'Diretora', tenant_id: EMPRESA, is_primary: true, contact_allowed: false, email: 'ana@exemplo.test', phone: '11999990000' },
-  { id: 's2', name: 'Bruno Aluno', role: 'student', title: 'Aluno', tenant_id: PESSOA_FISICA, is_primary: true, contact_allowed: false },
+  { id: ANA, name: 'Ana Contato', role: 'decision_maker', title: 'Diretora', tenant_id: EMPRESA, is_primary: true, contact_allowed: false, email: 'ana@exemplo.test', phone: '11999990000' },
+  { id: BRUNO, name: 'Bruno Aluno', role: 'student', title: 'Aluno', tenant_id: PESSOA_FISICA, is_primary: true, contact_allowed: false },
  ],
 };
 
@@ -75,10 +77,43 @@ export const PNG_1X1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ
 export function bancoFalso() {
  const fotos = [];
  const consultas = [];
+ // Escritas que as telas fizeram (para o teste conferir o que foi gravado) e o estado editável do lead
+ const escritas = [];
+ const lead = { version: 1, name: 'Lead de teste', email: 'lead@exemplo.test', whatsapp: null, message: 'Quero saber mais' };
  return {
-  fotos, consultas,
+  fotos, consultas, escritas, lead,
   async query(sql, params = []) {
    consultas.push(sql.replace(/\s+/g, ' ').slice(0, 90));
+   // Edições: empresa, pessoa e lead leem a linha (FOR UPDATE) e gravam; o estado muda de verdade, como no banco
+   if (/^SELECT id,name,status,relationship_kind,lifecycle_status,organization_type FROM tenants WHERE id=\$1 FOR UPDATE/.test(sql.replace(/\s+/g, ' ').trim())) {
+    const t = DADOS.tenants.find(x => x.id === params[0]);
+    return { rows: t ? [{ id: t.id, name: t.name, status: t.status, relationship_kind: t.relationship_kind, lifecycle_status: t.lifecycle_status, organization_type: t.organization_type }] : [] };
+   }
+   if (/^UPDATE tenants SET status=\$2,name=\$3/.test(sql.trim())) {
+    const t = DADOS.tenants.find(x => x.id === params[0]);
+    Object.assign(t, { status: params[1], name: params[2], relationship_kind: params[3], lifecycle_status: params[4], organization_type: params[5] });
+    escritas.push({ tipo: 'tenant', params }); return { rows: [], rowCount: 1 };
+   }
+   if (/FROM stakeholders s JOIN organization_stakeholders os ON os\.stakeholder_id = s\.id/.test(sql)) {
+    const p = DADOS.stakeholders.find(x => x.id === params[0] && x.tenant_id === params[1]);
+    return { rows: p ? [{ id: p.id, name: p.name, email: p.email ?? null, phone: p.phone ?? null, role: p.role, title: p.title ?? null, is_primary: p.is_primary, contact_allowed: p.contact_allowed }] : [] };
+   }
+   if (/SELECT 1 FROM stakeholders WHERE lower\(email\)/.test(sql)) return { rows: [], rowCount: 0 };
+   if (/^UPDATE stakeholders SET name=\$2, email=\$3, phone=\$4/.test(sql.trim())) {
+    const p = DADOS.stakeholders.find(x => x.id === params[0]); Object.assign(p, { name: params[1], email: params[2], phone: params[3] });
+    escritas.push({ tipo: 'pessoa', params }); return { rows: [], rowCount: 1 };
+   }
+   if (/^UPDATE organization_stakeholders SET role=\$3/.test(sql.trim())) {
+    const p = DADOS.stakeholders.find(x => x.id === params[1] && x.tenant_id === params[0]); Object.assign(p, { role: params[2], title: params[3], is_primary: params[4], contact_allowed: params[5] });
+    escritas.push({ tipo: 'vinculo', params }); return { rows: [], rowCount: 1 };
+   }
+   if (/^SELECT \* FROM commercial_leads WHERE id=\$1 FOR UPDATE/.test(sql.trim()))
+    return { rows: [{ ...LEAD_LINHA, version: lead.version, name: lead.name, email: lead.email, whatsapp: lead.whatsapp, message: lead.message, loss_reason: null, status: 'open' }] };
+   if (/^UPDATE commercial_leads SET status=\$2,owner_id=\$3,loss_reason=\$4,name=\$5/.test(sql.trim())) {
+    Object.assign(lead, { name: params[4], email: params[5], whatsapp: params[6], message: params[7], version: lead.version + 1 });
+    escritas.push({ tipo: 'lead', params }); return { rows: [], rowCount: 1 };
+   }
+   if (/INSERT INTO commercial_activities/.test(sql)) { escritas.push({ tipo: 'atividade', params }); return { rows: [], rowCount: 1 }; }
    // /api/bootstrap: uma linha, uma coluna por coleção
    if (/AS resource_bindings/.test(sql) && /jsonb_agg/.test(sql))
     return { rows: [{ tenants: DADOS.tenants, products: DADOS.products, memberships: [], entitlements: [], engagements: DADOS.engagements, stakeholders: DADOS.stakeholders, entries: [], resource_bindings: [] }] };
@@ -86,7 +121,7 @@ export function bancoFalso() {
    if (sql === 'SELECT * FROM tenants ORDER BY created_at DESC') return { rows: DADOS.tenants };
    // Inbound: lista e detalhe de lead, oportunidades da etapa e motivos de perda
    if (/FROM commercial_leads l JOIN tenants t ON t.id=l.tenant_id LEFT JOIN operator_accounts a ON a.id=l.owner_id LEFT JOIN pipeline_stages st/.test(sql)) return { rows: [LEAD_LINHA] };
-   if (/SELECT l\.\*,t\.name AS organization_name/.test(sql)) return { rows: [{ ...LEAD_LINHA, version: 1, service_model: 'education', message: 'Quero saber mais', source_ref: 'ref-1', privacy: {}, tenant_id: EMPRESA, estimated_value_minor: null, expected_close_at: null, loss_reason: null, custom_data: { porte: 'Micro', antigo: 'valor guardado' } }] };
+   if (/SELECT l\.\*,t\.name AS organization_name/.test(sql)) return { rows: [{ ...LEAD_LINHA, version: lead.version, name: lead.name, email: lead.email, whatsapp: lead.whatsapp, service_model: 'education', message: lead.message, source_ref: 'ref-1', privacy: {}, tenant_id: EMPRESA, estimated_value_minor: null, expected_close_at: null, loss_reason: null, custom_data: { porte: 'Micro', antigo: 'valor guardado' } }] };
    if (/FROM commercial_opportunities o JOIN pipeline_stages s ON s\.id=o\.stage_id LEFT JOIN client_engagements/.test(sql)) return { rows: [] };
    if (/FROM commercial_opportunities o\s+JOIN pipeline_stages s ON s\.id=o\.stage_id JOIN tenants t/.test(sql)) return { rows: params[1] === ETAPA(2) ? [OPORTUNIDADE] : [] };
    if (/SELECT id,name,kind,position FROM pipeline_stages WHERE pipeline_id=\$1 ORDER BY position/.test(sql))

@@ -37,7 +37,7 @@
   border: 1px solid var(--line);
   overflow: hidden;
   min-width: 0;
-  border-color: #eaeaea;
+  border-color: var(--line, #e4e4e7);
   border-radius: 12px;
   box-shadow: none;
 }
@@ -188,7 +188,7 @@
   gap: 14px;
   overflow-wrap: anywhere;
   min-width: 0;
-  border-color: #eaeaea;
+  border-color: var(--line, #e4e4e7);
   border-radius: 12px;
   box-shadow: none;
 }
@@ -228,7 +228,7 @@
 
 .delivery-component .detail {
   font-size: 13px;
-  color: #626269;
+  color: var(--muted, #646469);
 }
 
 .delivery-comparison {
@@ -315,7 +315,7 @@
   border-radius: 6px;
   font-size: 12px;
   background: #fafafa;
-  color: #565656;
+  color: var(--muted, #646469);
 }
 
 .delivery-provider .delivery-icon {
@@ -333,7 +333,7 @@
   border: 1px solid var(--line);
   margin-bottom: 32px;
   min-width: 0;
-  border-color: #eaeaea;
+  border-color: var(--line, #e4e4e7);
   border-radius: 12px;
   box-shadow: none;
 }
@@ -366,7 +366,7 @@
   flex-shrink: 0;
   border-radius: 6px;
   background: #fafafa;
-  color: #565656;
+  color: var(--muted, #646469);
 }
 
 .delivery-repo-body {
@@ -383,7 +383,7 @@
 
 .delivery-repo-body .detail {
   font-size: 13px;
-  color: #626269;
+  color: var(--muted, #646469);
 }
 
 .delivery-repo-row .primary {
@@ -402,7 +402,7 @@
   flex-wrap: wrap;
   background: var(--brand-soft);
   color: var(--brand);
-  border: 1px solid #e7e7e7;
+  border: 1px solid var(--line, #e4e4e7);
   border-radius: 10px;
   padding: 15px;
   overflow-wrap: anywhere;
@@ -451,7 +451,7 @@
 }
 
 .delivery-dialog input:not([type=checkbox]) {
-  border: 1px solid #e2e2e2;
+  border: 1px solid var(--line, #e4e4e7);
   transition: border-color .15s,box-shadow .15s;
   font-size: 14px;
   border-color: #d6d6d6;
@@ -463,7 +463,7 @@
 }
 
 .delivery-dialog select {
-  border: 1px solid #e2e2e2;
+  border: 1px solid var(--line, #e4e4e7);
   transition: border-color .15s,box-shadow .15s;
   font-size: 14px;
   border-color: #d6d6d6;
@@ -475,7 +475,7 @@
 }
 
 .delivery-search input {
-  border: 1px solid #e2e2e2;
+  border: 1px solid var(--line, #e4e4e7);
   transition: border-color .15s,box-shadow .15s;
   font-size: 14px;
   border-color: #d6d6d6;
@@ -559,7 +559,7 @@
 .delivery-config-summary {
   line-height: 1.6;
   font-size: 13px;
-  color: #626269;
+  color: var(--muted, #646469);
 }
 
 .delivery-kind-picker {
@@ -628,7 +628,7 @@
   display: grid;
   gap: 10px;
   margin-top: 14px;
-  border-color: #eaeaea;
+  border-color: var(--line, #e4e4e7);
   border-radius: 12px;
   box-shadow: none;
 }
@@ -687,7 +687,7 @@
 }
 
 .delivery-target-chip {
-  font-size: 11px;
+  font-size: 12px;
   border: 1px solid var(--line);
   padding: 6px 9px;
   border-radius: 6px;
@@ -707,7 +707,7 @@
 }
 
 .delivery-dialog .delivery-heading .quiet {
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .delivery-dialog .delivery-issues {
@@ -717,7 +717,7 @@
 .delivery-review-card .detail {
   overflow-wrap: anywhere;
   font-size: 13px;
-  color: #626269;
+  color: var(--muted, #646469);
 }
 
 .resource-panel {
@@ -725,7 +725,7 @@
   background: var(--surface);
   border: 1px solid var(--line);
   padding: 24px;
-  border-color: #eaeaea;
+  border-color: var(--line, #e4e4e7);
   border-radius: 12px;
   box-shadow: none;
 }
@@ -870,13 +870,13 @@
   align-items: center;
   gap: 9px;
   font-size: 13px;
-  color: #565656;
+  color: var(--muted, #646469);
 }
 
 .deploy-summary .delivery-icon {
   width: 17px;
   height: 17px;
-  color: #626269;
+  color: var(--muted, #646469);
 }
 
 .deploy-summary strong {
@@ -924,7 +924,7 @@
 }
 
 #deploys-list .deploy-card {
-  border-color: #eaeaea;
+  border-color: var(--line, #e4e4e7);
   border-radius: 12px;
   box-shadow: none;
 }
@@ -986,7 +986,7 @@
   padding: 3px 6px;
   border-radius: 5px;
   background: #f0f0f0;
-  color: #585858;
+  color: var(--muted, #646469);
   font-size: 12px;
 }
 
@@ -1097,7 +1097,7 @@
 .resource-fact dt {
   margin-bottom: 8px;
   font-size: 13px;
-  color: #626269;
+  color: var(--muted, #646469);
 }
 
 .resource-fact dd {
@@ -1139,7 +1139,7 @@
   box-shadow: none;
   border-radius: 0;
   background: transparent;
-  color: #626269;
+  color: var(--muted, #646469);
   padding: 12px 14px;
   min-height: 46px;
   font-size: 13px;
@@ -1212,7 +1212,7 @@
 }
 
 .infra-service-row+.infra-service-row {
-  border-top: 1px solid #f1f1f1;
+  border-top: 1px solid var(--line-soft, #efeff2);
 }
 
 #easypanel-inventory .deploy-card>.card-tags {
@@ -1325,7 +1325,7 @@
   }
 
   .delivery-step-button {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .delivery-step-button .delivery-icon {
@@ -1434,7 +1434,7 @@
   }
 
   .deploy-summary article>span {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .deploy-summary strong {
@@ -1456,7 +1456,7 @@
 
   .deploy-project-actions .secondary {
     padding: 8px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .deploy-latest {
@@ -1622,7 +1622,7 @@
   gap: 10px;
   background: var(--brand-soft);
   color: var(--brand);
-  border: 1px solid #e7e7e7;
+  border: 1px solid var(--line, #e4e4e7);
   border-radius: 10px;
   padding: 14px 15px;
   font-size: 13px;

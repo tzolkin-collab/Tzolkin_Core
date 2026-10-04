@@ -1,4 +1,4 @@
-import {openDatabase,transportWarning,scrubSecrets} from './platform/database.mjs';
+import {openDatabase,transportWarning,scrubSecrets,manterPoolQuente} from './platform/database.mjs';
 import {createGoogleIdentity} from './platform/google-identity.mjs';
 import {createAccountGate} from './modules/accounts.mjs';
 import {createCore} from './app.mjs';
@@ -18,7 +18,7 @@ const pausa=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const causa=error=>scrubSecrets(error?.diagnosis??`[${error?.code??'sem código'}] ${error?.message??'erro sem mensagem'}`,process.env.DATABASE_URL);
 const abrirBanco=async()=>{
  for(let tentativa=1;;tentativa++){
-  try{return await openDatabase({connectionString:process.env.DATABASE_URL,mode:'require',max:5,connectionTimeoutMillis:8000});}
+  try{return await openDatabase({connectionString:process.env.DATABASE_URL,mode:'require',max:5,connectionTimeoutMillis:8000,idleTimeoutMillis:300_000});}
   catch(error){
    console.error(`[boot] tentativa ${tentativa}/${TENTATIVAS} de abrir o banco falhou: ${causa(error)}`);
    if(tentativa>=TENTATIVAS)throw error;
@@ -35,6 +35,7 @@ catch(error){
  process.exit(1);
 }
 const warning=transportWarning(security);if(warning){console.error(`[boot] ${warning}`);console.error('[boot] TLS verificado é obrigatório em produção.');process.exit(1);}
+await manterPoolQuente(pool);
 const identity=createGoogleIdentity({pool,clientId:process.env.GOOGLE_CLIENT_ID,clientSecret:process.env.GOOGLE_CLIENT_SECRET,publicOrigin:origin.href,allowedEmails:process.env.CORE_ALLOWED_EMAILS,isAllowed:createAccountGate(pool)});
 const server=createCore({pool,identity,security,webOrigin:origin.origin,serveAsset});
 // A porta vai para o log: é a única forma de o operador ver, no painel, que a

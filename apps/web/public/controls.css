@@ -1,0 +1,158 @@
+/* Campos de formulário: um padrão só para busca, filtro, seletor e texto.
+   Carregado por ÚLTIMO (index.html), para valer sobre as regras de cada tela.
+
+   O que muda em relação ao padrão do navegador:
+   - seletor com seta desenhada (a nativa muda de um sistema para outro e some no modo escuro);
+   - busca com lupa em SVG e botão de limpar, no lugar do glifo de texto "⌕";
+   - foco em anel claro (2 camadas: borda + halo), visível no teclado e no mouse;
+   - hover, desativado e somente leitura com aparência própria;
+   - altura de 36px nas barras de lista (busca, filtro, período), 40px nos formulários e diálogos. */
+
+:root {
+  --field-ring: rgba(64, 106, 135, .2);
+  --field-hover: #b6b6be;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 4.5 6 8l3.5-3.5' fill='none' stroke='%23646469' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --lupa: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='7' cy='7' r='4.6' fill='none' stroke='%236e6e76' stroke-width='1.5'/%3E%3Cpath d='m10.6 10.6 3.4 3.4' stroke='%236e6e76' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  --limpar: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'%3E%3Ccircle cx='7' cy='7' r='6.2' fill='%23d4d4d8'/%3E%3Cpath d='m4.8 4.8 4.4 4.4m0-4.4-4.4 4.4' stroke='%23fff' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]):not([type=hidden]),
+select,
+textarea {
+  font: inherit;
+  font-size: var(--fs-base, 14px);
+  line-height: 1.4;
+  color: var(--text);
+  border: 1px solid var(--line-strong, #d4d4d8);
+  border-radius: 8px;
+  background-color: var(--surface, #fff);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .02);
+  transition: border-color .12s ease, box-shadow .12s ease, background-color .12s ease;
+}
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]):not([type=hidden]):hover,
+select:hover,
+textarea:hover {
+  border-color: var(--field-hover);
+}
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]):not([type=hidden]):focus,
+select:focus,
+textarea:focus {
+  outline: 0;
+  border-color: var(--focus-ring, #406a87);
+  box-shadow: 0 0 0 3px var(--field-ring);
+}
+input:disabled, select:disabled, textarea:disabled {
+  background-color: var(--surface-subtle, #fafafa);
+  color: var(--faint, #6e6e76);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+input:read-only:not([type=checkbox]):not([type=radio]):not(:disabled) { background-color: var(--surface-subtle, #fafafa); }
+::placeholder { color: var(--faint, #6e6e76); opacity: 1; }
+
+/* Seletor: seta própria */
+/* :not(...) só soma especificidade: várias telas definem 'background:' em atalho e apagavam a seta */
+select:not([multiple]):not([size]) {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 36px;
+  background-image: var(--chevron);
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+select:disabled { cursor: not-allowed; }
+select[multiple] { background-image: none; padding-right: 12px; }
+
+/* Busca: lupa em SVG à esquerda e "limpar" à direita */
+input[type=search]:not([hidden]):not([disabled-x]) {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-left: 38px;
+  background-image: var(--lupa);
+  background-repeat: no-repeat;
+  background-position: 13px center;
+  background-size: 16px;
+}
+input[type=search]::-webkit-search-decoration { -webkit-appearance: none; }
+input[type=search]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-right: -2px;
+  background: var(--limpar) center / 14px no-repeat;
+  cursor: pointer;
+}
+/* O glifo de texto antigo da busca sai: quem desenha a lupa agora é o próprio campo. */
+.search-label::before { display: none; }
+.search-label input { padding-left: 38px; }
+.search-label select { padding-left: 12px; }
+
+/* Barras de lista: campo e botão com a mesma altura (36px), para alinhar na mesma linha */
+.tbl-bar input:not([type=checkbox]):not([type=radio]), .tbl-bar select,
+.tbl-filter input:not([type=checkbox]):not([type=radio]), .tbl-filter select,
+.section-toolbar input:not([type=checkbox]):not([type=radio]), .section-toolbar select,
+.fin-top input:not([type=checkbox]):not([type=radio]), .fin-top select,
+.connections-tools input:not([type=checkbox]):not([type=radio]) {
+  height: 36px;
+  min-height: 36px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.tbl-bar button, .tbl-filter button, .section-toolbar > button, .connections-tools button, .fin-top .fin-button {
+  min-height: 36px;
+  border-radius: 8px;
+}
+.tbl-filter { align-items: flex-end; }
+.tbl-filter button, .tbl-bar button { height: 36px; padding-top: 0; padding-bottom: 0; }
+.tbl-filter label { gap: 6px; }
+
+/* Datas e meses: mantêm o seletor nativo do navegador, no mesmo corpo dos outros campos */
+input[type=date], input[type=month], input[type=time], input[type=datetime-local] { padding-right: 10px; }
+
+/* Texto de ajuda e erro sob o campo */
+label small, .field-hint { display: block; margin-top: 4px; font-size: 13px; color: var(--muted, #646469); }
+input:user-invalid, select:user-invalid, textarea:user-invalid { border-color: var(--danger, #a44848); }
+input:user-invalid:focus, select:user-invalid:focus, textarea:user-invalid:focus { box-shadow: 0 0 0 3px rgba(164, 72, 72, .18); }
+
+.funnel-bar { margin-bottom: 16px; }
+
+/* ==========================================================================
+   Botão de editar: um só em todo o painel (ver botaoEditar em data-table.js).
+   ========================================================================== */
+.edit-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong, #d4d4d8);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color .12s ease, border-color .12s ease, box-shadow .12s ease, transform .06s ease;
+}
+.edit-action svg { width: 14px; height: 14px; flex: none; color: var(--muted, #646469); transition: color .12s ease; }
+.edit-action:hover { border-color: var(--field-hover, #b6b6be); background: var(--surface-hover, #f4f4f5); }
+.edit-action:hover svg { color: var(--text); }
+.edit-action:active { transform: translateY(.5px); }
+.edit-action:focus-visible { outline: 0; border-color: var(--focus-ring, #406a87); box-shadow: 0 0 0 3px var(--field-ring, rgba(64, 106, 135, .2)); }
+.edit-action:disabled { opacity: .5; cursor: not-allowed; }
+/* No cabeçalho de uma ficha: mesma altura do botão principal ao lado */
+.edit-action.grande { height: 40px; min-height: 40px; padding: 0 14px; font-size: 14px; }
+.edit-action.grande svg { width: 15px; height: 15px; }
+/* Ações de linha de tabela (Campanhas, Cobrança...) na mesma altura do editar */
+.tbl .table-action { height: 32px; min-height: 32px; display: inline-flex; align-items: center; padding-block: 0; }
+.tbl .tbl-actions-row, .detail-row, .product-record-actions { align-items: center; }
+/* Toque: alvo maior */
+@media (pointer: coarse) { .edit-action { height: 40px; min-height: 40px; } }

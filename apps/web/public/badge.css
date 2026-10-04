@@ -1,0 +1,91 @@
+/* Selos (badges) e contagens: um sistema só. Carregado por último (index.html), vale sobre as regras antigas.
+
+   COR É ESTADO, NÃO CLASSIFICAÇÃO. "Cliente", "Empresa", "Mentoria" são neutros; Ativo, Em implantação, Pausado,
+   Pendente, Erro têm tom. Quem decide o tom de cada estado é uma regra só (tomDoEstado, em data-table.js), não
+   cada tela com o seu verde.
+
+   Tons: neutral | success | warning | danger | info | accent. Os nomes antigos seguem valendo como apelido
+   (active = success, building = warning, failed e danger = danger), para nada quebrar.
+
+   Contraste: texto sobre o fundo do selo >= 4,5:1 (AA para texto pequeno) e o pontinho >= 3:1. Um teste
+   (test/unit/badges.test.mjs) lê estes valores e falha se alguém mexer na paleta e quebrar isso. */
+
+:root {
+  --badge-neutral-bg: #f1f1f3; --badge-neutral-fg: #4b4b53; --badge-neutral-dot: #8a8a92;
+  --badge-success-bg: #e6f4ea; --badge-success-fg: #1b6a37; --badge-success-dot: #2f9d58;
+  --badge-warning-bg: #fcf0d6; --badge-warning-fg: #855400; --badge-warning-dot: #b36f00;
+  --badge-danger-bg:  #fce9ec; --badge-danger-fg:  #a11a31; --badge-danger-dot:  #d1364f;
+  --badge-info-bg:    #e7effb; --badge-info-fg:    #1d4d96; --badge-info-dot:    #3a79d8;
+  --badge-accent-bg:  #eeeafc; --badge-accent-fg:  #4e33ad; --badge-accent-dot:  #7656e8;
+}
+
+.status, .badge {
+  --b-bg: var(--badge-neutral-bg); --b-fg: var(--badge-neutral-fg); --b-dot: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--b-bg);
+  color: var(--b-fg);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -.003em;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+/* Pontinho: só nos tons com significado (o neutro não afirma nada). */
+.status::before, .badge::before {
+  content: "";
+  display: none;
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--b-dot);
+}
+:is(.status, .badge):is(.success, .active, .warning, .building, .danger, .failed, .info, .accent)::before { display: block; }
+
+:is(.status, .badge):is(.success, .active)  { --b-bg: var(--badge-success-bg); --b-fg: var(--badge-success-fg); --b-dot: var(--badge-success-dot); }
+:is(.status, .badge):is(.warning, .building) { --b-bg: var(--badge-warning-bg); --b-fg: var(--badge-warning-fg); --b-dot: var(--badge-warning-dot); }
+:is(.status, .badge):is(.danger, .failed)   { --b-bg: var(--badge-danger-bg);  --b-fg: var(--badge-danger-fg);  --b-dot: var(--badge-danger-dot); }
+:is(.status, .badge).info                   { --b-bg: var(--badge-info-bg);    --b-fg: var(--badge-info-fg);    --b-dot: var(--badge-info-dot); }
+:is(.status, .badge).accent                 { --b-bg: var(--badge-accent-bg);  --b-fg: var(--badge-accent-fg);  --b-dot: var(--badge-accent-dot); }
+:is(.status, .badge).neutral                { --b-bg: var(--badge-neutral-bg); --b-fg: var(--badge-neutral-fg); --b-dot: transparent; }
+
+/* Etiqueta livre (tags digitadas, tipos do EasyPanel...): neutra, com fio, sem pontinho. Diferente de estado. */
+.card-tags .status { background: var(--surface, #fff); border: 1px solid var(--line, #e4e4e7); color: var(--muted, #646469); font-weight: 500; }
+.card-tags .status::before { display: none; }
+
+/* Contagem nas abas e nos filtros: a mesma escala dos selos */
+.tab-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--badge-neutral-bg);
+  color: var(--badge-neutral-fg);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.tab.active .tab-count { background: var(--brand, #29292c); color: #fff; }
+
+/* Selos de preparo de conexões ("Pronto", "Parcial") na mesma paleta */
+.check-pill { height: 22px; padding: 0 9px; border-radius: 6px; font-size: 12px; font-weight: 500; line-height: 1; }
+.check-pill.ready { background: var(--badge-success-bg); color: var(--badge-success-fg); }
+.check-pill.partial { background: var(--badge-warning-bg); color: var(--badge-warning-fg); }
+
+/* Chip de tag com botão de remover: mesmo raio e altura de selo, tamanho de leitura (13px) por ser conteúdo do usuário */
+.tag-chip { height: 26px; padding: 0 4px 0 9px; border-radius: 6px; background: var(--badge-neutral-bg); color: var(--badge-neutral-fg); font-size: 13px; font-weight: 500; }
+.client-chip { border-radius: 6px; background: var(--badge-neutral-bg); color: var(--badge-neutral-fg); font-weight: 500; }
+
+/* Selo dentro de linha de tabela e de lista alinha no centro da linha */
+.tbl td .status, .tbl td .badge, .detail-row .status { vertical-align: middle; }

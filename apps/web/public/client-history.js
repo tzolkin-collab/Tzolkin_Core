@@ -5,6 +5,7 @@ export const TIPOS = {
  'tenant.updated': 'Empresa alterada',
  'tenant.status_changed': 'Situação da empresa alterada',
  'stakeholder.created': 'Pessoa cadastrada',
+ 'stakeholder.updated': 'Pessoa alterada',
  'engagement.created': 'Contratação criada',
  'engagement.updated': 'Contratação alterada',
  'engagement.archived': 'Contratação arquivada',
@@ -25,11 +26,13 @@ export const TIPOS = {
  'activity:engagement_changed': 'Atividade: contratação alterada',
 };
 
-const CAMPOS = { name: 'Nome', relationship_kind: 'Relacionamento', lifecycle_status: 'Ciclo de vida', organization_type: 'Tipo', status: 'Situação' };
+const CAMPOS = { name: 'Nome', relationship_kind: 'Relacionamento', lifecycle_status: 'Ciclo de vida', organization_type: 'Tipo', status: 'Situação', email: 'E-mail', phone: 'Telefone', role: 'Papel', title: 'Cargo', is_primary: 'Contato principal', contact_allowed: 'Pode ser contatada' };
 const VALORES = {
  customer: 'Cliente', prospect: 'Prospect', partner: 'Parceiro', internal: 'Interna',
  lead: 'Lead', onboarding: 'Em implantação', active: 'Ativo', paused: 'Pausado', completed: 'Concluído', discontinued: 'Descontinuado', unclassified: 'Não classificado', suspended: 'Suspensa',
  company: 'Empresa', person: 'Pessoa física', nonprofit: 'Sem fins lucrativos',
+ owner: 'Proprietário', decision_maker: 'Decisor', champion: 'Champion', finance: 'Financeiro', technical: 'Técnico', operational: 'Operacional', student: 'Aluno', contact: 'Contato',
+ true: 'Sim', false: 'Não',
 };
 const valor = v => (v == null || v === '' ? '—' : VALORES[v] || String(v));
 

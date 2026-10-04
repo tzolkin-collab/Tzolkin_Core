@@ -105,7 +105,7 @@
 .fin .fin-button-sm {
   min-height: 30px;
   padding: 4px 9px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .fin .fin-apply {
   border-color: var(--text);
@@ -298,7 +298,7 @@
 }
 .fin-eyebrow {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: .6px;
 }
@@ -309,7 +309,7 @@
   border-radius: 5px;
   color: var(--muted);
   background: var(--surface);
-  font-size: 11px;
+  font-size: 12px;
 }
 .fin-sales-metrics {
   display: grid;
@@ -374,7 +374,7 @@
 }
 .fin-processor-state {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   text-align: right;
 }
 .fin-processor {
@@ -431,7 +431,7 @@
   border-radius: 5px;
   color: var(--muted);
   background: var(--surface-muted, #f7f7f8);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -563,7 +563,7 @@
 .fin-axis {
   fill: var(--muted);
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px;
 }
 .fin-gridline {
   stroke: var(--line);
@@ -1165,4 +1165,28 @@
   .fin * {
     transition: none;
   }
+}
+
+/* ==========================================================================
+   Faixas de números sem moldura (mesmo padrão da Visão geral): dois fios e divisórias verticais.
+   ========================================================================== */
+.fin-sales-metrics { gap: 0; overflow: visible; border: 0; border-block: 1px solid var(--line, #e4e4e7); border-radius: 0; background: transparent; }
+.fin-sales-metric { padding: 18px 24px 18px 0; background: transparent; }
+.fin-sales-metric + .fin-sales-metric { padding-left: 24px; border-left: 1px solid var(--line, #e4e4e7); }
+
+.fin-projection-grid { gap: 0; border-block: 1px solid var(--line, #e4e4e7); }
+.fin-projection-card { padding: 16px 24px 16px 0; border: 0; border-radius: 0; background: transparent; }
+.fin-projection-card + .fin-projection-card { padding-left: 24px; border-left: 1px solid var(--line, #e4e4e7); }
+.fin-projection-card span, .fin-projection-card small { font-size: 13px; }
+
+/* o gráfico acumulado: a área entre a curva e o zero fica mais leve para a linha ser o que se lê */
+.fin-area { fill-opacity: .55; }
+
+/* extrato: o apoio da descrição (tipo · estabelecimento) legível */
+.fin-description small { font-size: 13px; color: var(--muted, #646469); }
+
+@media (max-width: 760px) {
+  .fin-sales-metrics, .fin-projection-grid { grid-template-columns: 1fr; }
+  .fin-sales-metric, .fin-projection-card { padding: 14px 0; }
+  .fin-sales-metric + .fin-sales-metric, .fin-projection-card + .fin-projection-card { padding-left: 0; border-left: 0; border-top: 1px solid var(--line, #e4e4e7); }
 }

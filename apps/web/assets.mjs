@@ -1,5 +1,7 @@
 // Arquivos estáticos do painel. Lista fixa: nada de resolução de caminho vinda da URL.
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { brotliCompressSync, gzipSync, constants as zlib } from 'node:zlib';
 import { BANK_LOGOS, BANK_LOGO_FILES } from './public/finance-model.js';
 
 // Deriva as entradas das marcas de uma constante do código — continua lista
@@ -37,6 +39,14 @@ const FILES = {
  '/icon-512.png': ['icon-512.png', 'image/png'],
  '/apple-touch-icon.png': ['apple-touch-icon.png', 'image/png'],
  '/app.js': ['app.js', 'text/javascript'],
+ '/data-table.js': ['data-table.js', 'text/javascript'],
+ '/controls.css': ['controls.css', 'text/css'],
+ '/peek.js': ['peek.js', 'text/javascript'],
+ '/inline-edit.js': ['inline-edit.js', 'text/javascript'],
+ '/peek.css': ['peek.css', 'text/css'],
+ '/badge.css': ['badge.css', 'text/css'],
+ // Inter (variável, só o subconjunto latino: cobre o português). Licença SIL OFL 1.1 em fonts/INTER-LICENSE.txt.
+ '/fonts/inter-latin-wght-normal.woff2': ['fonts/inter-latin-wght-normal.woff2', 'font/woff2'],
  '/management-workspace.js': ['management-workspace.js', 'text/javascript'],
  '/database-model.js': ['database-model.js', 'text/javascript'],
  '/database-workspace.css': ['database-workspace.css', 'text/css'],
@@ -92,12 +102,50 @@ const FILES = {
  '/checkout-editor.css': ['checkout-editor.css', 'text/css'],
 };
 
-export function serveAsset(pathname, res) {
+// Texto comprime bem (JS e CSS perdem ~75%); imagem e fonte já vêm comprimidas.
+const COMPRIMIVEL = /^(text\/|application\/(javascript|json|manifest\+json)|image\/svg)/;
+const memoria = new Map();
+
+// Cache em memória invalidado pela data e pelo tamanho do arquivo: ler do disco a cada pedido (como era)
+// mantém o fluxo de desenvolvimento ("editar o arquivo e recarregar"), e o cache evita refazer a
+// compressão. O ETag sai do conteúdo, então o navegador revalida com 304 em vez de rebaixar tudo.
+function carregar(file, type) {
+ const url = new URL(`./public/${file}`, import.meta.url);
+ const { mtimeMs, size } = statSync(url);
+ const guardado = memoria.get(file);
+ if (guardado && guardado.mtimeMs === mtimeMs && guardado.size === size) return guardado;
+ const corpo = readFileSync(url);
+ const item = { mtimeMs, size, corpo, br: null, gz: null, etag: `"${createHash('sha1').update(corpo).digest('base64url').slice(0, 22)}"` };
+ if (COMPRIMIVEL.test(type) && corpo.length > 1024) {
+  const br = brotliCompressSync(corpo, { params: { [zlib.BROTLI_PARAM_QUALITY]: 5 } });
+  const gz = gzipSync(corpo, { level: 9 });
+  if (br.length < corpo.length) item.br = br;
+  if (gz.length < corpo.length) item.gz = gz;
+ }
+ memoria.set(file, item);
+ return item;
+}
+
+export function serveAsset(pathname, res, req) {
  const entry = FILES[pathname];
  if (!entry) return false;
  const [file, type] = entry;
- const cacheControl = pathname === '/favicon.svg' || pathname === '/favicon.ico' || pathname.startsWith('/product-favicons/') ? 'no-store' : 'no-cache';
- res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8`, 'Cache-Control': cacheControl });
- res.end(readFileSync(new URL(`./public/${file}`, import.meta.url)));
+ // Fonte e marca não mudam de nome nem de conteúdo sem mudar de versão: uma semana no navegador.
+ const duravel = pathname.startsWith('/fonts/') || pathname.startsWith('/logos/');
+ const cacheControl = pathname === '/favicon.svg' || pathname === '/favicon.ico' || pathname.startsWith('/product-favicons/') ? 'no-store' : duravel ? 'public, max-age=604800' : 'no-cache';
+ const item = carregar(file, type);
+ const cabecalhos = { 'Content-Type': `${type}; charset=utf-8`, 'Cache-Control': cacheControl, ETag: item.etag, Vary: 'Accept-Encoding' };
+ if (cacheControl !== 'no-store' && req?.headers?.['if-none-match'] === item.etag) {
+  res.writeHead(304, { 'Cache-Control': cacheControl, ETag: item.etag, Vary: 'Accept-Encoding' });
+  res.end();
+  return true;
+ }
+ const aceita = String(req?.headers?.['accept-encoding'] || '');
+ let corpo = item.corpo;
+ if (item.br && /\bbr\b/.test(aceita)) { cabecalhos['Content-Encoding'] = 'br'; corpo = item.br; }
+ else if (item.gz && /\bgzip\b/.test(aceita)) { cabecalhos['Content-Encoding'] = 'gzip'; corpo = item.gz; }
+ cabecalhos['Content-Length'] = corpo.length;
+ res.writeHead(200, cabecalhos);
+ res.end(corpo);
  return true;
 }
