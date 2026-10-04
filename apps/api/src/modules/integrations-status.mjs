@@ -1,3 +1,4 @@
+import { vivo } from '../platform/env-vivo.mjs';
 // Configurações → Integrações: quais serviços externos o Core usa e se estão ligados.
 //
 // SÓ ESTADO. Devolve o NOME das variáveis de ambiente que existem e que faltam, nunca o valor, e nunca chave, token ou segredo
@@ -42,7 +43,7 @@ export function estadoDasIntegracoes(env = process.env) {
  return INTEGRACOES.map(def => estadoDe(def, env));
 }
 
-export function integrationsStatusRoutes(router, { env = process.env } = {}) {
+export function integrationsStatusRoutes(router, { env = vivo.env } = {}) {
  router.get('/api/integrations/status', async ({ pool, reply }) => {
   const itens = estadoDasIntegracoes(env);
   // Meta: além do aplicativo (variáveis), há a CONTA conectada (credencial no banco, cifrada). Só se diz se existe e se venceu.

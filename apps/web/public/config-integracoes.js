@@ -31,7 +31,7 @@ function contaMeta(i) {
  return 'Conta conectada.';
 }
 
-function cartao(i, abrirTela) {
+function cartao(i, abrirTela, cred, aoMudar) {
  const c = no('div', undefined, 'cfg-linha cfg-integracao');
  c.dataset.integracao = i.id; c.dataset.estado = i.estado;
  const t = no('div', undefined, 'cfg-linha-texto');
@@ -46,7 +46,90 @@ function cartao(i, abrirTela) {
   b.onclick = () => abrirTela(i.tela);
   c.append(b);
  }
+ if (cred) {
+  const b = no('button', 'Configurar', 'secondary'); b.type = 'button'; b.dataset.acao = 'configurar';
+  b.setAttribute('aria-label', `Configurar ${i.nome}`); b.setAttribute('aria-expanded', 'false');
+  let aberto = null;
+  b.onclick = () => {
+   if (aberto) { aberto.remove(); aberto = null; b.setAttribute('aria-expanded', 'false'); return; }
+   aberto = formularioDeCredenciais(cred, aoMudar);
+   c.append(aberto); b.setAttribute('aria-expanded', 'true');
+   aberto.querySelector('input')?.focus();
+  };
+  c.append(b);
+ }
  return c;
+}
+
+const DATA = iso => { try { return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }); } catch { return ''; } };
+
+/**
+ * Formulário de credenciais de um provedor. O valor de segredo NUNCA é preenchido de volta (o servidor nem o envia): campo vazio = não mudar.
+ * Salvar testa no provedor antes de gravar; se o provedor recusar, nada muda. Campo definido pela tela pode ser removido (volta a valer o .env).
+ */
+function formularioDeCredenciais(cred, aoMudar) {
+ const f = no('form', undefined, 'cfg-cred-form'); f.noValidate = true;
+ const entradas = new Map();
+ for (const c of cred.provedor.campos) {
+  const l = no('label', undefined, 'cfg-cred-campo');
+  l.append(no('span', c.rotulo + (c.obrigatorio ? '' : '')));
+  const inp = document.createElement('input');
+  inp.name = c.nome; inp.autocomplete = 'off'; inp.spellcheck = false;
+  inp.type = c.secreto ? 'password' : 'text';
+  if (!c.secreto) inp.value = c.valor || '';
+  else inp.placeholder = c.origem === 'tela' ? 'Definido pela tela — digite para trocar' : c.origem === 'servidor' ? 'Vem do servidor — digite para sobrepor' : 'Cole aqui';
+  inp.dataset.original = c.secreto ? '' : (c.valor || '');
+  entradas.set(c.nome, inp);
+  l.append(inp);
+  const origem = c.origem === 'tela' ? `Definido pela tela${c.atualizado_por ? ` por ${c.atualizado_por}` : ''}${c.atualizado_em ? ` em ${DATA(c.atualizado_em)}` : ''}${c.impressao ? ` · impressão ${c.impressao.slice(0, 8)}` : ''}.`
+   : c.origem === 'servidor' ? 'Vem do servidor (variável de ambiente).' : 'Ainda não definido.';
+  l.append(no('small', [c.ajuda, origem].filter(Boolean).join(' ')));
+  if (c.origem === 'tela') {
+   const r = no('button', 'Remover da tela', 'quiet cfg-cred-remover'); r.type = 'button';
+   r.onclick = async () => {
+    r.disabled = true;
+    try { await cred.api(`/api/integrations/credentials/${cred.provedor.id}/${c.nome}`, 'DELETE'); await aoMudar('Removido da tela. Passa a valer o que o servidor tiver.'); }
+    catch (e) { dizer(e.message, true); r.disabled = false; }
+   };
+   l.append(r);
+  }
+  f.append(l);
+ }
+ const aviso = no('p', '', 'config-aviso'); aviso.setAttribute('role', 'status');
+ const dizer = (t, erro = false) => { aviso.textContent = t; aviso.classList.toggle('erro', erro); };
+ const mudados = () => { const v = {}; for (const [nome, inp] of entradas) { const x = inp.value.trim(); if (x && x !== inp.dataset.original) v[nome] = x; } return v; };
+ const acoes = no('div', undefined, 'config-acoes');
+ const testar = no('button', 'Testar', 'secondary'); testar.type = 'button';
+ const salvar = no('button', 'Salvar', 'primary'); salvar.type = 'submit';
+ const bloqueado = !cred.pronto;
+ testar.disabled = salvar.disabled = bloqueado;
+ testar.onclick = async () => {
+  testar.disabled = true; dizer('Testando…');
+  try { const r = await cred.api('/api/integrations/credentials/test', 'POST', { provider: cred.provedor.id, valores: mudados() }); dizer(r.mensagem, !r.ok); }
+  catch (e) { dizer(e.message, true); }
+  testar.disabled = bloqueado;
+ };
+ f.onsubmit = async ev => {
+  ev.preventDefault();
+  const valores = mudados();
+  if (!Object.keys(valores).length) { dizer('Preencha o que quer trocar.', true); return; }
+  salvar.disabled = testar.disabled = true; dizer('Testando e salvando…');
+  try {
+   const r = await cred.api('/api/integrations/credentials', 'PUT', { provider: cred.provedor.id, valores });
+   await aoMudar(`Salvo. ${r.mensagem} As telas podem levar até 30 segundos para refletir.`);
+  } catch (e) { dizer(e.message, true); salvar.disabled = testar.disabled = bloqueado; }
+ };
+ acoes.append(testar, salvar);
+ f.append(acoes, aviso);
+ if (!cred.migracao) dizer('Disponível assim que a atualização do banco (migração 050) for aplicada.', true);
+ else if (!cred.chave) dizer('Falta definir CORE_SECRETS_KEY no servidor para guardar credenciais pela tela.', true);
+ const hist = cred.provedor.historico || [];
+ if (hist.length) {
+  const d = no('details', undefined, 'cfg-cred-hist'); d.append(no('summary', 'Histórico'));
+  for (const h of hist) d.append(no('p', `${DATA(h.em)} · ${h.nome} ${h.acao === 'set' ? 'definido' : 'removido'} por ${h.por}`, 'config-ajuda'));
+  f.append(d);
+ }
+ return f;
 }
 
 const RETORNO_GOOGLE = {
@@ -107,21 +190,34 @@ function blocoDoGoogle(api, retorno) {
 export function montar(raiz, { api, abrirTela, retorno }) {
  const corpo = no('div', undefined, 'cfg-integracoes');
  raiz.append(corpo);
- corpo.append(blocoDoGoogle(api, retorno));
- (async () => {
-  let dados;
-  try { dados = await api('/api/integrations/status'); } catch (e) { corpo.append(no('p', e.message, 'config-ajuda')); return; }
+ const google = blocoDoGoogle(api, retorno);
+ corpo.append(google);
+ const lista = no('div', undefined, 'cfg-integracoes-lista');
+ const aviso = no('p', '', 'config-aviso'); aviso.setAttribute('role', 'status');
+ corpo.append(aviso, lista);
+
+ async function desenhar(mensagem) {
+  let dados, credenciais = null;
+  try { dados = await api('/api/integrations/status'); } catch (e) { lista.replaceChildren(no('p', e.message, 'config-ajuda')); return; }
+  try { credenciais = await api('/api/integrations/credentials'); } catch { /* sem a tela de credenciais: os cartões ficam só de leitura */ }
   const itens = dados.integracoes || [];
   const resumo = itens.filter(i => i.estado === 'configurado').length;
-  corpo.append(no('p', `${resumo} de ${itens.length} integrações ligadas.`, 'config-ajuda cfg-resumo'));
+  const nos = [no('p', `${resumo} de ${itens.length} integrações ligadas.`, 'config-ajuda cfg-resumo')];
   for (const grupo of GRUPOS_DE_INTEGRACAO) {
    const doGrupo = itens.filter(i => i.grupo === grupo);
    if (!doGrupo.length) continue;
    const bloco = no('section', undefined, 'cfg-grupo-integracao');
    bloco.append(no('h3', grupo, 'config-sub'));
-   for (const i of doGrupo) bloco.append(cartao(i, abrirTela));
-   corpo.append(bloco);
+   for (const i of doGrupo) {
+    const provedor = credenciais?.provedores.find(p => p.id === i.id);
+    const cred = provedor ? { provedor, api, migracao: credenciais.migracao, chave: credenciais.chave, pronto: credenciais.migracao && credenciais.chave } : null;
+    bloco.append(cartao(i, abrirTela, cred, desenhar));
+   }
+   nos.push(bloco);
   }
-  corpo.append(no('p', 'Chaves e segredos nunca aparecem aqui. Para ligar um serviço, defina a variável indicada nos segredos do serviço no EasyPanel e reinicie.', 'cfg-nota'));
- })();
+  nos.push(no('p', 'Segredos nunca aparecem aqui, nem depois de salvos. Quem ainda não foi movido para a tela continua vindo das variáveis do servidor (EasyPanel).', 'cfg-nota'));
+  lista.replaceChildren(...nos);
+  aviso.textContent = mensagem || ''; aviso.classList.remove('erro');
+ }
+ desenhar();
 }

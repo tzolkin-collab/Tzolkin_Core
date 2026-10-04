@@ -1,3 +1,4 @@
+import { vivo } from '../platform/env-vivo.mjs';
 import { createDeliverySettings, readJson } from './delivery-settings.mjs';
 
 const safeText = (v, max = 180) => typeof v === 'string' ? v.slice(0,max) : null;
@@ -42,7 +43,7 @@ export function normalizeEasypanelDeployments(body,targetId) {
  return {status:'ok',items,partial:body.length>=21 || rows.length>20 || items.length<Math.min(rows.length,20),scope:'Últimas ações de deploy deste serviço. Concluído indica término da ação, não saúde da aplicação. Datas no horário informado pelo EasyPanel, sem fuso especificado.'};
 }
 
-export function createResourceReader({env=process.env,fetchImpl=fetch,clock=Date.now,settings=createDeliverySettings({env,fetchImpl,clock})}={}) {
+export function createResourceReader({env=vivo.env,fetchImpl=fetch,clock=Date.now,settings=createDeliverySettings({env,fetchImpl,clock})}={}) {
  return async ({provider,target,environment='production'}) => {
   const query = async (path,params={}) => {
    const base = new URL(provider === 'vercel' ? 'https://api.vercel.com' : env.EASYPANEL_URL);

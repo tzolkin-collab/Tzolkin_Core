@@ -5,6 +5,7 @@
 //
 // Falha de provedor NÃO derruba o painel: vira status do provedor na resposta.
 // Provedor não configurado NÃO é erro: é estado vazio honesto.
+import { vivo } from '../platform/env-vivo.mjs';
 import { onlyParams } from '../platform/http.mjs';
 import { createVercelAdapter } from '../integrations/vercel.mjs';
 
@@ -77,12 +78,15 @@ async function collect(providers) {
  }));
 }
 
-export function deploysRoutes(router, { registry = buildRegistry(), clock = Date.now } = {}) {
+export function deploysRoutes(router, { registry: registroFixo, clock = Date.now } = {}) {
  let cache = null;
+ // O registro vem do ambiente vivo (token da tela vence o do .env), então é montado a cada consulta; os testes passam uma lista fixa.
+ const registro = () => (typeof registroFixo === 'function' ? registroFixo() : registroFixo ?? buildRegistry(vivo.env));
 
  router.get('/api/deploys', async ({ url, reply }) => {
   onlyParams(url.searchParams, []);
 
+  const registry = registro();
   if (!registry.length) {
    return reply(200, {
     configured: false,

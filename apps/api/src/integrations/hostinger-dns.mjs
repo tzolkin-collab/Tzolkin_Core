@@ -18,6 +18,8 @@ export function normalizeHostingerZone(body) {
  });
 }
 
+import { vivo } from '../platform/env-vivo.mjs';
+
 export function createHostingerDnsAdapter({ env = process.env, fetchImpl = fetch } = {}) {
  const token = env.HOSTINGER_API_KEY || env.hostinger_api_key;
  const zone = env.HOSTINGER_DNS_ZONE || 'tzolkin.cloud';
@@ -37,3 +39,16 @@ export function createHostingerDnsAdapter({ env = process.env, fetchImpl = fetch
   },
  };
 }
+
+/** Adaptador que relê o ambiente vivo a CADA uso: a chave definida pela tela vale sem reiniciar. Configuração inválida vira estado, não exceção. */
+export function createHostingerDnsAdapterVivo({ fetchImpl = fetch } = {}) {
+ const atual = () => createHostingerDnsAdapter({ env: vivo.env, fetchImpl });
+ return {
+  get configured() { try { return atual().configured; } catch { return false; } },
+  async readZone() {
+   try { return await atual().readZone(); }
+   catch { return { status: 'invalid', zone: String(vivo.env.HOSTINGER_DNS_ZONE || 'tzolkin.cloud'), records: [] }; }
+  },
+ };
+}
+

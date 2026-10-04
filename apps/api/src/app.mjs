@@ -48,6 +48,8 @@ import { tenantSummaryRoutes } from './modules/tenant-summary.mjs';
 import { pushRoutes } from './modules/push.mjs';
 import { integrationsStatusRoutes } from './modules/integrations-status.mjs';
 import { googleCalendarRoutes } from './modules/google-calendar.mjs';
+import { integrationsCredentialsRoutes } from './modules/integrations-credentials.mjs';
+import { vivo } from './platform/env-vivo.mjs';
 import { mediaRoutes } from './modules/media.mjs';
 import { commercialPipelineRoutes } from './modules/commercial-pipelines.mjs';
 import { commercialLeadflowRoutes } from './modules/commercial-leadflow.mjs';
@@ -75,7 +77,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  agendaRoutes(router, { detector: detectorAgenda, relogio: clock });
  // Integrações externas são opcionais e injetáveis: os testes passam um registro
  // apontado para um stub local, e nunca tocam num provedor de verdade.
- deploysRoutes(router, { registry: deployRegistry ?? buildRegistry(), clock });
+ deploysRoutes(router, { registry: deployRegistry ?? undefined, clock });
  infrastructureRoutes(router, { ...infrastructureOptions, clock });
  deliveryRoutes(router, deliveryOptions);
  hostingerDnsRoutes(router, hostingerDnsOptions);
@@ -93,6 +95,8 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  // fica desligado: as rotas respondem "não configurado" e o resto do Core não muda.
  pushRoutes(router,pushOptions);
  integrationsStatusRoutes(router,{...(webhookEnv?{env:webhookEnv}:{})});
+ // Credenciais definidas pela tela (migração 050): o valor da tela vence o do .env. `vivo` é o ambiente que os módulos de integração leem.
+ integrationsCredentialsRoutes(router,{vivo,...(webhookEnv?{env:webhookEnv}:{})});
  mediaRoutes(router,{clock,...mediaOptions});
  commercialPipelineRoutes(router);
  commercialLeadflowRoutes(router);
@@ -106,6 +110,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
   securityHeaders(res);
   const reply = replier(res);
   try {
+   await vivo.garantir(pool);   // relê as credenciais da tela de tempos em tempos (sem chave de cifra, não faz nada)
    const origin = webOrigin || `http://127.0.0.1:${server.address().port}`;
    const url = new URL(req.url, origin);
    if (!['GET', 'POST', 'PUT', 'DELETE'].includes(req.method)) throw fail(405, 'Método não permitido.');

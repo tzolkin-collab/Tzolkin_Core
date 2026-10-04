@@ -1,6 +1,6 @@
 import { onlyParams } from '../platform/http.mjs';
 import { createDeliveryOptions } from '../integrations/delivery-options.mjs';
-import { createHostingerDnsAdapter } from '../integrations/hostinger-dns.mjs';
+import { createHostingerDnsAdapterVivo } from '../integrations/hostinger-dns.mjs';
 
 const normalized = value => String(value || '').toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const aliases = product => [...new Set([normalized(product.id), normalized(product.name).replace(/^tzolkin-/, '')].filter(value => value.length >= 3))];
@@ -28,7 +28,7 @@ const inventoryHas = (row, { github, vercel, easy, dnsRecords, zone, offers, tem
 
 // Une somente evidências observáveis. Nunca infere que um recurso está saudável,
 // nem grava o vínculo: confirmação explícita continua sendo responsabilidade do operador.
-export function productTopologyRoutes(router, { options = createDeliveryOptions(), dns = createHostingerDnsAdapter() } = {}) {
+export function productTopologyRoutes(router, { options = createDeliveryOptions(), dns = createHostingerDnsAdapterVivo() } = {}) {
  router.get('/api/products/topology', async ({ pool, url, reply }) => {
   onlyParams(url.searchParams, []);
   // Uma tabela só, e só o que está ativo. Antes eram duas — product_deploy_bindings

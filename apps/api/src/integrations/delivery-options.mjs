@@ -1,8 +1,9 @@
 import { createGithubAdapter, githubCliFetch } from './github.mjs';
 import { createVercelAdapter } from './vercel.mjs';
 import { createEasypanelAdapter } from './easypanel.mjs';
+import { vivo } from '../platform/env-vivo.mjs';
 
-export function createDeliveryOptions({ env = process.env, fetchImpl = fetch, clock = Date.now } = {}) {
+export function createDeliveryOptions({ env = vivo.env, fetchImpl = fetch, clock = Date.now } = {}) {
  let cached, pending;
  const read = async (configured, task) => {
   if (!configured) return { status: 'not_configured', items: [], truncated: false };

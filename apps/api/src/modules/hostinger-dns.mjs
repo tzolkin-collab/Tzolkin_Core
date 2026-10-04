@@ -1,7 +1,7 @@
 import { onlyParams } from '../platform/http.mjs';
-import { createHostingerDnsAdapter } from '../integrations/hostinger-dns.mjs';
+import { createHostingerDnsAdapterVivo } from '../integrations/hostinger-dns.mjs';
 
-export function hostingerDnsRoutes(router, { adapter = createHostingerDnsAdapter() } = {}) {
+export function hostingerDnsRoutes(router, { adapter = createHostingerDnsAdapterVivo() } = {}) {
  let cached = null;
  router.get('/api/dns/hostinger', async ({ url, reply }) => {
   onlyParams(url.searchParams, []);

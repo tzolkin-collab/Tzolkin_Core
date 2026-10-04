@@ -221,3 +221,14 @@ input:user-invalid:focus, select:user-invalid:focus, textarea:user-invalid:focus
 .cfg-faltando { color: var(--muted); }
 .cfg-resumo { margin: 0; }
 .cfg-google .config-aviso { margin: 8px 0 0; }
+.cfg-integracao { flex-wrap: wrap; }
+.cfg-cred-form { flex: 1 0 100%; display: grid; gap: 12px; margin-top: 4px; padding: 14px 0 4px; border-top: 1px dashed var(--line-soft); }
+.cfg-cred-campo { display: grid; gap: 4px; max-width: 480px; font-size: 13px; font-weight: 500; }
+.cfg-cred-campo small { color: var(--muted); font-weight: 400; font-size: var(--fs-sm, 13px); }
+.cfg-cred-remover { justify-self: start; min-height: 32px; padding: 0 10px; font-size: 13px; }
+.cfg-cred-hist summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.cfg-cred-hist p { margin: 4px 0 0; }
+.cfg-cred-form .config-acoes { margin-top: 0; }
+.cfg-cred-form .config-aviso { margin: 0; }
+.cfg-integracao > .cfg-linha-texto { flex: 1 1 0; }
+.cfg-integracao > button { flex: none; }

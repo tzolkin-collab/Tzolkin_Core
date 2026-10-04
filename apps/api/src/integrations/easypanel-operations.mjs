@@ -1,3 +1,4 @@
+import { vivo } from '../platform/env-vivo.mjs';
 import {createHash} from 'node:crypto';
 import {parseEnv} from 'node:util';
 import {readJson} from './delivery-settings.mjs';
@@ -35,7 +36,7 @@ export function normalizeOperationRead(section,body,target) {
  return {status:'ok',items,partial:rows.length>100,scope:section==='backups'?'Agendamentos configurados; não comprovam execução nem restauração de um backup.':null};
 }
 
-export function createEasypanelOperations({env=process.env,fetchImpl=fetch,clock=Date.now}={}) {
+export function createEasypanelOperations({env=vivo.env,fetchImpl=fetch,clock=Date.now}={}) {
  async function request(endpoint,params,method='GET') {
   const base=new URL(env.EASYPANEL_URL);
   if(base.protocol!=='https:'||base.username||base.password||base.search||base.hash||!['/','/api','/api/'].includes(base.pathname)||!env.EASYPANEL_TOKEN)throw Error('Invalid connection');

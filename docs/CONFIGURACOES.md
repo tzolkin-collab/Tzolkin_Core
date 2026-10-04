@@ -94,7 +94,9 @@ Preferências pessoais: tabela `operator_preferences(operator_subject, chave, va
 
 Cada fase termina com teste de tela (claro, escuro, celular), teste de "indisponível" e atualização desta página.
 
-## 6b. Fase 4 — credenciais pela tela, em vez do `.env` `[PROPOSTO]`
+## 6b. Fase 4 — credenciais pela tela, em vez do `.env` `[ETAPA 1 FEITA, migração 050 não aplicada]`
+
+**Etapa 1 (Vercel, GitHub, EasyPanel, Hostinger).** Construída: `platform/env-vivo.mjs` (o `process.env` com as credenciais da tela por cima; a tela vence; relê do banco a cada 15 s ou ao gravar; sem `CORE_SECRETS_KEY` ou sem a 050 é igual ao `process.env`), `platform/credenciais.mjs` (catálogo, validação, Testar), `modules/integrations-credentials.mjs` (`GET/PUT /api/integrations/credentials`, `POST …/test`, `DELETE …/:provedor/:nome`) e migração `050_credenciais_de_integracao.sql`. Os módulos antigos não mudaram a leitura (`env.VERCEL_TOKEN`): passaram a receber o ambiente vivo. Cada card ganhou **Configurar** (campo de senha que nunca volta preenchido, Testar, Salvar, Remover da tela, histórico). Salvar testa no provedor antes de gravar. Caches de 30 s dos módulos podem atrasar a troca nesse intervalo. As etapas 2 a 5 usam a mesma base: cada uma só acrescenta o provedor em `credenciais.mjs`.
 
 Objetivo: ligar, trocar e remover cada integração em Configurações → Integrações, sem editar variável de ambiente nem reiniciar.
 

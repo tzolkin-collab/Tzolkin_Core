@@ -1,7 +1,8 @@
+import { vivo } from '../platform/env-vivo.mjs';
 import { onlyParams } from '../platform/http.mjs';
 import { createEasypanelAdapter } from '../integrations/easypanel.mjs';
 
-export function infrastructureRoutes(router, { env = process.env, fetchImpl, clock = Date.now } = {}) {
+export function infrastructureRoutes(router, { env = vivo.env, fetchImpl, clock = Date.now } = {}) {
  let cached = null;
  let pending = null;
  router.get('/api/infrastructure/easypanel', async ({ url, reply }) => {

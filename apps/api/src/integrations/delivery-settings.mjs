@@ -1,3 +1,4 @@
+import { vivo } from '../platform/env-vivo.mjs';
 // Leitura sob demanda. Nunca retorna objetos brutos, env, scripts ou credenciais.
 const unavailable = () => ({ state:'unavailable' });
 const automatic = () => ({ state:'automatic' });
@@ -59,7 +60,7 @@ export async function readJson(response) {
  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
-export function createDeliverySettings({ env = process.env, fetchImpl = fetch, clock = Date.now } = {}) {
+export function createDeliverySettings({ env = vivo.env, fetchImpl = fetch, clock = Date.now } = {}) {
  return async ({provider,target,environment}) => {
   if (provider === 'easypanel' && target.type !== 'app') return {status:'unsupported',fields:{},message:'Consulta de configuração disponível apenas para serviços App do EasyPanel nesta etapa.'};
   try {

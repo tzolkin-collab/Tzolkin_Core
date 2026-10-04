@@ -1835,6 +1835,114 @@ const COM_GOOGLE = estado => `(() => {
  };
 })()`;
 
+const COM_CREDENCIAIS = estado => `(() => {
+ window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
+ const E = window.__cred = Object.assign({ migracao: true, chave: true, testes: [], puts: [], deletes: [], recusar: false, vercelOrigem: 'servidor', easypanelUrl: 'https://painel.exemplo.test' }, ${JSON.stringify(estado || {})});
+ const json = (c, s = 200) => new Response(JSON.stringify(c), { status: s, headers: { 'content-type': 'application/json' } });
+ const integ = (id, nome, grupo, tela) => ({ id, nome, grupo, para: 'Para ' + nome + '.', estado: 'configurado', faltando: [], opcionais_ausentes: [], tela });
+ window.fetch = async (url, o = {}) => {
+  const u = String(url), m = (o.method || 'GET').toUpperCase(), corpo = o.body ? JSON.parse(o.body) : {};
+  if (u === '/api/google/calendar/status') return json({ cliente: false, chave: false, migracao: false, disponivel: false, conectado: false });
+  if (u === '/api/integrations/status') return json({ integracoes: [integ('stripe', 'Stripe', 'Cobrança', 'finance'), integ('vercel', 'Vercel', 'Tecnologia', 'vercel'), integ('github', 'GitHub', 'Tecnologia', 'github'), integ('easypanel', 'EasyPanel', 'Tecnologia', 'easypanel'), integ('hostinger', 'Hostinger (DNS)', 'Tecnologia', 'dns')] });
+  if (u === '/api/integrations/credentials' && m === 'GET') {
+   const campo = (nome, rotulo, secreto, origem, extra = {}) => ({ nome, rotulo, secreto, obrigatorio: nome !== 'VERCEL_TEAM_ID' && nome !== 'HOSTINGER_DNS_ZONE', ajuda: null, origem, definido: origem !== null, ...(secreto ? {} : { valor: origem ? (extra.valor ?? '') : '' }), ...(origem === 'tela' ? { impressao: 'abcd1234abcd1234', atualizado_por: 'gustavo@exemplo.test', atualizado_em: '2026-10-04T15:00:00Z' } : {}) });
+   return json({ migracao: E.migracao, chave: E.chave, provedores: [
+    { id: 'vercel', nome: 'Vercel', campos: [campo('VERCEL_TOKEN', 'Token', true, E.vercelOrigem), campo('VERCEL_TEAM_ID', 'ID do time (opcional)', false, null)], historico: E.vercelOrigem === 'tela' ? [{ nome: 'VERCEL_TOKEN', acao: 'set', por: 'gustavo@exemplo.test', em: '2026-10-04T15:00:00Z' }] : [] },
+    { id: 'github', nome: 'GitHub', campos: [campo('GITHUB_TOKEN', 'Token', true, null)], historico: [] },
+    { id: 'easypanel', nome: 'EasyPanel', campos: [campo('EASYPANEL_URL', 'Endereço do painel', false, 'servidor', { valor: E.easypanelUrl }), campo('EASYPANEL_TOKEN', 'Token da API', true, 'servidor')], historico: [] },
+    { id: 'hostinger', nome: 'Hostinger (DNS)', campos: [campo('HOSTINGER_API_KEY', 'Chave da API', true, null), campo('HOSTINGER_DNS_ZONE', 'Zona de DNS', false, null)], historico: [] },
+   ] });
+  }
+  if (u === '/api/integrations/credentials/test') { E.testes.push(corpo); return json(E.recusar ? { ok: false, mensagem: 'Não foi possível validar: A Vercel recusou o token.' } : { ok: true, mensagem: 'A Vercel respondeu (há projetos visíveis).' }); }
+  if (u === '/api/integrations/credentials' && m === 'PUT') { E.puts.push(corpo); if (E.recusar) return json({ message: 'Não foi possível validar: A Vercel recusou o token.' }, 422); E.vercelOrigem = 'tela'; return json({ ok: true, mensagem: 'A Vercel respondeu (há projetos visíveis).', campos: Object.keys(corpo.valores) }); }
+  if (u.startsWith('/api/integrations/credentials/') && m === 'DELETE') { E.deletes.push(u); E.vercelOrigem = 'servidor'; return json({ ok: true }); }
+  return window.__fetchOriginal(url, o);
+ };
+})()`;
+
+test('configurações → Integrações: configurar uma credencial pela tela (testar, salvar, remover) sem nunca mostrar o segredo', { skip: PULAR }, async () => {
+ const abrir = async estado => {
+  const d = await pagina.injetar(COM_CREDENCIAIS(estado));
+  await pagina.tela(1280, 900);
+  await pagina.ir(origem + '/');
+  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+  await ABRIR_SECAO('integracoes');
+  await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-integracao').length === 5`, { descricao: 'cartões' });
+  return d;
+ };
+ const cartao = id => `document.querySelector('#settings-body .cfg-integracao[data-integracao=${id}]')`;
+ const abrirForm = async id => { await pagina.avaliar(`${cartao(id)}.querySelector('button[data-acao=configurar]').click()`); await pagina.esperar(`${cartao(id)}.querySelector('.cfg-cred-form')`); };
+ const digitar = (id, nome, valor) => pagina.avaliar(`(() => { const i = ${cartao(id)}.querySelector('input[name=${nome}]'); i.value = ${JSON.stringify(valor)}; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+ const botaoDoForm = (id, texto) => `[...${cartao(id)}.querySelectorAll('.cfg-cred-form button')].find(b => b.textContent === ${JSON.stringify(texto)})`;
+ let d = await abrir({});
+ assert.equal(await pagina.avaliar(`!!${cartao('stripe')}.querySelector('button[data-acao=configurar]')`), false, 'só quem já pode ser configurado pela tela ganha o botão');
+ assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-integracao[data-integracao=vercel] button').textContent`), 'Abrir', 'o botão de abrir continua primeiro');
+ await abrirForm('vercel');
+ const campos = await pagina.avaliar(`[...${cartao('vercel')}.querySelectorAll('.cfg-cred-campo')].map(l => ({ nome: l.querySelector('input').name, tipo: l.querySelector('input').type, valor: l.querySelector('input').value, dica: l.querySelector('small').textContent, placeholder: l.querySelector('input').placeholder }))`);
+ assert.deepEqual(campos.map(c => [c.nome, c.tipo, c.valor]), [['VERCEL_TOKEN', 'password', ''], ['VERCEL_TEAM_ID', 'text', '']], 'segredo é campo de senha e vem vazio');
+ assert.match(campos[0].dica, /Vem do servidor/); assert.match(campos[0].placeholder, /sobrepor/);
+ if (process.env.UI_SCREENSHOTS) {
+  await pagina.avaliar(`${cartao('vercel')}.scrollIntoView({ block: 'start' })`);
+  for (const esq of ['light', 'dark']) { await pagina.esquema(esq); await new Promise(r => setTimeout(r, 400)); await pagina.imagem(join(ARTEFATOS, `1012-Integracoes-formulario-${esq === 'dark' ? 'Escuro' : 'Claro'}.png`)); }
+  await pagina.esquema('light');
+ }
+ // nada digitado: pede para preencher, sem ir ao servidor
+ await pagina.avaliar(`${botaoDoForm('vercel', 'Salvar')}.click()`);
+ await pagina.esperar(`${cartao('vercel')}.querySelector('.config-aviso').textContent.includes('Preencha')`);
+ assert.equal(await pagina.avaliar(`window.__cred.puts.length`), 0);
+ // testar manda só o que mudou
+ await digitar('vercel', 'VERCEL_TOKEN', 'token-novo-1234567');
+ await pagina.avaliar(`${botaoDoForm('vercel', 'Testar')}.click()`);
+ await pagina.esperar(`window.__cred.testes.length === 1`);
+ assert.deepEqual(await pagina.avaliar(`window.__cred.testes[0]`), { provider: 'vercel', valores: { VERCEL_TOKEN: 'token-novo-1234567' } });
+ await pagina.esperar(`${cartao('vercel')}.querySelector('.config-aviso').textContent.includes('A Vercel respondeu')`);
+ assert.equal(await pagina.avaliar(`window.__cred.puts.length`), 0, 'testar não grava');
+ // provedor recusa: mostra o motivo, nada muda
+ await pagina.avaliar(`window.__cred.recusar = true`);
+ await pagina.avaliar(`${botaoDoForm('vercel', 'Salvar')}.click()`);
+ await pagina.esperar(`${cartao('vercel')}.querySelector('.config-aviso').textContent.includes('recusou o token')`);
+ assert.equal(await pagina.avaliar(`${cartao('vercel')}.querySelector('.config-aviso').classList.contains('erro')`), true);
+ assert.equal(await pagina.avaliar(`${cartao('vercel')}.dataset.estado`), 'configurado');
+ await pagina.avaliar(`window.__cred.recusar = false`);
+ // salvar: grava, a tela se redesenha e passa a dizer que vem da tela
+ await pagina.avaliar(`${botaoDoForm('vercel', 'Salvar')}.click()`);
+ await pagina.esperar(`window.__cred.puts.length === 2`);
+ assert.deepEqual(await pagina.avaliar(`window.__cred.puts[1]`), { provider: 'vercel', valores: { VERCEL_TOKEN: 'token-novo-1234567' } });
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-integracoes > .config-aviso').textContent.includes('Salvo.')`, { descricao: 'aviso de salvo' });
+ assert.match(await pagina.avaliar(`document.querySelector('#settings-body .cfg-integracoes > .config-aviso').textContent`), /30 segundos/);
+ await abrirForm('vercel');
+ const depois = await pagina.avaliar(`${cartao('vercel')}.querySelector('.cfg-cred-campo small').textContent`);
+ assert.match(depois, /Definido pela tela por gustavo@exemplo\.test/); assert.match(depois, /impressão abcd1234/);
+ assert.equal(await pagina.avaliar(`${cartao('vercel')}.querySelector('input[name=VERCEL_TOKEN]').value`), '', 'o segredo salvo não volta para o campo');
+ assert.ok(!(await pagina.avaliar(`document.getElementById('settings-body').innerHTML`)).includes('token-novo-1234567'), 'o valor digitado não fica na página depois de salvar');
+ assert.match(await pagina.avaliar(`${cartao('vercel')}.querySelector('.cfg-cred-hist').textContent`), /VERCEL_TOKEN definido por gustavo/);
+ // remover da tela: volta ao servidor
+ await pagina.avaliar(`${cartao('vercel')}.querySelector('.cfg-cred-remover').click()`);
+ await pagina.esperar(`window.__cred.deletes.length === 1`);
+ assert.equal(await pagina.avaliar(`window.__cred.deletes[0]`), '/api/integrations/credentials/vercel/VERCEL_TOKEN');
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-integracoes > .config-aviso').textContent.includes('Removido da tela')`);
+ // campo que não é segredo vem preenchido e pode ser editado
+ await abrirForm('easypanel');
+ assert.equal(await pagina.avaliar(`${cartao('easypanel')}.querySelector('input[name=EASYPANEL_URL]').value`), 'https://painel.exemplo.test');
+ assert.equal(await pagina.avaliar(`${cartao('easypanel')}.querySelector('input[name=EASYPANEL_TOKEN]').type`), 'password');
+ semExcecoes();
+ await d?.();
+
+ // sem chave ou sem migração: o formulário explica e não deixa salvar
+ d = await abrir({ chave: false });
+ await abrirForm('github');
+ assert.match(await pagina.avaliar(`${cartao('github')}.querySelector('.config-aviso').textContent`), /CORE_SECRETS_KEY/);
+ assert.equal(await pagina.avaliar(`${botaoDoForm('github', 'Salvar')}.disabled`), true);
+ assert.equal(await pagina.avaliar(`${botaoDoForm('github', 'Testar')}.disabled`), true);
+ await d?.();
+ d = await abrir({ migracao: false });
+ await abrirForm('hostinger');
+ assert.match(await pagina.avaliar(`${cartao('hostinger')}.querySelector('.config-aviso').textContent`), /migração 050/);
+ assert.equal(await pagina.avaliar(`${botaoDoForm('hostinger', 'Salvar')}.disabled`), true);
+ semExcecoes();
+ await d?.();
+});
+
 test('configurações → Integrações → Google: explica o que falta, conecta, mostra a conta e desconecta', { skip: PULAR }, async () => {
  const textoDoBloco = () => pagina.avaliar(`document.querySelector('#settings-body .cfg-google').textContent`);
  const abrir = async estado => {
