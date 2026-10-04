@@ -318,7 +318,7 @@ function switchView(view) {
  }
  $('notice').textContent = '';
  renderNav();
- if (view === 'settings') montarConfiguracoes($('settings-body'),{api,secao:state.configSecao,aoMudar:id=>{state.configSecao=id;}});
+ if (view === 'settings') montarConfiguracoes($('settings-body'),{api,secao:state.configSecao,aoMudar:id=>{state.configSecao=id;},abrirTela:v=>{switchView(v);closeNavigation();}});
  if (view === 'tracking') tracking.load().catch(reportError);
  if (view === 'finance') finance.load().catch(reportError);
  if (view === 'emails') emails.load().catch(reportError);

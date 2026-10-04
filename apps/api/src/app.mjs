@@ -46,6 +46,7 @@ import { marketingRoutes } from './modules/marketing.mjs';
 import { portfolioRoutes } from './modules/portfolio.mjs';
 import { tenantSummaryRoutes } from './modules/tenant-summary.mjs';
 import { pushRoutes } from './modules/push.mjs';
+import { integrationsStatusRoutes } from './modules/integrations-status.mjs';
 import { mediaRoutes } from './modules/media.mjs';
 import { commercialPipelineRoutes } from './modules/commercial-pipelines.mjs';
 import { commercialLeadflowRoutes } from './modules/commercial-leadflow.mjs';
@@ -88,6 +89,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  // Push do painel (assinatura do aparelho e aviso de lead novo). Sem VAPID no ambiente
  // fica desligado: as rotas respondem "não configurado" e o resto do Core não muda.
  pushRoutes(router,pushOptions);
+ integrationsStatusRoutes(router,{...(webhookEnv?{env:webhookEnv}:{})});
  mediaRoutes(router,{clock,...mediaOptions});
  commercialPipelineRoutes(router);
  commercialLeadflowRoutes(router);

@@ -214,3 +214,9 @@ input:user-invalid:focus, select:user-invalid:focus, textarea:user-invalid:focus
 .cfg-seletor { display: grid; gap: 6px; max-width: 320px; margin-top: 4px; font-size: 13px; font-weight: 500; }
 .cfg-atalhos { display: grid; gap: 20px; }
 .cfg-atalhos .ag-atalhos-lista { margin: 0; }
+.cfg-integracoes { display: grid; gap: 20px; }
+.cfg-grupo-integracao { display: grid; }
+.cfg-grupo-integracao .config-sub { margin-bottom: 4px; }
+.cfg-integracao-topo { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
+.cfg-faltando { color: var(--muted); }
+.cfg-resumo { margin: 0; }

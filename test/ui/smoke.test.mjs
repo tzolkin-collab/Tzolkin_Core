@@ -1665,7 +1665,7 @@ test('configurações: a casca lista as seções com o escopo de cada uma e troc
  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
  await pagina.avaliar(`document.getElementById('open-settings').click()`);
  await pagina.esperar(`document.querySelector('#settings-body .cfg-item') && document.querySelector('#settings-body input[name=tema]')`);
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-item')].map(b => b.textContent)`), ['Aparência', 'Notificações', 'Aplicativo', 'Teclado', 'Agenda']);
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-item')].map(b => b.textContent)`), ['Aparência', 'Notificações', 'Aplicativo', 'Teclado', 'Integrações', 'Agenda']);
  assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[aria-current=page]').textContent`), 'Aparência', 'abre na primeira seção');
  assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-escopo').textContent`), 'Só neste navegador');
  await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[data-secao=notificacoes]').click()`);
@@ -1704,6 +1704,124 @@ test('configurações → Aplicativo: só leitura, mostra o estado e oferece ins
  await pagina.avaliar(`[...document.querySelectorAll('#settings-body button')].find(b => b.textContent === 'Instalar o Core').click()`);
  await pagina.esperar(`window.__instalou === 1`);
  semExcecoes();
+});
+
+const ABRIR_SECAO = async id => {
+ await pagina.avaliar(`document.getElementById('open-settings').click()`);
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-item')`);
+ await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[data-secao=${id}]').click()`);
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-item[data-secao=${id}]').getAttribute('aria-current') === 'page' && document.querySelector('#settings-body .cfg-conteudo').children.length`);
+};
+
+test('configurações → Agenda: lembrete padrão (espaço) e preferências deste navegador, cada bloco com o seu selo', { skip: PULAR }, async () => {
+ const desfazer = await pagina.injetar(COM_PUSH);
+ await pagina.tela(1280, 900);
+ await pagina.avaliar(`try { localStorage.removeItem('tzolkin-agenda-inicio'); localStorage.removeItem('tzolkin-agenda-duracao'); } catch {}`);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await ABRIR_SECAO('agenda');
+ await pagina.esperar(`document.querySelector('#settings-body .config-chip')`, { descricao: 'lembrete padrão carregado' });
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#settings-body .cfg-cab .cfg-escopo').length`), 0, 'seção de escopo misto não tem selo no título');
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-bloco')].map(b => b.querySelector('.config-sub').textContent + ' | ' + b.querySelector('.cfg-escopo').textContent)`),
+  ['Lembrete padrão | Todo o espaço', 'Ao abrir a agenda | Só neste navegador', 'Atividade nova | Só neste navegador']);
+ // lembrete padrão: 15 min vem marcado; marcar 1 h grava a lista (maior primeiro) com a revisão lida
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-chip input')].filter(c => c.checked).map(c => c.parentElement.textContent)`), ['15 minutos antes']);
+ await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-chip')].find(l => l.textContent === '1 hora antes').querySelector('input').click()`);
+ await pagina.esperar(`window.__push.prefsPuts.length === 1`);
+ assert.deepEqual(await pagina.avaliar(`window.__push.prefsPuts[0]`), { revision: 1, default_reminders: [60, 15] });
+ await pagina.esperar(`document.querySelector('#settings-body .config-bloco .config-ajuda').textContent.includes('1 h e 15 min antes')`);
+ // visão inicial e duração padrão: guardadas neste navegador
+ const definir = (rotulo, valor) => pagina.avaliar(`(() => { const s = [...document.querySelectorAll('#settings-body .cfg-seletor')].find(l => l.firstChild.textContent === ${JSON.stringify(rotulo)}).querySelector('select'); s.value = ${JSON.stringify(valor)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+ await definir('Visão inicial', 'mes');
+ await definir('Duração padrão', '30');
+ assert.equal(await pagina.avaliar(`localStorage.getItem('tzolkin-agenda-inicio')`), 'mes');
+ assert.equal(await pagina.avaliar(`localStorage.getItem('tzolkin-agenda-duracao')`), '30');
+ // a agenda obedece: abre no mês e o formulário novo dura 30 min
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await IR_PARA_AGENDA();
+ assert.equal(await pagina.avaliar(VISAO_ATIVA), 'mes', 'abre na visão escolhida, mesmo que a última usada fosse outra');
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-acoes .primary').click()`);
+ await pagina.esperar(`document.querySelector('dialog.tracking-editor[open]')`);
+ const ini = await pagina.avaliar(`${CAMPO_DO_FORM('Início · Brasília')}.value`), fim = await pagina.avaliar(`${CAMPO_DO_FORM('Fim / prazo · Brasília')}.value`);
+ assert.equal((Date.parse(fim + ':00-03:00') - Date.parse(ini + ':00-03:00')) / 60000, 30, 'duração padrão aplicada');
+ await FECHAR_TUDO();
+ // voltar ao padrão apaga as chaves
+ await ABRIR_SECAO('agenda');
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-seletor')`);
+ await definir('Visão inicial', ''); await definir('Duração padrão', '60');
+ assert.equal(await pagina.avaliar(`[localStorage.getItem('tzolkin-agenda-inicio'), localStorage.getItem('tzolkin-agenda-duracao')].join()`), ',', 'valores padrão não ficam gravados');
+ semExcecoes();
+ await desfazer?.();
+});
+
+test('configurações → Agenda sem a migração 048 explica; Notificações aponta para o padrão da agenda; Teclado lista os atalhos', { skip: PULAR }, async () => {
+ const desfazer = await pagina.injetar(COM_PUSH);
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await pagina.avaliar(`window.__push.lembretes = false`);
+ await ABRIR_SECAO('agenda');
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-conteudo').textContent.includes('migração 048')`);
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#settings-body .config-chip').length`), 0, 'sem a 048 não há caixas de lembrete');
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#settings-body .cfg-seletor').length`), 2, 'o que é do navegador segue disponível');
+ // Notificações → botão leva para a Agenda
+ await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[data-secao=notificacoes]').click()`);
+ await pagina.esperar(`[...document.querySelectorAll('#settings-body button')].find(b => b.textContent === 'Escolher o lembrete padrão')`);
+ await pagina.avaliar(`[...document.querySelectorAll('#settings-body button')].find(b => b.textContent === 'Escolher o lembrete padrão').click()`);
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-titulo-secao').textContent === 'Agenda'`);
+ // Teclado
+ await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[data-secao=teclado]').click()`);
+ await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-atalhos kbd').length > 8`);
+ const texto = await pagina.avaliar(`document.querySelector('#settings-body .cfg-atalhos').textContent`);
+ assert.ok(texto.includes('Nova atividade') && texto.includes('Desfazer a última mudança de horário'));
+ assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-escopo').textContent`), 'Só neste navegador');
+ semExcecoes();
+ await desfazer?.();
+});
+
+const COM_INTEGRACOES = `(() => {
+ window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
+ const itens = [
+  { id: 'google-login', nome: 'Login com Google', grupo: 'Acesso', para: 'Quem entra no Core.', estado: 'configurado', faltando: [], opcionais_ausentes: [], tela: null },
+  { id: 'stripe', nome: 'Stripe', grupo: 'Cobrança', para: 'Cobranças.', estado: 'configurado', faltando: [], opcionais_ausentes: ['STRIPE_WEBHOOK_SECRET'], tela: 'finance' },
+  { id: 'asaas', nome: 'Asaas', grupo: 'Cobrança', para: 'Cobranças pelo Asaas.', estado: 'nao_configurado', faltando: ['ASAAS_API_KEY'], opcionais_ausentes: [], tela: 'finance' },
+  { id: 'meta', nome: 'Meta (anúncios)', grupo: 'Marketing', para: 'Campanhas.', estado: 'configurado', faltando: [], opcionais_ausentes: [], tela: null, conta: { conectada: false } },
+  { id: 'vercel', nome: 'Vercel', grupo: 'Tecnologia', para: 'Deploys.', estado: 'configurado', faltando: [], opcionais_ausentes: [], tela: 'vercel' },
+  { id: 'easypanel', nome: 'EasyPanel', grupo: 'Tecnologia', para: 'Serviços.', estado: 'parcial', faltando: ['EASYPANEL_TOKEN'], opcionais_ausentes: [], tela: 'easypanel' },
+  { id: 'push', nome: 'Notificações push', grupo: 'Avisos', para: 'Avisos.', estado: 'nao_configurado', faltando: ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'], opcionais_ausentes: [], tela: null },
+ ];
+ window.fetch = async (url, opcoes = {}) => {
+  if (String(url) === '/api/integrations/status') return new Response(JSON.stringify({ integracoes: itens }), { status: 200, headers: { 'content-type': 'application/json' } });
+  return window.__fetchOriginal(url, opcoes);
+ };
+})()`;
+
+test('configurações → Integrações: estado de cada serviço, o que falta e atalho para a tela de operação', { skip: PULAR }, async () => {
+ const desfazer = await pagina.injetar(COM_INTEGRACOES);
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await ABRIR_SECAO('integracoes');
+ await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-integracao').length === 7`, { descricao: 'sete integrações' });
+ assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-escopo').textContent`), 'Todo o espaço');
+ assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-resumo').textContent`), '4 de 7 integrações ligadas.');
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-grupo-integracao h3')].map(h => h.textContent)`), ['Acesso', 'Cobrança', 'Marketing', 'Tecnologia', 'Avisos']);
+ const linha = id => pagina.avaliar(`(() => { const c = document.querySelector('#settings-body .cfg-integracao[data-integracao=${id}]'); return { estado: c.dataset.estado, selo: c.querySelector('.status').textContent, texto: c.textContent, botao: !!c.querySelector('button') }; })()`);
+ const asaas = await linha('asaas');
+ assert.equal(asaas.selo, 'Não configurado'); assert.match(asaas.texto, /Falta definir no EasyPanel: ASAAS_API_KEY\./); assert.equal(asaas.botao, true);
+ const ep = await linha('easypanel');
+ assert.equal(ep.selo, 'Incompleto'); assert.match(ep.texto, /EASYPANEL_TOKEN/);
+ assert.match((await linha('stripe')).texto, /Opcional, ainda não definido: STRIPE_WEBHOOK_SECRET/);
+ assert.match((await linha('meta')).texto, /Nenhuma conta conectada ainda/);
+ assert.equal((await linha('push')).botao, false, 'sem tela de operação, sem botão');
+ assert.match(await pagina.avaliar(`document.querySelector('#settings-body .cfg-nota:last-child').textContent`), /nunca aparecem aqui/);
+ // "Abrir" leva para a tela de operação
+ await pagina.avaliar(`document.querySelector('#settings-body .cfg-integracao[data-integracao=vercel] button').click()`);
+ await pagina.esperar(`!document.getElementById('view-vercel').hidden`, { descricao: 'tela Vercel aberta' });
+ assert.equal(await pagina.avaliar(`document.getElementById('page-title').textContent.trim()`), 'Vercel');
+ semExcecoes();
+ await desfazer?.();
 });
 
 test('configurações: ligar, escolher assuntos, testar e desligar as notificações deste aparelho', { skip: PULAR }, async () => {

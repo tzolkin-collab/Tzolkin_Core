@@ -13,6 +13,7 @@ export const GRUPOS = Object.freeze(['Pessoal', 'Espaço de trabalho']);
 export const SECOES = Object.freeze([
  { id: 'aparencia', titulo: 'Aparência', grupo: 'Pessoal', escopo: 'navegador', descricao: 'Tema claro ou escuro.', carregar: () => import('./config-aparencia.js') },
  { id: 'notificacoes', titulo: 'Notificações', grupo: 'Pessoal', escopo: 'conta', descricao: 'Avisos neste aparelho e lembretes da agenda.', carregar: () => import('./notificacoes.js') },
+ { id: 'integracoes', titulo: 'Integrações', grupo: 'Espaço de trabalho', escopo: 'espaco', descricao: 'Quais serviços externos o Core usa e se estão ligados. As chaves ficam no servidor: aqui só aparece se existem e o que falta.', carregar: () => import('./config-integracoes.js') },
  { id: 'agenda', titulo: 'Agenda', grupo: 'Espaço de trabalho', escopo: null, descricao: 'Lembretes e como a agenda abre. Cada bloco diz de quem é.', carregar: () => import('./config-agenda.js') },
  { id: 'aplicativo', titulo: 'Aplicativo', grupo: 'Pessoal', escopo: 'navegador', descricao: 'Instalar o Core como aplicativo e ver o que o navegador permite.', carregar: () => import('./config-aplicativo.js') },
  { id: 'teclado', titulo: 'Teclado', grupo: 'Pessoal', escopo: 'navegador', descricao: 'Atalhos da agenda. Valem com o foco fora de campos de texto.', carregar: () => import('./config-teclado.js') },

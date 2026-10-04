@@ -52,6 +52,7 @@ const FILES = {
  '/config-indice.js': ['config-indice.js', 'text/javascript'],
  '/config-aparencia.js': ['config-aparencia.js', 'text/javascript'],
  '/config-aplicativo.js': ['config-aplicativo.js', 'text/javascript'],
+ '/config-integracoes.js': ['config-integracoes.js', 'text/javascript'],
  '/config-agenda.js': ['config-agenda.js', 'text/javascript'],
  '/config-teclado.js': ['config-teclado.js', 'text/javascript'],
  '/agenda-prefs.js': ['agenda-prefs.js', 'text/javascript'],

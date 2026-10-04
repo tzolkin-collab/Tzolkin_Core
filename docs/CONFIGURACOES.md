@@ -1,6 +1,6 @@
 # Configurações — plano de arquitetura
 
-Status: **fases 1 e 2 construídas** (casca, Aparência, Notificações, Aplicativo, Agenda, Teclado). O resto continua proposto. Decisões 1 e 2 confirmadas em 2026-10-04.
+Status: **fases 1, 2 e 3a construídas** (casca, Aparência, Notificações, Aplicativo, Agenda, Teclado, Integrações). O resto continua proposto. Decisões 1 e 2 confirmadas em 2026-10-04.
 
 ## 1. Problema
 
@@ -87,7 +87,8 @@ Preferências pessoais: tabela `operator_preferences(operator_subject, chave, va
 
 1. **Casca** `[FEITO]`: coluna de seções, `?secao=`, selos de escopo, Aparência e Notificações dentro dela, Aplicativo (somente leitura, botão Instalar quando o Chrome oferece). Configurações ganhou item no menu, em Administração, além do botão do rodapé.
 2. **Agenda e Teclado** `[FEITO]`: seção Agenda (escopo misto, cada bloco com o seu selo): lembrete padrão (espaço, vinda de Notificações, que agora só aponta para ela), visão em que a agenda abre e duração de atividade nova (ambas neste navegador, `agenda-prefs.js`). Seção Teclado lista os atalhos da agenda (`agenda-atalhos.js`, a mesma lista da janela do `?`). Ficaram para depois, por pedirem coluna nova no banco: semana começando no domingo e fuso.
-3. **Conexões**: Google (agenda e Meet) entra aqui; Meta e processadores migram.
+3. **Integrações** (3a `[FEITO]`): seção só leitura, `GET /api/integrations/status`, que diz para cada serviço (Login Google, Stripe, Asaas, Pluggy, Meta, e-mail, Vercel, GitHub, EasyPanel, Hostinger, push) se está ligado, incompleto ou não configurado, **o nome das variáveis que faltam** (nunca o valor; há teste que garante que nenhum valor vaza), e um botão "Abrir" para a tela de operação. A Meta mostra também se há conta conectada, expirada ou com erro. O nome é **Integrações** porque a tela "Conexões" do menu já existe e é outra coisa (a quem pertence cada recurso: projeto, deploy, domínio).
+   3b `[PROPOSTO]` **Google Agenda e Meet**: conectar a conta Google (OAuth com o mesmo cliente do login, mais o escopo de eventos do Calendar), botão "Criar sala do Meet" no evento. Pede tabela de credencial cifrada (migração nova) e as credenciais do Google Cloud: não foi construído porque não dá para verificar sem elas.
 4. **Financeiro e Anúncios**.
 5. **Conta e Administração**: depende da decisão D4 (IdP): sem login por pessoa, Perfil e sessões ficam limitados.
 
@@ -96,6 +97,6 @@ Cada fase termina com teste de tela (claro, escuro, celular), teste de "indispon
 ## 7. Decisões em aberto
 
 1. **Configurações no menu.** `[DECIDIDO]` Item em Administração, além do rodapé.
-2. **Conexões.** `[DECIDIDO]` Configuração em Configurações (fase 3); operação nas telas de Tecnologia.
+2. **Conexões.** `[DECIDIDO]` Configuração em Configurações (fase 3, como **Integrações**); operação nas telas de Tecnologia.
 3. **Conta por pessoa.** Preferência pessoal no banco só faz sentido com login individual. Enquanto for a senha única (D4), Minha conta tem um operador só.
 4. **Quem pode mudar escopo Espaço.** Hoje todo operador logado pode tudo. Criar papel "administrador" agora, ou depois?

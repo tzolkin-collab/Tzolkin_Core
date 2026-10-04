@@ -13,7 +13,7 @@ const no = (tag, texto, classe) => {
  * `secao`: a que abre primeiro (cai na padrão se não existir). `aoMudar(id)`: avisa quando a pessoa troca de seção.
  * Cada seção é um módulo carregado só quando aberta e exporta `montar(raiz, { api })`.
  */
-export function montarConfiguracoes(raiz, { api, secao, aoMudar } = {}) {
+export function montarConfiguracoes(raiz, { api, secao, aoMudar, abrirTela } = {}) {
  const casca = no('div', undefined, 'cfg');
  const nav = no('nav', undefined, 'cfg-nav'); nav.setAttribute('aria-label', 'Seções de Configurações');
  const corpo = no('section', undefined, 'cfg-corpo');
@@ -46,7 +46,7 @@ export function montarConfiguracoes(raiz, { api, secao, aoMudar } = {}) {
   try {
    const modulo = await s.carregar();
    if (meu !== ticket) return;
-   modulo.montar(conteudo, { api, irPara: id => abrir(id, true) });
+   modulo.montar(conteudo, { api, abrirTela, irPara: id => abrir(id, true) });
   } catch {
    if (meu === ticket) conteudo.replaceChildren(no('p', 'Não foi possível abrir esta seção. Recarregue a página.', 'config-ajuda'));
   }
