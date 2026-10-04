@@ -851,6 +851,8 @@ test('Vercel com dados: cada estado aparece, cabe na tela e o texto é legível 
   await pagina.avaliar(CLICAR_NO_MENU('Visão geral'));
   await pagina.avaliar(CLICAR_NO_MENU('Vercel'));
   await pagina.esperar(`document.querySelectorAll('#deploys-list .deploy-card').length === 6`, { descricao: 'seis projetos da Vercel' });
+  // Botões e links têm transition de cor (.15s): medir contraste no meio dela dá cor intermediária e falha ao acaso.
+  await new Promise(r => setTimeout(r, 600));
   const lido = await pagina.avaliar(`(() => {
    const canais = c => c.match(/[\\d.]+/g).slice(0, 3).map(Number);
    const luz = c => { const [r, g, b] = canais(c).map(v => v / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
@@ -877,6 +879,8 @@ test('Vercel com dados: cada estado aparece, cabe na tela e o texto é legível 
   for (const [topo, alturas] of filas) assert.ok(Math.max(...alturas) - Math.min(...alturas) <= 1, `${esquema}: fila em ${topo}px com alturas diferentes: ${alturas}`);
   assert.deepEqual(lido.ruins, [], `${esquema}: texto com contraste abaixo de 4,5:1 na aba Vercel`);
   // Favicon: o projeto que tem ícone mostra o favicon do site; quem não tem fica com a logo da Vercel.
+  // O favicon chega depois dos cartões (a busca é assíncrona): espera, senão o teste corre contra o carregamento.
+  await pagina.esperar(`[...document.querySelectorAll('#deploys-list .deploy-card')].some(c => c.querySelector('h3').textContent === 'tzolkin-site' && c.querySelector('.deploy-project-mark img.product-favicon'))`, { descricao: 'favicon do tzolkin-site' });
   const icones = await pagina.avaliar(`(() => Object.fromEntries([...document.querySelectorAll('#deploys-list .deploy-card')].map(c => [c.querySelector('h3').textContent, c.querySelector('.deploy-project-mark img')?.className || 'nenhum'])))()`);
   assert.match(icones['tzolkin-site'], /product-favicon/, `${esquema}: tzolkin-site devia mostrar o favicon do site: ${JSON.stringify(icones)}`);
   assert.match(icones['educare'], /provider-logo/, `${esquema}: educare sem favicon devia ficar com a logo da Vercel: ${JSON.stringify(icones)}`);
