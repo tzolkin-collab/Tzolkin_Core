@@ -4,7 +4,7 @@ import { criarPeek } from './peek.js';
 import { pares } from './inline-edit.js';
 import { selo } from './data-table.js';
 import * as M from './agenda-model.js';
-import { duracaoPadraoMin } from './agenda-prefs.js';
+import { duracaoPadraoMin, meetAutomatico } from './agenda-prefs.js';
 import { blocoDeLembrete, blocoDeRepeticao } from './agenda-repeticao.js';
 
 const TOM_DA_SITUACAO = { planned: 'info', done: 'success', cancelled: 'neutral' };
@@ -85,10 +85,12 @@ export function abrirEditor({ host, api, dados, tenants, evento = null, inicio =
   if (evento?.google_event_id) {
    blocoMeet.append(el('p', 'A sala do Meet já foi criada no seu Google Agenda. Mudanças de horário, título e cancelamento acompanham aqui.', 'detail'));
   } else {
-   meet = campo(blocoMeet, 'Sala', 'text', [['', 'Sem videoconferência'], ['meet', 'Criar sala do Google Meet']]);
+   meet = campo(blocoMeet, 'Sala', 'text', [['', 'Sem videoconferência'], ['meet', 'Adicionar videoconferência do Google Meet']]);
    convidados = campo(blocoMeet, 'Convidados (e-mails, separados por vírgula)', 'text'); convidados.placeholder = 'ana@empresa.com, bia@empresa.com'; convidados.maxLength = 1000;
    const rotuloConvidados = convidados.parentElement; rotuloConvidados.hidden = true;
    meet.addEventListener('change', () => { rotuloConvidados.hidden = meet.value !== 'meet'; });
+   // Como no Calendly: quem quer sala em toda atividade nova liga isso em Configurações → Agenda e já abre com ela marcada.
+   if (!evento && meetAutomatico()) { meet.value = 'meet'; rotuloConvidados.hidden = false; }
   }
   form.append(blocoMeet);
  }
@@ -295,7 +297,7 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
   const mudar = (rotulo, status, icone, classe) => { const b = botao(rotulo, icone, () => acao(b, erroNo, () => api(`/api/tracking/${e.id}/status`, 'PUT', { status, revision: e.revision })), classe); return b; };
   const nos = [botao('Editar', 'pencil', () => aoEditar(e))];
   const serie = serieDe(e, dadosAtuais || {});
-  if (dadosAtuais?.google_meet && !e.google_event_id && e.status !== 'cancelled') { const m = botao('Criar sala do Meet', 'plus', () => acao(m, erroNo, () => api(`/api/tracking/${e.id}/meet`, 'POST', {})), 'secondary'); nos.push(m); }
+  if (dadosAtuais?.google_meet && !e.google_event_id && e.status !== 'cancelled') { const m = botao('Adicionar videoconferência do Meet', 'plus', () => acao(m, erroNo, () => api(`/api/tracking/${e.id}/meet`, 'POST', {})), 'secondary'); nos.push(m); }
   if (serie && !serie.ended_at) nos.push(botao('Encerrar repetição', 'close', () => confirmarEncerrar(e, serie, erroNo), 'quiet'));
   if (e.status === 'planned') nos.push(mudar('Cancelar atividade', 'cancelled', 'close', 'quiet'), mudar('Concluir', 'done', 'check', 'primary'));
   else nos.push(mudar(e.status === 'done' ? 'Reabrir' : 'Reativar', 'planned', 'clock', 'secondary'));

@@ -1573,16 +1573,51 @@ test('agenda: se o Google falhar depois de salvar, a atividade fica e a tela avi
  const ID = '00000000-0000-4000-8000-000000000004';   // Daily
  await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]').click()`);
  await pagina.esperar(PAINEL_ABERTO);
- assert.ok(await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].some(b => b.textContent.trim() === 'Criar sala do Meet')`));
+ assert.ok(await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].some(b => b.textContent.trim() === 'Adicionar videoconferência do Meet')`));
  assert.ok(!(await pagina.avaliar(`document.querySelector('#peek-agenda').textContent`)).includes('Google Agenda'), 'sem sala não há linha do Google Agenda');
  const antes = await pagina.avaliar(`${NO_AGENDA}.meets.length`);
- await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].find(b => b.textContent.trim() === 'Criar sala do Meet').click()`);
+ await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].find(b => b.textContent.trim() === 'Adicionar videoconferência do Meet').click()`);
  await pagina.esperar(`${NO_AGENDA}.meets.length === ${antes + 1}`);
  await pagina.esperar(`document.querySelector('#peek-agenda').textContent.includes('Evento criado e sincronizado')`, { descricao: 'painel mostra a sincronização' });
- assert.ok(!(await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].some(b => b.textContent.trim() === 'Criar sala do Meet')`)), 'depois de criada, o botão some');
+ assert.ok(!(await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].some(b => b.textContent.trim() === 'Adicionar videoconferência do Meet')`)), 'depois de criada, o botão some');
  assert.ok((await pagina.avaliar(`document.querySelector('#peek-agenda a')?.href`)).includes('meet.google.com'), 'o link do Meet aparece nos detalhes');
  await pagina.avaliar(`(() => { const a = ${NO_AGENDA}; a.meet = false; const e = a.eventos.find(x => x.id === '${ID}'); delete e.google_event_id; delete e.meeting_url; e.revision = 1; })()`);
  await RECARREGAR_AGENDA();
+ await FECHAR_TUDO();
+ semExcecoes();
+});
+
+test('agenda: com "Meet em toda atividade nova" ligado em Configurações o formulário abre com a sala marcada', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ await pagina.avaliar(`${NO_AGENDA}.lembretes = true; ${NO_AGENDA}.meet = true`); await RECARREGAR_AGENDA();
+ await pagina.avaliar(`try { localStorage.setItem('tzolkin-agenda-meet-auto', '1'); } catch {}`);
+ await ABRIR_NOVA();
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Sala')}.value`), 'meet', 'abre com a sala marcada');
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Convidados (e-mails, separados por vírgula)')}.parentElement.hidden`), false, 'e já mostra os convidados');
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Sala')}.selectedOptions[0].textContent`), 'Adicionar videoconferência do Google Meet');
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Sala'), ''));   // dá para desmarcar antes de salvar
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Convidados (e-mails, separados por vírgula)')}.parentElement.hidden`), true);
+ await FECHAR_TUDO();
+ await pagina.avaliar(`try { localStorage.removeItem('tzolkin-agenda-meet-auto'); } catch {}`);
+ await ABRIR_NOVA();
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Sala')}.value`), '', 'desligado, abre sem sala');
+ await FECHAR_TUDO();
+ await pagina.avaliar(`${NO_AGENDA}.meet = false`); await RECARREGAR_AGENDA();
+ semExcecoes();
+});
+
+test('resposta que não é JSON (servidor reiniciando, página de erro do proxy) vira mensagem clara, não "Unexpected token"', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ await pagina.avaliar(`window.__fetchSalvo = window.fetch; window.fetch = async (u, o) => (String(u).includes('/status') ? new Response('<!DOCTYPE html><html><body>Bad Gateway</body></html>', { status: 502, headers: { 'content-type': 'text/html' } }) : window.__fetchSalvo(u, o))`);
+ const ID = '00000000-0000-4000-8000-000000000004';
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]').click()`);
+ await pagina.esperar(PAINEL_ABERTO);
+ await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].find(b => b.textContent.trim() === 'Concluir').click()`);
+ await pagina.esperar(`document.querySelector('#peek-agenda .form-error')?.textContent.length > 0`);
+ const msg = await pagina.avaliar(`document.querySelector('#peek-agenda .form-error').textContent`);
+ assert.match(msg, /O servidor não respondeu direito \(código 502\)/);
+ assert.ok(!msg.includes('Unexpected token') && !msg.includes('DOCTYPE'));
+ await pagina.avaliar(`window.fetch = window.__fetchSalvo`);
  await FECHAR_TUDO();
  semExcecoes();
 });
@@ -1789,7 +1824,7 @@ test('configurações → Agenda: lembrete padrão (espaço) e preferências des
  await pagina.esperar(`document.querySelector('#settings-body .config-chip')`, { descricao: 'lembrete padrão carregado' });
  assert.equal(await pagina.avaliar(`document.querySelectorAll('#settings-body .cfg-cab .cfg-escopo').length`), 0, 'seção de escopo misto não tem selo no título');
  assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-bloco')].map(b => b.querySelector('.config-sub').textContent + ' | ' + b.querySelector('.cfg-escopo').textContent)`),
-  ['Lembrete padrão | Todo o espaço', 'Ao abrir a agenda | Só neste navegador', 'Atividade nova | Só neste navegador']);
+  ['Lembrete padrão | Todo o espaço', 'Ao abrir a agenda | Só neste navegador', 'Atividade nova | Só neste navegador', 'Videoconferência | Só neste navegador']);
  // lembrete padrão: 15 min vem marcado; marcar 1 h grava a lista (maior primeiro) com a revisão lida
  assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-chip input')].filter(c => c.checked).map(c => c.parentElement.textContent)`), ['15 minutos antes']);
  await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-chip')].find(l => l.textContent === '1 hora antes').querySelector('input').click()`);
@@ -1979,6 +2014,23 @@ test('configurações → Integrações → Google: explica o que falta, conecta
  assert.ok(!(await textoDoBloco()).includes('eu@exemplo.test'));
  semExcecoes();
  await d?.();
+});
+
+test('configurações → Agenda: a opção de Meet automático é guardada neste navegador', { skip: PULAR }, async () => {
+ const desfazer = await pagina.injetar(COM_PUSH);
+ await pagina.tela(1280, 900);
+ await pagina.avaliar(`try { localStorage.removeItem('tzolkin-agenda-meet-auto'); } catch {}`);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await ABRIR_SECAO('agenda');
+ await pagina.esperar(`document.querySelector('#settings-body input[name=meet-auto]')`);
+ assert.equal(await pagina.avaliar(`document.querySelector('#settings-body input[name=meet-auto]').checked`), false);
+ await pagina.avaliar(`document.querySelector('#settings-body input[name=meet-auto]').click()`);
+ assert.equal(await pagina.avaliar(`localStorage.getItem('tzolkin-agenda-meet-auto')`), '1');
+ await pagina.avaliar(`document.querySelector('#settings-body input[name=meet-auto]').click()`);
+ assert.equal(await pagina.avaliar(`localStorage.getItem('tzolkin-agenda-meet-auto')`), null, 'desligar apaga a chave');
+ semExcecoes();
+ await desfazer?.();
 });
 
 test('configurações → Agenda sem a migração 048 explica; Notificações aponta para o padrão da agenda; Teclado lista os atalhos', { skip: PULAR }, async () => {

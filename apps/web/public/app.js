@@ -250,7 +250,9 @@ async function api(path, method = 'GET', body) {
   headers: body ? { 'Content-Type': 'application/json' } : {},
   body: body ? JSON.stringify(body) : undefined,
  });
- const data = await response.json();
+ // Página HTML no lugar de JSON = o pedido nem chegou ao Core (servidor reiniciando, proxy fora do ar): diz isso em vez do erro do parser.
+ const data = await response.json().catch(() => null);
+ if (data === null) throw new Error(response.status >= 500 || response.status === 0 ? `O servidor não respondeu direito (código ${response.status}). Pode estar reiniciando: tente de novo em instantes.` : `Resposta inesperada do servidor (código ${response.status}). Atualize a página e tente de novo.`);
  if (!response.ok) {
   if (response.status === 401) signedOut();
   throw new Error(data.message || 'Não foi possível concluir. Tente novamente.');

@@ -4,6 +4,7 @@ import { VISOES } from './agenda-model.js';
 
 const CHAVE_INICIO = 'tzolkin-agenda-inicio';
 const CHAVE_DURACAO = 'tzolkin-agenda-duracao';
+const CHAVE_MEET = 'tzolkin-agenda-meet-auto';
 
 export const DURACOES = Object.freeze([[15, '15 minutos'], [30, '30 minutos'], [45, '45 minutos'], [60, '1 hora'], [90, '1 hora e 30 minutos'], [120, '2 horas']]);
 export const DURACAO_PADRAO = 60;
@@ -24,3 +25,8 @@ export function visaoInicial() {
  return VISOES.includes(v) ? v : '';
 }
 export const definirVisaoInicial = v => gravar(CHAVE_INICIO, VISOES.includes(v) ? v : null);
+
+/** Atividade nova já abre com "Adicionar videoconferência do Google Meet" marcado (só aparece para quem conectou a conta Google). */
+export const meetAutomatico = () => ler(CHAVE_MEET) === '1';
+export const definirMeetAutomatico = ligado => gravar(CHAVE_MEET, ligado ? '1' : null);
+

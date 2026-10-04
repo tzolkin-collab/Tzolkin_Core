@@ -3,7 +3,7 @@
 //   Neste navegador — visão em que a agenda abre e duração de uma atividade nova (agenda-prefs.js)
 import { textoDosLembretes, VISOES, ROTULO_DA_VISAO } from './agenda-model.js';
 import { caixaDeLembretes } from './agenda-repeticao.js';
-import { DURACOES, duracaoPadraoMin, definirDuracaoPadrao, visaoInicial, definirVisaoInicial } from './agenda-prefs.js';
+import { DURACOES, duracaoPadraoMin, definirDuracaoPadrao, visaoInicial, definirVisaoInicial, meetAutomatico, definirMeetAutomatico } from './agenda-prefs.js';
 import { seloDeEscopo } from './config-indice.js';
 
 const no = (tag, texto, classe) => {
@@ -62,4 +62,12 @@ export function montar(raiz, { api }) {
  const nova = bloco('Atividade nova', 'navegador', 'Duração quando você clica num horário vazio ou usa "Nova atividade".');
  nova.append(seletor('Duração padrão', DURACOES, duracaoPadraoMin(), v => { definirDuracaoPadrao(Number(v)); dizer('Salvo neste navegador.'); }));
  corpo.append(nova);
+
+ const video = bloco('Videoconferência', 'navegador', 'Só tem efeito para quem conectou a conta Google em Integrações.');
+ const caixa = no('label', undefined, 'config-opcao');
+ const marcar = document.createElement('input'); marcar.type = 'checkbox'; marcar.checked = meetAutomatico(); marcar.name = 'meet-auto';
+ marcar.onchange = () => { definirMeetAutomatico(marcar.checked); dizer('Salvo neste navegador.'); };
+ const texto = no('span', undefined, 'config-opcao-texto'); texto.append(no('strong', 'Adicionar o Google Meet em toda atividade nova'), no('small', 'A atividade abre com a sala marcada; dá para desmarcar antes de salvar.'));
+ caixa.append(marcar, texto); video.append(caixa);
+ corpo.append(video);
 }
