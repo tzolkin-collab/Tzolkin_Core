@@ -1,7 +1,7 @@
 -- Agenda (Acompanhamento): campos de evento que o calendário passa a mostrar e editar.
 -- Só adiciona colunas opcionais; atividade antiga continua válida e a API só toca nelas quando vêm preenchidas,
 -- então o Core funciona antes e depois desta migração (usar descrição/local/link antes dela dá erro de coluna).
--- NÃO foi aplicada no banco compartilhado: aplicar antes de liberar a edição desses três campos.
+-- Aplicada no banco compartilhado em 2026-10-04 (npm run db:migrate; service_activities estava vazia).
 
 ALTER TABLE service_activities ADD COLUMN IF NOT EXISTS description text;
 ALTER TABLE service_activities ADD COLUMN IF NOT EXISTS location text;

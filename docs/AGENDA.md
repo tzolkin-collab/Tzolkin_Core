@@ -30,7 +30,7 @@ calendários externos (Fases 1 a 3) ainda não existem.
 | `apps/web/public/tracking.css` | Estilo, só tokens. |
 | `apps/api/src/modules/tracking.mjs` | `GET /api/tracking`, `POST /api/tracking`, **`PUT /api/tracking/:id`** (novo), status, contratação, tempo. |
 | `apps/api/src/platform/tracking-model.mjs` | Validação: `activityInput`, `activityUpdateInput`, `trackingRange`. |
-| `db/migrations/047_agenda_campos.sql` | Colunas `description`, `location`, `meeting_url`. **Não aplicada.** |
+| `db/migrations/047_agenda_campos.sql` | Colunas `description`, `location`, `meeting_url`. **Aplicada em 2026-10-04.** |
 
 ## API
 
@@ -40,15 +40,15 @@ calendários externos (Fases 1 a 3) ainda não existem.
   `description`, `location`, `meeting_url`. Revisão velha ou atividade inexistente: **409**. Vazio ou `null` limpa descrição, local e link.
 - `description` (até 2000), `location` (200, uma linha), `meeting_url` (500, **só https**, sem credencial embutida: vira link na tela).
 
-## Migração 047 (pendente)
+## Migração 047 (aplicada em 2026-10-04)
 
-O banco compartilhado está na 046. A 047 só **adiciona** colunas opcionais. Enquanto ela não for aplicada:
+Aplicada no banco compartilhado com `npm run db:migrate` (era a única pendente; a tabela `service_activities` tinha 0 linhas). Só **adicionou** colunas opcionais. O texto abaixo vale para qualquer banco que ainda não a tenha (ambiente novo, restauração antiga). Enquanto ela não for aplicada:
 
 - tudo o que já existia continua funcionando (o SQL de criar é idêntico ao anterior quando os campos novos não vêm);
 - `GET` devolve `agenda_campos: false` e a tela **não mostra** descrição, local nem link;
 - criar ou editar **com** esses campos devolve 409 com a mensagem "falta aplicar a migração 047" (nunca um erro de coluna do banco).
 
-Depois de aplicar, a primeira consulta (até 1 minuto) já passa a oferecer os campos. Aplicar não exige reiniciar nada.
+Depois de aplicar, a primeira consulta (até 1 minuto) já passa a oferecer os campos. Aplicar não exige reiniciar nada: no Core de produção isso já valeu assim que o deploy com a agenda subiu.
 
 ## Testes
 
