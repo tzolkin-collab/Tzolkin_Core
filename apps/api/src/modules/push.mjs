@@ -1,6 +1,6 @@
 import { fail, input, isUuid } from '../platform/http.mjs';
 import {
- TOPICOS, assinaturaValida, enderecoPushValido, topicosValidos, vapidConfig, createSender, senderPadrao,
+ TOPICOS, assinaturaValida, enderecoPushValido, topicosValidos, vapidConfig, senderDe, senderPadrao,
  payloadLeadNovo, payloadTeste,
 } from '../platform/webpush.mjs';
 
@@ -66,13 +66,16 @@ export async function notificarLeadNovo(pool, { productId, leadId, nome, organiz
 const agente = req => String(req?.headers?.['user-agent'] ?? '').slice(0, 300) || null;
 
 export function pushRoutes(router, opcoes = {}) {
- const config = 'config' in opcoes ? opcoes.config : vapidConfig();
- const enviar = opcoes.enviar ?? (config ? createSender(config) : null);
+ // Lido a CADA pedido: as chaves definidas pela tela (ambiente vivo) valem sem reiniciar. Os testes injetam `config` e `enviar`.
+ const lerConfig = () => ('config' in opcoes ? opcoes.config : vapidConfig());
+ const lerEnviar = () => opcoes.enviar ?? senderDe(lerConfig());
 
  // Qualquer operador logado pode saber se o push está ligado e qual é a chave
  // pública (ela não é segredo: o navegador precisa dela para assinar).
- router.get('/api/push/config', async ({ reply }) =>
-  reply(200, { enabled: Boolean(config), publicKey: config?.publicKey ?? null, topics: TOPICOS }));
+ router.get('/api/push/config', async ({ reply }) => {
+  const config = lerConfig();
+  reply(200, { enabled: Boolean(config), publicKey: config?.publicKey ?? null, topics: TOPICOS });
+ });
 
  // "Meus aparelhos". Nunca devolve endpoint nem chaves.
  router.get('/api/push/subscriptions', async ({ pool, operator, reply }) => {
@@ -86,7 +89,7 @@ export function pushRoutes(router, opcoes = {}) {
  // Assina (ou religa) o aparelho de quem está logado. Mesmo aparelho assinado de novo
  // por outro operador passa a ser dele: o endpoint é único.
  router.put('/api/push/subscriptions', async ({ client, body, operator, req }) => {
-  if (!config) throw fail(503, 'Notificações push ainda não estão configuradas neste servidor.');
+  if (!lerConfig()) throw fail(503, 'Notificações push ainda não estão configuradas neste servidor.');
   input(body, ['subscription', 'topics']);
   if (!assinaturaValida(body.subscription)) throw fail(400, 'Assinatura de push inválida.');
   const topics = body.topics === undefined ? ['commercial.lead'] : topicosValidos(body.topics);
@@ -127,6 +130,7 @@ export function pushRoutes(router, opcoes = {}) {
  // Teste: manda um aviso SÓ para os aparelhos de quem pediu. Serve para o operador
  // ver que funcionou, e nunca dispara nada para outras pessoas.
  router.post('/api/push/test', async ({ pool, operator, reply }) => {
+  const enviar = lerEnviar();
   if (!enviar) throw fail(503, 'Notificações push ainda não estão configuradas neste servidor.');
   const r = await pool.query(
    `SELECT id,endpoint,p256dh,auth FROM push_subscriptions WHERE operator_subject=$1 AND revoked_at IS NULL`,

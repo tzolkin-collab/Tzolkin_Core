@@ -1,4 +1,5 @@
 import webpush from 'web-push';
+import { vivo } from './env-vivo.mjs';
 
 // Web Push do Core: validação da assinatura, configuração VAPID e envio.
 //
@@ -49,7 +50,7 @@ export function topicosValidos(topicos) {
  * Chaves VAPID do ambiente. Sem as três o push fica DESLIGADO (null), e o painel
  * funciona igual: nenhuma rota de push falha o resto, só responde "não configurado".
  */
-export function vapidConfig(env = process.env) {
+export function vapidConfig(env = vivo.env) {
  const publicKey = String(env.VAPID_PUBLIC_KEY ?? '').trim();
  const privateKey = String(env.VAPID_PRIVATE_KEY ?? '').trim();
  const subject = String(env.VAPID_SUBJECT ?? '').trim();
@@ -71,17 +72,24 @@ export function createSender(config, lib = webpush) {
  });
 }
 
-let padrao;
-/** Envio configurado pelo ambiente, criado uma vez. null = push desligado. */
-export function senderPadrao() {
- if (padrao === undefined) {
-  const config = vapidConfig();
-  padrao = config ? createSender(config) : null;
- }
- return padrao;
+let guardado = null;
+/**
+ * Envio para uma configuração, reaproveitado enquanto as chaves forem as mesmas e refeito quando mudarem (as chaves definidas pela
+ * tela valem sem reiniciar). null = push desligado.
+ */
+export function senderDe(config) {
+ if (!config) return null;
+ const chave = `${config.publicKey}|${config.privateKey}|${config.subject}`;
+ if (guardado?.chave !== chave) guardado = { chave, enviar: createSender(config) };
+ return guardado.enviar;
 }
+/** Envio configurado pelo ambiente VIVO (tela por cima do .env). Consultado a cada uso. */
+export function senderPadrao() { return senderDe(vapidConfig()); }
 /** Só para teste: descarta o envio guardado. */
-export function _reiniciarSenderPadrao() { padrao = undefined; }
+export function _reiniciarSenderPadrao() { guardado = null; }
+
+/** Par de chaves VAPID novo (a chave privada nunca sai do servidor). */
+export const gerarChavesVapid = (lib = webpush) => lib.generateVAPIDKeys();
 
 const corta = (valor, max) => String(valor ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 

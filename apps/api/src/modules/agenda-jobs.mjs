@@ -2,6 +2,7 @@ import {notificarTopico} from './push.mjs';
 import {gerarOcorrencias} from './agenda.mjs';
 import {payloadLembrete,senderPadrao} from '../platform/webpush.mjs';
 import {criarDetector} from '../platform/agenda-recursos.mjs';
+import {vivo} from '../platform/env-vivo.mjs';
 import {hojeEmBrasilia} from '../platform/recorrencia.mjs';
 
 // Trabalho de fundo da agenda, no mesmo processo do servidor:
@@ -84,13 +85,14 @@ export async function estenderSeries(pool,{detector=criarDetector(),agora=Date.n
  * Liga os dois ciclos e devolve a função que os desliga. Os temporizadores não seguram o processo vivo (unref).
  * Um ciclo que ainda está rodando não é sobreposto pelo seguinte.
  */
-export function iniciarJobsDaAgenda({pool,enviar=senderPadrao(),detector=criarDetector(),log=console,cadaMs=60000,seriesCadaMs=6*3600000,primeiraSerieEmMs=15000}={}){
+export function iniciarJobsDaAgenda({pool,enviar,detector=criarDetector(),log=console,cadaMs=60000,seriesCadaMs=6*3600000,primeiraSerieEmMs=15000}={}){
  let ocupado=false,ocupadoSeries=false;
  const guardar=(nome,fn)=>async()=>{
   const flag=nome==='series'?'ocupadoSeries':'ocupado';
   if(flag==='ocupado'?ocupado:ocupadoSeries)return;
   if(flag==='ocupado')ocupado=true;else ocupadoSeries=true;
   try{
+   await vivo.garantir(pool);   // sem pedido de tela por perto, é o próprio ciclo que relê as chaves definidas pela tela
    const r=await fn();
    if(r?.enviados||r?.criadas)log.log(`[agenda] ${nome}: ${JSON.stringify(r)}`);
   }catch(erro){log.error(`[agenda] ${nome} falhou:`,erro?.message);}

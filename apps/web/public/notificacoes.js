@@ -21,6 +21,8 @@ export function chaveParaBytes(texto) {
  return Uint8Array.from(bruto, c => c.charCodeAt(0));
 }
 
+const mesmosBytes = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
+
 /** O que impede (ou não) de ligar neste aparelho. Devolve { ok:true } ou { ok:false, motivo }. */
 export function podeNotificar(env = window) {
  if (!('serviceWorker' in env.navigator) || !('PushManager' in env) || !('Notification' in env)) {
@@ -74,7 +76,12 @@ export function montarNotificacoes(raiz, { api, irPara }) {
     try {
      const permissao = await Notification.requestPermission();
      if (permissao !== 'granted') { dizer('Permissão não concedida. Sem ela o navegador não mostra avisos.', true); botao.disabled = false; return; }
-     const nova = sub || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chaveParaBytes(cfg.publicKey) });
+     const chaveAtual = chaveParaBytes(cfg.publicKey);
+     // Assinatura feita com outra chave pública (as chaves foram trocadas) não recebe nada: descarta e assina de novo.
+     let existente = sub;
+     const antiga = existente?.options?.applicationServerKey;
+     if (existente && antiga && !mesmosBytes(new Uint8Array(antiga), chaveAtual)) { await existente.unsubscribe(); existente = null; }
+     const nova = existente || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chaveAtual });
      await api('/api/push/subscriptions', 'PUT', { subscription: nova.toJSON(), topics: ASSUNTOS.map(a => a[0]) });
      dizer('Notificações ativadas neste aparelho.');
      await desenhar();

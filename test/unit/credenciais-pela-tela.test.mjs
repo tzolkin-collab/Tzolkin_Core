@@ -90,7 +90,7 @@ test('só campos conhecidos, não vazios, no formato certo', () => {
  recusa('vercel', {}, /Nada para salvar/);
  recusa('hostinger', { HOSTINGER_DNS_ZONE: 'não é domínio' }, /domínio/);
  recusa('inexistente', { X: 'y' }, /Provedor desconhecido/);
- assert.deepEqual(Object.keys(PROVEDORES), ['vercel', 'github', 'easypanel', 'hostinger']);
+ assert.deepEqual(Object.keys(PROVEDORES), ['vercel', 'github', 'easypanel', 'push', 'hostinger']);
  for (const p of Object.values(PROVEDORES)) for (const c of p.campos) assert.match(c.nome, /^[A-Z][A-Z0-9_]{2,63}$/, 'cabe na CHECK da migração');
 });
 
@@ -257,4 +257,86 @@ test('migração 050: só adiciona, uma credencial ativa por nome e o histórico
  assert.ok(!/ciphertext|token_|valor|value/i.test(historico.split(');')[0]), 'o histórico nunca guarda valor');
  const app = readFileSync(new URL('../../apps/api/src/app.mjs', import.meta.url), 'utf8');
  assert.match(app, /integrationsCredentialsRoutes\(router/); assert.match(app, /await vivo\.garantir\(pool\)/);
+});
+
+// ---------- etapa 2: notificações push (chaves VAPID pela tela) ----------
+import { parDeChavesConfere } from '../../apps/api/src/platform/credenciais.mjs';
+import { gerarChavesVapid, vapidConfig, senderDe, senderPadrao, _reiniciarSenderPadrao } from '../../apps/api/src/platform/webpush.mjs';
+import { pushRoutes } from '../../apps/api/src/modules/push.mjs';
+
+test('VAPID: formato de cada campo e o par precisa conferir (pública nasce da privada)', async () => {
+ const par = gerarChavesVapid();
+ assert.equal(par.publicKey.length, 87); assert.equal(par.privateKey.length, 43);
+ assert.equal(parDeChavesConfere(par.publicKey, par.privateKey), true);
+ const outro = gerarChavesVapid();
+ assert.equal(parDeChavesConfere(par.publicKey, outro.privateKey), false, 'par trocado é detectado');
+ assert.equal(parDeChavesConfere('lixo', 'lixo'), false);
+ const ok = validarValores('push', { VAPID_PUBLIC_KEY: par.publicKey, VAPID_PRIVATE_KEY: par.privateKey, VAPID_SUBJECT: 'https://core.exemplo.test' }, fail);
+ assert.equal(Object.keys(ok).length, 3);
+ const recusa = (v, re) => assert.throws(() => validarValores('push', v, fail), e => e.status === 400 && re.test(e.message));
+ recusa({ VAPID_PUBLIC_KEY: 'curta' }, /87 caracteres/);
+ recusa({ VAPID_PRIVATE_KEY: par.publicKey }, /43 caracteres/);
+ recusa({ VAPID_SUBJECT: 'http://inseguro.test' }, /https/);
+ recusa({ VAPID_SUBJECT: 'contato@exemplo.test' }, /mailto/);
+ assert.equal(validarValores('push', { VAPID_SUBJECT: 'mailto:eu@exemplo.test' }, fail).VAPID_SUBJECT, 'mailto:eu@exemplo.test');
+ // Testar: só confere o par, não envia aviso nenhum
+ const certo = await testarProvedor('push', { VAPID_PUBLIC_KEY: par.publicKey, VAPID_PRIVATE_KEY: par.privateKey, VAPID_SUBJECT: 'https://x.test' }, () => '');
+ assert.deepEqual([certo.ok, /Nenhum aviso foi enviado/.test(certo.mensagem)], [true, true]);
+ const errado = await testarProvedor('push', { VAPID_PUBLIC_KEY: par.publicKey, VAPID_PRIVATE_KEY: outro.privateKey, VAPID_SUBJECT: 'https://x.test' }, () => '');
+ assert.equal(errado.ok, false); assert.match(errado.mensagem, /não é a par/); assert.ok(!errado.mensagem.includes(outro.privateKey));
+});
+
+test('gerar chaves: guarda as três cifradas, devolve SÓ a pública, e desativa os aparelhos antigos', async () => {
+ const m = montar({ env: { ...BASE, PUBLIC_ORIGIN: 'https://core.exemplo.test' }, db: { 'UPDATE push_subscriptions': () => ({ rowCount: 3, rows: [] }) } });
+ const r = await m.rotas['POST /api/integrations/credentials/push/gerar']({ client: m.client, body: {}, operator: OPERADOR });
+ assert.equal(m.regs['POST /api/integrations/credentials/push/gerar'].transactional, true);
+ assert.deepEqual(Object.keys(r.response).sort(), ['aparelhos_desativados', 'assunto', 'ok', 'publica']);
+ assert.equal(r.response.assunto, 'https://core.exemplo.test', 'assunto padrão: o endereço público do Core');
+ assert.equal(r.response.aparelhos_desativados, 3);
+ const ins = m.log.filter(q => q.sql.startsWith('INSERT INTO integration_credentials('));
+ assert.deepEqual(ins.map(q => q.params[1]), ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT']);
+ const privada = open({ ciphertext: ins[1].params[2], iv: ins[1].params[3], tag: ins[1].params[4] }, CHAVE);
+ const publica = open({ ciphertext: ins[0].params[2], iv: ins[0].params[3], tag: ins[0].params[4] }, CHAVE);
+ assert.equal(publica, r.response.publica); assert.equal(parDeChavesConfere(publica, privada), true, 'o par gravado confere');
+ assert.ok(!JSON.stringify(r.response).includes(privada), 'a privada não volta');
+ assert.ok(m.log.some(q => q.sql.startsWith('UPDATE push_subscriptions SET revoked_at')));
+ assert.ok(!JSON.stringify(m.log.map(q => q.params.map(p => (Buffer.isBuffer(p) ? '' : String(p))))).includes(privada), 'a privada em claro não vai ao banco');
+});
+
+test('gerar chaves: havendo chaves hoje exige confirmação; sem assunto válido, 400; sem chave de cifra, 503; sem a 050, 409', async () => {
+ const comChaves = montar({ env: { ...BASE, PUBLIC_ORIGIN: 'https://core.exemplo.test', VAPID_PUBLIC_KEY: 'x'.repeat(87), VAPID_PRIVATE_KEY: 'y'.repeat(43) } });
+ await assert.rejects(comChaves.rotas['POST /api/integrations/credentials/push/gerar']({ client: comChaves.client, body: {}, operator: OPERADOR }), e => e.status === 409 && /Confirme/.test(e.message));
+ assert.equal(comChaves.log.filter(q => q.sql.includes('INSERT')).length, 0, 'sem confirmação nada muda');
+ const confirmou = await comChaves.rotas['POST /api/integrations/credentials/push/gerar']({ client: comChaves.client, body: { confirmar: true }, operator: OPERADOR });
+ assert.equal(confirmou.response.ok, true);
+ const semAssunto = montar({ env: { ...BASE } });
+ await assert.rejects(semAssunto.rotas['POST /api/integrations/credentials/push/gerar']({ client: semAssunto.client, body: {}, operator: OPERADOR }), e => e.status === 400 && /Assunto/.test(e.message));
+ const comAssunto = await semAssunto.rotas['POST /api/integrations/credentials/push/gerar']({ client: semAssunto.client, body: { subject: 'mailto:eu@exemplo.test' }, operator: OPERADOR });
+ assert.equal(comAssunto.response.assunto, 'mailto:eu@exemplo.test');
+ const semChave = montar({ env: { PUBLIC_ORIGIN: 'https://core.exemplo.test' } });
+ await assert.rejects(semChave.rotas['POST /api/integrations/credentials/push/gerar']({ client: semChave.client, body: {}, operator: OPERADOR }), e => e.status === 503);
+ const semMigracao = montar({ env: { ...BASE, PUBLIC_ORIGIN: 'https://core.exemplo.test' }, db: { 'SELECT 1 FROM integration_credentials': () => Object.assign(new Error('relation'), { code: '42P01' }) } });
+ await assert.rejects(semMigracao.rotas['POST /api/integrations/credentials/push/gerar']({ client: semMigracao.client, body: {}, operator: OPERADOR }), e => e.status === 409 && e.message === MENSAGEM_050);
+});
+
+test('o push lê as chaves a CADA pedido: chaves definidas pela tela valem sem reiniciar, e o envio é refeito quando elas mudam', async () => {
+ const rotas = {};
+ pushRoutes({ get: (p, h) => { rotas['GET ' + p] = h; }, post: (p, h) => { rotas['POST ' + p] = h; }, put: (p, h) => { rotas['PUT ' + p] = h; }, delete: (p, h) => { rotas['DELETE ' + p] = h; } });
+ const consulta = async () => { let saida; await rotas['GET /api/push/config']({ reply: (s, c) => { saida = c; } }); return saida; };
+ assert.equal((await consulta()).enabled, false, 'sem chaves, desligado');
+ const par = gerarChavesVapid();
+ const antes = processoVivo._sobre.size;
+ for (const [k, v] of [['VAPID_PUBLIC_KEY', par.publicKey], ['VAPID_PRIVATE_KEY', par.privateKey], ['VAPID_SUBJECT', 'https://core.exemplo.test']]) processoVivo._sobre.set(k, v);
+ try {
+  const c = await consulta();
+  assert.deepEqual([c.enabled, c.publicKey], [true, par.publicKey], 'a chave da tela aparece sem reiniciar');
+  _reiniciarSenderPadrao();
+  const a = senderPadrao(); assert.equal(typeof a, 'function'); assert.equal(senderPadrao(), a, 'mesmas chaves: reaproveita o envio');
+  const novo = gerarChavesVapid();
+  processoVivo._sobre.set('VAPID_PUBLIC_KEY', novo.publicKey); processoVivo._sobre.set('VAPID_PRIVATE_KEY', novo.privateKey);
+  assert.notEqual(senderPadrao(), a, 'chaves novas: envio refeito');
+  assert.equal((await consulta()).publicKey, novo.publicKey);
+ } finally { for (const k of ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT']) processoVivo._sobre.delete(k); _reiniciarSenderPadrao(); assert.equal(processoVivo._sobre.size, antes); }
+ assert.equal((await consulta()).enabled, false, 'tirou as chaves, desliga');
+ assert.equal(senderDe(null), null);
 });

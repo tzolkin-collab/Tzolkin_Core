@@ -1735,6 +1735,7 @@ const COM_PUSH = `(() => {
  window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
  const json = (corpo, status = 200) => Promise.resolve(new Response(JSON.stringify(corpo), { status, headers: { 'content-type': 'application/json' } }));
  const assinatura = { endpoint: 'https://push.exemplo.test/abc', toJSON() { return { endpoint: this.endpoint, keys: { p256dh: 'p', auth: 'a' } }; }, unsubscribe() { estado.desinscrito++; assinatura.ativa = false; return Promise.resolve(true); }, ativa: false };
+ estado.assinatura = assinatura;
  const registro = { pushManager: { getSubscription: () => Promise.resolve(assinatura.ativa ? assinatura : null), subscribe: opcoes => { estado.opcoes = { userVisibleOnly: opcoes.userVisibleOnly, bytes: opcoes.applicationServerKey.length }; assinatura.ativa = true; return Promise.resolve(assinatura); } } };
  Object.defineProperty(navigator.serviceWorker, 'ready', { configurable: true, get: () => Promise.resolve(registro) });
  Object.defineProperty(Notification, 'permission', { configurable: true, get: () => estado.permissao });
@@ -1872,13 +1873,13 @@ const COM_GOOGLE = estado => `(() => {
 
 const COM_CREDENCIAIS = estado => `(() => {
  window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
- const E = window.__cred = Object.assign({ migracao: true, chave: true, testes: [], puts: [], deletes: [], recusar: false, vercelOrigem: 'servidor', easypanelUrl: 'https://painel.exemplo.test' }, ${JSON.stringify(estado || {})});
+ const E = window.__cred = Object.assign({ migracao: true, chave: true, testes: [], puts: [], deletes: [], gerar: [], pushTem: false, recusar: false, vercelOrigem: 'servidor', easypanelUrl: 'https://painel.exemplo.test' }, ${JSON.stringify(estado || {})});
  const json = (c, s = 200) => new Response(JSON.stringify(c), { status: s, headers: { 'content-type': 'application/json' } });
  const integ = (id, nome, grupo, tela) => ({ id, nome, grupo, para: 'Para ' + nome + '.', estado: 'configurado', faltando: [], opcionais_ausentes: [], tela });
  window.fetch = async (url, o = {}) => {
   const u = String(url), m = (o.method || 'GET').toUpperCase(), corpo = o.body ? JSON.parse(o.body) : {};
   if (u === '/api/google/calendar/status') return json({ cliente: false, chave: false, migracao: false, disponivel: false, conectado: false });
-  if (u === '/api/integrations/status') return json({ integracoes: [integ('stripe', 'Stripe', 'Cobrança', 'finance'), integ('vercel', 'Vercel', 'Tecnologia', 'vercel'), integ('github', 'GitHub', 'Tecnologia', 'github'), integ('easypanel', 'EasyPanel', 'Tecnologia', 'easypanel'), integ('hostinger', 'Hostinger (DNS)', 'Tecnologia', 'dns')] });
+  if (u === '/api/integrations/status') return json({ integracoes: [integ('stripe', 'Stripe', 'Cobrança', 'finance'), integ('vercel', 'Vercel', 'Tecnologia', 'vercel'), integ('github', 'GitHub', 'Tecnologia', 'github'), integ('easypanel', 'EasyPanel', 'Tecnologia', 'easypanel'), integ('hostinger', 'Hostinger (DNS)', 'Tecnologia', 'dns'), integ('push', 'Notificações push', 'Avisos', null)] });
   if (u === '/api/integrations/credentials' && m === 'GET') {
    const campo = (nome, rotulo, secreto, origem, extra = {}) => ({ nome, rotulo, secreto, obrigatorio: nome !== 'VERCEL_TEAM_ID' && nome !== 'HOSTINGER_DNS_ZONE', ajuda: null, origem, definido: origem !== null, ...(secreto ? {} : { valor: origem ? (extra.valor ?? '') : '' }), ...(origem === 'tela' ? { impressao: 'abcd1234abcd1234', atualizado_por: 'gustavo@exemplo.test', atualizado_em: '2026-10-04T15:00:00Z' } : {}) });
    return json({ migracao: E.migracao, chave: E.chave, provedores: [
@@ -1886,10 +1887,12 @@ const COM_CREDENCIAIS = estado => `(() => {
     { id: 'github', nome: 'GitHub', campos: [campo('GITHUB_TOKEN', 'Token', true, null)], historico: [] },
     { id: 'easypanel', nome: 'EasyPanel', campos: [campo('EASYPANEL_URL', 'Endereço do painel', false, 'servidor', { valor: E.easypanelUrl }), campo('EASYPANEL_TOKEN', 'Token da API', true, 'servidor')], historico: [] },
     { id: 'hostinger', nome: 'Hostinger (DNS)', campos: [campo('HOSTINGER_API_KEY', 'Chave da API', true, null), campo('HOSTINGER_DNS_ZONE', 'Zona de DNS', false, null)], historico: [] },
+    { id: 'push', nome: 'Notificações push', campos: [campo('VAPID_PUBLIC_KEY', 'Chave pública', false, E.pushTem ? 'tela' : null, { valor: 'BPUBLICA' }), campo('VAPID_PRIVATE_KEY', 'Chave privada', true, E.pushTem ? 'tela' : null), campo('VAPID_SUBJECT', 'Assunto', false, E.pushTem ? 'tela' : null, { valor: 'https://core.exemplo.test' })], historico: [] },
    ] });
   }
   if (u === '/api/integrations/credentials/test') { E.testes.push(corpo); return json(E.recusar ? { ok: false, mensagem: 'Não foi possível validar: A Vercel recusou o token.' } : { ok: true, mensagem: 'A Vercel respondeu (há projetos visíveis).' }); }
   if (u === '/api/integrations/credentials' && m === 'PUT') { E.puts.push(corpo); if (E.recusar) return json({ message: 'Não foi possível validar: A Vercel recusou o token.' }, 422); E.vercelOrigem = 'tela'; return json({ ok: true, mensagem: 'A Vercel respondeu (há projetos visíveis).', campos: Object.keys(corpo.valores) }); }
+  if (u === '/api/integrations/credentials/push/gerar') { E.gerar.push(corpo); E.pushTem = true; return json({ ok: true, publica: 'BPUBLICA', assunto: 'https://core.exemplo.test', aparelhos_desativados: corpo.confirmar ? 2 : 0 }); }
   if (u.startsWith('/api/integrations/credentials/') && m === 'DELETE') { E.deletes.push(u); E.vercelOrigem = 'servidor'; return json({ ok: true }); }
   return window.__fetchOriginal(url, o);
  };
@@ -1902,7 +1905,7 @@ test('configurações → Integrações: configurar uma credencial pela tela (te
   await pagina.ir(origem + '/');
   await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
   await ABRIR_SECAO('integracoes');
-  await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-integracao').length === 5`, { descricao: 'cartões' });
+  await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-integracao').length === 6`, { descricao: 'cartões' });
   return d;
  };
  const cartao = id => `document.querySelector('#settings-body .cfg-integracao[data-integracao=${id}]')`;
@@ -1976,6 +1979,62 @@ test('configurações → Integrações: configurar uma credencial pela tela (te
  assert.equal(await pagina.avaliar(`${botaoDoForm('hostinger', 'Salvar')}.disabled`), true);
  semExcecoes();
  await d?.();
+});
+
+test('configurações → Integrações → Notificações push: gerar as chaves VAPID pela tela, com confirmação quando já existem', { skip: PULAR }, async () => {
+ const abrir = async estado => {
+  const d = await pagina.injetar(COM_CREDENCIAIS(estado));
+  await pagina.tela(1280, 900);
+  await pagina.ir(origem + '/');
+  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+  await ABRIR_SECAO('integracoes');
+  await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-integracao').length === 6`, { descricao: 'cartões' });
+  return d;
+ };
+ const cartao = `document.querySelector('#settings-body .cfg-integracao[data-integracao=push]')`;
+ const botao = texto => `[...${cartao}.querySelectorAll('.cfg-cred-form button')].find(b => b.textContent.startsWith(${JSON.stringify(texto)}))`;
+ const abrirForm = async () => { await pagina.avaliar(`${cartao}.querySelector('button[data-acao=configurar]').click()`); await pagina.esperar(`${cartao}.querySelector('.cfg-cred-form')`); };
+ // sem chaves: gera direto, sem pedir confirmação
+ let d = await abrir({ pushTem: false });
+ await abrirForm();
+ assert.deepEqual(await pagina.avaliar(`[...${cartao}.querySelectorAll('.cfg-cred-campo input')].map(i => [i.name, i.type])`), [['VAPID_PUBLIC_KEY', 'text'], ['VAPID_PRIVATE_KEY', 'password'], ['VAPID_SUBJECT', 'text']], 'a chave privada é campo de senha');
+ await pagina.avaliar(`${botao('Gerar chaves')}.click()`);
+ await pagina.esperar(`window.__cred.gerar.length === 1`);
+ assert.deepEqual(await pagina.avaliar(`window.__cred.gerar[0]`), { confirmar: false });
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-integracoes > .config-aviso').textContent.includes('Chaves geradas')`);
+ assert.match(await pagina.avaliar(`document.querySelector('#settings-body .cfg-integracoes > .config-aviso').textContent`), /privada ficou só no servidor/);
+ assert.ok(!(await pagina.avaliar(`document.getElementById('settings-body').innerHTML`)).includes('PRIVADA-SECRETA'), 'a privada nunca chega à tela');
+ await d?.();
+ // com chaves: o primeiro clique só avisa; o segundo confirma
+ d = await abrir({ pushTem: true });
+ await abrirForm();
+ await pagina.avaliar(`${botao('Gerar chaves novas')}.click()`);
+ assert.equal(await pagina.avaliar(`window.__cred.gerar.length`), 0, 'o primeiro clique não gera');
+ assert.match(await pagina.avaliar(`${cartao}.querySelector('.config-aviso').textContent`), /desativa os aparelhos que já ativaram/);
+ assert.ok(await pagina.avaliar(`!!${botao('Confirmar')}`));
+ await pagina.avaliar(`${botao('Confirmar')}.click()`);
+ await pagina.esperar(`window.__cred.gerar.length === 1`);
+ assert.deepEqual(await pagina.avaliar(`window.__cred.gerar[0]`), { confirmar: true, subject: 'https://core.exemplo.test' }, 'o assunto que está no campo vai junto');
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-integracoes > .config-aviso').textContent.includes('2 aparelho(s) foram desativados')`);
+ semExcecoes();
+ await d?.();
+});
+
+test('configurações → Notificações: assinatura do navegador feita com a chave antiga é descartada e refeita com a atual', { skip: PULAR }, async () => {
+ const desfazer = await pagina.injetar(COM_PUSH);
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ // o navegador ainda guarda uma assinatura feita com OUTRA chave pública; o servidor não a conhece
+ await pagina.avaliar(`(() => { const a = window.__push.assinatura; a.ativa = true; a.options = { applicationServerKey: new Uint8Array(65).fill(7).buffer }; })()`);
+ await IR_PARA_CONFIG();
+ assert.ok(await pagina.avaliar(`!!${BOTAO_CONFIG('Ativar neste aparelho')}`));
+ await pagina.avaliar(`${BOTAO_CONFIG('Ativar neste aparelho')}.click()`);
+ await pagina.esperar(`window.__push.puts.length === 1`);
+ assert.equal(await pagina.avaliar(`window.__push.desinscrito`), 1, 'a assinatura antiga foi cancelada');
+ assert.deepEqual(await pagina.avaliar(`window.__push.opcoes`), { userVisibleOnly: true, bytes: 65 }, 'e uma nova foi feita com a chave atual');
+ semExcecoes();
+ await desfazer?.();
 });
 
 test('configurações → Integrações → Google: explica o que falta, conecta, mostra a conta e desconecta', { skip: PULAR }, async () => {
@@ -2092,7 +2151,7 @@ test('configurações → Integrações: estado de cada serviço, o que falta e 
  assert.equal(ep.selo, 'Incompleto'); assert.match(ep.texto, /EASYPANEL_TOKEN/);
  assert.match((await linha('stripe')).texto, /Opcional, ainda não definido: STRIPE_WEBHOOK_SECRET/);
  assert.match((await linha('meta')).texto, /Nenhuma conta conectada ainda/);
- assert.equal((await linha('push')).botao, false, 'sem tela de operação, sem botão');
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-integracao[data-integracao=push] button')].some(b => b.textContent === 'Abrir')`), false, 'sem tela de operação, sem botão Abrir');
  assert.match(await pagina.avaliar(`document.querySelector('#settings-body .cfg-nota:last-child').textContent`), /nunca aparecem aqui/);
  // "Abrir" leva para a tela de operação
  await pagina.avaliar(`document.querySelector('#settings-body .cfg-integracao[data-integracao=vercel] button').click()`);

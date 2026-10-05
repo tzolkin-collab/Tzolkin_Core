@@ -5,6 +5,7 @@ import { createVercelAdapter } from '../integrations/vercel.mjs';
 import { createGithubAdapter } from '../integrations/github.mjs';
 import { createEasypanelAdapter } from '../integrations/easypanel.mjs';
 import { createHostingerDnsAdapter } from '../integrations/hostinger-dns.mjs';
+import { createECDH } from 'node:crypto';
 import { scrub } from './secrets.mjs';
 
 const LIMPO = /^[\x21-\x7e]{8,500}$/;                       // segredo: ASCII visível, sem espaço nem quebra de linha
@@ -16,6 +17,15 @@ const enderecoEasypanel = valor => {
  if (u.protocol !== 'https:' || u.username || u.password || u.search || u.hash || !['/', '/api', '/api/'].includes(u.pathname)) return 'Use o endereço https do painel, sem usuário, parâmetros ou caminho (só / ou /api).';
  return null;
 };
+
+const chavePublicaVapid = valor => /^[A-Za-z0-9_-]{87}$/.test(valor) ? null : 'Chave pública inválida (87 caracteres, letras, números, - e _).';
+const chavePrivadaVapid = valor => /^[A-Za-z0-9_-]{43}$/.test(valor) ? null : 'Chave privada inválida (43 caracteres, letras, números, - e _).';
+const assuntoVapid = valor => valor.length <= 200 && /^(https:\/\/[^\s]+|mailto:[^\s@]+@[^\s@]+)$/.test(valor) ? null : 'Use o endereço do site (https://…) ou um mailto:.';
+/** A chave pública tem de ser a que nasce da privada: par trocado faz todo envio falhar sem explicação. */
+export function parDeChavesConfere(publica, privada) {
+ try { const e = createECDH('prime256v1'); e.setPrivateKey(Buffer.from(privada, 'base64url')); return e.getPublicKey().toString('base64url') === publica; }
+ catch { return false; }
+}
 
 const rotuloDeErro = (e, ...segredos) => scrub(e?.message || 'sem detalhe', ...segredos).slice(0, 160);
 
@@ -48,6 +58,18 @@ export const PROVEDORES = Object.freeze({
   async testar(v, fetchImpl) {
    await createEasypanelAdapter({ baseUrl: v.EASYPANEL_URL, token: v.EASYPANEL_TOKEN, fetchImpl }).inventory();
    return 'O EasyPanel respondeu ao inventário.';
+  },
+ },
+ push: {
+  nome: 'Notificações push',
+  campos: [
+   { nome: 'VAPID_PUBLIC_KEY', rotulo: 'Chave pública', secreto: false, obrigatorio: true, validar: chavePublicaVapid, ajuda: 'É entregue ao navegador; não é segredo.' },
+   { nome: 'VAPID_PRIVATE_KEY', rotulo: 'Chave privada', secreto: true, obrigatorio: true, validar: chavePrivadaVapid, ajuda: 'Fica só no servidor.' },
+   { nome: 'VAPID_SUBJECT', rotulo: 'Assunto', secreto: false, obrigatorio: true, validar: assuntoVapid, ajuda: 'O endereço do site (https://…) ou um mailto:. Identifica o remetente para o serviço de push.' },
+  ],
+  async testar(v) {
+   if (!parDeChavesConfere(v.VAPID_PUBLIC_KEY, v.VAPID_PRIVATE_KEY)) throw new Error('A chave pública não é a par da chave privada.');
+   return 'O par de chaves confere. Nenhum aviso foi enviado.';
   },
  },
  hostinger: {

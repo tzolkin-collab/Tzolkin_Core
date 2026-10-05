@@ -120,6 +120,27 @@ function formularioDeCredenciais(cred, aoMudar) {
   } catch (e) { dizer(e.message, true); salvar.disabled = testar.disabled = bloqueado; }
  };
  acoes.append(testar, salvar);
+ // Push: as chaves VAPID se GERAM aqui (o par nasce no servidor; a privada nunca vem para a tela).
+ if (cred.provedor.id === 'push') {
+  const jaTem = cred.provedor.campos.some(c => c.nome === 'VAPID_PUBLIC_KEY' && c.definido);
+  const gerar = no('button', jaTem ? 'Gerar chaves novas…' : 'Gerar chaves', 'secondary'); gerar.type = 'button'; gerar.dataset.acao = 'gerar';
+  gerar.disabled = bloqueado;
+  let confirmando = false;
+  gerar.onclick = async () => {
+   if (jaTem && !confirmando) {
+    confirmando = true; gerar.textContent = 'Confirmar: gerar e desativar os aparelhos atuais';
+    dizer('Trocar as chaves desativa os aparelhos que já ativaram as notificações: cada pessoa precisa ativar de novo em Configurações → Notificações. Clique de novo para confirmar.', true);
+    return;
+   }
+   gerar.disabled = true; dizer('Gerando…');
+   try {
+    const assunto = entradas.get('VAPID_SUBJECT')?.value.trim();
+    const r = await cred.api('/api/integrations/credentials/push/gerar', 'POST', { confirmar: jaTem, ...(assunto ? { subject: assunto } : {}) });
+    await aoMudar(`Chaves geradas e guardadas. ${r.aparelhos_desativados ? `${r.aparelhos_desativados} aparelho(s) foram desativados: cada pessoa ativa de novo em Notificações. ` : ''}A chave privada ficou só no servidor.`);
+   } catch (e) { dizer(e.message, true); gerar.disabled = bloqueado; confirmando = false; gerar.textContent = jaTem ? 'Gerar chaves novas…' : 'Gerar chaves'; }
+  };
+  acoes.append(gerar);
+ }
  f.append(acoes, aviso);
  if (!cred.migracao) dizer('Disponível assim que a atualização do banco (migração 050) for aplicada.', true);
  else if (!cred.chave) dizer('Falta definir CORE_SECRETS_KEY no servidor para guardar credenciais pela tela.', true);
