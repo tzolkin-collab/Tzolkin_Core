@@ -1,8 +1,9 @@
 import {createPluggy} from '../integrations/pluggy.mjs';
 import {pluggyItemIds} from '../integrations/pluggy-config.mjs';
 import {fail,json,input} from '../platform/http.mjs';
+import {vivo} from '../platform/env-vivo.mjs';
 
-export function financeRoutes(router,{provider=createPluggy(),env=process.env}={}) {
+export function financeRoutes(router,{provider=createPluggy(),env=vivo.env}={}) {
  const pending=new Map();
  const read=async(pool,key)=>(await pool.query('SELECT payload,updated_at FROM finance_snapshots WHERE key=$1',[key])).rows[0]||null;
  const save=(pool,key,data)=>pool.query('INSERT INTO finance_snapshots(key,payload) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET payload=EXCLUDED.payload,updated_at=now()',[key,JSON.stringify(data)]);

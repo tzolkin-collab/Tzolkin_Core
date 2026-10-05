@@ -34,6 +34,15 @@ const tokenWebhookAsaas = v => /^[\x21-\x7e]{16,255}$/.test(v) ? null : 'Use de 
 const ambienteAsaas = v => ['production', 'sandbox'].includes(v) ? null : 'Use production ou sandbox.';
 const modoStripe = v => (String(v).includes('_live_') ? 'live' : 'test');
 
+const idPluggy = v => /^[A-Za-z0-9_-]{8,128}$/.test(v) ? null : 'ID do cliente inválido (letras, números, - e _).';
+const itensPluggy = v => {
+ const ids = v.split(',').map(x => x.trim()).filter(Boolean);
+ if (!ids.length) return 'Informe pelo menos um item.';
+ if (ids.length > 20) return 'No máximo 20 itens.';
+ return ids.every(i => /^[A-Za-z0-9_-]{1,128}$/.test(i)) ? null : 'Cada item deve ter só letras, números, - e _, separados por vírgula.';
+};
+export const itensDePluggy = v => [...new Set(String(v || '').split(',').map(x => x.trim()).filter(Boolean))];
+
 const rotuloDeErro = (e, ...segredos) => scrub(e?.message || 'sem detalhe', ...segredos).slice(0, 160);
 
 export const PROVEDORES = Object.freeze({
@@ -65,6 +74,30 @@ export const PROVEDORES = Object.freeze({
   async testar(v, fetchImpl) {
    await createEasypanelAdapter({ baseUrl: v.EASYPANEL_URL, token: v.EASYPANEL_TOKEN, fetchImpl }).inventory();
    return 'O EasyPanel respondeu ao inventário.';
+  },
+ },
+ pluggy: {
+  nome: 'Pluggy (bancos)',
+  campos: [
+   { nome: 'PLUGGY_CLIENT_ID', rotulo: 'ID do cliente', secreto: false, obrigatorio: true, validar: idPluggy, ajuda: 'Dashboard da Pluggy → Aplicação.' },
+   { nome: 'PLUGGY_CLIENT_SECRET', rotulo: 'Segredo do cliente', secreto: true, obrigatorio: true, validar: segredo, ajuda: 'Do mesmo aplicativo na Pluggy.' },
+   { nome: 'PLUGGY_ITEM_IDS', rotulo: 'Conexões (itens), separadas por vírgula', secreto: false, validar: itensPluggy, ajuda: 'Cada banco conectado na Pluggy tem um item. Sem itens o Financeiro não mostra contas.' },
+  ],
+  async testar(v, fetchImpl) {
+   const auth = await fetchImpl('https://api.pluggy.ai/auth', { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId: v.PLUGGY_CLIENT_ID, clientSecret: v.PLUGGY_CLIENT_SECRET }), signal: AbortSignal.timeout(10000) });
+   if (auth.status === 401 || auth.status === 403) throw new Error('A Pluggy recusou o ID e o segredo do cliente.');
+   if (!auth.ok) throw new Error('A Pluggy não respondeu como esperado.');
+   const { apiKey } = await auth.json();
+   if (!apiKey) throw new Error('A Pluggy não devolveu o token de acesso.');
+   const itens = itensDePluggy(v.PLUGGY_ITEM_IDS).slice(0, 10);
+   if (!itens.length) return 'A Pluggy aceitou o ID e o segredo. Nenhuma conexão (item) informada ainda.';
+   const faltam = [];
+   for (const id of itens) {
+    const r = await fetchImpl(`https://api.pluggy.ai/items/${encodeURIComponent(id)}`, { method: 'GET', redirect: 'error', headers: { 'X-API-KEY': apiKey }, signal: AbortSignal.timeout(10000) });
+    if (!r.ok) faltam.push(id);
+   }
+   if (faltam.length) throw new Error(`Credenciais aceitas, mas ${faltam.length === 1 ? 'este item não foi encontrado' : 'estes itens não foram encontrados'} nesta conta: ${faltam.join(', ')}.`);
+   return `A Pluggy aceitou as credenciais e ${itens.length === 1 ? 'a conexão respondeu' : `as ${itens.length} conexões responderam`}.`;
   },
  },
  push: {

@@ -90,7 +90,7 @@ test('só campos conhecidos, não vazios, no formato certo', () => {
  recusa('vercel', {}, /Nada para salvar/);
  recusa('hostinger', { HOSTINGER_DNS_ZONE: 'não é domínio' }, /domínio/);
  recusa('inexistente', { X: 'y' }, /Provedor desconhecido/);
- assert.deepEqual(Object.keys(PROVEDORES), ['vercel', 'github', 'easypanel', 'push', 'stripe', 'asaas', 'hostinger']);
+ assert.deepEqual(Object.keys(PROVEDORES), ['vercel', 'github', 'easypanel', 'pluggy', 'push', 'stripe', 'asaas', 'hostinger']);
  for (const p of Object.values(PROVEDORES)) for (const c of p.campos) assert.match(c.nome, /^[A-Z][A-Z0-9_]{2,63}$/, 'cabe na CHECK da migração');
 });
 
@@ -455,6 +455,72 @@ test('as rotas de cobrança leem o ambiente vivo: a chave da tela vale sem reini
  } finally { for (const k of ['STRIPE_SECRET_KEY', 'ASAAS_API_KEY', 'ASAAS_ENVIRONMENT']) processoVivo._sobre.delete(k); assert.equal(processoVivo._sobre.size, antes); }
  // os demais módulos de cobrança usam o mesmo ambiente por padrão (não o process.env congelado)
  for (const arquivo of ['modules/payment-sales.mjs', 'modules/payment-webhooks.mjs', 'modules/product-payments.mjs', 'modules/stripe-catalog.mjs', 'modules/checkout-gateway.mjs', 'integrations/payment-sales.mjs']) {
+  const fonte = readFileSync(new URL(`../../apps/api/src/${arquivo}`, import.meta.url), 'utf8');
+  assert.match(fonte, /env-vivo\.mjs/, arquivo); assert.match(fonte, /env\s*=\s*vivo\.env/, arquivo);
+ }
+});
+
+// ---------- etapa 4: Pluggy (bancos) ----------
+import { createPluggy } from '../../apps/api/src/integrations/pluggy.mjs';
+import { itensDePluggy } from '../../apps/api/src/platform/credenciais.mjs';
+
+test('Pluggy: formato dos campos e lista de itens sem repetição', () => {
+ const ok = validarValores('pluggy', { PLUGGY_CLIENT_ID: 'abc12345-def6-7890', PLUGGY_CLIENT_SECRET: 'segredo-da-pluggy-1234', PLUGGY_ITEM_IDS: 'item-1, item_2 ,item-1' }, fail);
+ assert.equal(ok.PLUGGY_ITEM_IDS, 'item-1, item_2 ,item-1');
+ assert.deepEqual(itensDePluggy(ok.PLUGGY_ITEM_IDS), ['item-1', 'item_2'], 'sem repetição e sem espaços');
+ const recusa = (v, re) => assert.throws(() => validarValores('pluggy', v, fail), e => e.status === 400 && re.test(e.message));
+ recusa({ PLUGGY_CLIENT_ID: 'curto' }, /inválido/);
+ recusa({ PLUGGY_ITEM_IDS: 'item com espaço,outro' }, /só letras/);
+ recusa({ PLUGGY_ITEM_IDS: Array.from({ length: 21 }, (_, i) => `item-${i}`).join(',') }, /No máximo 20/);
+ recusa({ PLUGGY_ITEM_IDS: ' , ' }, /pelo menos um/);
+});
+
+test('Pluggy: Testar autentica, confere cada item e diz qual não existe; sem ecoar segredo', async () => {
+ const SEGREDO = 'segredo-PLUGGY-987654321';
+ const chamadas = [];
+ const rede = (itensOk = ['item-1', 'item-2'], authStatus = 200) => async (url, o = {}) => {
+  const u = String(url); chamadas.push({ url: u, metodo: o.method || 'GET', chave: o.headers?.['X-API-KEY'], corpo: o.body });
+  if (u.endsWith('/auth')) return authStatus === 200 ? resposta({ apiKey: 'AK-1' }) : resposta({}, authStatus);
+  const id = decodeURIComponent(u.split('/items/')[1]);
+  return resposta({}, itensOk.includes(id) ? 200 : 404);
+ };
+ const base = { PLUGGY_CLIENT_ID: 'abc12345-def6', PLUGGY_CLIENT_SECRET: SEGREDO };
+ const sem = await testarProvedor('pluggy', base, () => '', rede());
+ assert.equal(sem.ok, true); assert.match(sem.mensagem, /Nenhuma conexão \(item\) informada/);
+ const dois = await testarProvedor('pluggy', { ...base, PLUGGY_ITEM_IDS: 'item-1,item-2' }, () => '', rede());
+ assert.match(dois.mensagem, /as 2 conexões responderam/);
+ assert.equal(chamadas.find(c => c.url.includes('/items/item-1')).chave, 'AK-1', 'o token obtido é usado nos itens');
+ assert.deepEqual(JSON.parse(chamadas.find(c => c.url.endsWith('/auth')).corpo), { clientId: 'abc12345-def6', clientSecret: SEGREDO });
+ const falta = await testarProvedor('pluggy', { ...base, PLUGGY_ITEM_IDS: 'item-1,item-x' }, () => '', rede(['item-1']));
+ assert.equal(falta.ok, false); assert.match(falta.mensagem, /este item não foi encontrado nesta conta: item-x/);
+ const recusada = await testarProvedor('pluggy', { ...base, PLUGGY_ITEM_IDS: 'item-1' }, () => '', rede([], 401));
+ assert.equal(recusada.ok, false); assert.match(recusada.mensagem, /recusou o ID e o segredo/); assert.ok(!recusada.mensagem.includes(SEGREDO));
+ // só os itens no pedido: ID e segredo que já valem (servidor ou tela) são usados na autenticação
+ const mistura = await testarProvedor('pluggy', { PLUGGY_ITEM_IDS: 'item-2' }, n => ({ PLUGGY_CLIENT_ID: 'abc12345-def6', PLUGGY_CLIENT_SECRET: SEGREDO })[n] || '', rede());
+ assert.equal(mistura.ok, true, mistura.mensagem);
+});
+
+test('Pluggy: trocar ID ou segredo descarta o token de acesso obtido com as credenciais antigas', async () => {
+ const env = { PLUGGY_CLIENT_ID: 'cliente-antigo', PLUGGY_CLIENT_SECRET: 'segredo-antigo-123' };
+ const auths = [];
+ let n = 0;
+ const fetcher = async (url, o = {}) => {
+  const u = String(url);
+  if (u.endsWith('/auth')) { auths.push(JSON.parse(o.body).clientId); return resposta({ apiKey: `chave-${++n}` }); }
+  return resposta({ status: 'UPDATED', lastUpdatedAt: null, results: [] });
+ };
+ const p = createPluggy({ env, fetcher, clock: () => 0 });
+ await p.accounts('item-1');
+ await p.accounts('item-1');
+ assert.deepEqual(auths, ['cliente-antigo'], 'mesmas credenciais: o token é reaproveitado');
+ env.PLUGGY_CLIENT_ID = 'cliente-novo';
+ await p.accounts('item-1');
+ assert.deepEqual(auths, ['cliente-antigo', 'cliente-novo'], 'credencial trocada: autentica de novo, sem esperar o token vencer');
+});
+
+test('o Financeiro e a Pluggy leem o ambiente vivo por padrão', async () => {
+ const { readFileSync } = await import('node:fs');
+ for (const arquivo of ['modules/finance.mjs', 'integrations/pluggy.mjs']) {
   const fonte = readFileSync(new URL(`../../apps/api/src/${arquivo}`, import.meta.url), 'utf8');
   assert.match(fonte, /env-vivo\.mjs/, arquivo); assert.match(fonte, /env\s*=\s*vivo\.env/, arquivo);
  }

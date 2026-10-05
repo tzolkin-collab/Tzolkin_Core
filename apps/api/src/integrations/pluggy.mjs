@@ -1,4 +1,5 @@
 import {fail} from '../platform/http.mjs';
+import {vivo} from '../platform/env-vivo.mjs';
 
 const endpoint = env => {
  const value = env.PLUGGY_API_BASE?.trim() || 'https://api.pluggy.ai';
@@ -7,10 +8,13 @@ const endpoint = env => {
  return url.origin;
 };
 
-export function createPluggy({env=process.env,fetcher=fetch,clock=Date.now}={}) {
+export function createPluggy({env=vivo.env,fetcher=fetch,clock=Date.now}={}) {
  const base = endpoint(env);
- let key,expires=0,pending;
+ let key,expires=0,pending,usado='';
  async function request(path,signal) {
+  // Credencial trocada (pela tela): o token de acesso obtido com a anterior não vale mais.
+  const atual=`${env.PLUGGY_CLIENT_ID}|${env.PLUGGY_CLIENT_SECRET}`;
+  if(usado!==atual){key=null;expires=0;usado=atual;}
   if(!key || clock()>=expires) {
    pending ||= (async()=>{
     if(!env.PLUGGY_CLIENT_ID || !env.PLUGGY_CLIENT_SECRET)throw fail(503,'Configure as credenciais Pluggy no backend.');
