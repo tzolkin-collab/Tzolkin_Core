@@ -43,6 +43,13 @@ const itensPluggy = v => {
 };
 export const itensDePluggy = v => [...new Set(String(v || '').split(',').map(x => x.trim()).filter(Boolean))];
 
+const idAppMeta = v => /^\d{8,20}$/.test(v) ? null : 'ID do aplicativo inválido (só números).';
+const configLoginMeta = v => /^\d{5,25}$/.test(v) ? null : 'ID da configuração inválido (só números).';
+const retornoMeta = v => {
+ let u; try { u = new URL(v); } catch { return 'Informe o endereço completo, com https://.'; }
+ return u.protocol === 'https:' && !u.username && !u.password && !u.search && !u.hash ? null : 'Use um endereço https, sem usuário, parâmetros ou âncora.';
+};
+
 const rotuloDeErro = (e, ...segredos) => scrub(e?.message || 'sem detalhe', ...segredos).slice(0, 160);
 
 export const PROVEDORES = Object.freeze({
@@ -147,6 +154,24 @@ export const PROVEDORES = Object.freeze({
    if (r.status === 401 || r.status === 403) throw new Error(`O Asaas recusou a chave no ambiente ${producao ? 'production' : 'sandbox'}. Confira se a chave é do ambiente certo.`);
    if (!r.ok) throw new Error('O Asaas não respondeu como esperado.');
    return `O Asaas aceitou a chave (ambiente ${producao ? 'production' : 'sandbox'}).${v.ASAAS_WEBHOOK_TOKEN ? ' O token do webhook tem o formato certo; só um evento real confirma que bate.' : ''}`;
+  },
+ },
+ meta: {
+  nome: 'Meta (anúncios)',
+  campos: [
+   { nome: 'META_APP_ID', rotulo: 'ID do aplicativo', secreto: false, obrigatorio: true, critico: true, validar: idAppMeta, ajuda: 'developers.facebook.com → seu aplicativo → Configurações → Básico.', avisoTroca: 'Trocar o aplicativo da Meta invalida a conta de anúncios já conectada: será preciso conectar de novo em cada produto.' },
+   { nome: 'META_APP_SECRET', rotulo: 'Chave secreta do aplicativo', secreto: true, obrigatorio: true, critico: true, validar: segredo, ajuda: 'Na mesma página (Chave secreta do aplicativo).', avisoTroca: 'Trocar a chave secreta do aplicativo pode invalidar a conta de anúncios já conectada: se a Meta recusar o token antigo, será preciso conectar de novo.' },
+   { nome: 'META_LOGIN_CONFIG_ID', rotulo: 'ID da configuração do Login para Empresas (opcional)', secreto: false, validar: configLoginMeta, ajuda: 'Só para Login para Empresas. Sem ele, usa o Login do Facebook clássico.' },
+   { nome: 'META_REDIRECT_URI', rotulo: 'Endereço de retorno (opcional)', secreto: false, validar: retornoMeta, ajuda: 'Só se o endereço de retorno cadastrado na Meta não for o do próprio Core (/api/marketing/meta/callback).' },
+  ],
+  async testar(v, fetchImpl) {
+   // O app só emite token de acesso se ID e chave secreta forem do mesmo aplicativo. POST (e não GET): a chave não vai em endereço.
+   const r = await fetchImpl('https://graph.facebook.com/oauth/access_token', { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: v.META_APP_ID, client_secret: v.META_APP_SECRET, grant_type: 'client_credentials' }), signal: AbortSignal.timeout(10000) });
+   if (r.status === 400 || r.status === 401 || r.status === 403) throw new Error('A Meta recusou o ID e a chave secreta: confira se são do mesmo aplicativo.');
+   if (!r.ok) throw new Error('A Meta não respondeu como esperado.');
+   const d = await r.json();
+   if (!d.access_token) throw new Error('A Meta não confirmou o aplicativo.');
+   return `A Meta aceitou o ID e a chave secreta do aplicativo.${v.META_LOGIN_CONFIG_ID ? ' O ID da configuração tem o formato certo; só uma conexão real confirma que existe.' : ''}`;
   },
  },
  hostinger: {

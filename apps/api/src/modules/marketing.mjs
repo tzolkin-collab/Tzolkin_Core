@@ -15,6 +15,7 @@
 // Ver docs/INTEGRATIONS.md e db/migrations/026_marketing_campaigns.sql
 import { fail, input, isProductId, isUuid, json, onlyParams, text } from '../platform/http.mjs';
 import { readKey, seal, open, fingerprint, scrub } from '../platform/secrets.mjs';
+import { vivo } from '../platform/env-vivo.mjs';
 import { createMetaGraphAdapter, exchangeLongLivedToken, buildAuthorizeUrl, exchangeCodeForToken, ehConfigDeLogin } from '../integrations/meta-graph.mjs';
 import { randomBytes } from 'node:crypto';
 import { digest } from '../platform/session.mjs';
@@ -154,7 +155,7 @@ const SQL_CAMPANHAS = `
    ) i ON true
   WHERE c.provider=$3`;
 
-export function marketingRoutes(router, { env = process.env, clock = Date.now, adapter = null } = {}) {
+export function marketingRoutes(router, { env = vivo.env, clock = Date.now, adapter = null } = {}) {
 
  const abrirAdaptador = async pool => {
   const credencial = await credencialAtiva(pool, env);

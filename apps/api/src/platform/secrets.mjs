@@ -27,7 +27,9 @@ const KEY_BYTES = 32;
  * Lê a chave-mestra do ambiente. Falha alto e cedo: um Core que aceita rodar
  * sem chave acabaria guardando credencial em texto claro sem ninguém notar.
  */
-export function readKey(env = process.env, name = 'META_MARKETING_KEY') {
+export function readKey(env = process.env, name) {
+ // Sem nome explícito: META_MARKETING_KEY (quem já a tem segue igual); senão, a chave única do Core.
+ name ??= String(env.META_MARKETING_KEY ?? '').trim() || !String(env.CORE_SECRETS_KEY ?? '').trim() ? 'META_MARKETING_KEY' : 'CORE_SECRETS_KEY';
  const raw = env[name];
  if (!raw) throw Object.assign(
   new Error(`Defina ${name} no ambiente do servidor. Gere com: node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"`),

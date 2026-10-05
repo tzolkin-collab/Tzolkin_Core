@@ -90,7 +90,7 @@ test('só campos conhecidos, não vazios, no formato certo', () => {
  recusa('vercel', {}, /Nada para salvar/);
  recusa('hostinger', { HOSTINGER_DNS_ZONE: 'não é domínio' }, /domínio/);
  recusa('inexistente', { X: 'y' }, /Provedor desconhecido/);
- assert.deepEqual(Object.keys(PROVEDORES), ['vercel', 'github', 'easypanel', 'pluggy', 'push', 'stripe', 'asaas', 'hostinger']);
+ assert.deepEqual(Object.keys(PROVEDORES), ['vercel', 'github', 'easypanel', 'pluggy', 'push', 'stripe', 'asaas', 'meta', 'hostinger']);
  for (const p of Object.values(PROVEDORES)) for (const c of p.campos) assert.match(c.nome, /^[A-Z][A-Z0-9_]{2,63}$/, 'cabe na CHECK da migração');
 });
 
@@ -524,4 +524,73 @@ test('o Financeiro e a Pluggy leem o ambiente vivo por padrão', async () => {
   const fonte = readFileSync(new URL(`../../apps/api/src/${arquivo}`, import.meta.url), 'utf8');
   assert.match(fonte, /env-vivo\.mjs/, arquivo); assert.match(fonte, /env\s*=\s*vivo\.env/, arquivo);
  }
+});
+
+// ---------- etapa 5: Meta (só o aplicativo; a conta continua conectada dentro do produto) ----------
+import { readKey } from '../../apps/api/src/platform/secrets.mjs';
+import { chaveConfigurada, oauthConfigurado, modoDeLogin } from '../../apps/api/src/modules/marketing.mjs';
+
+test('Meta: formato dos campos', () => {
+ const ok = validarValores('meta', { META_APP_ID: '123456789012345', META_APP_SECRET: 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6', META_LOGIN_CONFIG_ID: '987654321', META_REDIRECT_URI: 'https://core.exemplo.test/api/marketing/meta/callback' }, fail);
+ assert.equal(Object.keys(ok).length, 4);
+ const recusa = (v, re) => assert.throws(() => validarValores('meta', v, fail), e => e.status === 400 && re.test(e.message));
+ recusa({ META_APP_ID: 'app-123' }, /só números/);
+ recusa({ META_APP_ID: '123' }, /só números/);
+ recusa({ META_LOGIN_CONFIG_ID: 'abc' }, /só números/);
+ recusa({ META_REDIRECT_URI: 'http://inseguro.test/x' }, /https/);
+ recusa({ META_REDIRECT_URI: 'https://x.test/cb?token=1' }, /parâmetros/);
+ recusa({ META_APP_SECRET: 'curto' }, /8 a 500/);
+});
+
+test('Meta: Testar pede o token do aplicativo por POST (a chave nunca vai no endereço) e explica quando ID e chave não combinam', async () => {
+ const SEGREDO = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6';
+ const chamadas = [];
+ const rede = (status, corpoJson = { access_token: 'APPTOKEN' }) => async (url, o = {}) => { chamadas.push({ url: String(url), metodo: o.method, corpo: String(o.body) }); return resposta(corpoJson, status); };
+ const ok = await testarProvedor('meta', { META_APP_ID: '123456789012345', META_APP_SECRET: SEGREDO, META_LOGIN_CONFIG_ID: '987654321' }, () => '', rede(200));
+ assert.equal(ok.ok, true, ok.mensagem); assert.match(ok.mensagem, /aceitou o ID e a chave secreta/); assert.match(ok.mensagem, /só uma conexão real confirma/);
+ assert.equal(chamadas[0].metodo, 'POST'); assert.ok(!chamadas[0].url.includes(SEGREDO) && !chamadas[0].url.includes('?'), 'nada de segredo no endereço');
+ assert.match(chamadas[0].corpo, /client_id=123456789012345/); assert.match(chamadas[0].corpo, /grant_type=client_credentials/);
+ const recusada = await testarProvedor('meta', { META_APP_ID: '123456789012345', META_APP_SECRET: SEGREDO }, () => '', rede(400, { error: { message: 'Invalid client_secret' } }));
+ assert.equal(recusada.ok, false); assert.match(recusada.mensagem, /mesmo aplicativo/); assert.ok(!recusada.mensagem.includes(SEGREDO));
+ const semToken = await testarProvedor('meta', { META_APP_ID: '123456789012345', META_APP_SECRET: SEGREDO }, () => '', rede(200, {}));
+ assert.equal(semToken.ok, false);
+ const mistura = await testarProvedor('meta', { META_APP_SECRET: SEGREDO }, n => (n === 'META_APP_ID' ? '123456789012345' : ''), rede(200));
+ assert.equal(mistura.ok, true, 'o ID que já vale (servidor ou tela) completa o pedido');
+});
+
+test('Meta: trocar o aplicativo (ID ou chave) em uso pede confirmação e avisa que a conta conectada pode cair; opcionais não', async () => {
+ const rede = async () => resposta({ access_token: 'APPTOKEN' });
+ const SEGREDO = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6';
+ const m = montar({ env: { ...BASE, META_APP_ID: '123456789012345', META_APP_SECRET: SEGREDO }, fetchImpl: rede });
+ await assert.rejects(m.rotas['PUT /api/integrations/credentials']({ client: m.client, body: { provider: 'meta', valores: { META_APP_ID: '999999999999999' } }, operator: OPERADOR }), e => e.status === 409 && /conectar de novo/.test(e.message));
+ const ok = await m.rotas['PUT /api/integrations/credentials']({ client: m.client, body: { provider: 'meta', valores: { META_APP_ID: '999999999999999' }, confirmar: true }, operator: OPERADOR });
+ assert.equal(ok.response.ok, true);
+ const opc = montar({ env: { ...BASE, META_APP_ID: '123456789012345', META_APP_SECRET: SEGREDO }, fetchImpl: rede });
+ assert.equal((await opc.rotas['PUT /api/integrations/credentials']({ client: opc.client, body: { provider: 'meta', valores: { META_LOGIN_CONFIG_ID: '987654321' } }, operator: OPERADOR })).response.ok, true, 'campo opcional não pede confirmação');
+ const primeira = montar({ env: { ...BASE }, fetchImpl: rede });
+ assert.equal((await primeira.rotas['PUT /api/integrations/credentials']({ client: primeira.client, body: { provider: 'meta', valores: { META_APP_ID: '123456789012345', META_APP_SECRET: SEGREDO } }, operator: OPERADOR })).response.ok, true, 'primeira definição não pede');
+});
+
+test('a chave que cifra o token da Meta: META_MARKETING_KEY se existir, senão a chave única do Core', () => {
+ const k1 = randomBytes(32).toString('base64'), k2 = randomBytes(32).toString('base64');
+ assert.deepEqual(readKey({ META_MARKETING_KEY: k1, CORE_SECRETS_KEY: k2 }), Buffer.from(k1, 'base64'), 'quem já tem a chave da Meta segue com ela');
+ assert.deepEqual(readKey({ CORE_SECRETS_KEY: k2 }), Buffer.from(k2, 'base64'), 'só a chave única: vale');
+ assert.deepEqual(readKey({ META_MARKETING_KEY: k1 }), Buffer.from(k1, 'base64'));
+ assert.throws(() => readKey({}), e => e.status === 503 && /META_MARKETING_KEY/.test(e.message));
+ assert.equal(chaveConfigurada({ CORE_SECRETS_KEY: k2 }), true);
+ assert.equal(chaveConfigurada({}), false);
+});
+
+test('a Meta lê o ambiente vivo: ID e chave da tela fazem o OAuth ficar disponível sem reiniciar', async () => {
+ const v = criarEnvVivo({ base: { ...BASE }, log: mudo });
+ assert.equal(oauthConfigurado(v.env), false);
+ const SEGREDO = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6';
+ await v.carregar(bancoCom([linha('META_APP_ID', '123456789012345'), linha('META_APP_SECRET', SEGREDO)]));
+ assert.equal(oauthConfigurado(v.env), true, 'ID e chave definidos pela tela ligam o OAuth');
+ assert.equal(modoDeLogin(v.env), 'classic');
+ await v.carregar(bancoCom([linha('META_APP_ID', '123456789012345'), linha('META_APP_SECRET', SEGREDO), linha('META_LOGIN_CONFIG_ID', '987654321')]));
+ assert.equal(modoDeLogin(v.env), 'business');
+ const { readFileSync } = await import('node:fs');
+ const fonte = readFileSync(new URL('../../apps/api/src/modules/marketing.mjs', import.meta.url), 'utf8');
+ assert.match(fonte, /env-vivo\.mjs/); assert.match(fonte, /env\s*=\s*vivo\.env/);
 });

@@ -116,6 +116,10 @@ Objetivo: ligar, trocar e remover cada integração em Configurações → Integ
 
 **Ordem proposta.** 1) infraestrutura (tabela, cifra, resolvedor, formulário e Testar) com Vercel, GitHub, EasyPanel e Hostinger, que são só leitura; 2) e-mail e push (gerar VAPID pela tela); 3) Stripe e Asaas (mexem com dinheiro e webhooks: cada troca de segredo de webhook pede confirmação); 4) Pluggy; 5) Meta (a conta conectada continua no produto, só app id e segredo vêm para cá).
 
+**Etapa 5 (Meta) `[FEITA]`.** Só o APLICATIVO vem para a tela: ID, chave secreta, configuração do Login para Empresas e endereço de retorno. A conta de anúncios continua sendo conectada dentro de cada produto (Inbound → Campanhas), com o token cifrado no banco como antes. **Testar** pede o token do aplicativo à Meta por POST (a chave não vai em endereço): só sai se ID e chave forem do mesmo aplicativo. ID e chave são campos críticos: trocar o aplicativo em uso pede confirmação e avisa que a conta já conectada pode precisar ser conectada de novo. A chave que cifra o token da Meta agora é `META_MARKETING_KEY` se existir, senão a `CORE_SECRETS_KEY` (uma chave só serve para tudo).
+
+**Fase 4 concluída** para tudo o que tem código por trás: Vercel, GitHub, EasyPanel, Hostinger, push, Stripe, Asaas, Pluggy e Meta. Ficam no `.env`, de propósito, só as variáveis de bootstrap (banco, `CORE_SECRETS_KEY`, endereços, login com Google). E-mail entra quando existir envio.
+
 ## 7. Decisões em aberto
 
 1. **Configurações no menu.** `[DECIDIDO]` Item em Administração, além do rodapé.
