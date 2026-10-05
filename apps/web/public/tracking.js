@@ -29,7 +29,7 @@ export function setupTracking({ api, openTenant }) {
  const host = document.getElementById('view-tracking');
  const celular = window.matchMedia('(max-width:700px)');
  const estado = { visao: visaoInicial() || lerVisao() || (celular.matches ? 'dia' : 'semana'), dia: hoje(), miniMes: hoje(), fim: null, tenant: '', texto: '', categorias: new Set(), status: '' };
- let dados = null, eventos = [], tenants = [], geracao = 0, aviso = '', rolagem = null, relogio = 0, suprimirClique = false, filtrosAbertos = false;
+ let dados = null, eventos = [], tenants = [], pessoas = [], geracao = 0, aviso = '', rolagem = null, relogio = 0, suprimirClique = false, filtrosAbertos = false;
  const compacta = window.matchMedia('(max-width:1100px)');   // abaixo disso a lateral some e os filtros viram um bloco recolhível
  const salvando = new Set();
  const partes = { topo: null, lateral: null, principal: null, horas: null, entrada: null };
@@ -54,7 +54,7 @@ export function setupTracking({ api, openTenant }) {
    const [resposta, diretorio] = await Promise.all([api('/api/tracking?' + filtro), tenants.length ? null : api('/api/overview')]);
    if (ticket !== geracao) return;
    dados = resposta; eventos = resposta.activities.map(M.normalizar);
-   if (diretorio) tenants = diretorio.tenants;
+   if (diretorio) { tenants = diretorio.tenants; pessoas = diretorio.stakeholders || []; }
    host.removeAttribute('aria-busy');
    desenhar();
    painel.atualizar(dados, eventos);
@@ -86,10 +86,10 @@ export function setupTracking({ api, openTenant }) {
  // `extra.aviso`: algo que deu errado DEPOIS de salvar (a sala do Meet, por exemplo): a atividade existe, e a pessoa precisa saber do resto.
  function depoisDeSalvar(_atividade, extra) { if (extra?.aviso) aviso = extra.aviso; carregar({ silencioso: true }); }
  function novo(inicio = null, fim = null) {
-  abrirEditor({ host, api, dados, tenants, inicio, fim, tenantPadrao: estado.tenant, aoSalvar: depoisDeSalvar });
+  abrirEditor({ host, api, dados, tenants, pessoas, inicio, fim, tenantPadrao: estado.tenant, aoSalvar: depoisDeSalvar });
  }
  function editar(evento) {
-  abrirEditor({ host, api, dados, tenants, evento, aoSalvar: depoisDeSalvar });
+  abrirEditor({ host, api, dados, tenants, pessoas, evento, aoSalvar: depoisDeSalvar });
  }
  /** Grava só o horário (arrastar/esticar): mostra o resultado já, confirma com o servidor e desfaz se ele recusar. */
  // Depois de mover ou esticar, um aviso de 8 s oferece "Desfazer" (e Ctrl/Cmd+Z): grava de volta o horário anterior.

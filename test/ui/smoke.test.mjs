@@ -1611,6 +1611,13 @@ test('agenda: com a conta Google conectada o formulário oferece a sala do Meet;
  await pagina.avaliar(`(() => { const set = (c, v, ev = 'input') => { c.value = v; c.dispatchEvent(new Event(ev, { bubbles: true })); }; set(${CAMPO_DO_FORM('Título')}, 'Reunião com Meet'); set(${CAMPO_DO_FORM('Cliente')}, ${JSON.stringify(EMPRESA)}, 'change'); })()`);
  await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Sala'), 'meet'));
  assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Convidados (e-mails, separados por vírgula)')}.parentElement.hidden`), false);
+ // Sala escolhida: local vira "Google Meet", o link fica travado (o Google gera) e os dois ficam logo abaixo da sala
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Local (opcional)')}.value`), 'Google Meet');
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Link da reunião (opcional)')}.disabled`), true);
+ assert.equal(await pagina.avaliar(`(() => { const f = document.querySelector('dialog.tracking-editor form'); const i = n => [...f.children].findIndex(c => c.contains(${CAMPO_DO_FORM('Sala')}) && n === 'sala' || (n === 'local' && c.contains(${CAMPO_DO_FORM('Local (opcional)')}))); return i('local') > i('sala'); })()`), true, 'local depois da sala');
+ // contatos: escolher na lista põe o e-mail nos convidados, sem repetir
+ await pagina.avaliar(`(() => { const b = ${CAMPO_DO_FORM('Adicionar contato como convidado')}; b.value = 'ana@exemplo.test'; b.dispatchEvent(new Event('input', { bubbles: true })); b.value = 'ana@exemplo.test'; b.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Convidados (e-mails, separados por vírgula)')}.value`), 'ana@exemplo.test');
  await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Convidados (e-mails, separados por vírgula)'), 'ana@empresa.com, bia@empresa.com', 'input'));
  // com repetição escolhida a sala sai (vale para atividade avulsa)
  await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Repete'), 'weekly'));

@@ -22,7 +22,7 @@ const proximaHora = () => { const ms = Date.now(); return ms - (ms % 3600000) + 
  * `inicio`/`fim` (ms) pré-preenchem o horário, vindos de um clique ou arraste na grade.
  * `aoSalvar(atividade)` recebe a atividade já mesclada com o nome da empresa e da contratação.
  */
-export function abrirEditor({ host, api, dados, tenants, evento = null, inicio = null, fim = null, tenantPadrao = '', aoSalvar }) {
+export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = null, inicio = null, fim = null, tenantPadrao = '', aoSalvar }) {
  const anterior = document.activeElement;
  const dialog = el('dialog', null, 'tracking-editor');
  const form = el('form', null, 'tracking-form');
@@ -88,11 +88,43 @@ export function abrirEditor({ host, api, dados, tenants, evento = null, inicio =
    meet = campo(blocoMeet, 'Sala', 'text', [['', 'Sem videoconferência'], ['meet', 'Adicionar videoconferência do Google Meet']]);
    convidados = campo(blocoMeet, 'Convidados (e-mails, separados por vírgula)', 'text'); convidados.placeholder = 'ana@empresa.com, bia@empresa.com'; convidados.maxLength = 1000;
    const rotuloConvidados = convidados.parentElement; rotuloConvidados.hidden = true;
-   meet.addEventListener('change', () => { rotuloConvidados.hidden = meet.value !== 'meet'; });
+   // Contatos (stakeholders) da empresa escolhida primeiro, depois os demais: escolher um põe o e-mail na lista de convidados.
+   const lista = el('datalist'); lista.id = 'ag-contatos-' + Math.random().toString(36).slice(2, 8);
+   const busca = campo(blocoMeet, 'Adicionar contato como convidado', 'text'); busca.setAttribute('list', lista.id); busca.placeholder = 'Digite um nome ou e-mail…'; busca.autocomplete = 'off';
+   const rotuloBusca = busca.parentElement; rotuloBusca.hidden = true; rotuloBusca.append(lista);
+   const comEmail = pessoas.filter(p => p.email);
+   const desenharContatos = () => {
+    const doCliente = p => p.tenant_id === cliente.value;
+    const ordem = [...comEmail].sort((a, b) => Number(doCliente(b)) - Number(doCliente(a)));
+    const vistos = new Set(), opcoesLista = [];
+    for (const p of ordem) { const k = p.email.toLowerCase(); if (vistos.has(k)) continue; vistos.add(k); const o = el('option'); o.value = p.email; o.label = [p.name, (tenants.find(t => t.id === p.tenant_id) || {}).name].filter(Boolean).join(' · '); opcoesLista.push(o); }
+    lista.replaceChildren(...opcoesLista);
+   };
+   const adicionar = () => {
+    const v = busca.value.trim().toLowerCase(); if (!v) return;
+    const p = comEmail.find(x => x.email.toLowerCase() === v) || comEmail.find(x => x.name.toLowerCase() === v);
+    if (!p) return;
+    const atuais = convidados.value.split(/[,;\s]+/).filter(Boolean);
+    if (!atuais.some(x => x.toLowerCase() === p.email.toLowerCase())) convidados.value = [...atuais, p.email].join(', ');
+    busca.value = '';
+   };
+   busca.addEventListener('input', adicionar); busca.addEventListener('change', adicionar);
+   cliente.addEventListener('change', desenharContatos); desenharContatos();
+   // Sala escolhida: o local vira "Google Meet" (se estava vazio) e o link é gerado pelo Google, então o campo fica travado.
+   let localAutomatico = false;
+   const sincronizarSala = () => {
+    const comSala = meet.value === 'meet';
+    rotuloConvidados.hidden = !comSala; rotuloBusca.hidden = !comSala;
+    if (comSala) { if (!local.value.trim()) { local.value = 'Google Meet'; localAutomatico = true; } link.disabled = true; link.placeholder = 'O Google gera o link ao criar a sala'; link.value = ''; }
+    else { if (localAutomatico && local.value === 'Google Meet') local.value = ''; localAutomatico = false; link.disabled = false; link.placeholder = 'https://…'; }
+   };
+   local.addEventListener('input', () => { localAutomatico = false; });
+   meet.addEventListener('change', sincronizarSala);
    // Como no Calendly: quem quer sala em toda atividade nova liga isso em Configurações → Agenda e já abre com ela marcada.
-   if (!evento && meetAutomatico()) { meet.value = 'meet'; rotuloConvidados.hidden = false; }
+   if (!evento && meetAutomatico()) { meet.value = 'meet'; sincronizarSala(); }
   }
   form.append(blocoMeet);
+  if (comCampos) form.append(local.parentElement, link.parentElement);   // Local e link logo abaixo da sala
  }
  if (repeticao) {
   form.append(repeticao.no);
@@ -142,7 +174,7 @@ export function abrirEditor({ host, api, dados, tenants, evento = null, inicio =
   const rotuloOriginal = salvar.textContent;
   salvar.disabled = true; salvar.textContent = 'Salvando…'; form.setAttribute('aria-busy', 'true');
   try {
-   const extras = comCampos ? { description: descricao.value.trim(), location: local.value.trim(), meeting_url: link.value.trim() } : {};
+   const extras = comCampos ? { description: descricao.value.trim(), location: local.value.trim(), ...(link.disabled ? {} : { meeting_url: link.value.trim() }) } : {};
    let atividade;
    const regra = repeticao ? repeticao.valor(Date.parse(ini), Date.parse(term)) : null;   // lança com a mensagem certa se a repetição está incompleta
    if (!evento && regra) {

@@ -118,6 +118,7 @@ export function bancoFalso() {
    if (/AS resource_bindings/.test(sql) && /jsonb_agg/.test(sql))
     return { rows: [{ tenants: DADOS.tenants, products: DADOS.products, memberships: [], entitlements: [], engagements: DADOS.engagements, stakeholders: DADOS.stakeholders, entries: [], resource_bindings: [] }] };
    // /api/overview (o Acompanhamento lê as empresas dele)
+   if (/SELECT os\.tenant_id,os\.role,os\.title,os\.is_primary,os\.contact_allowed,s\.id,s\.name,s\.email,s\.phone\s+FROM organization_stakeholders os JOIN stakeholders s ON s\.id=os\.stakeholder_id ORDER BY s\.name/.test(sql)) return { rows: DADOS.stakeholders };
    if (sql === 'SELECT * FROM tenants ORDER BY created_at DESC') return { rows: DADOS.tenants };
    // Inbound: lista e detalhe de lead, oportunidades da etapa e motivos de perda
    if (/FROM commercial_leads l JOIN tenants t ON t.id=l.tenant_id LEFT JOIN operator_accounts a ON a.id=l.owner_id LEFT JOIN pipeline_stages st/.test(sql)) return { rows: [LEAD_LINHA] };
