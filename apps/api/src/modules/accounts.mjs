@@ -33,14 +33,25 @@ export function createAccountGate(pool) {
 // Quem administra contas. Em modo local existe um operador só, o que tem a
 // senha do bootstrap — ele é owner por definição.
 async function exigirOwner(client, operator) {
- if (operator?.subject === 'local-bootstrap') return;
- const email = operator?.email?.toLowerCase();
- if (!email) throw fail(403, 'Apenas administradores podem gerenciar contas.');
- const r = await client.query("SELECT role FROM operator_accounts WHERE email=$1 AND status='active'", [email]);
- // Conta que entrou pelo ambiente e ainda não foi cadastrada conta como owner:
- // senão o primeiro acesso não conseguiria cadastrar ninguém.
- if (r.rowCount && r.rows[0].role !== 'owner') throw fail(403, 'Apenas administradores podem gerenciar contas.');
+ if (!(await papelDoOperador(client, operator)).administra) throw fail(403, 'Apenas administradores podem gerenciar contas.');
 }
+
+/**
+ * O papel de quem está logado: { papel, nome, origem, administra }.
+ *   local     senha de bootstrap (modo local): owner por definição
+ *   cadastro  tem conta ATIVA em operator_accounts: vale o papel dela (só 'owner' administra)
+ *   ambiente  entrou por CORE_ALLOWED_EMAILS e não tem conta ativa: conta como owner, senão o primeiro acesso não conseguiria cadastrar ninguém
+ * Sem e-mail e fora do modo local não administra.
+ */
+export async function papelDoOperador(db, operator) {
+ if (operator?.subject === 'local-bootstrap') return { papel: 'owner', nome: null, origem: 'local', administra: true };
+ const email = operator?.email?.toLowerCase();
+ if (!email) return { papel: 'member', nome: null, origem: 'ambiente', administra: false };
+ const r = await db.query("SELECT role,name FROM operator_accounts WHERE email=$1 AND status='active'", [email]);
+ if (r.rowCount) return { papel: r.rows[0].role, nome: r.rows[0].name ?? null, origem: 'cadastro', administra: r.rows[0].role === 'owner' };
+ return { papel: 'owner', nome: null, origem: 'ambiente', administra: true };
+}
+export const podeAdministrar = async (db, operator) => (await papelDoOperador(db, operator)).administra;
 
 const PAPEL_CONTA = ['owner', 'member', 'viewer'];
 const PAPEL_TIME = ['lead', 'member'];

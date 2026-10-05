@@ -3,6 +3,7 @@ import { readKey, seal } from '../platform/secrets.mjs';
 import { PROVEDORES, campoDe, validarValores, testarProvedor } from '../platform/credenciais.mjs';
 import { vivo as vivoPadrao } from '../platform/env-vivo.mjs';
 import { gerarChavesVapid } from '../platform/webpush.mjs';
+import { podeAdministrar } from './accounts.mjs';
 
 // Credenciais de integração pela TELA. O valor sai do navegador para o servidor, é testado no provedor, cifrado e gravado; nunca volta.
 // A tela só recebe: o campo existe, de onde ele vale (tela ou servidor), e — só para campos que NÃO são segredo, como o endereço do
@@ -13,13 +14,15 @@ export const MENSAGEM_050 = 'Guardar credenciais pela tela ainda não está disp
 const MENSAGEM_CHAVE = 'Defina CORE_SECRETS_KEY no servidor para guardar credenciais pela tela.';
 
 const ator = o => o?.email || o?.subject || 'desconhecido';
+const MENSAGEM_ADMIN = 'Só administradores podem alterar as credenciais das integrações.';
+const exigirAdmin = async (db, operator) => { if (!(await podeAdministrar(db, operator))) throw fail(403, MENSAGEM_ADMIN); };
 
 export function integrationsCredentialsRoutes(router, { vivo = vivoPadrao, env = process.env, fetchImpl = fetch } = {}) {
  const nomeDaChave = () => (String(env.CORE_SECRETS_KEY ?? '').trim() ? 'CORE_SECRETS_KEY' : 'META_MARKETING_KEY');
  const chave = () => { try { return readKey(env, nomeDaChave()); } catch { throw fail(503, MENSAGEM_CHAVE); } };
  const atuais = nome => { const v = vivo.env[nome]; return typeof v === 'string' ? v : ''; };
 
- router.get('/api/integrations/credentials', async ({ pool, reply }) => {
+ router.get('/api/integrations/credentials', async ({ pool, reply, operator }) => {
   let ativas = [], historico = [], migracao = true;
   try {
    ativas = (await pool.query('SELECT provider,nome,fingerprint,updated_by,created_at FROM integration_credentials WHERE revoked_at IS NULL')).rows;
@@ -41,10 +44,11 @@ export function integrationsCredentialsRoutes(router, { vivo = vivoPadrao, env =
    }),
    historico: historico.filter(h => h.provider === id).slice(0, 5).map(h => ({ nome: h.nome, acao: h.action, por: h.actor, em: h.created_at })),
   }));
-  reply(200, { migracao, chave: vivo.temChave(), provedores });
+  reply(200, { migracao, chave: vivo.temChave(), pode_alterar: await podeAdministrar(pool, operator), provedores });
  });
 
- router.post('/api/integrations/credentials/test', async ({ req, reply }) => {
+ router.post('/api/integrations/credentials/test', async ({ pool, req, reply, operator }) => {
+  await exigirAdmin(pool, operator);   // testar sonda o provedor com um segredo digitado: é do administrador
   const b = await json(req); input(b, ['provider', 'valores']);
   const limpos = b.valores && Object.keys(b.valores).length ? validarValores(b.provider, b.valores, fail) : {};
   if (!PROVEDORES[b.provider]) throw fail(400, 'Provedor desconhecido.');
@@ -63,6 +67,7 @@ export function integrationsCredentialsRoutes(router, { vivo = vivoPadrao, env =
  }
 
  router.put('/api/integrations/credentials', async ({ client, body, operator }) => {
+  await exigirAdmin(client, operator);
   input(body, ['provider', 'valores', 'confirmar']);
   const limpos = validarValores(body.provider, body.valores, fail);
   const k = chave();
@@ -79,6 +84,7 @@ export function integrationsCredentialsRoutes(router, { vivo = vivoPadrao, env =
  }, { transactional: true, audit: false });
 
  router.delete('/api/integrations/credentials/:provider/:nome', async ({ client, params, operator, url }) => {
+  await exigirAdmin(client, operator);
   if (!campoDe(params.provider, params.nome)) throw fail(404, 'Credencial desconhecida.');
   if (campoDe(params.provider, params.nome).critico && url.searchParams.get('confirmar') !== '1') throw fail(409, `Confirme a remoção: ${campoDe(params.provider, params.nome).avisoTroca ?? 'este valor está em uso.'} Ao remover, passa a valer o que o servidor tiver (ou nada).`);
   try {
@@ -93,6 +99,7 @@ export function integrationsCredentialsRoutes(router, { vivo = vivoPadrao, env =
  // Gera as chaves VAPID NO SERVIDOR (a privada nunca sai daqui) e já as guarda. Trocar as chaves desativa os aparelhos já ativados:
  // a assinatura de cada um foi feita com a chave pública antiga. Por isso, havendo chaves hoje, exige `confirmar: true`.
  router.post('/api/integrations/credentials/push/gerar', async ({ client, body, operator }) => {
+  await exigirAdmin(client, operator);
   input(body, ['confirmar', 'subject']);
   const k = chave();
   try { await client.query('SELECT 1 FROM integration_credentials LIMIT 1'); } catch (e) { if (e?.code === '42P01') throw fail(409, MENSAGEM_050); throw e; }

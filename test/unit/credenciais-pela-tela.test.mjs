@@ -203,10 +203,10 @@ test('valor que o provedor recusa NÃO é gravado (422), e sem chave (503) ou se
 test('testar sem salvar: a rota de teste não escreve nada e devolve só ok e mensagem', async () => {
  const m = montar({ fetchImpl: async () => resposta({ projects: [] }) });
  const r = reply();
- await m.rotas['POST /api/integrations/credentials/test']({ req: corpo({ provider: 'vercel', valores: { VERCEL_TOKEN: 'token-TESTE-123456' } }), reply: r.fn });
+ await m.rotas['POST /api/integrations/credentials/test']({ pool: m.pool, req: corpo({ provider: 'vercel', valores: { VERCEL_TOKEN: 'token-TESTE-123456' } }), reply: r.fn, operator: OPERADOR });
  assert.equal(r.s.corpo.ok, true);
  assert.deepEqual(Object.keys(r.s.corpo).sort(), ['mensagem', 'ok']);
- assert.equal(m.log.length, 0);
+ assert.equal(m.log.filter(q => /INSERT|UPDATE|DELETE/.test(q.sql)).length, 0, 'testar não escreve nada');
 });
 
 test('remover: revoga e registra; o que veio do servidor não se remove pela tela; campo desconhecido é 404', async () => {
@@ -420,7 +420,7 @@ test('remover um campo crítico exige confirmação (?confirmar=1); campo comum,
  const m = montar({ db: { 'UPDATE integration_credentials SET revoked_at=now() WHERE nome': () => ({ rowCount: 1, rows: [{ fingerprint: 'abcd1234abcd1234' }] }) } });
  const sem = new URL('http://x.test/api/integrations/credentials/asaas/ASAAS_WEBHOOK_TOKEN');
  await assert.rejects(m.rotas['DELETE /api/integrations/credentials/:provider/:nome']({ client: m.client, params: { provider: 'asaas', nome: 'ASAAS_WEBHOOK_TOKEN' }, operator: OPERADOR, url: sem }), e => e.status === 409 && /Confirme a remoção/.test(e.message) && /MESMO valor/.test(e.message));
- assert.equal(m.log.length, 0, 'sem confirmação nada muda');
+ assert.equal(m.log.filter(q => /INSERT|UPDATE|DELETE/.test(q.sql)).length, 0, 'sem confirmação nada muda');
  const com = new URL('http://x.test/api/integrations/credentials/asaas/ASAAS_WEBHOOK_TOKEN?confirmar=1');
  assert.deepEqual((await m.rotas['DELETE /api/integrations/credentials/:provider/:nome']({ client: m.client, params: { provider: 'asaas', nome: 'ASAAS_WEBHOOK_TOKEN' }, operator: OPERADOR, url: com })).response, { ok: true });
  const comum = await m.rotas['DELETE /api/integrations/credentials/:provider/:nome']({ client: m.client, params: { provider: 'stripe', nome: 'STRIPE_PUBLISHABLE_KEY' }, operator: OPERADOR, url: new URL('http://x.test/x') });

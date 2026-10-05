@@ -85,7 +85,7 @@ function formularioDeCredenciais(cred, aoMudar) {
    : c.origem === 'servidor' ? 'Vem do servidor (variável de ambiente).' : 'Ainda não definido.';
   l.append(no('small', [c.ajuda, origem].filter(Boolean).join(' ')));
   if (c.origem === 'tela') {
-   const r = no('button', 'Remover da tela', 'quiet cfg-cred-remover'); r.type = 'button';
+   const r = no('button', 'Remover da tela', 'quiet cfg-cred-remover'); r.type = 'button'; r.disabled = !cred.podeAlterar;
    let confirmaRemocao = false;
    r.onclick = async () => {
     if (c.critico && !confirmaRemocao) {
@@ -171,7 +171,8 @@ function formularioDeCredenciais(cred, aoMudar) {
   acoes.append(enviar);
  }
  f.append(acoes, aviso);
- if (!cred.migracao) dizer('Disponível assim que a atualização do banco (migração 050) for aplicada.', true);
+ if (!cred.podeAlterar) dizer('Só administradores podem alterar as credenciais das integrações. Você vê o estado, mas não troca nada.', true);
+ else if (!cred.migracao) dizer('Disponível assim que a atualização do banco (migração 050) for aplicada.', true);
  else if (!cred.chave) dizer('Falta definir CORE_SECRETS_KEY no servidor para guardar credenciais pela tela.', true);
  const hist = cred.provedor.historico || [];
  if (hist.length) {
@@ -262,7 +263,8 @@ export function montar(raiz, { api, abrirTela, retorno }) {
    bloco.append(no('h3', grupo, 'config-sub'));
    for (const i of doGrupo) {
     const provedor = credenciais?.provedores.find(p => p.id === i.id);
-    const cred = provedor ? { provedor, api, migracao: credenciais.migracao, chave: credenciais.chave, pronto: credenciais.migracao && credenciais.chave } : null;
+    const podeAlterar = credenciais?.pode_alterar !== false;
+    const cred = provedor ? { provedor, api, migracao: credenciais.migracao, chave: credenciais.chave, podeAlterar, pronto: credenciais.migracao && credenciais.chave && podeAlterar } : null;
     bloco.append(cartao(i, abrirTela, cred, desenhar));
    }
    nos.push(bloco);

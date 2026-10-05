@@ -233,3 +233,9 @@ input:user-invalid:focus, select:user-invalid:focus, textarea:user-invalid:focus
 .cfg-integracao > .cfg-linha-texto { flex: 1 1 0; }
 .cfg-integracao > button { flex: none; }
 .cfg-codigo { display: inline-block; margin-top: 2px; padding: 2px 6px; border-radius: 5px; background: var(--surface-hover); color: var(--text); font-size: 12px; user-select: all; word-break: break-all; }
+.cfg-conta-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: none; }
+.cfg-conta-acoes select { width: auto; min-height: 34px; padding: 4px 8px; font-size: 13px; }
+.cfg-conta-acoes button { min-height: 34px; padding: 0 12px; font-size: 13px; }
+.cfg-sem-permissao { margin: 0; color: var(--badge-warning-fg); }
+.cfg-registro .cfg-valor { white-space: nowrap; }
+@media (max-width: 700px) { .cfg-conta { flex-wrap: wrap; } }

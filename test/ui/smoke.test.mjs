@@ -1772,7 +1772,7 @@ test('configurações: a casca lista as seções com o escopo de cada uma e troc
  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
  await pagina.avaliar(`document.getElementById('open-settings').click()`);
  await pagina.esperar(`document.querySelector('#settings-body .cfg-item') && document.querySelector('#settings-body input[name=tema]')`);
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-item')].map(b => b.textContent)`), ['Aparência', 'Notificações', 'Aplicativo', 'Teclado', 'Integrações', 'Agenda']);
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-item')].map(b => b.textContent)`), ['Perfil e sessão', 'Aparência', 'Notificações', 'Aplicativo', 'Teclado', 'Integrações', 'Agenda', 'Acessos', 'Auditoria']);
  assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[aria-current=page]').textContent`), 'Aparência', 'abre na primeira seção');
  assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-escopo').textContent`), 'Só neste navegador');
  await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[data-secao=notificacoes]').click()`);
@@ -1878,7 +1878,7 @@ const COM_GOOGLE = estado => `(() => {
 
 const COM_CREDENCIAIS = estado => `(() => {
  window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
- const E = window.__cred = Object.assign({ migracao: true, chave: true, testes: [], puts: [], deletes: [], gerar: [], pushTem: false, stripeTela: false, recusar: false, vercelOrigem: 'servidor', easypanelUrl: 'https://painel.exemplo.test' }, ${JSON.stringify(estado || {})});
+ const E = window.__cred = Object.assign({ migracao: true, chave: true, testes: [], puts: [], deletes: [], gerar: [], pushTem: false, stripeTela: false, recusar: false, semAdmin: false, vercelOrigem: 'servidor', easypanelUrl: 'https://painel.exemplo.test' }, ${JSON.stringify(estado || {})});
  const json = (c, s = 200) => new Response(JSON.stringify(c), { status: s, headers: { 'content-type': 'application/json' } });
  const integ = (id, nome, grupo, tela) => ({ id, nome, grupo, para: 'Para ' + nome + '.', estado: 'configurado', faltando: [], opcionais_ausentes: [], tela });
  window.fetch = async (url, o = {}) => {
@@ -1888,7 +1888,7 @@ const COM_CREDENCIAIS = estado => `(() => {
   if (u === '/api/integrations/credentials' && m === 'GET') {
    const CRITICOS = { STRIPE_SECRET_KEY: 'Trocar a chave secreta muda a conta usada nas cobranças, no checkout e nas vendas importadas.', STRIPE_WEBHOOK_SECRET: 'Trocar o segredo do webhook: o endpoint no Stripe precisa estar com o MESMO valor, senão os pagamentos deixam de ser confirmados.', ASAAS_API_KEY: 'Trocar a chave da API muda a conta usada nas cobranças e nas vendas importadas.', ASAAS_ENVIRONMENT: 'Trocar o ambiente faz o Core falar com outra conta do Asaas (produção ou testes).', ASAAS_WEBHOOK_TOKEN: 'Trocar o token do webhook: o webhook no Asaas precisa estar com o MESMO valor, senão os pagamentos deixam de ser confirmados.' };
    const campo = (nome, rotulo, secreto, origem, extra = {}) => ({ nome, rotulo, secreto, obrigatorio: nome !== 'VERCEL_TEAM_ID' && nome !== 'HOSTINGER_DNS_ZONE', ajuda: null, critico: nome in CRITICOS, ...(nome in CRITICOS ? { aviso_troca: CRITICOS[nome] } : {}), origem, definido: origem !== null, ...(secreto ? {} : { valor: origem ? (extra.valor ?? '') : '' }), ...(origem === 'tela' ? { impressao: 'abcd1234abcd1234', atualizado_por: 'gustavo@exemplo.test', atualizado_em: '2026-10-04T15:00:00Z' } : {}) });
-   return json({ migracao: E.migracao, chave: E.chave, provedores: [
+   return json({ migracao: E.migracao, chave: E.chave, pode_alterar: !E.semAdmin, provedores: [
     { id: 'vercel', nome: 'Vercel', campos: [campo('VERCEL_TOKEN', 'Token', true, E.vercelOrigem), campo('VERCEL_TEAM_ID', 'ID do time (opcional)', false, null)], historico: E.vercelOrigem === 'tela' ? [{ nome: 'VERCEL_TOKEN', acao: 'set', por: 'gustavo@exemplo.test', em: '2026-10-04T15:00:00Z' }] : [] },
     { id: 'github', nome: 'GitHub', campos: [campo('GITHUB_TOKEN', 'Token', true, null)], historico: [] },
     { id: 'easypanel', nome: 'EasyPanel', campos: [campo('EASYPANEL_URL', 'Endereço do painel', false, 'servidor', { valor: E.easypanelUrl }), campo('EASYPANEL_TOKEN', 'Token da API', true, 'servidor')], historico: [] },
@@ -2214,6 +2214,124 @@ test('E-mails → Atividade sem a migração 051 explica em vez de mostrar uma f
  await pagina.esperar(`document.querySelector('#view-emails .email-activity .email-empty')`);
  assert.match(await pagina.avaliar(`document.querySelector('#view-emails .email-activity').textContent`), /migração 051/);
  assert.equal(await pagina.avaliar(`document.querySelectorAll('#view-emails .email-outbox-item').length`), 0);
+ semExcecoes();
+ await d?.();
+});
+
+const COM_CONTA = estado => `(() => {
+ window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
+ const E = window.__conta = Object.assign({ admin: true, outras: 2, puts: [], encerrar: 0, google: true }, ${JSON.stringify(estado || {})});
+ const json = (c, s = 200) => new Response(JSON.stringify(c), { status: s, headers: { 'content-type': 'application/json' } });
+ window.fetch = async (url, o = {}) => {
+  const u = String(url), m = (o.method || 'GET').toUpperCase(), corpo = o.body ? JSON.parse(o.body) : {};
+  if (u === '/api/me') return json(E.google
+   ? { email: 'gustavo@exemplo.test', nome: 'Gustavo', modo: 'google', papel: E.admin ? 'owner' : 'member', papel_rotulo: E.admin ? 'Administrador' : 'Membro', origem: 'cadastro', pode_administrar: E.admin, sessao: { criada_em: '2026-10-05T11:00:00Z', expira_em: '2026-10-05T19:00:00Z', outras_ativas: E.outras } }
+   : { email: null, nome: null, modo: 'senha-local', papel: 'owner', papel_rotulo: 'Administrador', origem: 'local', pode_administrar: true, sessao: null });
+  if (u === '/api/me/sessoes/encerrar-outras' && m === 'POST') { E.encerrar++; const n = E.outras; E.outras = 0; return json({ ok: true, encerradas: n }); }
+  if (u === '/api/accounts' && m === 'GET') return json({ accounts: [
+    { id: 'a1', email: 'gustavo@exemplo.test', name: 'Gustavo', role: 'owner', status: 'active', source: 'manual' },
+    { id: 'a2', email: 'lucas@exemplo.test', name: 'Lucas', role: 'member', status: 'active', source: 'manual' },
+    { id: 'a3', email: 'ex@exemplo.test', name: null, role: 'viewer', status: 'suspended', source: 'manual' } ], teams: [],
+    authorization: { sources: ['CORE_ALLOWED_EMAILS', 'operator_accounts'], env_count: 2, registry_count: 2, env_only: ['socio@exemplo.test'], effective: 3 }, enforcement: 'env_plus_registry' });
+  if (u === '/api/accounts' && m === 'PUT') { E.puts.push(corpo); return json({ ok: true }); }
+  if (u.startsWith('/api/audit')) return json({ itens: [
+    { quando: '2026-10-05T10:00:00Z', tipo: 'credencial.definida', quem: 'gustavo@exemplo.test', onde: 'stripe · STRIPE_SECRET_KEY', fonte: 'integracoes' },
+    { quando: '2026-10-05T09:00:00Z', tipo: 'engagement.created', quem: 'lucas@exemplo.test', onde: 'Empresa Alfa', fonte: 'empresas' } ], fora_da_trilha: ['alterações de contas e times'] });
+  return window.__fetchOriginal(url, o);
+ };
+})()`;
+
+test('configurações → Perfil e sessão: quem é, o papel, a validade da sessão e encerrar as outras', { skip: PULAR }, async () => {
+ const d = await pagina.injetar(COM_CONTA({}));
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await ABRIR_SECAO('perfil');
+ await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-linha').length >= 5`, { descricao: 'perfil carregado' });
+ assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-escopo').textContent`), 'Sua conta');
+ const texto = await pagina.avaliar(`document.querySelector('#settings-body .cfg-lista').textContent`);
+ assert.match(texto, /Gustavo/); assert.match(texto, /gustavo@exemplo\.test/); assert.match(texto, /PapelAdministra o Core: gerencia quem entra e altera as credenciais.*Tem conta cadastrada em Acessos\.Administrador/); assert.match(texto, /Conta Google/);
+ assert.match(texto, /Vale até 05\/10\/2026, 16:00/); assert.match(texto, /2 ativas/);
+ assert.ok(!texto.includes('token'), 'nenhum token na tela');
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-lista button')].map(b => b.textContent).join('|')`), 'Sair deste aparelho|Encerrar as outras 2 sessões');
+ await pagina.avaliar(`document.querySelector('#settings-body button[data-acao=encerrar-outras]').click()`);
+ await pagina.esperar(`window.__conta.encerrar === 1 && document.querySelector('#settings-body .config-aviso').textContent.includes('2 sessões encerradas. Esta continua valendo.')`);
+ await pagina.esperar(`!document.querySelector('#settings-body button[data-acao=encerrar-outras]')`, { descricao: 'o botão some quando não há outras' });
+ assert.match(await pagina.avaliar(`document.querySelector('#settings-body .cfg-lista').textContent`), /Outras sessões.*Nenhuma/s);
+ await d?.();
+ // senha local: uma sessão só, sem "encerrar outras"
+ const d2 = await pagina.injetar(COM_CONTA({ google: false }));
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await ABRIR_SECAO('perfil');
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-lista').textContent.includes('Senha local')`);
+ assert.match(await pagina.avaliar(`document.querySelector('#settings-body .cfg-lista').textContent`), /Única/);
+ assert.equal(await pagina.avaliar(`!!document.querySelector('#settings-body button[data-acao=encerrar-outras]')`), false);
+ semExcecoes();
+ await d2?.();
+});
+
+test('configurações → Acessos: o administrador altera papel e situação e adiciona conta; quem não administra só vê', { skip: PULAR }, async () => {
+ const abrir = async estado => {
+  const d = await pagina.injetar(COM_CONTA(estado));
+  await pagina.tela(1280, 900);
+  await pagina.ir(origem + '/');
+  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+  await ABRIR_SECAO('acessos');
+  await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-conta').length === 3`, { descricao: 'três contas' });
+  return d;
+ };
+ let d = await abrir({});
+ assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-escopo').textContent`), 'Todo o espaço');
+ assert.match(await pagina.avaliar(`document.querySelector('#settings-body .cfg-resumo').textContent`), /3 pessoas podem entrar hoje: a lista do servidor \(2\) somada às contas ativas abaixo \(2\)/);
+ assert.match(await pagina.avaliar(`document.querySelector('#settings-body .cfg-nota').textContent`), /socio@exemplo\.test.*não se suspendem por aqui.*CORE_ALLOWED_EMAILS/);
+ const linha = await pagina.avaliar(`(() => { const l = document.querySelector('#settings-body .cfg-conta[data-email="lucas@exemplo.test"]'); return { selos: [...l.querySelectorAll('.status')].map(s => s.textContent), selects: [...l.querySelectorAll('select')].map(s => s.value) }; })()`);
+ assert.deepEqual(linha, { selos: ['Membro', 'Ativa'], selects: ['member', 'active'] });
+ // trocar o papel do Lucas para administrador
+ await pagina.avaliar(`(() => { const l = document.querySelector('#settings-body .cfg-conta[data-email="lucas@exemplo.test"]'); const s = l.querySelector('select[name=role]'); s.value = 'owner'; l.querySelector('button').click(); })()`);
+ await pagina.esperar(`window.__conta.puts.length === 1`);
+ assert.deepEqual(await pagina.avaliar(`window.__conta.puts[0]`), { email: 'lucas@exemplo.test', name: 'Lucas', role: 'owner', status: 'active' });
+ await pagina.esperar(`document.querySelector('#settings-body .config-aviso').textContent === 'Salvo: lucas@exemplo.test.'`);
+ // adicionar
+ await pagina.avaliar(`(() => { const f = document.querySelector('#settings-body form'); f.querySelector('input[name=email]').value = 'nova@exemplo.test'; f.querySelector('input[name=name]').value = 'Nova Pessoa'; f.querySelector('select[name=role]').value = 'viewer'; f.requestSubmit(); })()`);
+ await pagina.esperar(`window.__conta.puts.length === 2`);
+ assert.deepEqual(await pagina.avaliar(`window.__conta.puts[1]`), { email: 'nova@exemplo.test', name: 'Nova Pessoa', role: 'viewer', status: 'active' });
+ await d?.();
+ // quem não administra: lista, aviso, nenhum controle de edição
+ d = await abrir({ admin: false });
+ assert.match(await pagina.avaliar(`document.querySelector('#settings-body .cfg-sem-permissao').textContent`), /Só administradores alteram contas/);
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#settings-body .cfg-conta select, #settings-body form').length`), 0);
+ semExcecoes();
+ await d?.();
+});
+
+test('configurações → Auditoria: lista o que mudou com nome em português e avisa o que ainda não entra', { skip: PULAR }, async () => {
+ const d = await pagina.injetar(COM_CONTA({}));
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await ABRIR_SECAO('auditoria');
+ await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-registro').length === 2`, { descricao: 'dois registros' });
+ const regs = await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-registro')].map(r => [r.querySelector('strong').textContent, r.querySelector('small').textContent, r.dataset.fonte])`);
+ assert.deepEqual(regs, [['Credencial de integração definida', 'gustavo@exemplo.test · stripe · STRIPE_SECRET_KEY', 'integracoes'], ['engagement.created', 'lucas@exemplo.test · Empresa Alfa', 'empresas']]);
+ assert.match(await pagina.avaliar(`document.querySelector('#settings-body .cfg-nota').textContent`), /Ainda não entram aqui: alterações de contas e times/);
+ semExcecoes();
+ await d?.();
+});
+
+test('configurações → Integrações: quem não é administrador vê o estado, mas não altera credencial', { skip: PULAR }, async () => {
+ const d = await pagina.injetar(COM_CREDENCIAIS({ semAdmin: true, stripeTela: true }));
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await ABRIR_SECAO('integracoes');
+ await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-integracao').length === 7`, { descricao: 'cartões' });
+ const cartao = id => `document.querySelector('#settings-body .cfg-integracao[data-integracao=${id}]')`;
+ await pagina.avaliar(`${cartao('stripe')}.querySelector('button[data-acao=configurar]').click()`);
+ await pagina.esperar(`${cartao('stripe')}.querySelector('.cfg-cred-form')`);
+ assert.match(await pagina.avaliar(`${cartao('stripe')}.querySelector('.config-aviso').textContent`), /Só administradores podem alterar as credenciais/);
+ assert.deepEqual(await pagina.avaliar(`[...${cartao('stripe')}.querySelectorAll('.cfg-cred-form button')].map(b => [b.textContent, b.disabled])`), [['Remover da tela', true], ['Testar', true], ['Salvar', true]]);
+ assert.equal(await pagina.avaliar(`window.__cred.puts.length + window.__cred.testes.length + window.__cred.deletes.length`), 0);
  semExcecoes();
  await d?.();
 });

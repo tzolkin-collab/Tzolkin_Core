@@ -1,6 +1,6 @@
 # Configurações — plano de arquitetura
 
-Status: **fases 1, 2 e 3a construídas** (casca, Aparência, Notificações, Aplicativo, Agenda, Teclado, Integrações). O resto continua proposto. Decisões 1 e 2 confirmadas em 2026-10-04.
+Status: **fases 1 a 5 construídas** (casca, Aparência, Notificações, Aplicativo, Agenda, Teclado, Integrações, credenciais pela tela, Perfil e sessão, Acessos, Auditoria). O resto continua proposto. Decisões 1 e 2 confirmadas em 2026-10-04.
 
 ## 1. Problema
 
@@ -90,7 +90,7 @@ Preferências pessoais: tabela `operator_preferences(operator_subject, chave, va
 3. **Integrações** (3a `[FEITO]`): seção só leitura, `GET /api/integrations/status`, que diz para cada serviço (Login Google, Stripe, Asaas, Pluggy, Meta, e-mail, Vercel, GitHub, EasyPanel, Hostinger, push) se está ligado, incompleto ou não configurado, **o nome das variáveis que faltam** (nunca o valor; há teste que garante que nenhum valor vaza), e um botão "Abrir" para a tela de operação. A Meta mostra também se há conta conectada, expirada ou com erro. O nome é **Integrações** porque a tela "Conexões" do menu já existe e é outra coisa (a quem pertence cada recurso: projeto, deploy, domínio).
    3b `[FEITO, migração 049 não aplicada]` **Google Agenda e Meet**: conexão por operador em Integrações e botão "Criar sala do Meet" no evento. Detalhes em `docs/AGENDA.md`.
 4. **Financeiro e Anúncios**.
-5. **Conta e Administração**: depende da decisão D4 (IdP): sem login por pessoa, Perfil e sessões ficam limitados.
+5. **Conta e Administração** `[FEITO]`: a D4 já estava resolvida em produção (login individual pelo Google, `operator_accounts` com papéis `owner`, `member`, `viewer`). Seções novas: **Perfil e sessão** (quem é, papel e como entrou, até quando vale a sessão, Sair, **Encerrar as outras sessões** da mesma pessoa), **Acessos** (a lista de contas com papel e situação; o administrador altera e adiciona; quem entra só pela lista do servidor aparece num aviso, porque não se suspende por aqui) e **Auditoria** (trilha das empresas + histórico de credenciais, em ordem, sem valores; alterações de contas e times ainda NÃO são auditadas, e a tela diz isso). O menu ganhou o grupo **Administração**.
 
 Cada fase termina com teste de tela (claro, escuro, celular), teste de "indisponível" e atualização desta página.
 
@@ -127,4 +127,4 @@ Objetivo: ligar, trocar e remover cada integração em Configurações → Integ
 1. **Configurações no menu.** `[DECIDIDO]` Item em Administração, além do rodapé.
 2. **Conexões.** `[DECIDIDO]` Configuração em Configurações (fase 3, como **Integrações**); operação nas telas de Tecnologia.
 3. **Conta por pessoa.** Preferência pessoal no banco só faz sentido com login individual. Enquanto for a senha única (D4), Minha conta tem um operador só.
-4. **Quem pode mudar escopo Espaço.** Hoje todo operador logado pode tudo. Criar papel "administrador" agora, ou depois?
+4. **Quem pode mudar escopo Espaço.** `[DECIDIDO E FEITO PARA CREDENCIAIS]` O papel de administrador já existia (`owner`). Só ele testa, salva, remove e gera chaves de integração (o servidor recusa com 403 e a tela desabilita os botões para os demais, que continuam vendo o estado). Quem entra pela lista do servidor e não tem conta cadastrada conta como administrador, para o primeiro acesso não se trancar. Outras configurações de escopo Espaço (lembrete padrão da agenda) seguem abertas a qualquer operador.
