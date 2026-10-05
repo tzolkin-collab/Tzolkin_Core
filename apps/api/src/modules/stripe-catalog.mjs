@@ -1,3 +1,4 @@
+import { vivo } from '../platform/env-vivo.mjs';
 // Catálogo da Stripe confrontado com as ofertas do Core.
 //
 // SOMENTE LEITURA, e de propósito: importar automaticamente exigiria adivinhar
@@ -13,7 +14,7 @@ import { createStripeCatalogAdapter } from '../integrations/stripe-catalog.mjs';
 
 const CACHE_MS = 30000;
 
-export function stripeCatalogRoutes(router, { env = process.env, clock = Date.now, adapter } = {}) {
+export function stripeCatalogRoutes(router, { env = vivo.env, clock = Date.now, adapter } = {}) {
  let cache = null;
 
  router.get('/api/billing/stripe-catalog', async ({ url, pool, reply }) => {

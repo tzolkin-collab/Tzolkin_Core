@@ -1,3 +1,4 @@
+import { vivo } from '../platform/env-vivo.mjs';
 // Gateway de checkout — a única rota pública do Core que cria uma sessão de
 // pagamento de verdade.
 //
@@ -87,7 +88,7 @@ async function lerOfertaETemplate(pool, productId, offerSlug, templateSlug) {
  return { produto, oferta: oferta.rows[0], template: template.rows[0] };
 }
 
-export function checkoutGatewayRoutes(router, { env = process.env, adapterFactory = createStripeCheckoutAdapter, throttle = createIpThrottle() } = {}) {
+export function checkoutGatewayRoutes(router, { env = vivo.env, adapterFactory = createStripeCheckoutAdapter, throttle = createIpThrottle() } = {}) {
  router.get('/api/checkout/offer', async ({ url, pool, reply }) => {
   onlyParams(url.searchParams, ['product_id', 'offer_slug', 'template_slug']);
   const productId = url.searchParams.get('product_id'), offerSlug = url.searchParams.get('offer_slug'), templateSlug = url.searchParams.get('template_slug');

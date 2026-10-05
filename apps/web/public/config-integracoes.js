@@ -86,10 +86,16 @@ function formularioDeCredenciais(cred, aoMudar) {
   l.append(no('small', [c.ajuda, origem].filter(Boolean).join(' ')));
   if (c.origem === 'tela') {
    const r = no('button', 'Remover da tela', 'quiet cfg-cred-remover'); r.type = 'button';
+   let confirmaRemocao = false;
    r.onclick = async () => {
+    if (c.critico && !confirmaRemocao) {
+     confirmaRemocao = true; r.textContent = 'Confirmar remoção';
+     dizer(`${c.aviso_troca || 'Este valor está em uso.'} Ao remover, passa a valer o que o servidor tiver (ou nada). Clique de novo para confirmar.`, true);
+     return;
+    }
     r.disabled = true;
-    try { await cred.api(`/api/integrations/credentials/${cred.provedor.id}/${c.nome}`, 'DELETE'); await aoMudar('Removido da tela. Passa a valer o que o servidor tiver.'); }
-    catch (e) { dizer(e.message, true); r.disabled = false; }
+    try { await cred.api(`/api/integrations/credentials/${cred.provedor.id}/${c.nome}${c.critico ? '?confirmar=1' : ''}`, 'DELETE'); await aoMudar('Removido da tela. Passa a valer o que o servidor tiver.'); }
+    catch (e) { dizer(e.message, true); r.disabled = false; confirmaRemocao = false; r.textContent = 'Remover da tela'; }
    };
    l.append(r);
   }
@@ -98,6 +104,7 @@ function formularioDeCredenciais(cred, aoMudar) {
  const aviso = no('p', '', 'config-aviso'); aviso.setAttribute('role', 'status');
  const dizer = (t, erro = false) => { aviso.textContent = t; aviso.classList.toggle('erro', erro); };
  const mudados = () => { const v = {}; for (const [nome, inp] of entradas) { const x = inp.value.trim(); if (x && x !== inp.dataset.original) v[nome] = x; } return v; };
+ let confirmado = false;   // segundo clique de quem troca um campo crítico em uso
  const acoes = no('div', undefined, 'config-acoes');
  const testar = no('button', 'Testar', 'secondary'); testar.type = 'button';
  const salvar = no('button', 'Salvar', 'primary'); salvar.type = 'submit';
@@ -113,12 +120,20 @@ function formularioDeCredenciais(cred, aoMudar) {
   ev.preventDefault();
   const valores = mudados();
   if (!Object.keys(valores).length) { dizer('Preencha o que quer trocar.', true); return; }
+  // Trocar o que já está em uso e mexe com dinheiro (chave, webhook, ambiente) pede um segundo clique, com o motivo na tela.
+  const emUso = cred.provedor.campos.filter(c => c.critico && c.definido && valores[c.nome] !== undefined);
+  if (emUso.length && !confirmado) {
+   confirmado = true; salvar.textContent = 'Confirmar e salvar';
+   dizer(`Confirme a troca: ${emUso.map(c => c.aviso_troca || c.rotulo).join(' ')}`, true);
+   return;
+  }
   salvar.disabled = testar.disabled = true; dizer('Testando e salvando…');
   try {
-   const r = await cred.api('/api/integrations/credentials', 'PUT', { provider: cred.provedor.id, valores });
+   const r = await cred.api('/api/integrations/credentials', 'PUT', { provider: cred.provedor.id, valores, ...(emUso.length ? { confirmar: true } : {}) });
    await aoMudar(`Salvo. ${r.mensagem} As telas podem levar até 30 segundos para refletir.`);
-  } catch (e) { dizer(e.message, true); salvar.disabled = testar.disabled = bloqueado; }
+  } catch (e) { dizer(e.message, true); salvar.disabled = testar.disabled = bloqueado; confirmado = false; salvar.textContent = 'Salvar'; }
  };
+ f.addEventListener('input', () => { if (confirmado) { confirmado = false; salvar.textContent = 'Salvar'; } });   // mexeu de novo: a confirmação anterior não vale mais
  acoes.append(testar, salvar);
  // Push: as chaves VAPID se GERAM aqui (o par nasce no servidor; a privada nunca vem para a tela).
  if (cred.provedor.id === 'push') {

@@ -1,3 +1,4 @@
+import { vivo } from '../platform/env-vivo.mjs';
 // Recebimento de webhooks de pagamento.
 //
 // Estas são as ÚNICAS rotas do Core alcançáveis sem sessão e sem header Origin —
@@ -85,7 +86,7 @@ async function registrar(pool, evento) {
  } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
 }
 
-export function paymentWebhookRoutes(router, { env = process.env, clock = Date.now } = {}) {
+export function paymentWebhookRoutes(router, { env = vivo.env, clock = Date.now } = {}) {
  const receber = provider => async ({ req, url, pool, reply }) => {
   onlyParams(url.searchParams, []);
   const corpo = await rawBody(req);

@@ -27,6 +27,13 @@ export function parDeChavesConfere(publica, privada) {
  catch { return false; }
 }
 
+const chaveStripe = v => /^(sk|rk)_(live|test)_[A-Za-z0-9]{10,}$/.test(v) ? null : 'Chave secreta inválida (começa com sk_live_, sk_test_ ou rk_).';
+const chavePublicaStripe = v => /^pk_(live|test)_[A-Za-z0-9]{10,}$/.test(v) ? null : 'Chave publicável inválida (começa com pk_live_ ou pk_test_).';
+const segredoWebhookStripe = v => /^whsec_[A-Za-z0-9]{16,}$/.test(v) ? null : 'Segredo de webhook inválido (começa com whsec_).';
+const tokenWebhookAsaas = v => /^[\x21-\x7e]{16,255}$/.test(v) ? null : 'Use de 16 a 255 caracteres, sem espaços.';
+const ambienteAsaas = v => ['production', 'sandbox'].includes(v) ? null : 'Use production ou sandbox.';
+const modoStripe = v => (String(v).includes('_live_') ? 'live' : 'test');
+
 const rotuloDeErro = (e, ...segredos) => scrub(e?.message || 'sem detalhe', ...segredos).slice(0, 160);
 
 export const PROVEDORES = Object.freeze({
@@ -70,6 +77,43 @@ export const PROVEDORES = Object.freeze({
   async testar(v) {
    if (!parDeChavesConfere(v.VAPID_PUBLIC_KEY, v.VAPID_PRIVATE_KEY)) throw new Error('A chave pública não é a par da chave privada.');
    return 'O par de chaves confere. Nenhum aviso foi enviado.';
+  },
+ },
+ stripe: {
+  nome: 'Stripe',
+  campos: [
+   { nome: 'STRIPE_SECRET_KEY', rotulo: 'Chave secreta', secreto: true, obrigatorio: true, critico: true, validar: chaveStripe, ajuda: 'Dashboard do Stripe → Desenvolvedores → Chaves de API. Prefira uma chave restrita (rk_) com o mínimo necessário.', avisoTroca: 'Trocar a chave secreta muda a conta usada nas cobranças, no checkout e nas vendas importadas.' },
+   { nome: 'STRIPE_PUBLISHABLE_KEY', rotulo: 'Chave publicável', secreto: false, validar: chavePublicaStripe, ajuda: 'Usada no checkout. Tem de ser do mesmo modo (live ou test) da chave secreta.' },
+   { nome: 'STRIPE_WEBHOOK_SECRET', rotulo: 'Segredo do webhook', secreto: true, critico: true, validar: segredoWebhookStripe, ajuda: 'Vem do endpoint de webhook no Stripe (whsec_…). Sem ele os pagamentos não são confirmados.', avisoTroca: 'Trocar o segredo do webhook: o endpoint no Stripe precisa estar com o MESMO valor, senão os pagamentos deixam de ser confirmados.' },
+  ],
+  async testar(v, fetchImpl) {
+   const partes = [];
+   const r = await fetchImpl('https://api.stripe.com/v1/balance', { method: 'GET', redirect: 'error', headers: { Authorization: `Bearer ${v.STRIPE_SECRET_KEY}` }, signal: AbortSignal.timeout(10000) });
+   if (r.status === 401 || r.status === 403) throw new Error('O Stripe recusou a chave secreta.');
+   if (!r.ok) throw new Error('O Stripe não respondeu como esperado.');
+   partes.push(`O Stripe aceitou a chave secreta (modo ${modoStripe(v.STRIPE_SECRET_KEY)}).`);
+   if (v.STRIPE_PUBLISHABLE_KEY) {
+    if (modoStripe(v.STRIPE_PUBLISHABLE_KEY) !== modoStripe(v.STRIPE_SECRET_KEY)) throw new Error('A chave publicável e a secreta são de modos diferentes (uma live, outra test).');
+    partes.push('A chave publicável é do mesmo modo.');
+   }
+   if (v.STRIPE_WEBHOOK_SECRET) partes.push('O segredo do webhook tem o formato certo; só um evento real confirma que bate com o do Stripe.');
+   return partes.join(' ');
+  },
+ },
+ asaas: {
+  nome: 'Asaas',
+  campos: [
+   { nome: 'ASAAS_API_KEY', rotulo: 'Chave da API', secreto: true, obrigatorio: true, critico: true, validar: segredo, ajuda: 'Asaas → Integrações → Chave de API.', avisoTroca: 'Trocar a chave da API muda a conta usada nas cobranças e nas vendas importadas.' },
+   { nome: 'ASAAS_ENVIRONMENT', rotulo: 'Ambiente (production ou sandbox)', secreto: false, critico: true, validar: ambienteAsaas, ajuda: 'Se vazio, usa sandbox. A chave de produção só funciona em production.', avisoTroca: 'Trocar o ambiente faz o Core falar com outra conta do Asaas (produção ou testes).' },
+   { nome: 'ASAAS_WEBHOOK_TOKEN', rotulo: 'Token do webhook', secreto: true, critico: true, validar: tokenWebhookAsaas, ajuda: 'O mesmo token configurado no webhook do Asaas. Sem ele os pagamentos não são confirmados.', avisoTroca: 'Trocar o token do webhook: o webhook no Asaas precisa estar com o MESMO valor, senão os pagamentos deixam de ser confirmados.' },
+  ],
+  async testar(v, fetchImpl) {
+   const producao = v.ASAAS_ENVIRONMENT === 'production';
+   const base = producao ? 'https://api.asaas.com/v3' : 'https://api-sandbox.asaas.com/v3';
+   const r = await fetchImpl(`${base}/finance/balance`, { method: 'GET', redirect: 'error', headers: { access_token: v.ASAAS_API_KEY, 'User-Agent': 'TZOLKIN-Core/1.0' }, signal: AbortSignal.timeout(10000) });
+   if (r.status === 401 || r.status === 403) throw new Error(`O Asaas recusou a chave no ambiente ${producao ? 'production' : 'sandbox'}. Confira se a chave é do ambiente certo.`);
+   if (!r.ok) throw new Error('O Asaas não respondeu como esperado.');
+   return `O Asaas aceitou a chave (ambiente ${producao ? 'production' : 'sandbox'}).${v.ASAAS_WEBHOOK_TOKEN ? ' O token do webhook tem o formato certo; só um evento real confirma que bate.' : ''}`;
   },
  },
  hostinger: {

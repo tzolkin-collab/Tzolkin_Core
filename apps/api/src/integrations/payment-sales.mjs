@@ -1,3 +1,4 @@
+import { vivo } from '../platform/env-vivo.mjs';
 import {fail} from '../platform/http.mjs';
 
 const safe=(value,fallback,max=180)=>typeof value==='string'&&value.trim()?value.trim().slice(0,max):fallback;
@@ -13,7 +14,7 @@ async function body(response){
  return response.json();
 }
 
-export function createStripeSales({env=process.env,fetcher=fetch}={}){
+export function createStripeSales({env=vivo.env,fetcher=fetch}={}){
  return async(month,signal)=>{
   if(!env.STRIPE_SECRET_KEY)throw fail(503,'Stripe não configurada.');
   const dates=period(month),rows=[],seen=new Set();let cursor;
@@ -35,7 +36,7 @@ export function createStripeSales({env=process.env,fetcher=fetch}={}){
  };
 }
 
-export function createAsaasSales({env=process.env,fetcher=fetch}={}){
+export function createAsaasSales({env=vivo.env,fetcher=fetch}={}){
  return async(month,signal)=>{
   if(!env.ASAAS_API_KEY)throw fail(503,'Asaas não configurado.');
   const dates=period(month),base=env.ASAAS_ENVIRONMENT==='production'?'https://api.asaas.com/v3':'https://api-sandbox.asaas.com/v3',rows=[],seen=new Set();

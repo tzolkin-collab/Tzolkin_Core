@@ -31,6 +31,7 @@ export function integrationsCredentialsRoutes(router, { vivo = vivoPadrao, env =
     const origem = vivo.origem(c.nome), linha = ativas.find(a => a.nome === c.nome);
     return {
      nome: c.nome, rotulo: c.rotulo, secreto: c.secreto, obrigatorio: Boolean(c.obrigatorio), ajuda: c.ajuda ?? null,
+     critico: Boolean(c.critico), ...(c.critico ? { aviso_troca: c.avisoTroca ?? null } : {}),
      origem,                                              // 'tela' | 'servidor' | null
      definido: origem !== null,
      // Só campo que não é segredo devolve o valor. Segredo: nem parte dele.
@@ -62,9 +63,12 @@ export function integrationsCredentialsRoutes(router, { vivo = vivoPadrao, env =
  }
 
  router.put('/api/integrations/credentials', async ({ client, body, operator }) => {
-  input(body, ['provider', 'valores']);
+  input(body, ['provider', 'valores', 'confirmar']);
   const limpos = validarValores(body.provider, body.valores, fail);
   const k = chave();
+  // Trocar o que já está em uso e mexe com dinheiro (chave, segredo de webhook, ambiente) exige confirmação explícita.
+  const criticos = Object.keys(limpos).filter(n => campoDe(body.provider, n).critico && vivo.origem(n) !== null);
+  if (criticos.length && body.confirmar !== true) throw fail(409, `Confirme a troca: ${criticos.map(n => campoDe(body.provider, n).avisoTroca ?? n).join(' ')}`);
   // Testa ANTES de gravar: valor que o provedor recusa nunca substitui um que funciona.
   const teste = await testarProvedor(body.provider, limpos, atuais, fetchImpl);
   if (!teste.ok) throw fail(422, teste.mensagem);
@@ -74,8 +78,9 @@ export function integrationsCredentialsRoutes(router, { vivo = vivoPadrao, env =
   return { response: { ok: true, mensagem: teste.mensagem, campos: Object.keys(limpos) } };
  }, { transactional: true, audit: false });
 
- router.delete('/api/integrations/credentials/:provider/:nome', async ({ client, params, operator }) => {
+ router.delete('/api/integrations/credentials/:provider/:nome', async ({ client, params, operator, url }) => {
   if (!campoDe(params.provider, params.nome)) throw fail(404, 'Credencial desconhecida.');
+  if (campoDe(params.provider, params.nome).critico && url.searchParams.get('confirmar') !== '1') throw fail(409, `Confirme a remoção: ${campoDe(params.provider, params.nome).avisoTroca ?? 'este valor está em uso.'} Ao remover, passa a valer o que o servidor tiver (ou nada).`);
   try {
    const r = await client.query('UPDATE integration_credentials SET revoked_at=now() WHERE nome=$1 AND revoked_at IS NULL RETURNING fingerprint', [params.nome]);
    if (!r.rowCount) throw fail(404, 'Este valor não foi definido pela tela. Se vem do servidor, remova a variável no EasyPanel.');

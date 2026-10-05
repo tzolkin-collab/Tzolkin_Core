@@ -1,9 +1,10 @@
+import { vivo } from '../platform/env-vivo.mjs';
 import {createSalesProviders} from '../integrations/payment-sales.mjs';
 import {fail,json,input} from '../platform/http.mjs';
 
 const validMonth=value=>typeof value==='string'&&/^20\d{2}-(0[1-9]|1[0-2])$/.test(value);
 
-export function paymentSalesRoutes(router,{providers=createSalesProviders(),env=process.env}={}){
+export function paymentSalesRoutes(router,{providers=createSalesProviders(),env=vivo.env}={}){
  const configured=()=>({stripe:Boolean(env.STRIPE_SECRET_KEY),asaas:Boolean(env.ASAAS_API_KEY),asaas_environment:env.ASAAS_ENVIRONMENT==='production'?'production':'sandbox'});
  const read=async(pool,key)=>(await pool.query('SELECT payload,updated_at FROM finance_snapshots WHERE key=$1',[key])).rows[0]||null;
  const save=(pool,key,data)=>pool.query('INSERT INTO finance_snapshots(key,payload) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET payload=EXCLUDED.payload,updated_at=now()',[key,JSON.stringify(data)]);

@@ -1873,20 +1873,23 @@ const COM_GOOGLE = estado => `(() => {
 
 const COM_CREDENCIAIS = estado => `(() => {
  window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
- const E = window.__cred = Object.assign({ migracao: true, chave: true, testes: [], puts: [], deletes: [], gerar: [], pushTem: false, recusar: false, vercelOrigem: 'servidor', easypanelUrl: 'https://painel.exemplo.test' }, ${JSON.stringify(estado || {})});
+ const E = window.__cred = Object.assign({ migracao: true, chave: true, testes: [], puts: [], deletes: [], gerar: [], pushTem: false, stripeTela: false, recusar: false, vercelOrigem: 'servidor', easypanelUrl: 'https://painel.exemplo.test' }, ${JSON.stringify(estado || {})});
  const json = (c, s = 200) => new Response(JSON.stringify(c), { status: s, headers: { 'content-type': 'application/json' } });
  const integ = (id, nome, grupo, tela) => ({ id, nome, grupo, para: 'Para ' + nome + '.', estado: 'configurado', faltando: [], opcionais_ausentes: [], tela });
  window.fetch = async (url, o = {}) => {
   const u = String(url), m = (o.method || 'GET').toUpperCase(), corpo = o.body ? JSON.parse(o.body) : {};
   if (u === '/api/google/calendar/status') return json({ cliente: false, chave: false, migracao: false, disponivel: false, conectado: false });
-  if (u === '/api/integrations/status') return json({ integracoes: [integ('stripe', 'Stripe', 'Cobrança', 'finance'), integ('vercel', 'Vercel', 'Tecnologia', 'vercel'), integ('github', 'GitHub', 'Tecnologia', 'github'), integ('easypanel', 'EasyPanel', 'Tecnologia', 'easypanel'), integ('hostinger', 'Hostinger (DNS)', 'Tecnologia', 'dns'), integ('push', 'Notificações push', 'Avisos', null)] });
+  if (u === '/api/integrations/status') return json({ integracoes: [integ('stripe', 'Stripe', 'Cobrança', 'finance'), integ('vercel', 'Vercel', 'Tecnologia', 'vercel'), integ('github', 'GitHub', 'Tecnologia', 'github'), integ('easypanel', 'EasyPanel', 'Tecnologia', 'easypanel'), integ('hostinger', 'Hostinger (DNS)', 'Tecnologia', 'dns'), integ('push', 'Notificações push', 'Avisos', null), integ('asaas', 'Asaas', 'Cobrança', 'finance')] });
   if (u === '/api/integrations/credentials' && m === 'GET') {
-   const campo = (nome, rotulo, secreto, origem, extra = {}) => ({ nome, rotulo, secreto, obrigatorio: nome !== 'VERCEL_TEAM_ID' && nome !== 'HOSTINGER_DNS_ZONE', ajuda: null, origem, definido: origem !== null, ...(secreto ? {} : { valor: origem ? (extra.valor ?? '') : '' }), ...(origem === 'tela' ? { impressao: 'abcd1234abcd1234', atualizado_por: 'gustavo@exemplo.test', atualizado_em: '2026-10-04T15:00:00Z' } : {}) });
+   const CRITICOS = { STRIPE_SECRET_KEY: 'Trocar a chave secreta muda a conta usada nas cobranças, no checkout e nas vendas importadas.', STRIPE_WEBHOOK_SECRET: 'Trocar o segredo do webhook: o endpoint no Stripe precisa estar com o MESMO valor, senão os pagamentos deixam de ser confirmados.', ASAAS_API_KEY: 'Trocar a chave da API muda a conta usada nas cobranças e nas vendas importadas.', ASAAS_ENVIRONMENT: 'Trocar o ambiente faz o Core falar com outra conta do Asaas (produção ou testes).', ASAAS_WEBHOOK_TOKEN: 'Trocar o token do webhook: o webhook no Asaas precisa estar com o MESMO valor, senão os pagamentos deixam de ser confirmados.' };
+   const campo = (nome, rotulo, secreto, origem, extra = {}) => ({ nome, rotulo, secreto, obrigatorio: nome !== 'VERCEL_TEAM_ID' && nome !== 'HOSTINGER_DNS_ZONE', ajuda: null, critico: nome in CRITICOS, ...(nome in CRITICOS ? { aviso_troca: CRITICOS[nome] } : {}), origem, definido: origem !== null, ...(secreto ? {} : { valor: origem ? (extra.valor ?? '') : '' }), ...(origem === 'tela' ? { impressao: 'abcd1234abcd1234', atualizado_por: 'gustavo@exemplo.test', atualizado_em: '2026-10-04T15:00:00Z' } : {}) });
    return json({ migracao: E.migracao, chave: E.chave, provedores: [
     { id: 'vercel', nome: 'Vercel', campos: [campo('VERCEL_TOKEN', 'Token', true, E.vercelOrigem), campo('VERCEL_TEAM_ID', 'ID do time (opcional)', false, null)], historico: E.vercelOrigem === 'tela' ? [{ nome: 'VERCEL_TOKEN', acao: 'set', por: 'gustavo@exemplo.test', em: '2026-10-04T15:00:00Z' }] : [] },
     { id: 'github', nome: 'GitHub', campos: [campo('GITHUB_TOKEN', 'Token', true, null)], historico: [] },
     { id: 'easypanel', nome: 'EasyPanel', campos: [campo('EASYPANEL_URL', 'Endereço do painel', false, 'servidor', { valor: E.easypanelUrl }), campo('EASYPANEL_TOKEN', 'Token da API', true, 'servidor')], historico: [] },
     { id: 'hostinger', nome: 'Hostinger (DNS)', campos: [campo('HOSTINGER_API_KEY', 'Chave da API', true, null), campo('HOSTINGER_DNS_ZONE', 'Zona de DNS', false, null)], historico: [] },
+    { id: 'stripe', nome: 'Stripe', campos: [campo('STRIPE_SECRET_KEY', 'Chave secreta', true, 'servidor'), campo('STRIPE_PUBLISHABLE_KEY', 'Chave publicável', false, 'servidor', { valor: 'pk_live_Antiga123456789A' }), campo('STRIPE_WEBHOOK_SECRET', 'Segredo do webhook', true, E.stripeTela ? 'tela' : 'servidor')], historico: [] },
+    { id: 'asaas', nome: 'Asaas', campos: [campo('ASAAS_API_KEY', 'Chave da API', true, 'servidor'), campo('ASAAS_ENVIRONMENT', 'Ambiente (production ou sandbox)', false, 'servidor', { valor: 'sandbox' }), campo('ASAAS_WEBHOOK_TOKEN', 'Token do webhook', true, null)], historico: [] },
     { id: 'push', nome: 'Notificações push', campos: [campo('VAPID_PUBLIC_KEY', 'Chave pública', false, E.pushTem ? 'tela' : null, { valor: 'BPUBLICA' }), campo('VAPID_PRIVATE_KEY', 'Chave privada', true, E.pushTem ? 'tela' : null), campo('VAPID_SUBJECT', 'Assunto', false, E.pushTem ? 'tela' : null, { valor: 'https://core.exemplo.test' })], historico: [] },
    ] });
   }
@@ -1905,7 +1908,7 @@ test('configurações → Integrações: configurar uma credencial pela tela (te
   await pagina.ir(origem + '/');
   await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
   await ABRIR_SECAO('integracoes');
-  await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-integracao').length === 6`, { descricao: 'cartões' });
+  await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-integracao').length === 7`, { descricao: 'cartões' });
   return d;
  };
  const cartao = id => `document.querySelector('#settings-body .cfg-integracao[data-integracao=${id}]')`;
@@ -1913,7 +1916,7 @@ test('configurações → Integrações: configurar uma credencial pela tela (te
  const digitar = (id, nome, valor) => pagina.avaliar(`(() => { const i = ${cartao(id)}.querySelector('input[name=${nome}]'); i.value = ${JSON.stringify(valor)}; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
  const botaoDoForm = (id, texto) => `[...${cartao(id)}.querySelectorAll('.cfg-cred-form button')].find(b => b.textContent === ${JSON.stringify(texto)})`;
  let d = await abrir({});
- assert.equal(await pagina.avaliar(`!!${cartao('stripe')}.querySelector('button[data-acao=configurar]')`), false, 'só quem já pode ser configurado pela tela ganha o botão');
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#settings-body button[data-acao=configurar]').length`), 7, 'todo provedor que a tela já sabe guardar ganha o botão');
  assert.equal(await pagina.avaliar(`document.querySelector('#settings-body .cfg-integracao[data-integracao=vercel] button').textContent`), 'Abrir', 'o botão de abrir continua primeiro');
  await abrirForm('vercel');
  const campos = await pagina.avaliar(`[...${cartao('vercel')}.querySelectorAll('.cfg-cred-campo')].map(l => ({ nome: l.querySelector('input').name, tipo: l.querySelector('input').type, valor: l.querySelector('input').value, dica: l.querySelector('small').textContent, placeholder: l.querySelector('input').placeholder }))`);
@@ -1988,7 +1991,7 @@ test('configurações → Integrações → Notificações push: gerar as chaves
   await pagina.ir(origem + '/');
   await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
   await ABRIR_SECAO('integracoes');
-  await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-integracao').length === 6`, { descricao: 'cartões' });
+  await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-integracao').length === 7`, { descricao: 'cartões' });
   return d;
  };
  const cartao = `document.querySelector('#settings-body .cfg-integracao[data-integracao=push]')`;
@@ -2035,6 +2038,62 @@ test('configurações → Notificações: assinatura do navegador feita com a ch
  assert.deepEqual(await pagina.avaliar(`window.__push.opcoes`), { userVisibleOnly: true, bytes: 65 }, 'e uma nova foi feita com a chave atual');
  semExcecoes();
  await desfazer?.();
+});
+
+test('configurações → Integrações → Stripe e Asaas: trocar chave ou webhook em uso pede um segundo clique com o motivo; campo comum não', { skip: PULAR }, async () => {
+ const d = await pagina.injetar(COM_CREDENCIAIS({ stripeTela: true }));
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await ABRIR_SECAO('integracoes');
+ await pagina.esperar(`document.querySelectorAll('#settings-body .cfg-integracao').length === 7`, { descricao: 'cartões' });
+ const cartao = id => `document.querySelector('#settings-body .cfg-integracao[data-integracao=${id}]')`;
+ const botao = (id, texto) => `[...${cartao(id)}.querySelectorAll('.cfg-cred-form button')].find(b => b.textContent === ${JSON.stringify(texto)})`;
+ const digitar = (id, nome, valor) => pagina.avaliar(`(() => { const i = ${cartao(id)}.querySelector('input[name=${nome}]'); i.value = ${JSON.stringify(valor)}; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+ await pagina.avaliar(`${cartao('stripe')}.querySelector('button[data-acao=configurar]').click()`);
+ await pagina.esperar(`${cartao('stripe')}.querySelector('.cfg-cred-form')`);
+ assert.deepEqual(await pagina.avaliar(`[...${cartao('stripe')}.querySelectorAll('.cfg-cred-campo input')].map(i => [i.name, i.type])`), [['STRIPE_SECRET_KEY', 'password'], ['STRIPE_PUBLISHABLE_KEY', 'text'], ['STRIPE_WEBHOOK_SECRET', 'password']]);
+ // campo comum (chave publicável): grava no primeiro clique
+ await digitar('stripe', 'STRIPE_PUBLISHABLE_KEY', 'pk_live_Outra1234567890A');
+ await pagina.avaliar(`${botao('stripe', 'Salvar')}.click()`);
+ await pagina.esperar(`window.__cred.puts.length === 1`);
+ assert.deepEqual(await pagina.avaliar(`window.__cred.puts[0]`), { provider: 'stripe', valores: { STRIPE_PUBLISHABLE_KEY: 'pk_live_Outra1234567890A' } }, 'sem confirmar');
+ await pagina.esperar(`${cartao('stripe')}`);
+ // chave secreta em uso: o primeiro clique só avisa
+ await pagina.avaliar(`${cartao('stripe')}.querySelector('button[data-acao=configurar]').click()`);
+ await pagina.esperar(`${cartao('stripe')}.querySelector('.cfg-cred-form')`);
+ await digitar('stripe', 'STRIPE_SECRET_KEY', 'sk_live_Nova1234567890AB');
+ await pagina.avaliar(`${botao('stripe', 'Salvar')}.click()`);
+ assert.equal(await pagina.avaliar(`window.__cred.puts.length`), 1, 'o primeiro clique não envia');
+ assert.match(await pagina.avaliar(`${cartao('stripe')}.querySelector('.config-aviso').textContent`), /Confirme a troca: .*muda a conta usada nas cobranças/);
+ assert.ok(await pagina.avaliar(`!!${botao('stripe', 'Confirmar e salvar')}`));
+ // mexeu em outro campo: a confirmação anterior não vale mais
+ await digitar('stripe', 'STRIPE_PUBLISHABLE_KEY', 'pk_live_Terceira123456789');
+ assert.ok(await pagina.avaliar(`!!${botao('stripe', 'Salvar')}`), 'voltou a pedir o primeiro clique');
+ await pagina.avaliar(`${botao('stripe', 'Salvar')}.click()`);
+ await pagina.avaliar(`${botao('stripe', 'Confirmar e salvar')}.click()`);
+ await pagina.esperar(`window.__cred.puts.length === 2`);
+ assert.deepEqual(await pagina.avaliar(`window.__cred.puts[1]`), { provider: 'stripe', valores: { STRIPE_SECRET_KEY: 'sk_live_Nova1234567890AB', STRIPE_PUBLISHABLE_KEY: 'pk_live_Terceira123456789' }, confirmar: true });
+ // webhook definido pela tela: remover pede confirmação e manda ?confirmar=1
+ await pagina.esperar(`document.querySelector('#settings-body .cfg-integracoes > .config-aviso').textContent.includes('Salvo.')`);
+ await pagina.avaliar(`${cartao('stripe')}.querySelector('button[data-acao=configurar]').click()`);
+ await pagina.esperar(`${cartao('stripe')}.querySelector('.cfg-cred-remover')`);
+ await pagina.avaliar(`${cartao('stripe')}.querySelector('.cfg-cred-remover').click()`);
+ assert.equal(await pagina.avaliar(`window.__cred.deletes.length`), 0, 'o primeiro clique só avisa');
+ assert.match(await pagina.avaliar(`${cartao('stripe')}.querySelector('.config-aviso').textContent`), /MESMO valor/);
+ assert.equal(await pagina.avaliar(`${cartao('stripe')}.querySelector('.cfg-cred-remover').textContent`), 'Confirmar remoção');
+ await pagina.avaliar(`${cartao('stripe')}.querySelector('.cfg-cred-remover').click()`);
+ await pagina.esperar(`window.__cred.deletes.length === 1`);
+ assert.equal(await pagina.avaliar(`window.__cred.deletes[0]`), '/api/integrations/credentials/stripe/STRIPE_WEBHOOK_SECRET?confirmar=1');
+ // Asaas: ambiente e token do webhook também são críticos
+ await pagina.avaliar(`${cartao('asaas')}.querySelector('button[data-acao=configurar]').click()`);
+ await pagina.esperar(`${cartao('asaas')}.querySelector('.cfg-cred-form')`);
+ assert.deepEqual(await pagina.avaliar(`[...${cartao('asaas')}.querySelectorAll('.cfg-cred-campo input')].map(i => [i.name, i.type])`), [['ASAAS_API_KEY', 'password'], ['ASAAS_ENVIRONMENT', 'text'], ['ASAAS_WEBHOOK_TOKEN', 'password']]);
+ await digitar('asaas', 'ASAAS_ENVIRONMENT', 'production');
+ await pagina.avaliar(`${botao('asaas', 'Salvar')}.click()`);
+ assert.match(await pagina.avaliar(`${cartao('asaas')}.querySelector('.config-aviso').textContent`), /outra conta do Asaas/);
+ semExcecoes();
+ await d?.();
 });
 
 test('configurações → Integrações → Google: explica o que falta, conecta, mostra a conta e desconecta', { skip: PULAR }, async () => {

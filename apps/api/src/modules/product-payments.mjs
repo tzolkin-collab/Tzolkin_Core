@@ -1,8 +1,9 @@
+import { vivo } from '../platform/env-vivo.mjs';
 import {isProductId,onlyParams,fail} from '../platform/http.mjs';
 import {findEditableProduct} from './catalog.mjs';
 import {projectEmailRules} from './emails.mjs';
 
-export function productPaymentRoutes(router,{env=process.env}={}){
+export function productPaymentRoutes(router,{env=vivo.env}={}){
  router.get('/api/products/:productId/payments',async({pool,reply,params,url})=>{
   onlyParams(url.searchParams,[]);if(!isProductId(params.productId))throw fail(400,'Produto inválido.');
  const product=await findEditableProduct(pool,params.productId);if(!product)throw fail(404,'Produto não encontrado.');

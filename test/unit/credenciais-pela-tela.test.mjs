@@ -90,7 +90,7 @@ test('só campos conhecidos, não vazios, no formato certo', () => {
  recusa('vercel', {}, /Nada para salvar/);
  recusa('hostinger', { HOSTINGER_DNS_ZONE: 'não é domínio' }, /domínio/);
  recusa('inexistente', { X: 'y' }, /Provedor desconhecido/);
- assert.deepEqual(Object.keys(PROVEDORES), ['vercel', 'github', 'easypanel', 'push', 'hostinger']);
+ assert.deepEqual(Object.keys(PROVEDORES), ['vercel', 'github', 'easypanel', 'push', 'stripe', 'asaas', 'hostinger']);
  for (const p of Object.values(PROVEDORES)) for (const c of p.campos) assert.match(c.nome, /^[A-Z][A-Z0-9_]{2,63}$/, 'cabe na CHECK da migração');
 });
 
@@ -339,4 +339,123 @@ test('o push lê as chaves a CADA pedido: chaves definidas pela tela valem sem r
  } finally { for (const k of ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT']) processoVivo._sobre.delete(k); _reiniciarSenderPadrao(); assert.equal(processoVivo._sobre.size, antes); }
  assert.equal((await consulta()).enabled, false, 'tirou as chaves, desliga');
  assert.equal(senderDe(null), null);
+});
+
+// ---------- etapa 3: Stripe e Asaas (dinheiro e webhooks) ----------
+import { createStripeSales, createAsaasSales } from '../../apps/api/src/integrations/payment-sales.mjs';
+import { readFileSync } from 'node:fs';
+
+const SK = 'sk_live_' + 'A1b2C3d4E5f6G7h8'; const SK_TESTE = 'sk_test_' + 'A1b2C3d4E5f6G7h8';
+const PK_LIVE = 'pk_live_' + 'Z9y8X7w6V5u4T3s2'; const PK_TESTE = 'pk_test_' + 'Z9y8X7w6V5u4T3s2';
+const WH = 'whsec_' + 'abcdef0123456789ABCDEF';
+
+test('Stripe e Asaas: formato de cada campo', () => {
+ const ok = validarValores('stripe', { STRIPE_SECRET_KEY: SK, STRIPE_PUBLISHABLE_KEY: PK_LIVE, STRIPE_WEBHOOK_SECRET: WH }, fail);
+ assert.equal(Object.keys(ok).length, 3);
+ assert.equal(validarValores('stripe', { STRIPE_SECRET_KEY: 'rk_live_' + 'Qwerty1234567890' }, fail).STRIPE_SECRET_KEY.startsWith('rk_live_'), true, 'chave restrita vale');
+ const recusa = (p, v, re) => assert.throws(() => validarValores(p, v, fail), e => e.status === 400 && re.test(e.message));
+ recusa('stripe', { STRIPE_SECRET_KEY: 'pk_live_' + 'Z9y8X7w6V5u4T3s2' }, /sk_live_/);
+ recusa('stripe', { STRIPE_SECRET_KEY: 'sk_live_curta' }, /inválida/);
+ recusa('stripe', { STRIPE_PUBLISHABLE_KEY: SK }, /pk_live_/);
+ recusa('stripe', { STRIPE_WEBHOOK_SECRET: 'segredo-qualquer-1234567' }, /whsec_/);
+ recusa('asaas', { ASAAS_ENVIRONMENT: 'producao' }, /production ou sandbox/);
+ recusa('asaas', { ASAAS_WEBHOOK_TOKEN: 'curto' }, /16 a 255/);
+ assert.equal(validarValores('asaas', { ASAAS_API_KEY: '$aact_YTU5YTE0M2M2N2I4MTliNzk0YTI5N2U5MzdjNWZmNDQ6OjAwMDAwMDAwMDAwMDAwNjU0NzE6OiRhYWNoXzM0' }, fail).ASAAS_API_KEY.startsWith('$aact_'), true, 'a chave real do Asaas começa com $');
+ for (const id of ['stripe', 'asaas']) for (const c of PROVEDORES[id].campos) assert.match(c.nome, /^[A-Z][A-Z0-9_]{2,63}$/);
+});
+
+test('Stripe: Testar confere a chave no Stripe, o modo das duas chaves e o formato do webhook, sem ecoar segredo', async () => {
+ const chamadas = [];
+ const rede = status => async (url, o = {}) => { chamadas.push({ url: String(url), auth: o.headers?.Authorization }); return resposta({}, status); };
+ const bom = await testarProvedor('stripe', { STRIPE_SECRET_KEY: SK, STRIPE_PUBLISHABLE_KEY: PK_LIVE, STRIPE_WEBHOOK_SECRET: WH }, () => '', rede(200));
+ assert.equal(bom.ok, true, bom.mensagem);
+ assert.match(bom.mensagem, /modo live/); assert.match(bom.mensagem, /mesmo modo/); assert.match(bom.mensagem, /só um evento real confirma/);
+ assert.deepEqual([chamadas[0].url, chamadas[0].auth], ['https://api.stripe.com/v1/balance', `Bearer ${SK}`]);
+ const teste = await testarProvedor('stripe', { STRIPE_SECRET_KEY: SK_TESTE }, () => '', rede(200));
+ assert.match(teste.mensagem, /modo test/);
+ const misturado = await testarProvedor('stripe', { STRIPE_SECRET_KEY: SK, STRIPE_PUBLISHABLE_KEY: PK_TESTE }, () => '', rede(200));
+ assert.equal(misturado.ok, false); assert.match(misturado.mensagem, /modos diferentes/);
+ const recusada = await testarProvedor('stripe', { STRIPE_SECRET_KEY: SK }, () => '', rede(401));
+ assert.equal(recusada.ok, false); assert.match(recusada.mensagem, /recusou a chave secreta/); assert.ok(!recusada.mensagem.includes(SK));
+ // só o segredo do webhook no pedido: a chave que já vale (servidor ou tela) é a testada
+ const so = await testarProvedor('stripe', { STRIPE_WEBHOOK_SECRET: WH }, n => (n === 'STRIPE_SECRET_KEY' ? SK : ''), rede(200));
+ assert.equal(so.ok, true, so.mensagem); assert.equal(chamadas.at(-1).auth, `Bearer ${SK}`);
+});
+
+test('Asaas: Testar usa o ambiente certo (sandbox por padrão) e explica chave do ambiente errado', async () => {
+ const chamadas = [];
+ const rede = status => async (url, o = {}) => { chamadas.push({ url: String(url), chave: o.headers?.access_token }); return resposta({}, status); };
+ const sand = await testarProvedor('asaas', { ASAAS_API_KEY: '$aact_chave-de-teste-123' }, () => '', rede(200));
+ assert.match(sand.mensagem, /ambiente sandbox/); assert.ok(chamadas[0].url.startsWith('https://api-sandbox.asaas.com/v3/finance/balance'));
+ const prod = await testarProvedor('asaas', { ASAAS_API_KEY: '$aact_chave-real-1234567', ASAAS_ENVIRONMENT: 'production', ASAAS_WEBHOOK_TOKEN: 'token-do-webhook-1234' }, () => '', rede(200));
+ assert.match(prod.mensagem, /ambiente production/); assert.match(prod.mensagem, /só um evento real/);
+ assert.ok(chamadas[1].url.startsWith('https://api.asaas.com/v3/finance/balance'));
+ const errada = await testarProvedor('asaas', { ASAAS_API_KEY: '$aact_chave-real-1234567' }, () => '', rede(401));
+ assert.equal(errada.ok, false); assert.match(errada.mensagem, /Confira se a chave é do ambiente certo/); assert.ok(!errada.mensagem.includes('chave-real'));
+});
+
+test('trocar chave, ambiente ou webhook JÁ EM USO exige confirmação; definir pela primeira vez e campos comuns, não', async () => {
+ const rede = async () => resposta({ available: [] });
+ // chave do Stripe em uso (vem do servidor): trocar pede confirmação
+ const m = montar({ env: { ...BASE, STRIPE_SECRET_KEY: SK }, fetchImpl: rede });
+ await assert.rejects(m.rotas['PUT /api/integrations/credentials']({ client: m.client, body: { provider: 'stripe', valores: { STRIPE_SECRET_KEY: 'sk_live_' + 'Novo1234567890AB' } }, operator: OPERADOR }),
+  e => e.status === 409 && /Confirme a troca/.test(e.message) && /muda a conta usada nas cobranças/.test(e.message));
+ assert.equal(m.log.filter(q => q.sql.includes('INSERT')).length, 0, 'sem confirmação nada muda');
+ const ok = await m.rotas['PUT /api/integrations/credentials']({ client: m.client, body: { provider: 'stripe', valores: { STRIPE_SECRET_KEY: 'sk_live_' + 'Novo1234567890AB' }, confirmar: true }, operator: OPERADOR });
+ assert.deepEqual(ok.response.campos, ['STRIPE_SECRET_KEY']);
+ // segredo de webhook em uso: a mensagem diz que o painel do Stripe precisa ter o mesmo valor
+ const w = montar({ env: { ...BASE, STRIPE_SECRET_KEY: SK, STRIPE_WEBHOOK_SECRET: WH }, fetchImpl: rede });
+ await assert.rejects(w.rotas['PUT /api/integrations/credentials']({ client: w.client, body: { provider: 'stripe', valores: { STRIPE_WEBHOOK_SECRET: 'whsec_' + 'zzzzzzzz00000000AAAA' } }, operator: OPERADOR }), e => e.status === 409 && /MESMO valor/.test(e.message));
+ // primeira definição (nada em uso): sem confirmação
+ const novo = montar({ env: { ...BASE }, fetchImpl: rede });
+ const primeira = await novo.rotas['PUT /api/integrations/credentials']({ client: novo.client, body: { provider: 'asaas', valores: { ASAAS_API_KEY: '$aact_primeira-chave-123' } }, operator: OPERADOR });
+ assert.equal(primeira.response.ok, true);
+ // campo que não é crítico (chave publicável), mesmo havendo uma em uso: sem confirmação
+ const pub = montar({ env: { ...BASE, STRIPE_SECRET_KEY: SK, STRIPE_PUBLISHABLE_KEY: PK_LIVE }, fetchImpl: rede });
+ const trocouPub = await pub.rotas['PUT /api/integrations/credentials']({ client: pub.client, body: { provider: 'stripe', valores: { STRIPE_PUBLISHABLE_KEY: 'pk_live_' + 'Outra1234567890A' } }, operator: OPERADOR });
+ assert.equal(trocouPub.response.ok, true);
+});
+
+test('remover um campo crítico exige confirmação (?confirmar=1); campo comum, não', async () => {
+ const m = montar({ db: { 'UPDATE integration_credentials SET revoked_at=now() WHERE nome': () => ({ rowCount: 1, rows: [{ fingerprint: 'abcd1234abcd1234' }] }) } });
+ const sem = new URL('http://x.test/api/integrations/credentials/asaas/ASAAS_WEBHOOK_TOKEN');
+ await assert.rejects(m.rotas['DELETE /api/integrations/credentials/:provider/:nome']({ client: m.client, params: { provider: 'asaas', nome: 'ASAAS_WEBHOOK_TOKEN' }, operator: OPERADOR, url: sem }), e => e.status === 409 && /Confirme a remoção/.test(e.message) && /MESMO valor/.test(e.message));
+ assert.equal(m.log.length, 0, 'sem confirmação nada muda');
+ const com = new URL('http://x.test/api/integrations/credentials/asaas/ASAAS_WEBHOOK_TOKEN?confirmar=1');
+ assert.deepEqual((await m.rotas['DELETE /api/integrations/credentials/:provider/:nome']({ client: m.client, params: { provider: 'asaas', nome: 'ASAAS_WEBHOOK_TOKEN' }, operator: OPERADOR, url: com })).response, { ok: true });
+ const comum = await m.rotas['DELETE /api/integrations/credentials/:provider/:nome']({ client: m.client, params: { provider: 'stripe', nome: 'STRIPE_PUBLISHABLE_KEY' }, operator: OPERADOR, url: new URL('http://x.test/x') });
+ assert.deepEqual(comum.response, { ok: true });
+});
+
+test('GET marca os campos críticos com o aviso de troca; segredo de dinheiro nunca volta', async () => {
+ const m = montar({ env: { ...BASE, STRIPE_SECRET_KEY: SK, ASAAS_API_KEY: '$aact_SEGREDO-do-asaas-1', STRIPE_PUBLISHABLE_KEY: PK_LIVE } });
+ const r = reply();
+ await m.rotas['GET /api/integrations/credentials']({ pool: m.pool, reply: r.fn });
+ const campo = (id, nome) => r.s.corpo.provedores.find(p => p.id === id).campos.find(c => c.nome === nome);
+ assert.deepEqual([campo('stripe', 'STRIPE_SECRET_KEY').critico, campo('stripe', 'STRIPE_PUBLISHABLE_KEY').critico], [true, false]);
+ assert.match(campo('stripe', 'STRIPE_WEBHOOK_SECRET').aviso_troca, /MESMO valor/);
+ assert.equal(campo('stripe', 'STRIPE_PUBLISHABLE_KEY').valor, PK_LIVE, 'chave publicável não é segredo');
+ const texto = JSON.stringify(r.s.corpo);
+ assert.ok(!texto.includes(SK) && !texto.includes('SEGREDO-do-asaas'));
+});
+
+test('as rotas de cobrança leem o ambiente vivo: a chave da tela vale sem reiniciar', async () => {
+ const antes = processoVivo._sobre.size;
+ const chamadas = [];
+ const fetcher = async (url, o = {}) => { chamadas.push({ url: String(url), auth: o.headers?.Authorization, chave: o.headers?.access_token }); return resposta({ data: [], has_more: false }); };
+ try {
+  await assert.rejects(createStripeSales({ fetcher })('2026-09'), e => e.status === 503, 'sem chave: não configurada');
+  processoVivo._sobre.set('STRIPE_SECRET_KEY', SK);
+  await createStripeSales({ fetcher })('2026-09');
+  assert.equal(chamadas.at(-1).auth, `Bearer ${SK}`, 'a chave da tela foi usada');
+  processoVivo._sobre.set('ASAAS_API_KEY', '$aact_da-tela-1234567'); processoVivo._sobre.set('ASAAS_ENVIRONMENT', 'production');
+  await createAsaasSales({ fetcher })('2026-09');
+  assert.ok(chamadas.at(-1).url.startsWith('https://api.asaas.com/v3/payments'), 'o ambiente da tela decide a URL');
+  assert.equal(chamadas.at(-1).chave, '$aact_da-tela-1234567');
+ } finally { for (const k of ['STRIPE_SECRET_KEY', 'ASAAS_API_KEY', 'ASAAS_ENVIRONMENT']) processoVivo._sobre.delete(k); assert.equal(processoVivo._sobre.size, antes); }
+ // os demais módulos de cobrança usam o mesmo ambiente por padrão (não o process.env congelado)
+ for (const arquivo of ['modules/payment-sales.mjs', 'modules/payment-webhooks.mjs', 'modules/product-payments.mjs', 'modules/stripe-catalog.mjs', 'modules/checkout-gateway.mjs', 'integrations/payment-sales.mjs']) {
+  const fonte = readFileSync(new URL(`../../apps/api/src/${arquivo}`, import.meta.url), 'utf8');
+  assert.match(fonte, /env-vivo\.mjs/, arquivo); assert.match(fonte, /env\s*=\s*vivo\.env/, arquivo);
+ }
 });
