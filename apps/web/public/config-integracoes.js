@@ -156,6 +156,20 @@ function formularioDeCredenciais(cred, aoMudar) {
   };
   acoes.append(gerar);
  }
+ // E-mail: prova de verdade, com um envio só para o seu endereço (o Testar acima confere chave e domínio sem enviar nada).
+ if (cred.provedor.id === 'email') {
+  const pronto = ['EMAIL_PROVIDER', 'EMAIL_API_KEY', 'EMAIL_FROM'].every(n => cred.provedor.campos.find(c => c.nome === n)?.definido);
+  const enviar = no('button', 'Enviar e-mail de teste', 'secondary'); enviar.type = 'button'; enviar.dataset.acao = 'enviar-teste';
+  enviar.disabled = !pronto;
+  if (!pronto) enviar.title = 'Salve provedor, chave e remetente primeiro.';
+  enviar.onclick = async () => {
+   enviar.disabled = true; dizer('Enviando…');
+   try { const r = await cred.api('/api/integrations/email/teste', 'POST', {}); dizer(r.mensagem); }
+   catch (e) { dizer(e.message, true); }
+   enviar.disabled = !pronto;
+  };
+  acoes.append(enviar);
+ }
  f.append(acoes, aviso);
  if (!cred.migracao) dizer('Disponível assim que a atualização do banco (migração 050) for aplicada.', true);
  else if (!cred.chave) dizer('Falta definir CORE_SECRETS_KEY no servidor para guardar credenciais pela tela.', true);

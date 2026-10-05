@@ -49,6 +49,7 @@ import { pushRoutes } from './modules/push.mjs';
 import { integrationsStatusRoutes } from './modules/integrations-status.mjs';
 import { googleCalendarRoutes } from './modules/google-calendar.mjs';
 import { integrationsCredentialsRoutes } from './modules/integrations-credentials.mjs';
+import { integrationsEmailRoutes } from './modules/integrations-email.mjs';
 import { vivo } from './platform/env-vivo.mjs';
 import { mediaRoutes } from './modules/media.mjs';
 import { commercialPipelineRoutes } from './modules/commercial-pipelines.mjs';
@@ -97,6 +98,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  integrationsStatusRoutes(router,{...(webhookEnv?{env:webhookEnv}:{})});
  // Credenciais definidas pela tela (migração 050): o valor da tela vence o do .env. `vivo` é o ambiente que os módulos de integração leem.
  integrationsCredentialsRoutes(router,{vivo,...(webhookEnv?{env:webhookEnv}:{})});
+ integrationsEmailRoutes(router,{vivo,clock});
  mediaRoutes(router,{clock,...mediaOptions});
  commercialPipelineRoutes(router);
  commercialLeadflowRoutes(router);

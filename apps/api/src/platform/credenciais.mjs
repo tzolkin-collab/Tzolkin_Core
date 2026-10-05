@@ -7,6 +7,7 @@ import { createEasypanelAdapter } from '../integrations/easypanel.mjs';
 import { createHostingerDnsAdapter } from '../integrations/hostinger-dns.mjs';
 import { createECDH } from 'node:crypto';
 import { scrub } from './secrets.mjs';
+import { lerRemetente, conferirResend, PROVEDORES_DE_EMAIL } from './email.mjs';
 
 const LIMPO = /^[\x21-\x7e]{8,500}$/;                       // segredo: ASCII visível, sem espaço nem quebra de linha
 const segredo = valor => LIMPO.test(valor) ? null : 'Use de 8 a 500 caracteres, sem espaços nem quebras de linha.';
@@ -49,6 +50,10 @@ const retornoMeta = v => {
  let u; try { u = new URL(v); } catch { return 'Informe o endereço completo, com https://.'; }
  return u.protocol === 'https:' && !u.username && !u.password && !u.search && !u.hash ? null : 'Use um endereço https, sem usuário, parâmetros ou âncora.';
 };
+
+const provedorEmail = v => PROVEDORES_DE_EMAIL.includes(v) ? null : `Por enquanto só ${PROVEDORES_DE_EMAIL.join(', ')}.`;
+const chaveResend = v => /^re_[A-Za-z0-9_]{16,}$/.test(v) ? null : 'Chave do Resend inválida (começa com re_).';
+const remetenteEmail = v => lerRemetente(v) ? null : 'Use voce@dominio.com ou Nome <voce@dominio.com>.';
 
 const rotuloDeErro = (e, ...segredos) => scrub(e?.message || 'sem detalhe', ...segredos).slice(0, 160);
 
@@ -172,6 +177,20 @@ export const PROVEDORES = Object.freeze({
    const d = await r.json();
    if (!d.access_token) throw new Error('A Meta não confirmou o aplicativo.');
    return `A Meta aceitou o ID e a chave secreta do aplicativo.${v.META_LOGIN_CONFIG_ID ? ' O ID da configuração tem o formato certo; só uma conexão real confirma que existe.' : ''}`;
+  },
+ },
+ email: {
+  nome: 'E-mail transacional',
+  campos: [
+   { nome: 'EMAIL_PROVIDER', rotulo: 'Provedor', secreto: false, obrigatorio: true, validar: provedorEmail, ajuda: 'Por enquanto só resend.' },
+   { nome: 'EMAIL_API_KEY', rotulo: 'Chave da API', secreto: true, obrigatorio: true, validar: chaveResend, ajuda: 'resend.com/api-keys. Prefira uma chave só de envio (permissão "Sending access").' },
+   { nome: 'EMAIL_FROM', rotulo: 'Remetente', secreto: false, obrigatorio: true, validar: remetenteEmail, ajuda: 'Ex.: Tzolkin <contato@tzolkin.cloud>. O domínio precisa estar verificado no Resend.' },
+  ],
+  async testar(v, fetchImpl) {
+   const remetente = lerRemetente(v.EMAIL_FROM);
+   const r = await conferirResend({ chave: v.EMAIL_API_KEY, remetente, fetchImpl });
+   if (r.restrita) return 'O Resend aceitou a chave (ela é restrita a envio, o que é o ideal). O domínio só se confere enviando o e-mail de teste.';
+   return `O Resend aceitou a chave e o domínio ${remetente.dominio} está verificado.`;
   },
  },
  hostinger: {

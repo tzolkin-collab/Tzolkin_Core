@@ -2096,6 +2096,55 @@ test('configurações → Integrações → Stripe e Asaas: trocar chave ou webh
  await d?.();
 });
 
+const COM_EMAIL = definido => `(() => {
+ window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
+ const E = window.__email = { definido: ${definido}, testes: 0, falhar: false };
+ const json = (c, s = 200) => new Response(JSON.stringify(c), { status: s, headers: { 'content-type': 'application/json' } });
+ window.fetch = async (url, o = {}) => {
+  const u = String(url), m = (o.method || 'GET').toUpperCase();
+  if (u === '/api/google/calendar/status') return json({ cliente: false, chave: false, migracao: false, disponivel: false, conectado: false });
+  if (u === '/api/integrations/status') return json({ integracoes: [{ id: 'email', nome: 'E-mail transacional', grupo: 'Marketing', para: 'Envio de e-mail do Core.', estado: E.definido ? 'configurado' : 'nao_configurado', faltando: E.definido ? [] : ['EMAIL_PROVIDER', 'EMAIL_API_KEY', 'EMAIL_FROM'], opcionais_ausentes: [], tela: null }] });
+  if (u === '/api/integrations/credentials' && m === 'GET') {
+   const campo = (nome, rotulo, secreto, valor) => ({ nome, rotulo, secreto, obrigatorio: true, ajuda: null, critico: false, origem: E.definido ? 'tela' : null, definido: E.definido, ...(secreto ? {} : { valor: E.definido ? valor : '' }) });
+   return json({ migracao: true, chave: true, provedores: [{ id: 'email', nome: 'E-mail transacional', campos: [campo('EMAIL_PROVIDER', 'Provedor', false, 'resend'), campo('EMAIL_API_KEY', 'Chave da API', true), campo('EMAIL_FROM', 'Remetente', false, 'Tzolkin <contato@tzolkin.cloud>')], historico: [] }] });
+  }
+  if (u === '/api/integrations/email/teste' && m === 'POST') { E.testes++; return E.falhar ? json({ message: 'O Resend não enviou: The tzolkin.cloud domain is not verified.' }, 422) : json({ ok: true, para: 'gustavo@exemplo.test', mensagem: 'E-mail de teste enviado para gustavo@exemplo.test. Confira a caixa de entrada (e o spam).' }); }
+  return window.__fetchOriginal(url, o);
+ };
+})()`;
+
+test('configurações → Integrações → E-mail: o botão de teste só vale com tudo salvo, envia para o próprio operador e mostra o motivo se falhar', { skip: PULAR }, async () => {
+ const abrir = async definido => {
+  const d = await pagina.injetar(COM_EMAIL(definido));
+  await pagina.tela(1280, 900);
+  await pagina.ir(origem + '/');
+  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+  await ABRIR_SECAO('integracoes');
+  await pagina.esperar(`document.querySelector('#settings-body .cfg-integracao[data-integracao=email]')`, { descricao: 'card de e-mail' });
+  await pagina.avaliar(`document.querySelector('#settings-body .cfg-integracao[data-integracao=email] button[data-acao=configurar]').click()`);
+  await pagina.esperar(`document.querySelector('#settings-body .cfg-integracao[data-integracao=email] .cfg-cred-form')`);
+  return d;
+ };
+ const botao = `document.querySelector('#settings-body .cfg-integracao[data-integracao=email] button[data-acao=enviar-teste]')`;
+ const aviso = `document.querySelector('#settings-body .cfg-integracao[data-integracao=email] .config-aviso')`;
+ let d = await abrir(false);
+ assert.equal(await pagina.avaliar(`${botao}.disabled`), true, 'sem provedor, chave e remetente salvos o botão não vale');
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .cfg-integracao[data-integracao=email] .cfg-cred-campo input')].map(i => [i.name, i.type])`), [['EMAIL_PROVIDER', 'text'], ['EMAIL_API_KEY', 'password'], ['EMAIL_FROM', 'text']]);
+ await d?.();
+ d = await abrir(true);
+ assert.equal(await pagina.avaliar(`${botao}.disabled`), false);
+ await pagina.avaliar(`${botao}.click()`);
+ await pagina.esperar(`window.__email.testes === 1 && ${aviso}.textContent.includes('E-mail de teste enviado para gustavo@exemplo.test')`);
+ assert.equal(await pagina.avaliar(`${aviso}.classList.contains('erro')`), false);
+ assert.equal(await pagina.avaliar(`${botao}.disabled`), false, 'volta a poder pedir outro');
+ await pagina.avaliar(`window.__email.falhar = true`);
+ await pagina.avaliar(`${botao}.click()`);
+ await pagina.esperar(`${aviso}.textContent.includes('domain is not verified')`);
+ assert.equal(await pagina.avaliar(`${aviso}.classList.contains('erro')`), true);
+ semExcecoes();
+ await d?.();
+});
+
 test('configurações → Integrações → Google: explica o que falta, conecta, mostra a conta e desconecta', { skip: PULAR }, async () => {
  const textoDoBloco = () => pagina.avaliar(`document.querySelector('#settings-body .cfg-google').textContent`);
  const abrir = async estado => {

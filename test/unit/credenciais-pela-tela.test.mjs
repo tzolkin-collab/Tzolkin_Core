@@ -90,7 +90,7 @@ test('só campos conhecidos, não vazios, no formato certo', () => {
  recusa('vercel', {}, /Nada para salvar/);
  recusa('hostinger', { HOSTINGER_DNS_ZONE: 'não é domínio' }, /domínio/);
  recusa('inexistente', { X: 'y' }, /Provedor desconhecido/);
- assert.deepEqual(Object.keys(PROVEDORES), ['vercel', 'github', 'easypanel', 'pluggy', 'push', 'stripe', 'asaas', 'meta', 'hostinger']);
+ assert.deepEqual(Object.keys(PROVEDORES), ['vercel', 'github', 'easypanel', 'pluggy', 'push', 'stripe', 'asaas', 'meta', 'email', 'hostinger']);
  for (const p of Object.values(PROVEDORES)) for (const c of p.campos) assert.match(c.nome, /^[A-Z][A-Z0-9_]{2,63}$/, 'cabe na CHECK da migração');
 });
 
@@ -593,4 +593,86 @@ test('a Meta lê o ambiente vivo: ID e chave da tela fazem o OAuth ficar dispon�
  const { readFileSync } = await import('node:fs');
  const fonte = readFileSync(new URL('../../apps/api/src/modules/marketing.mjs', import.meta.url), 'utf8');
  assert.match(fonte, /env-vivo\.mjs/); assert.match(fonte, /env\s*=\s*vivo\.env/);
+});
+
+// ---------- etapa 6: e-mail (Resend) ----------
+import { lerRemetente, enderecoValido, conferirResend, enviarEmail, ErroDeEmail } from '../../apps/api/src/platform/email.mjs';
+import { integrationsEmailRoutes } from '../../apps/api/src/modules/integrations-email.mjs';
+
+const CHAVE_RESEND = 're_' + 'AbCdEf0123456789xyz';
+
+test('e-mail: remetente nos dois formatos, domínio extraído, e nada de quebra de linha', () => {
+ assert.deepEqual(lerRemetente('Tzolkin <Contato@Tzolkin.cloud>'), { nome: 'Tzolkin', email: 'contato@tzolkin.cloud', dominio: 'tzolkin.cloud' });
+ assert.deepEqual(lerRemetente('contato@tzolkin.cloud'), { nome: null, email: 'contato@tzolkin.cloud', dominio: 'tzolkin.cloud' });
+ assert.deepEqual(lerRemetente('"Equipe Tzolkin" <time@mail.tzolkin.cloud>'), { nome: 'Equipe Tzolkin', email: 'time@mail.tzolkin.cloud', dominio: 'mail.tzolkin.cloud' });
+ for (const ruim of ['', 'sem-arroba', 'a@b', 'Nome <a@b.co>\r\nBcc: x@y.co', 'a@b.co, c@d.co', '<>', 'x'.repeat(250) + '@a.co']) assert.equal(lerRemetente(ruim), null, JSON.stringify(ruim));
+ assert.equal(enderecoValido('pessoa@exemplo.com'), true); assert.equal(enderecoValido('pessoa@exemplo'), false);
+});
+
+test('e-mail: formato dos campos da tela', () => {
+ const ok = validarValores('email', { EMAIL_PROVIDER: 'resend', EMAIL_API_KEY: CHAVE_RESEND, EMAIL_FROM: 'Tzolkin <contato@tzolkin.cloud>' }, fail);
+ assert.equal(Object.keys(ok).length, 3);
+ const recusa = (v, re) => assert.throws(() => validarValores('email', v, fail), e => e.status === 400 && re.test(e.message));
+ recusa({ EMAIL_PROVIDER: 'sendgrid' }, /só resend/);
+ recusa({ EMAIL_API_KEY: 'chave-qualquer-1234567' }, /começa com re_/);
+ recusa({ EMAIL_FROM: 'sem-formato' }, /voce@dominio/);
+});
+
+test('e-mail: Testar confere chave e domínio no Resend, aceita chave restrita a envio e explica cada recusa', async () => {
+ const resposta2 = (status, corpoJson) => async () => resposta(corpoJson, status);
+ const v = { EMAIL_PROVIDER: 'resend', EMAIL_API_KEY: CHAVE_RESEND, EMAIL_FROM: 'Tzolkin <contato@tzolkin.cloud>' };
+ const chamadas = [];
+ const rede = (status, corpoJson) => async (url, o = {}) => { chamadas.push({ url: String(url), metodo: o.method, auth: o.headers?.Authorization }); return resposta(corpoJson, status); };
+ const ok = await testarProvedor('email', v, () => '', rede(200, { data: [{ name: 'tzolkin.cloud', status: 'verified' }] }));
+ assert.equal(ok.ok, true, ok.mensagem); assert.match(ok.mensagem, /domínio tzolkin\.cloud está verificado/);
+ assert.deepEqual([chamadas[0].url, chamadas[0].metodo, chamadas[0].auth], ['https://api.resend.com/domains', 'GET', `Bearer ${CHAVE_RESEND}`]);
+ const restrita = await testarProvedor('email', v, () => '', resposta2(401, { name: 'restricted_api_key', message: 'This API key is restricted to only send emails' }));
+ assert.equal(restrita.ok, true); assert.match(restrita.mensagem, /restrita a envio/); assert.match(restrita.mensagem, /e-mail de teste/);
+ const recusada = await testarProvedor('email', v, () => '', resposta2(401, { name: 'invalid_api_key' }));
+ assert.equal(recusada.ok, false); assert.match(recusada.mensagem, /recusou a chave/); assert.ok(!recusada.mensagem.includes(CHAVE_RESEND));
+ const semDominio = await testarProvedor('email', v, () => '', resposta2(200, { data: [{ name: 'outro.com', status: 'verified' }] }));
+ assert.match(semDominio.mensagem, /domínio tzolkin\.cloud não está cadastrado/);
+ const pendente = await testarProvedor('email', v, () => '', resposta2(200, { data: [{ name: 'tzolkin.cloud', status: 'pending' }] }));
+ assert.match(pendente.mensagem, /ainda não foi verificado.*pending/);
+});
+
+test('e-mail: enviar usa as credenciais do momento, manda só para quem pediu e repassa o motivo do Resend sem a chave', async () => {
+ const env = { EMAIL_PROVIDER: 'resend', EMAIL_API_KEY: CHAVE_RESEND, EMAIL_FROM: 'Tzolkin <contato@tzolkin.cloud>' };
+ const chamadas = [];
+ const rede = (status, corpoJson) => async (url, o = {}) => { chamadas.push({ url: String(url), o }); return resposta(corpoJson, status); };
+ const r = await enviarEmail({ env, para: 'eu@exemplo.test', assunto: 'Oi', texto: 'corpo', fetchImpl: rede(200, { id: 'em_1' }) });
+ assert.deepEqual(r, { id: 'em_1' });
+ const enviado = JSON.parse(chamadas[0].o.body);
+ assert.deepEqual([enviado.from, enviado.to, enviado.subject, enviado.text], ['Tzolkin <contato@tzolkin.cloud>', ['eu@exemplo.test'], 'Oi', 'corpo']);
+ assert.equal(chamadas[0].o.headers.Authorization, `Bearer ${CHAVE_RESEND}`);
+ await assert.rejects(enviarEmail({ env: {}, para: 'eu@exemplo.test', assunto: 'x', texto: 'y' }), e => e instanceof ErroDeEmail && e.status === 503 && /ainda não está configurado/.test(e.message));
+ await assert.rejects(enviarEmail({ env: { ...env, EMAIL_PROVIDER: 'outro' }, para: 'eu@exemplo.test', assunto: 'x', texto: 'y' }), e => e.status === 503);
+ await assert.rejects(enviarEmail({ env, para: 'sem-arroba', assunto: 'x', texto: 'y' }), e => e.status === 400);
+ await assert.rejects(enviarEmail({ env, para: 'eu@exemplo.test', assunto: 'x', texto: 'y', fetchImpl: rede(403, { message: `The tzolkin.cloud domain is not verified (${CHAVE_RESEND})` }) }),
+  e => e.status === 422 && /recusou a chave/.test(e.message));
+ await assert.rejects(enviarEmail({ env, para: 'eu@exemplo.test', assunto: 'x', texto: 'y', fetchImpl: rede(422, { message: `The tzolkin.cloud domain is not verified. ${CHAVE_RESEND}` }) }),
+  e => e.status === 422 && /domain is not verified/.test(e.message) && !e.message.includes(CHAVE_RESEND));
+ await assert.rejects(enviarEmail({ env, para: 'eu@exemplo.test', assunto: 'x', texto: 'y', fetchImpl: rede(500, {}) }), e => e.status === 502);
+});
+
+test('e-mail de teste: só para o e-mail de quem está logado, com limite de uma vez a cada 30 s, e usando o ambiente vivo', async () => {
+ const rotas = {}; const regs = {};
+ let agora = 1000;
+ const chamadas = [];
+ const v = criarEnvVivo({ base: { ...BASE }, log: mudo });
+ integrationsEmailRoutes({ post: (p, h, o) => { rotas['POST ' + p] = h; regs['POST ' + p] = o; } }, { vivo: v, clock: () => agora, fetchImpl: async (url, o) => { chamadas.push(JSON.parse(o.body)); return resposta({ id: 'em_1' }); } });
+ const chamar = async operador => { let saida; await rotas['POST /api/integrations/email/teste']({ operator: operador, reply: (s, c) => { saida = { s, c }; } }); return saida; };
+ // sem credenciais: 503 claro
+ await assert.rejects(chamar(OPERADOR), e => e.status === 503 && /ainda não está configurado/.test(e.message));
+ // a tela define as três; o envio passa a funcionar sem reiniciar
+ await v.carregar(bancoCom([linha('EMAIL_PROVIDER', 'resend'), linha('EMAIL_API_KEY', CHAVE_RESEND), linha('EMAIL_FROM', 'Tzolkin <contato@tzolkin.cloud>')]));
+ agora += 40000;
+ const r = await chamar(OPERADOR);
+ assert.equal(r.s, 200); assert.equal(r.c.para, 'gustavo@exemplo.test'); assert.match(r.c.mensagem, /enviado para gustavo@exemplo\.test/);
+ assert.deepEqual(chamadas[0].to, ['gustavo@exemplo.test'], 'sempre para o próprio operador');
+ await assert.rejects(chamar(OPERADOR), e => e.status === 429);
+ agora += 31000;
+ assert.equal((await chamar(OPERADOR)).s, 200, 'passado o intervalo, libera');
+ await assert.rejects(chamar({ subject: 'x' }), e => e.status === 409 && /não tem um e-mail/.test(e.message));
+ assert.equal(regs['POST /api/integrations/email/teste'].body, false, 'não lê corpo: destinatário não é digitável');
 });

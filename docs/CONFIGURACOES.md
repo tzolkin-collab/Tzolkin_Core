@@ -118,7 +118,9 @@ Objetivo: ligar, trocar e remover cada integração em Configurações → Integ
 
 **Etapa 5 (Meta) `[FEITA]`.** Só o APLICATIVO vem para a tela: ID, chave secreta, configuração do Login para Empresas e endereço de retorno. A conta de anúncios continua sendo conectada dentro de cada produto (Inbound → Campanhas), com o token cifrado no banco como antes. **Testar** pede o token do aplicativo à Meta por POST (a chave não vai em endereço): só sai se ID e chave forem do mesmo aplicativo. ID e chave são campos críticos: trocar o aplicativo em uso pede confirmação e avisa que a conta já conectada pode precisar ser conectada de novo. A chave que cifra o token da Meta agora é `META_MARKETING_KEY` se existir, senão a `CORE_SECRETS_KEY` (uma chave só serve para tudo).
 
-**Fase 4 concluída** para tudo o que tem código por trás: Vercel, GitHub, EasyPanel, Hostinger, push, Stripe, Asaas, Pluggy e Meta. Ficam no `.env`, de propósito, só as variáveis de bootstrap (banco, `CORE_SECRETS_KEY`, endereços, login com Google). E-mail entra quando existir envio.
+**Etapa 6 (e-mail) `[FEITA]`.** Provedor Resend (`platform/email.mjs`, REST, sem biblioteca): provedor, chave (`re_…`) e remetente (`Nome <voce@dominio>`). **Testar** confere a chave e se o domínio do remetente está verificado no Resend; chave restrita a ENVIO (a recomendada) não consegue listar domínios, e a tela diz que a conferência do domínio sai do e-mail de teste. **Enviar e-mail de teste** manda UM e-mail só para o endereço de quem está logado (o destinatário não é digitável), com limite de um a cada 30 s e as credenciais do momento. As automações e modelos de e-mail seguem em rascunho: nada os liga ainda a esse envio.
+
+**Fase 4 concluída** para tudo o que tem código por trás: Vercel, GitHub, EasyPanel, Hostinger, push, Stripe, Asaas, Pluggy, Meta e e-mail. Ficam no `.env`, de propósito, só as variáveis de bootstrap (banco, `CORE_SECRETS_KEY`, endereços, login com Google).
 
 ## 7. Decisões em aberto
 

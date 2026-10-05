@@ -15,7 +15,7 @@ export const INTEGRACOES = Object.freeze([
  { id: 'asaas', nome: 'Asaas', grupo: 'Cobrança', obrigatorias: ['ASAAS_API_KEY'], opcionais: ['ASAAS_WEBHOOK_TOKEN', 'ASAAS_ENVIRONMENT'], para: 'Cobranças e vendas pelo Asaas.', tela: 'finance' },
  { id: 'pluggy', nome: 'Pluggy (bancos)', grupo: 'Cobrança', obrigatorias: ['PLUGGY_CLIENT_ID', 'PLUGGY_CLIENT_SECRET'], opcionais: ['PLUGGY_ITEM_IDS'], para: 'Contas bancárias e extratos no Financeiro.', tela: 'finance' },
  { id: 'meta', nome: 'Meta (anúncios)', grupo: 'Marketing', obrigatorias: ['META_APP_ID', 'META_APP_SECRET'], opcionais: ['META_LOGIN_CONFIG_ID', 'META_REDIRECT_URI'], para: 'Campanhas e gasto de anúncios. A conta é conectada dentro de cada produto.' },
- { id: 'email', nome: 'E-mail transacional', grupo: 'Marketing', obrigatorias: ['EMAIL_PROVIDER', 'EMAIL_API_KEY'], para: 'Envio de e-mails do Core.' },
+ { id: 'email', nome: 'E-mail transacional', grupo: 'Marketing', obrigatorias: ['EMAIL_PROVIDER', 'EMAIL_API_KEY', 'EMAIL_FROM'], para: 'Envio de e-mail do Core (hoje, o e-mail de teste; as automações seguem em rascunho).' },
  { id: 'vercel', nome: 'Vercel', grupo: 'Tecnologia', obrigatorias: ['VERCEL_TOKEN'], opcionais: ['VERCEL_TEAM_ID'], para: 'Leitura de projetos e deploys.', tela: 'vercel' },
  { id: 'github', nome: 'GitHub', grupo: 'Tecnologia', obrigatorias: ['GITHUB_TOKEN'], alternativa: { GITHUB_USE_CLI: 'true' }, para: 'Leitura de repositórios.', tela: 'github' },
  { id: 'easypanel', nome: 'EasyPanel', grupo: 'Tecnologia', obrigatorias: ['EASYPANEL_URL', 'EASYPANEL_TOKEN'], para: 'Inventário de serviços e operações.', tela: 'easypanel' },
