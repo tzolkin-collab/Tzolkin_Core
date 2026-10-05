@@ -5,6 +5,8 @@ import { VISOES } from './agenda-model.js';
 const CHAVE_INICIO = 'tzolkin-agenda-inicio';
 const CHAVE_DURACAO = 'tzolkin-agenda-duracao';
 const CHAVE_MEET = 'tzolkin-agenda-meet-auto';
+const CHAVE_LOCAL_MEET = 'tzolkin-agenda-meet-local';
+const CHAVE_CONVIDAR = 'tzolkin-agenda-meet-convidar-principal';
 
 export const DURACOES = Object.freeze([[15, '15 minutos'], [30, '30 minutos'], [45, '45 minutos'], [60, '1 hora'], [90, '1 hora e 30 minutos'], [120, '2 horas']]);
 export const DURACAO_PADRAO = 60;
@@ -30,3 +32,15 @@ export const definirVisaoInicial = v => gravar(CHAVE_INICIO, VISOES.includes(v) 
 export const meetAutomatico = () => ler(CHAVE_MEET) === '1';
 export const definirMeetAutomatico = ligado => gravar(CHAVE_MEET, ligado ? '1' : null);
 
+
+/** Texto do campo Local quando a sala do Meet é escolhida e o Local está vazio. '' = não preencher. */
+export const LOCAL_MEET_PADRAO = 'Google Meet';
+export function localDoMeet() {
+ const v = ler(CHAVE_LOCAL_MEET);
+ return v === null ? LOCAL_MEET_PADRAO : v === '-' ? '' : v.slice(0, 200);
+}
+export const definirLocalDoMeet = texto => { const t = String(texto ?? '').trim().slice(0, 200); gravar(CHAVE_LOCAL_MEET, t === LOCAL_MEET_PADRAO ? null : t === '' ? '-' : t); };
+
+/** Com a sala do Meet escolhida, o convidado já vem preenchido com o contato principal (com e-mail) da empresa. */
+export const convidarContatoPrincipal = () => ler(CHAVE_CONVIDAR) === '1';
+export const definirConvidarContatoPrincipal = ligado => gravar(CHAVE_CONVIDAR, ligado ? '1' : null);

@@ -682,6 +682,7 @@ tbody tr:hover {
   height: 20px;
   object-fit: contain;
   flex-shrink: 0;
+  padding: 1px;
   border-radius: 22%;
 }
 

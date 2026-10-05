@@ -95,3 +95,9 @@ Depois de aplicar, a primeira consulta (até 1 minuto) já passa a oferecer os c
 - **Não vale para séries** (atividade que se repete): a sala é por evento avulso.
 - **Sem a 049**: a tela diz "indisponível", não oferece a sala, e a API devolve 409 com a mensagem. Endereço de retorno a cadastrar no Google Cloud: `<PUBLIC_ORIGIN>/api/google/calendar/callback`.
 - Arquivos: `platform/google-calendar.mjs` (conversa com o Google), `modules/google-calendar.mjs` (rotas, detector, sincronização), `config-integracoes.js` (conexão), blocos "Videoconferência" em `agenda-evento.js`.
+
+## Videoconferência: padrões em Configurações → Agenda (neste navegador)
+
+- **Local quando a sala é escolhida** (padrão "Google Meet"; vazio = não preencher). Só preenche se o Local estiver vazio.
+- **Convidar o contato principal da empresa**: ao escolher a sala, o e-mail do contato principal (ou o primeiro com e-mail) entra em Convidados. Dá para remover ou somar outros pelo campo "Adicionar contato como convidado".
+- Com a sala marcada, o Link fica travado: o Google gera.

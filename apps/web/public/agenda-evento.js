@@ -4,7 +4,7 @@ import { criarPeek } from './peek.js';
 import { pares } from './inline-edit.js';
 import { selo } from './data-table.js';
 import * as M from './agenda-model.js';
-import { duracaoPadraoMin, meetAutomatico } from './agenda-prefs.js';
+import { duracaoPadraoMin, meetAutomatico, localDoMeet, convidarContatoPrincipal } from './agenda-prefs.js';
 import { blocoDeLembrete, blocoDeRepeticao } from './agenda-repeticao.js';
 
 const TOM_DA_SITUACAO = { planned: 'info', done: 'success', cancelled: 'neutral' };
@@ -112,14 +112,17 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
    cliente.addEventListener('change', desenharContatos); desenharContatos();
    // Sala escolhida: o local vira "Google Meet" (se estava vazio) e o link é gerado pelo Google, então o campo fica travado.
    let localAutomatico = false;
+   const principalDe = tenantId => comEmail.find(p => p.tenant_id === tenantId && p.is_primary) || comEmail.find(p => p.tenant_id === tenantId);
    const sincronizarSala = () => {
     const comSala = meet.value === 'meet';
     rotuloConvidados.hidden = !comSala; rotuloBusca.hidden = !comSala;
-    if (comSala) { if (!local.value.trim()) { local.value = 'Google Meet'; localAutomatico = true; } link.disabled = true; link.placeholder = 'O Google gera o link ao criar a sala'; link.value = ''; }
-    else { if (localAutomatico && local.value === 'Google Meet') local.value = ''; localAutomatico = false; link.disabled = false; link.placeholder = 'https://…'; }
+    if (comSala && convidarContatoPrincipal() && !convidados.value.trim()) { const p = principalDe(cliente.value); if (p) convidados.value = p.email; }
+    if (comSala) { if (!local.value.trim() && localDoMeet()) { local.value = localDoMeet(); localAutomatico = true; } link.disabled = true; link.placeholder = 'O Google gera o link ao criar a sala'; link.value = ''; }
+    else { if (localAutomatico && local.value === localDoMeet()) local.value = ''; localAutomatico = false; link.disabled = false; link.placeholder = 'https://…'; }
    };
    local.addEventListener('input', () => { localAutomatico = false; });
    meet.addEventListener('change', sincronizarSala);
+   cliente.addEventListener('change', () => { if (meet.value === 'meet') sincronizarSala(); });
    // Como no Calendly: quem quer sala em toda atividade nova liga isso em Configurações → Agenda e já abre com ela marcada.
    if (!evento && meetAutomatico()) { meet.value = 'meet'; sincronizarSala(); }
   }
@@ -156,6 +159,7 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   comeco.value = M.paraCampoLocal(ini); termino.value = M.paraCampoLocal(fim ?? ini + duracaoPadraoMin() * 60000);
  }
  termino.min = comeco.value;
+ if (meet?.value === 'meet') meet.dispatchEvent(new Event('change'));   // sala já marcada (Meet automático): completa com a empresa escolhida
 
  const erro = el('p', null, 'form-error'); erro.setAttribute('role', 'alert'); erro.tabIndex = -1;
  form.append(erro);

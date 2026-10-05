@@ -3,7 +3,7 @@
 //   Neste navegador — visão em que a agenda abre e duração de uma atividade nova (agenda-prefs.js)
 import { textoDosLembretes, VISOES, ROTULO_DA_VISAO } from './agenda-model.js';
 import { caixaDeLembretes } from './agenda-repeticao.js';
-import { DURACOES, duracaoPadraoMin, definirDuracaoPadrao, visaoInicial, definirVisaoInicial, meetAutomatico, definirMeetAutomatico } from './agenda-prefs.js';
+import { DURACOES, duracaoPadraoMin, definirDuracaoPadrao, visaoInicial, definirVisaoInicial, meetAutomatico, definirMeetAutomatico, localDoMeet, definirLocalDoMeet, convidarContatoPrincipal, definirConvidarContatoPrincipal, LOCAL_MEET_PADRAO } from './agenda-prefs.js';
 import { seloDeEscopo } from './config-indice.js';
 
 const no = (tag, texto, classe) => {
@@ -69,5 +69,15 @@ export function montar(raiz, { api }) {
  marcar.onchange = () => { definirMeetAutomatico(marcar.checked); dizer('Salvo neste navegador.'); };
  const texto = no('span', undefined, 'config-opcao-texto'); texto.append(no('strong', 'Adicionar o Google Meet em toda atividade nova'), no('small', 'A atividade abre com a sala marcada; dá para desmarcar antes de salvar.'));
  caixa.append(marcar, texto); video.append(caixa);
+ const localCampo = no('label', undefined, 'cfg-seletor');
+ localCampo.append(no('span', 'Local quando a sala é escolhida'));
+ const entrada = document.createElement('input'); entrada.type = 'text'; entrada.name = 'meet-local'; entrada.maxLength = 200; entrada.value = localDoMeet(); entrada.placeholder = LOCAL_MEET_PADRAO;
+ entrada.onchange = () => { definirLocalDoMeet(entrada.value); dizer('Salvo neste navegador.'); };
+ localCampo.append(entrada); video.append(localCampo, no('p', 'Preenche o Local só se ele estiver vazio. Deixe em branco para não preencher.', 'config-ajuda'));
+ const caixa2 = no('label', undefined, 'config-opcao');
+ const marcar2 = document.createElement('input'); marcar2.type = 'checkbox'; marcar2.checked = convidarContatoPrincipal(); marcar2.name = 'meet-convidar';
+ marcar2.onchange = () => { definirConvidarContatoPrincipal(marcar2.checked); dizer('Salvo neste navegador.'); };
+ const texto2 = no('span', undefined, 'config-opcao-texto'); texto2.append(no('strong', 'Convidar o contato principal da empresa'), no('small', 'Ao escolher a sala, o e-mail do contato principal já entra nos convidados; dá para remover ou somar outros contatos.'));
+ caixa2.append(marcar2, texto2); video.append(caixa2);
  corpo.append(video);
 }

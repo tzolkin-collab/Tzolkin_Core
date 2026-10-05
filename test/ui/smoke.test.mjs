@@ -1631,6 +1631,15 @@ test('agenda: com a conta Google conectada o formulário oferece a sala do Meet;
  assert.deepEqual(await pagina.avaliar(`${NO_AGENDA}.meets[0].corpo`), { convidados: 'ana@empresa.com, bia@empresa.com' });
  assert.equal(await pagina.avaliar(`${NO_AGENDA}.meets[0].id`), post.id, 'a sala é criada para a atividade que acabou de ser gravada');
  await pagina.esperar(`!document.querySelector('dialog.tracking-editor[open]')`);
+ // preferências do navegador: local próprio e contato principal da empresa como convidado
+ await pagina.avaliar(`localStorage.setItem('tzolkin-agenda-meet-local', 'Sala virtual'); localStorage.setItem('tzolkin-agenda-meet-convidar-principal', '1')`);
+ await ABRIR_NOVA();
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Cliente'), EMPRESA));
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Sala'), 'meet'));
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Local (opcional)')}.value`), 'Sala virtual');
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Convidados (e-mails, separados por vírgula)')}.value`), 'ana@exemplo.test');
+ await pagina.avaliar(`localStorage.removeItem('tzolkin-agenda-meet-local'); localStorage.removeItem('tzolkin-agenda-meet-convidar-principal')`);
+ await FECHAR_TUDO();
  semExcecoes();
 });
 
@@ -1929,6 +1938,11 @@ test('configurações → Agenda: lembrete padrão (espaço) e preferências des
  await pagina.esperar(`document.querySelector('#settings-body .cfg-seletor')`);
  await definir('Visão inicial', ''); await definir('Duração padrão', '60');
  assert.equal(await pagina.avaliar(`[localStorage.getItem('tzolkin-agenda-inicio'), localStorage.getItem('tzolkin-agenda-duracao')].join()`), ',', 'valores padrão não ficam gravados');
+ // local do Meet e contato principal: valem para o popup
+ await pagina.avaliar(`(() => { const i = document.querySelector('#settings-body input[name="meet-local"]'); i.value = 'Sala virtual'; i.dispatchEvent(new Event('change', { bubbles: true })); document.querySelector('#settings-body input[name="meet-convidar"]').click(); })()`);
+ assert.equal(await pagina.avaliar(`[localStorage.getItem('tzolkin-agenda-meet-local'), localStorage.getItem('tzolkin-agenda-meet-convidar-principal')].join()`), 'Sala virtual,1');
+ await pagina.avaliar(`(() => { const i = document.querySelector('#settings-body input[name="meet-local"]'); i.value = 'Google Meet'; i.dispatchEvent(new Event('change', { bubbles: true })); document.querySelector('#settings-body input[name="meet-convidar"]').click(); })()`);
+ assert.equal(await pagina.avaliar(`[localStorage.getItem('tzolkin-agenda-meet-local'), localStorage.getItem('tzolkin-agenda-meet-convidar-principal')].join()`), ',', 'padrão não fica gravado');
  semExcecoes();
  await desfazer?.();
 });
@@ -2471,7 +2485,7 @@ test('configurações → Agenda sem a migração 048 explica; Notificações ap
  await ABRIR_SECAO('agenda');
  await pagina.esperar(`document.querySelector('#settings-body .cfg-conteudo').textContent.includes('migração 048')`);
  assert.equal(await pagina.avaliar(`document.querySelectorAll('#settings-body .config-chip').length`), 0, 'sem a 048 não há caixas de lembrete');
- assert.equal(await pagina.avaliar(`document.querySelectorAll('#settings-body .cfg-seletor').length`), 2, 'o que é do navegador segue disponível');
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#settings-body .cfg-seletor').length`), 3, 'o que é do navegador segue disponível');
  // Notificações → botão leva para a Agenda
  await pagina.avaliar(`document.querySelector('#settings-body .cfg-item[data-secao=notificacoes]').click()`);
  await pagina.esperar(`[...document.querySelectorAll('#settings-body button')].find(b => b.textContent === 'Escolher o lembrete padrão')`);
