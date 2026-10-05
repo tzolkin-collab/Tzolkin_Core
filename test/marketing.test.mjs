@@ -432,6 +432,7 @@ test('Conectar com Facebook (OAuth)', async t => {
  const env = {
   META_MARKETING_KEY: CHAVE, META_GRAPH_BASE: grafo,
   META_APP_ID: '1234567890', META_APP_SECRET: 'segredo-do-app-de-teste',
+  META_REDIRECT_URI: 'https://core.example.test/api/marketing/meta/callback',
  };
  const server = createCore({ pool, adminPassword, marketingOptions: { env } });
  await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -489,7 +490,7 @@ test('Conectar com Facebook (OAuth)', async t => {
    assert.equal(r.status, 200);
    const url = new URL((await r.json()).url);
    assert.equal(url.hostname, 'www.facebook.com');
-   assert.equal(url.searchParams.get('redirect_uri'), origin + '/api/marketing/meta/callback');
+   assert.equal(url.searchParams.get('redirect_uri'), env.META_REDIRECT_URI);
    assert.equal(url.searchParams.get('client_secret'), null);
    assert.equal(url.searchParams.get('scope'), 'ads_read');
    assert.equal(url.searchParams.get('config_id'), null);
@@ -573,7 +574,7 @@ test('Conectar com Facebook Login para Empresas (token que não expira)', async 
  const { servidor, recebidas, ajustes } = grafoFalso();
  await new Promise(r => servidor.listen(0, '127.0.0.1', r));
  const grafo = `http://127.0.0.1:${servidor.address().port}`;
- const base = { META_MARKETING_KEY: CHAVE, META_GRAPH_BASE: grafo, META_APP_ID: '1234567890', META_APP_SECRET: SEGREDO_APP };
+ const base = { META_MARKETING_KEY: CHAVE, META_GRAPH_BASE: grafo, META_APP_ID: '1234567890', META_APP_SECRET: SEGREDO_APP, META_REDIRECT_URI: 'https://core.example.test/api/marketing/meta/callback' };
  const server = createCore({ pool, adminPassword, marketingOptions: { env: { ...base, META_LOGIN_CONFIG_ID: CONFIG } } });
  await new Promise(r => server.listen(0, '127.0.0.1', r));
  const origin = `http://127.0.0.1:${server.address().port}`;

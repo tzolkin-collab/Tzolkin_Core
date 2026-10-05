@@ -14,20 +14,21 @@ export function paymentSalesRoutes(router,{providers=createSalesProviders(),env=
   for(const name of ['stripe','asaas']){
    if(list.length===1){
     const snapshot=await read(pool,`sales:${name}:${list[0]}`),attempt=await read(pool,`attempt:sales:${name}:${list[0]}`);
-    result.providers[name]={snapshot,attempt};
+    result.providers[name]={snapshot,attempt,saved_months:snapshot?[list[0]]:[]};
    }else{
-    const allSales=[];let latestUpdate=null,lastAttempt=null;
+    const allSales=[];let latestUpdate=null,lastAttempt=null;const savedMonths=[];
     for(const m of list){
      const s=await read(pool,`sales:${name}:${m}`);
      if(s?.payload?.sales){
       allSales.push(...s.payload.sales);
+      savedMonths.push(m);
       if(!latestUpdate||Date.parse(s.updated_at)>Date.parse(latestUpdate))latestUpdate=s.updated_at;
      }
      const a=await read(pool,`attempt:sales:${name}:${m}`);
      if(a&&(!lastAttempt||Date.parse(a.updated_at)>Date.parse(lastAttempt.updated_at)))lastAttempt=a;
     }
     const snapshot=allSales.length||latestUpdate?{payload:{sales:allSales,time_zone:'America/Sao_Paulo'},updated_at:latestUpdate}:null;
-    result.providers[name]={snapshot,attempt:lastAttempt};
+    result.providers[name]={snapshot,attempt:lastAttempt,saved_months:savedMonths};
    }
   }
   return result;

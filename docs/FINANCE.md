@@ -7,7 +7,7 @@ Vendas são lidas diretamente das APIs da Stripe e do Asaas, por mês e somente 
 ## Uso
 
 Menu Financeiro abre todas as contas e extratos já salvos. Cards filtram a conta; mês e conta selecionados são lembrados no navegador (somente filtros, nunca valores ou transações em localStorage).
-Ao abrir, snapshots históricos válidos são reutilizados; o mês atual é atualizado em segundo plano quando a última gravação tem 12 horas. Períodos ausentes são importados automaticamente para todas as contas. Há uma só ação manual: Atualizar dados.
+Ao abrir, snapshots históricos válidos são reutilizados; o mês atual é atualizado em segundo plano quando a última gravação tem 12 horas. Períodos ausentes são importados automaticamente para todas as contas. Na visão anual, isso significa completar os meses sem snapshot do ano selecionado para bancos e processadores; a ação manual Atualizar dados força a atualização do período exibido.
 Os dados salvos permanecem visíveis durante a atualização; falhas preservam o snapshot anterior e são indicadas. Tentativas com erro/interrompidas têm intervalo de dez minutos antes de nova tentativa automática, registrado no banco. Requisições concorrentes para a mesma conta/período compartilham uma execução no processo atual.
 Extrato consolidado, busca, filtro de entrada/saída e páginas de 30 linhas. Gráfico e indicadores usam somente movimentos efetivados de contas BANK na moeda selecionada. Entradas e saídas são brutas, incluem transferências e não representam receitas, despesas contábeis ou lucro. Cartões e moedas diferentes não são somados.
 Detalhes recolhidos mostram datas de consulta e atualização do banco separadamente.

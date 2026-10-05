@@ -18,7 +18,7 @@ import * as AM from '../../apps/web/public/agenda-model.js';
 const PULAR = acharNavegador() ? false : 'Chrome/Edge não encontrado (defina CHROME_PATH)';
 const ARTEFATOS = fileURLToPath(new URL('./artifacts/', import.meta.url));
 
-const MENU_ESPERADO = ['Visão geral', 'Financeiro', 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'E-mails', 'Portfólio', 'Serviços', 'Acompanhamento', 'Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS', 'Banco de dados', 'Configurações'];
+const MENU_ESPERADO = ['Visão geral', 'Financeiro', 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'E-mails', 'Portfólio', 'Serviços', 'Acompanhamento', 'Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS', 'Banco de dados'];
 const SECAO = `[...document.querySelectorAll('main section')].find(s => !s.hidden && s.offsetParent)`;
 /**
  * Lê, de dentro da página, os defeitos de uma tela: título, estouro de largura, texto com valor

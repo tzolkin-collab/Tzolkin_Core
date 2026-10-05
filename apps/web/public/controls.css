@@ -222,6 +222,8 @@ input:user-invalid:focus, select:user-invalid:focus, textarea:user-invalid:focus
 .cfg-resumo { margin: 0; }
 .cfg-google .config-aviso { margin: 8px 0 0; }
 .cfg-integracao { flex-wrap: wrap; }
+.cfg-integracao-logo { width: 24px; height: 24px; flex: 0 0 24px; object-fit: contain; }
+.cfg-google .cfg-integracao-logo { align-self: center; }
 .cfg-cred-form { flex: 1 0 100%; display: grid; gap: 12px; margin-top: 4px; padding: 14px 0 4px; border-top: 1px dashed var(--line-soft); }
 .cfg-cred-campo { display: grid; gap: 4px; max-width: 480px; font-size: 13px; font-weight: 500; }
 .cfg-cred-campo small { color: var(--muted); font-weight: 400; font-size: var(--fs-sm, 13px); }

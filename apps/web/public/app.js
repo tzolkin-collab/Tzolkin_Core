@@ -102,7 +102,8 @@ const CONTEXTS = {
    // ADMINISTRAÇÃO
    // Acesso a produto é assunto do contexto de produto; no geral a tela só mostrava vazio.
    access: { title: 'Acessos', section: 'view-access', action: ['Vincular acesso', 'member-dialog'], hidden:true },
-   settings: { title: 'Configurações', section: 'view-settings', metrics:false },
+   // Oculta do menu: o botão Configurações do rodapé abre (igual ao contexto de produto).
+   settings: { title: 'Configurações', section: 'view-settings', metrics:false, hidden:true },
    security: { title: 'Segurança', section: 'view-security', metrics:false, hidden:true },
   },
  },

@@ -53,7 +53,7 @@ test('eventos, automações e tarefas, contra PostgreSQL isolado', async t => {
    dono2 = (await pool.query("INSERT INTO operator_accounts(email,name,role,status,source) VALUES($1,'Dono dois','member','active','manual') RETURNING id", [`auto-dono2-${marca}@example.invalid`])).rows[0].id;
    assert.equal((await request('/api/commercial/automations', 'GET', null, { cookie: '' })).status, 401);
    const cat = (await request('/api/commercial/automations?space_id=sites')).body.catalog;
-   assert.equal(Object.keys(cat.events).length, 10); assert.deepEqual(Object.keys(cat.actions), ['tarefa.criar', 'responsavel.atribuir']);
+   assert.equal(Object.keys(cat.events).length, 10); assert.deepEqual(Object.keys(cat.actions), ['tarefa.criar', 'responsavel.atribuir', 'email.enviar']);
   });
 
   await t.test('cadastro de automação: evento, ações, responsável, funil e etapa são conferidos', async () => {

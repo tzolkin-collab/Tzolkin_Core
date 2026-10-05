@@ -67,9 +67,10 @@ export function financeRoutes(router,{provider=createPluggy(),env=vivo.env}={}) 
   const saved=new Map(rows.map(row=>[row.key,row]));
   const history=accounts.length?(await pool.query("SELECT key,updated_at FROM finance_snapshots WHERE split_part(key,':',1)='transactions' AND split_part(key,':',2)=ANY($1::text[])",[accounts.map(a=>a.id)])).rows:[];
   reply(200,{month:month||targetMonths[0],year:year||null,from:from||null,to:to||null,target_months:targetMonths,connections:list.map((c,i)=>{const attempt=saved.get('attempt:item:'+ids[i]);return {...c,attempt:attempt?{payload:attempt.payload,updated_at:attempt.updated_at}:null};}),accounts:accounts.map(a=>{
+   const accountMonths=history.filter(row=>row.key.split(':')[1]===a.id).map(row=>row.key.split(':')[2]).filter(Boolean);
    if(targetMonths.length===1){
     const snapshot=saved.get('transactions:'+a.id+':'+targetMonths[0]),attempt=saved.get('attempt:transactions:'+a.id+':'+targetMonths[0]);
-    return {...a,snapshot:snapshot?{payload:snapshot.payload,updated_at:snapshot.updated_at}:null,attempt:attempt?{payload:attempt.payload,updated_at:attempt.updated_at}:null};
+    return {...a,snapshot:snapshot?{payload:snapshot.payload,updated_at:snapshot.updated_at}:null,attempt:attempt?{payload:attempt.payload,updated_at:attempt.updated_at}:null,saved_months:[...new Set(accountMonths)].sort().reverse()};
    }
    const allTx=[];let latestUpdate=null,lastAttempt=null;
    for(const m of targetMonths){
@@ -82,7 +83,7 @@ export function financeRoutes(router,{provider=createPluggy(),env=vivo.env}={}) 
     if(att&&(!lastAttempt||Date.parse(att.updated_at)>Date.parse(lastAttempt.updated_at)))lastAttempt=att;
    }
    const snapshot=allTx.length||latestUpdate?{payload:{transactions:allTx,time_zone:'America/Sao_Paulo'},updated_at:latestUpdate}:null;
-   return {...a,snapshot,attempt:lastAttempt?{payload:lastAttempt.payload,updated_at:lastAttempt.updated_at}:null};
+   return {...a,snapshot,attempt:lastAttempt?{payload:lastAttempt.payload,updated_at:lastAttempt.updated_at}:null,saved_months:[...new Set(accountMonths)].sort().reverse()};
   }),saved_months:[...new Set(history.map(row=>row.key.split(':')[2]))].sort().reverse()});
  });
  router.post('/api/finance/sync',async({pool,reply,req})=>{

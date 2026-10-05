@@ -540,7 +540,21 @@ export function marketingRoutes(router, { env = vivo.env, clock = Date.now, adap
  // ---------------------------------------------------------------------------
  // O token vai da Meta direto para o servidor. Ninguém copia, cola nem vê.
  const RETORNO_META = '/api/marketing/meta/callback';
- const enderecoDeRetorno = url => env.META_REDIRECT_URI || (url.origin + RETORNO_META);
+ const enderecoDeRetorno = url => {
+  if (env.META_REDIRECT_URI) {
+   const redirect = String(env.META_REDIRECT_URI).trim();
+   try { if (new URL(redirect).protocol === 'https:') return redirect; } catch { /* falha abaixo com mensagem segura */ }
+   throw fail(503, 'META_REDIRECT_URI precisa usar HTTPS para o login da Meta.');
+  }
+  let origin;
+  try {
+   const configured = new URL(env.PUBLIC_ORIGIN);
+   if (configured.protocol === 'https:' && configured.pathname === '/' && !configured.search && !configured.hash) origin = configured.origin;
+  } catch { /* o bootstrap local pode não ter origem pública configurada */ }
+  if (!origin && url.protocol === 'https:') origin = url.origin;
+  if (!origin) throw fail(503, 'O login da Meta exige um endereço público HTTPS. Abra o Core pelo domínio seguro ou configure PUBLIC_ORIGIN.');
+  return origin + RETORNO_META;
+ };
  const extrasGraph = () => ({
   ...(env.META_GRAPH_BASE ? { baseUrl: env.META_GRAPH_BASE } : {}),
   ...(env.META_GRAPH_VERSION ? { version: env.META_GRAPH_VERSION } : {}),

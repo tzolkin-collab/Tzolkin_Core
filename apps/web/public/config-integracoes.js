@@ -15,6 +15,33 @@ const ESTADO = {
  nao_configurado: ['Não configurado', 'neutral'],
 };
 
+const LOGOS_INTEGRACOES = Object.freeze({
+ 'google-login': 'google', stripe: 'stripe', asaas: 'asaas', pluggy: 'pluggy',
+ meta: 'meta', email: 'resend', vercel: 'vercel', github: 'github',
+ easypanel: 'easypanel', hostinger: 'hostinger', push: 'push',
+});
+
+function logo(nome, classe = 'cfg-integracao-logo provider-logo') {
+ const img = document.createElement('img');
+ img.src = `/logos/${nome}.svg`; img.alt = ''; img.className = classe;
+ img.setAttribute('aria-hidden', 'true'); img.loading = 'lazy';
+ return img;
+}
+
+/** Push usa a marca do sistema atual; em plataformas não reconhecidas fica o sino neutro. */
+function plataformaAtualDoPush() {
+ const ua = navigator.userAgent || '';
+ const plataforma = navigator.userAgentData?.platform || navigator.platform || '';
+ if (/iPhone|iPad|iPod/i.test(ua) || (/Mac/i.test(plataforma) && navigator.maxTouchPoints > 1)) return 'apple';
+ if (/Windows/i.test(ua) || /^Win/i.test(plataforma)) return 'windows';
+ if (/Macintosh|Mac OS X/i.test(ua) || /^Mac/i.test(plataforma)) return 'apple';
+ return 'push';
+}
+
+function logoDaIntegracao(id) {
+ return id === 'push' ? plataformaAtualDoPush() : (LOGOS_INTEGRACOES[id] || 'push');
+}
+
 export const GRUPOS_DE_INTEGRACAO = Object.freeze(['Acesso', 'Cobrança', 'Marketing', 'Tecnologia', 'Avisos']);
 
 /** Uma linha de frase sobre o que falta, ou nada se está tudo certo. */
@@ -34,6 +61,7 @@ function contaMeta(i) {
 function cartao(i, abrirTela, cred, aoMudar) {
  const c = no('div', undefined, 'cfg-linha cfg-integracao');
  c.dataset.integracao = i.id; c.dataset.estado = i.estado;
+ c.append(logo(logoDaIntegracao(i.id)));
  const t = no('div', undefined, 'cfg-linha-texto');
  const topo = no('div', undefined, 'cfg-integracao-topo');
  topo.append(no('strong', i.nome), selo(...ESTADO[i.estado]));
@@ -200,15 +228,16 @@ function blocoDoGoogle(api, retorno) {
  const t = no('div', undefined, 'cfg-linha-texto');
  const aviso = no('p', '', 'config-aviso'); aviso.setAttribute('role', 'status');
  const dizer = (texto, erro = false) => { aviso.textContent = texto; aviso.classList.toggle('erro', erro); };
+ const topo = no('div', undefined, 'cfg-integracao-topo');
+ topo.append(logo('google-calendar'), no('strong', 'Sua conta Google'));
+ t.append(topo);
  if (retorno && RETORNO_GOOGLE[retorno]) dizer(...RETORNO_GOOGLE[retorno]);
  linha.append(t);
  bloco.append(linha, aviso);
  (async () => {
   let s;
   try { s = await api('/api/google/calendar/status'); } catch (e) { t.append(no('small', e.message)); return; }
-  const topo = no('div', undefined, 'cfg-integracao-topo');
-  topo.append(no('strong', 'Sua conta Google'));
-  t.append(topo, no('small', 'Cria a sala do Meet junto com a atividade, na SUA agenda, e acompanha mudança de horário e cancelamento. Só pede permissão para eventos.'));
+  t.append(no('small', 'Cria a sala do Meet junto com a atividade, na SUA agenda, e acompanha mudança de horário e cancelamento. Só pede permissão para eventos.'));
   // Endereço que o Google exige cadastrado, para copiar sem errar (erro redirect_uri_mismatch).
   if (s.retorno) { const r = no('small', 'Endereço de retorno a cadastrar no Google Cloud (URIs de redirecionamento autorizados): ', 'cfg-faltando'); const code = no('code', s.retorno, 'cfg-codigo'); r.append(code); t.append(r); }
   if (!s.migracao) { topo.append(selo('Indisponível', 'neutral')); t.append(no('small', 'Disponível assim que a atualização do banco (migração 049) for aplicada.', 'cfg-faltando')); return; }

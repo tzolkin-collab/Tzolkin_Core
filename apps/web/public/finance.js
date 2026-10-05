@@ -81,6 +81,7 @@ export function setupFinance({api}){
   if(busy||loading||!board)return;
   const ticket=generation;
   const syncMonth=periodMode==='month'?month:periodMode==='day'?day.slice(0,7):brazilMonth(Date.now());
+  const syncMonths=periodMode==='year'?Array.from({length:12},(_,i)=>`${year}-${String(i+1).padStart(2,'0')}`):[syncMonth];
   busy=true;error=false;message='Verificando atualizações…';render();let failed=0;
   try{
    const staleConnections=board.connections.some(c=>{
@@ -92,22 +93,31 @@ export function setupFinance({api}){
     failed+=result.results.filter(r=>!r.ok).length;
     const updated=await readBoard();if(ticket!==generation)return;board=updated;normalize();render();
    }
-   const queue=accounts().filter(a=>force||needsRefresh(a.snapshot,a.attempt,syncMonth));
-   for(const [index,account]of queue.entries()){
+   const queue=accounts().flatMap(account=>syncMonths
+    .filter(target=>periodMode==='year'?(force||!(account.saved_months||[]).includes(target)):(force||needsRefresh(account.snapshot,account.attempt,target)))
+    .map(target=>({account,month:target})));
+   for(const [index,item]of queue.entries()){
     if(ticket!==generation)return;
     message=`Atualizando extratos · ${index+1} de ${queue.length}`;render();
-    try{const result=await api('/api/finance/transactions/sync','POST',{account_id:account.id,month:syncMonth});if(ticket!==generation)return;account.snapshot=result.snapshot;account.attempt={payload:{state:'ok'},updated_at:new Date().toISOString()};}
-    catch{if(ticket!==generation)return;failed++;account.attempt={payload:{state:'error'},updated_at:new Date().toISOString()};}
-   }
+    try{await api('/api/finance/transactions/sync','POST',{account_id:item.account.id,month:item.month});if(ticket!==generation)return;}
+    catch{if(ticket!==generation)return;failed++;}
+    }
+   if(periodMode==='year'&&queue.length){const updated=await readBoard();if(ticket!==generation)return;board=updated;normalize();}
+   const salesMonths=periodMode==='year'?syncMonths.filter(target=>force||Object.entries(sales?.providers||{}).some(([name,provider])=>sales?.configured?.[name]&&!provider.saved_months?.includes(target))):[syncMonth];
    const salesSaved=Object.values(sales?.providers||{}).map(p=>p.snapshot?.updated_at).filter(Boolean).sort().at(-1);
-   if(force||!salesSaved||syncMonth===brazilMonth(Date.now())&&Date.now()-Date.parse(salesSaved)>=43200000){
-    message='Atualizando vendas Stripe e Asaas…';render();
-    const result=await api('/api/finance/sales/sync','POST',{month:syncMonth});if(ticket!==generation)return;
-    sales={month:result.month,configured:result.configured,providers:result.providers};
-    failed+=result.results.filter(r=>r.configured&& !r.ok).length;
+   const shouldRefreshSales=periodMode==='year'?salesMonths.length>0:(force||!salesSaved||syncMonth===brazilMonth(Date.now())&&Date.now()-Date.parse(salesSaved)>=43200000);
+   if(shouldRefreshSales){
+    const targets=periodMode==='year'?salesMonths:[syncMonth];
+    for(const [index,target]of targets.entries()){
+     message=`Atualizando vendas · ${index+1} de ${targets.length}`;render();
+     const result=await api('/api/finance/sales/sync','POST',{month:target});if(ticket!==generation)return;
+     failed+=result.results.filter(r=>r.configured&&!r.ok).length;
+    }
+    const [updatedBoard,updatedSales]=await Promise.all([readBoard(),readSales()]);if(ticket!==generation)return;
+    board=updatedBoard;sales=updatedSales;normalize();
    }
    failed=Math.max(failed,accounts().filter(a=>a.attempt?.payload.state==='error').length,board.connections.filter(c=>c.attempt?.payload.state==='error').length);
-   if(accounts().some(a=>a.snapshot))board.saved_months=[...new Set([...(board.saved_months||[]),syncMonth])].sort().reverse();
+   if(periodMode!=='year'&&accounts().some(a=>a.snapshot))board.saved_months=[...new Set([...(board.saved_months||[]),syncMonth])].sort().reverse();
    message=failed?'Parte dos dados não pôde ser atualizada. O que já estava salvo continua disponível.':'Dados salvos no Core.';error=failed>0;
   }catch(e){if(ticket===generation){message=e.message;error=true;}}
   finally{if(ticket===generation){busy=false;render();}}

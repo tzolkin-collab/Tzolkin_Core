@@ -52,7 +52,15 @@ Brand assets from SVGL: https://svgl.app/library/github_light.svg and https://sv
 EasyPanel: official SVG from https://easypanel.io/icon.svg?icon.2sbiocau1w1w9.svg, linked by https://easypanel.io/ (retrieved 2026-08-31). Bundled locally as logos/easypanel.svg for provider identification; the mark remains its owner's trademark.
 # Stripe
 
-SVG obtido sem alterações do catálogo SVGL: https://svgl.app/library/stripe.svg (2026-08-31). Marca pertencente à Stripe; uso para identificar a integração, sem sugerir endosso. Asaas e Pluggy não encontrados na consulta ao catálogo https://api.svgl.app nesta data; aguardando SVGs oficiais do usuário.
+SVG obtido sem alterações do catálogo SVGL: https://svgl.app/library/stripe.svg (2026-08-31). Marca pertencente à Stripe; uso para identificar a integração, sem sugerir endosso. Asaas e Pluggy não encontrados na consulta ao catálogo https://api.svgl.app naquela data.
+
+# Configurações → Integrações
+
+SVGs obtidos sem alterações do SVGL em 2026-10-05: https://svgl.app/library/google.svg, https://svgl.app/library/google-calendar.svg, https://svgl.app/library/meta.svg, https://svgl.app/library/resend-icon-black.svg, https://svgl.app/library/vercel.svg, https://svgl.app/library/github_light.svg e https://svgl.app/library/stripe.svg. Usados localmente para identificar integrações. Marcas continuam pertencendo a seus respectivos titulares; respeitar as diretrizes de cada marca e não sugerir endosso.
+
+Asaas e EasyPanel reutilizam os arquivos locais existentes (`logos/asaas.svg` e `logos/easypanel.svg`); as fontes estão descritas acima e na seção de marcas financeiras. O catálogo SVGL consultado em 2026-10-05 não contém Pluggy, Hostinger ou ícone de notificações push. `logos/pluggy.svg` e `logos/push.svg` continuam pictogramas genéricos criados para a interface. `logos/hostinger.svg` usa o ícone H oficial `v3/h-icon.png` do [repositório oficial da Hostinger](https://github.com/hostinger/logo) (MIT), incorporado ao SVG local para preservar a marca em tamanho pequeno.
+
+`logos/apple.svg` e `logos/windows.svg` vêm sem alterações do SVGL (`https://svgl.app/library/apple.svg` e `https://svgl.app/library/windows.svg`). O cartão de Notificações push escolhe Apple em iPhone/iPad/Mac e Windows em Windows; em plataformas não identificadas mantém o pictograma genérico.
 
 # Marcas de instituições financeiras
 

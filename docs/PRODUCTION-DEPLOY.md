@@ -67,6 +67,8 @@ Mesmo app, mesma URI de retorno, permissão `ads_read` pedida por `scope`. Em De
 
 `META_REDIRECT_URI` sobrescreve o endereço de retorno quando o Core estiver atrás de outro domínio.
 
+O Login da Meta só inicia com callback HTTPS: o Core usa `META_REDIRECT_URI` ou a origem HTTPS de `PUBLIC_ORIGIN`. O endereço local `http://127.0.0.1:3100` não é um callback seguro e será recusado; para testar, abra o Core pelo domínio HTTPS cadastrado no app.
+
 ### Meta — versão da Graph API
 
 Padrão `v26.0` (lançada em 29/07/2026), conferida em 15/09/2026 contra os changelogs da Graph e da Marketing API: nenhuma mudança nos campos lidos (contas, campanhas, insights), em `debug_token`, `oauth/access_token` ou `dialog/oauth`. A `v21.0` anterior já tinha expirado na Marketing API em 09/09/2025 e é removida da Graph em 21/01/2027. `META_GRAPH_VERSION` sobrescreve o padrão sem mudar código (basta reiniciar o serviço).
