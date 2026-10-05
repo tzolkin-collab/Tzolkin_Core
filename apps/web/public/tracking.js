@@ -28,7 +28,7 @@ const limitar = (n, a, b) => Math.min(Math.max(n, a), b);
 export function setupTracking({ api, openTenant }) {
  const host = document.getElementById('view-tracking');
  const celular = window.matchMedia('(max-width:700px)');
- const estado = { visao: visaoInicial() || lerVisao() || (celular.matches ? 'dia' : 'semana'), dia: hoje(), miniMes: hoje(), tenant: '', texto: '', categorias: new Set(), status: '' };
+ const estado = { visao: visaoInicial() || lerVisao() || (celular.matches ? 'dia' : 'semana'), dia: hoje(), miniMes: hoje(), fim: null, tenant: '', texto: '', categorias: new Set(), status: '' };
  let dados = null, eventos = [], tenants = [], geracao = 0, aviso = '', rolagem = null, relogio = 0, suprimirClique = false, filtrosAbertos = false;
  const compacta = window.matchMedia('(max-width:1100px)');   // abaixo disso a lateral some e os filtros viram um bloco recolhível
  const salvando = new Set();
@@ -48,7 +48,7 @@ export function setupTracking({ api, openTenant }) {
   const ticket = ++geracao;
   if (!dados) host.replaceChildren(el('p', 'Carregando acompanhamento…', 'empty-list'));
   else if (!silencioso) host.setAttribute('aria-busy', 'true');
-  const j = M.janela(estado.visao, estado.dia);
+  const j = M.janela(estado.visao, estado.dia, estado.fim);
   const filtro = new URLSearchParams({ from: j.from, to: j.to, ...(estado.tenant ? { tenant_id: estado.tenant } : {}) });
   try {
    const [resposta, diretorio] = await Promise.all([api('/api/tracking?' + filtro), tenants.length ? null : api('/api/overview')]);
@@ -65,10 +65,18 @@ export function setupTracking({ api, openTenant }) {
   }
  }
 
- function irPara({ dia = estado.dia, visao = estado.visao } = {}) {
+ /** Um passo para trás/frente: o período livre anda do tamanho dele; as demais visões, o passo de sempre. */
+ const andar = sentido => {
+  if (estado.visao !== 'periodo') return { dia: M.navegar(estado.visao, estado.dia, sentido) };
+  const n = M.intervalo(estado.dia, estado.fim).length;
+  return { visao: 'periodo', dia: M.somarDias(estado.dia, n * sentido), fim: M.somarDias(estado.fim, n * sentido) };
+ };
+ /** Período livre (mini-calendário): de `dia` até `fim`, inclusive. Qualquer outra navegação sai dele. */
+ function irPara({ dia = estado.dia, visao = estado.visao, fim = null } = {}) {
   const mudouVisao = visao !== estado.visao;
-  estado.dia = dia; estado.visao = visao; estado.miniMes = M.primeiroDoMes(dia); aviso = '';
-  if (mudouVisao) guardarVisao(visao);
+  if (visao === 'periodo') { if (fim && fim < dia) [dia, fim] = [fim, dia]; if (!fim || fim === dia) { visao = 'dia'; fim = null; } else fim = M.somarDias(dia, Math.min(M.intervalo(dia, fim).length, M.MAX_PERIODO) - 1); } else fim = null;
+  estado.dia = dia; estado.visao = visao; estado.fim = fim; estado.miniMes = M.primeiroDoMes(dia); aviso = '';
+  if (mudouVisao && visao !== 'periodo') guardarVisao(visao);
   rolagem = null;
   desenharTopo(); desenharLateral();
   carregar();
@@ -118,11 +126,11 @@ export function setupTracking({ api, openTenant }) {
  function desenharTopo() {
   const topo = partes.topo; topo.replaceChildren();
   const nav = el('div', null, 'ag-nav');
-  const anterior = botao('', 'arrow', () => irPara({ dia: M.navegar(estado.visao, estado.dia, -1) }), 'quiet ag-icone ag-anterior');
-  const proximo = botao('', 'arrow', () => irPara({ dia: M.navegar(estado.visao, estado.dia, 1) }), 'quiet ag-icone');
-  const rotulos = { dia: ['Dia anterior', 'Próximo dia'], semana: ['Semana anterior', 'Próxima semana'], mes: ['Mês anterior', 'Próximo mês'], agenda: ['Período anterior', 'Próximo período'] }[estado.visao];
+  const anterior = botao('', 'arrow', () => irPara(andar(-1)), 'quiet ag-icone ag-anterior');
+  const proximo = botao('', 'arrow', () => irPara(andar(1)), 'quiet ag-icone');
+  const rotulos = { dia: ['Dia anterior', 'Próximo dia'], semana: ['Semana anterior', 'Próxima semana'], mes: ['Mês anterior', 'Próximo mês'], agenda: ['Período anterior', 'Próximo período'], periodo: ['Período anterior', 'Próximo período'] }[estado.visao];
   for (const [b, r] of [[anterior, rotulos[0]], [proximo, rotulos[1]]]) { b.setAttribute('aria-label', r); b.title = r; }
-  const titulo = el('h2', maiuscula(M.titulo(estado.visao, estado.dia)), 'ag-titulo'); titulo.setAttribute('aria-live', 'polite');
+  const titulo = el('h2', maiuscula(M.titulo(estado.visao, estado.dia, estado.fim ?? estado.dia)), 'ag-titulo'); titulo.setAttribute('aria-live', 'polite');
   nav.append(botao('Hoje', null, () => irPara({ dia: hoje() }), 'secondary ag-hoje'), anterior, proximo, titulo);
 
   const acoes = el('div', null, 'ag-acoes');
@@ -143,6 +151,20 @@ export function setupTracking({ api, openTenant }) {
  }
 
  // ---------- lateral: mini-calendário e filtros ----------
+ let suprimirMini = false;
+ function ligarIntervalo(grade) {
+  grade.addEventListener('pointerdown', ev => {
+   const ini = ev.target.closest('.ag-mini-dia');
+   if (!ini || ev.button !== 0) return;
+   const a = ini.dataset.dia; let b = a;
+   const sob = e => document.elementFromPoint(e.clientX, e.clientY)?.closest?.('.ag-mini-dia')?.dataset.dia;
+   const marcar = () => { const dias = new Set(M.intervalo(a, b)); for (const x of grade.querySelectorAll('.ag-mini-dia')) { if (dias.size > 1 && dias.has(x.dataset.dia)) x.dataset.escolha = ''; else delete x.dataset.escolha; } };
+   const mover = e => { const d = sob(e); if (d && d !== b) { b = d; marcar(); } };
+   const sair = () => { document.removeEventListener('pointermove', mover); document.removeEventListener('pointerup', soltar); document.removeEventListener('pointercancel', sair); for (const x of grade.querySelectorAll('[data-escolha]')) delete x.dataset.escolha; };
+   const soltar = () => { sair(); if (b === a) return; suprimirMini = true; setTimeout(() => { suprimirMini = false; }, 0); irPara({ visao: 'periodo', dia: a < b ? a : b, fim: a < b ? b : a }); };
+   document.addEventListener('pointermove', mover); document.addEventListener('pointerup', soltar); document.addEventListener('pointercancel', sair);
+  });
+ }
  function desenharLateral() {
   const lateral = partes.lateral; lateral.replaceChildren();
   const mini = el('section', null, 'ag-mini'); mini.setAttribute('aria-label', 'Mini calendário');
@@ -153,7 +175,7 @@ export function setupTracking({ api, openTenant }) {
   cab.append(el('strong', maiuscula(M.titulo('mes', estado.miniMes))), mesAnt, mesPro);
   const grade = el('div', null, 'ag-mini-grade');
   for (const letra of ['S', 'T', 'Q', 'Q', 'S', 'S', 'D']) grade.append(el('span', letra, 'ag-mini-sem'));
-  const janelaAtual = new Set(M.semanaDe(estado.dia));
+  const janelaAtual = new Set(estado.visao === 'periodo' ? M.intervalo(estado.dia, estado.fim) : M.semanaDe(estado.dia));
   const hojeDia = hoje();
   for (const semana of M.gradeDoMes(estado.miniMes)) for (const d of semana) {
    const b = el('button', String(M.numeroDoDia(d)), 'ag-mini-dia'); b.type = 'button'; b.dataset.dia = d;
@@ -161,10 +183,12 @@ export function setupTracking({ api, openTenant }) {
    if (!M.mesmoMes(d, estado.miniMes)) b.dataset.fora = '';
    if (d === hojeDia) b.dataset.hoje = '';
    if (d === estado.dia) b.setAttribute('aria-current', 'date');
-   else if (estado.visao === 'semana' && janelaAtual.has(d)) b.dataset.semana = '';
-   b.onclick = () => irPara({ dia: d });
+   else if ((estado.visao === 'semana' || estado.visao === 'periodo') && janelaAtual.has(d)) b.dataset.semana = '';
+   // clique = esse dia; Shift+clique = do dia atual até esse; arrastar de um dia a outro = esse intervalo (no toque também)
+   b.onclick = ev => { if (suprimirMini) { suprimirMini = false; return; } irPara(ev.shiftKey ? { visao: 'periodo', dia: estado.dia, fim: d } : { dia: d }); };
    grade.append(b);
   }
+  ligarIntervalo(grade);
   mini.append(cab, grade);
 
   const filtros = el('section', null, 'ag-filtros'); filtros.setAttribute('aria-label', 'Filtros');
@@ -209,9 +233,9 @@ export function setupTracking({ api, openTenant }) {
   if (toast) { const t = el('div', null, 'ag-toast'); t.setAttribute('role', 'status'); t.append(el('span', toast.texto), botao('Desfazer', null, desfazerUltimo, 'quiet')); principal.append(t); }
   if (dados.truncated) principal.append(el('p', 'Limite de registros atingido: a lista pode estar incompleta. Filtre por cliente.', 'security-banner'));
   const lista = visiveis();
-  if (estado.visao === 'agenda') principal.append(desenharAgenda(lista));
+  if (estado.visao === 'agenda' || (estado.visao === 'periodo' && M.intervalo(estado.dia, estado.fim).length > 7)) principal.append(desenharAgenda(lista));
   else if (estado.visao === 'mes') principal.append(desenharMes(lista));
-  else principal.append(desenharGrade(estado.visao === 'dia' ? [estado.dia] : M.semanaDe(estado.dia), lista));
+  else principal.append(desenharGrade(estado.visao === 'dia' ? [estado.dia] : estado.visao === 'periodo' ? M.intervalo(estado.dia, estado.fim) : M.semanaDe(estado.dia), lista));
   const n = lista.length;
   const contador = el('p', `${n} atividade${n === 1 ? '' : 's'} no período`, 'ag-contagem detail'); contador.setAttribute('role', 'status');
   principal.append(contador);
@@ -250,7 +274,7 @@ export function setupTracking({ api, openTenant }) {
  }
 
  function desenharGrade(dias, lista) {
-  const raiz = el('div', null, 'ag-grade'); raiz.setAttribute('role', 'region'); raiz.setAttribute('aria-label', dias.length === 1 ? 'Calendário do dia' : 'Calendário da semana');
+  const raiz = el('div', null, 'ag-grade'); raiz.setAttribute('role', 'region'); raiz.setAttribute('aria-label', dias.length === 1 ? 'Calendário do dia' : dias.length === 7 ? 'Calendário da semana' : `Calendário de ${dias.length} dias`);
   estilo(raiz, { '--ag-colunas': String(dias.length), '--ag-hora': ALTURA_HORA + 'px' });
   const hojeDia = hoje();
   const rolar = el('div', null, 'ag-rolagem'); rolar.tabIndex = -1;
@@ -446,7 +470,7 @@ export function setupTracking({ api, openTenant }) {
 
  // ---------- visão Agenda (lista) ----------
  function desenharAgenda(lista) {
-  const j = M.janela('agenda', estado.dia);
+  const j = estado.visao === 'periodo' ? M.janela('periodo', estado.dia, estado.fim) : M.janela('agenda', estado.dia);
   const grupos = M.agruparPorDia(lista, j.from, j.to);
   const raiz = el('div', null, 'ag-lista'); raiz.setAttribute('role', 'region'); raiz.setAttribute('aria-label', 'Agenda em lista');
   if (!grupos.length) {
@@ -536,9 +560,9 @@ export function setupTracking({ api, openTenant }) {
   const visoes = { d: 'dia', w: 'semana', m: 'mes', a: 'agenda' };
   if (k === 't') irPara({ dia: hoje() });
   else if (visoes[k]) irPara({ visao: visoes[k] });
-  else if (k === 'arrowleft') irPara({ dia: M.navegar(estado.visao, estado.dia, -1) });
-  else if (k === 'arrowright' || k === 'n' || k === 'j') irPara({ dia: M.navegar(estado.visao, estado.dia, 1) });
-  else if (k === 'p' || k === 'k') irPara({ dia: M.navegar(estado.visao, estado.dia, -1) });
+  else if (k === 'arrowleft') irPara(andar(-1));
+  else if (k === 'arrowright' || k === 'n' || k === 'j') irPara(andar(1));
+  else if (k === 'p' || k === 'k') irPara(andar(-1));
   else if (k === '/') partes.entrada?.focus();
   else if (k === '?') ajudaDeAtalhos();
   else if (k === 'c') novo();

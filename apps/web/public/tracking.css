@@ -268,3 +268,7 @@
 .ag-atalhos-lista dd { text-align: left; color: var(--text); }
 .ag-atalhos-lista dt { flex-wrap: wrap; }
 @media (max-width: 480px) { .ag-atalhos-lista > div { grid-template-columns: 110px minmax(0, 1fr); gap: 10px; } }
+
+/* Intervalo sendo arrastado no mini-calendário */
+.ag-mini-dia[data-escolha] { background: color-mix(in srgb, var(--focus-ring) 28%, transparent); }
+.ag-mini-grade { touch-action: none; user-select: none; -webkit-user-select: none; }

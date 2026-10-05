@@ -1370,6 +1370,31 @@ test('agenda: no toque, arrastar exige segurar; mexer antes de segurar é rolage
  semExcecoes();
 });
 
+test('agenda: arrastar ou Shift+clique no mini-calendário escolhe um intervalo de dias; 7 ou menos vira grade, mais vira lista', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ const dias = await pagina.avaliar(`[...document.querySelectorAll('#view-tracking .ag-mini-dia')].map(b => b.dataset.dia)`);
+ const hojeDia = await pagina.avaliar(`document.querySelector('#view-tracking .ag-mini-dia[data-hoje]').dataset.dia`);
+ const i = dias.indexOf(hojeDia);
+ const ev = (tipo, dia, extra = '') => pagina.avaliar(`document.querySelector('#view-tracking .ag-mini-dia[data-dia="${dia}"]').dispatchEvent(new PointerEvent('${tipo}', { bubbles: true, button: 0, pointerId: 3, clientX: 1, clientY: 1 ${extra} }))`);
+ // Shift+clique: de hoje até 2 dias depois = 3 colunas
+ const alvo = dias[i + 2];
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-mini-dia[data-dia="${alvo}"]').dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true }))`);
+ await pagina.esperar(`document.querySelectorAll('#view-tracking .ag-grade .ag-coluna, #view-tracking .ag-grade [data-dia]').length >= 3 && document.querySelector('#view-tracking .ag-titulo').textContent.includes('–')`, { descricao: 'período de 3 dias' });
+ assert.match(await pagina.avaliar(`document.querySelector('#view-tracking .ag-grade').getAttribute('aria-label')`), /3 dias/);
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#view-tracking .ag-mini-dia[data-semana], #view-tracking .ag-mini-dia[aria-current]').length`), 3, 'o mini mostra os 3 dias');
+ // um passo adiante anda 3 dias
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-nav .ag-icone:not(.ag-anterior)').click()`);
+ await pagina.esperar(`document.querySelector('#view-tracking .ag-mini-dia[aria-current]')?.dataset.dia === ${JSON.stringify(dias[i + 3])}`, { descricao: 'andou 3 dias' });
+ // intervalo longo (10 dias) vira lista
+ await pagina.avaliar(`document.querySelector('#view-tracking [data-visao="semana"]').click()`);
+ await pagina.esperar(`document.querySelector('#view-tracking .ag-grade')`, { descricao: 'semana' });
+ await ev('pointerdown', dias[i]); await ev('pointermove', dias[i + 9], ''); 
+ await pagina.avaliar(`document.elementFromPoint = () => document.querySelector('#view-tracking .ag-mini-dia[data-dia="${dias[i + 9]}"]')`);
+ await ev('pointermove', dias[i + 9]); await ev('pointerup', dias[i + 9]);
+ await pagina.esperar(`document.querySelector('#view-tracking .ag-lista')`, { descricao: 'lista do período longo' });
+ semExcecoes();
+});
+
 // ---- lembrete e repetição (migração 048) ----
 const CAMPO_DO_FORM = nome => `[...document.querySelectorAll('dialog.tracking-editor label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)}).querySelector('input,select,textarea')`;
 const DEFINIR = (c, v, ev = 'change') => `(() => { const c = ${c}; c.value = ${JSON.stringify(v)}; c.dispatchEvent(new Event(${JSON.stringify(ev)}, { bubbles: true })); })()`;

@@ -12,6 +12,7 @@ calendários externos (Fases 1 a 3) ainda não existem.
   prazos de um dia ou mais, evento que atravessa a meia-noite aparece nos dois dias.
 - **Sobreposição como no Google:** dois eventos que começam em horas diferentes (30 min ou mais) ficam em cascata (o de baixo recua e
   fica por cima); começando juntos, ou três ou mais, dividem a largura em colunas iguais.
+- **Intervalo de dias:** no mini-calendário, arraste de um dia a outro (ou Shift+clique). Até 7 dias vira grade com essas colunas; mais que isso, lista. As setas andam o tamanho do intervalo; escolher uma visão sai dele.
 - **Criar:** clicar numa hora vazia (1h a partir da meia hora anterior) ou arrastar na grade (mouse; no toque, segurar e arrastar).
 - **Mover e esticar:** arrastar o evento (muda hora e dia, gruda de 15 em 15 min) e a alça de baixo (muda o fim). Esc cancela. O
   servidor recusando (409) desfaz e avisa. No celular: toque abre o evento; **segurar ~0,4 s** o evento (ou uma hora vazia) "pega" e o dedo arrasta (a rolagem trava só nesse momento); a alça de baixo, maior no toque, estica de imediato.

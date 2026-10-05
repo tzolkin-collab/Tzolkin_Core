@@ -41,7 +41,12 @@ export function gradeDoMes(dia) {
 
 // ---------- visões ----------
 /** Janela de consulta da visão: `from` inclusivo, `to` exclusivo (o que /api/tracking?from=&to= espera; máximo 62 dias). */
-export function janela(visao, dia) {
+/** Dias de a até b, inclusive (b antes de a troca de lugar). */
+export function intervalo(a, b) { if (b < a) [a, b] = [b, a]; const r = []; for (let d = a; d <= b && r.length < 366; d = somarDias(d, 1)) r.push(d); return r; }
+/** Período livre escolhido no mini-calendário: de `dia` até `fim` (inclusive). Até 7 dias vira grade; mais que isso, lista. */
+export const MAX_PERIODO = 62;
+export function janela(visao, dia, ate = dia) {
+ if (visao === 'periodo') return { from: dia, to: somarDias(ate, 1) };
  if (visao === 'dia') return { from: dia, to: somarDias(dia, 1) };
  if (visao === 'semana') { const seg = segundaDe(dia); return { from: seg, to: somarDias(seg, 7) }; }
  if (visao === 'agenda') return { from: dia, to: somarDias(dia, 31) };
@@ -56,7 +61,8 @@ export function navegar(visao, dia, sentido) {
  return `${alvo.getUTCFullYear()}-${pad(alvo.getUTCMonth() + 1)}-${pad(Math.min(d, ult))}`;
 }
 const fmt = (opcoes, dia) => new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC', ...opcoes }).format(new Date(dia + 'T12:00:00Z'));
-export function titulo(visao, dia) {
+export function titulo(visao, dia, ate = dia) {
+ if (visao === 'periodo') return `${fmt({ day: 'numeric', month: 'short' }, dia)} – ${fmt({ day: 'numeric', month: 'short', year: 'numeric' }, ate)}`;
  if (visao === 'dia') return fmt({ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }, dia);
  if (visao === 'mes') return fmt({ month: 'long', year: 'numeric' }, dia);
  const j = janela(visao, dia), ini = j.from, fim = somarDias(j.to, -1);
