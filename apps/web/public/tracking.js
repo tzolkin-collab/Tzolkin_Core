@@ -12,6 +12,8 @@ import { duracaoPadraoMin, visaoInicial } from './agenda-prefs.js';
 const ALTURA_HORA = 48;   // px por hora na grade; o CSS usa o mesmo valor em --ag-hora
 const PASSO = 15;         // minutos: arrastar e esticar grudam de 15 em 15
 const MINIMO = 30;        // minutos: duração visual mínima e padrão de um clique na grade
+const SEGURAR_MS = 380;   // toque: tempo parado para "pegar" o evento; antes disso o dedo rola a página
+const TOLERANCIA_TOQUE = 10; // px que o dedo pode tremer durante o segurar
 const LIMIAR = 4;         // px que o mouse anda antes de um clique virar arraste
 const MAX_CHIPS_MES = 3;
 const CHAVE_VISAO = 'tzolkin-agenda-visao';
@@ -312,7 +314,10 @@ export function setupTracking({ api, openTenant }) {
  function ligarInteracao(corpo, colunas, dias, lista) {
   const diaDoX = x => { const i = colunas.findIndex(c => { const r = c.getBoundingClientRect(); return x >= r.left && x < r.right; }); return i < 0 ? (x < colunas[0].getBoundingClientRect().left ? 0 : colunas.length - 1) : i; };
   const minutoDoY = (col, y) => limitar((y - col.getBoundingClientRect().top) / ALTURA_HORA * 60, 0, 1440);
-  const mouse = ev => ev.button === 0 && ev.pointerType !== 'touch';
+  const principal = ev => ev.button === 0;
+  const vibrar = () => { try { navigator.vibrate?.(12); } catch { /* sem vibração */ } };
+  // Dedo: arrastar exige segurar antes (senão é rolagem). Com o dedo "pego", a rolagem da página é travada até soltar.
+  const travarRolagem = () => { const parar = e => { if (e.cancelable) e.preventDefault(); }; document.addEventListener('touchmove', parar, { passive: false }); return () => document.removeEventListener('touchmove', parar); };
 
   // Clique simples numa hora vazia: 1h a partir da meia hora anterior (toque e mouse). Arrastar define o intervalo.
   colunas.forEach((col, i) => {
@@ -323,10 +328,14 @@ export function setupTracking({ api, openTenant }) {
     novo(M.inicioDoDia(dias[i]) + ini * 60000, M.inicioDoDia(dias[i]) + (ini + duracaoPadraoMin()) * 60000);
    });
    col.addEventListener('pointerdown', ev => {
-    if (ev.target !== col || !mouse(ev)) return;
-    const y0 = ev.clientY, base = M.arredondar(minutoDoY(col, y0) - PASSO / 2, PASSO);
-    let fantasma = null, fim = base + MINIMO;
+    if (ev.target !== col || !principal(ev)) return;
+    const toque = ev.pointerType === 'touch';
+    const y0 = ev.clientY, x0 = ev.clientX, base = M.arredondar(minutoDoY(col, y0) - PASSO / 2, PASSO);
+    let fantasma = null, fim = base + MINIMO, pego = !toque, timer = null, destravar = null;
+    if (toque) timer = setTimeout(() => { pego = true; destravar = travarRolagem(); vibrar(); fantasma = el('div', null, 'ag-fantasma'); estilo(fantasma, { top: base / 60 * ALTURA_HORA + 'px', height: MINIMO / 60 * ALTURA_HORA + 'px' }); fantasma.dataset.ini = String(base); col.append(fantasma); }, SEGURAR_MS);
+    const fimToque = () => { clearTimeout(timer); destravar?.(); };
     const mover = m => {
+     if (!pego) { if (Math.hypot(m.clientX - x0, m.clientY - y0) > TOLERANCIA_TOQUE) { fimToque(); cancelar(); } return; }
      if (!fantasma && Math.abs(m.clientY - y0) < LIMIAR) return;
      if (!fantasma) { fantasma = el('div', null, 'ag-fantasma'); col.append(fantasma); try { col.setPointerCapture(ev.pointerId); } catch { /* sem captura: segue pelo document */ } }
      const atual = M.arredondar(minutoDoY(col, m.clientY), PASSO);
@@ -336,20 +345,21 @@ export function setupTracking({ api, openTenant }) {
      fantasma.dataset.ini = String(a);
     };
     const soltar = () => {
+     fimToque();
      document.removeEventListener('pointermove', mover); document.removeEventListener('pointerup', soltar); document.removeEventListener('pointercancel', cancelar);
      if (!fantasma) return;
      const a = Number(fantasma.dataset.ini); fantasma.remove(); suprimirClique = true;
      setTimeout(() => { suprimirClique = false; }, 0);
      novo(M.inicioDoDia(dias[i]) + a * 60000, M.inicioDoDia(dias[i]) + Math.max(fim, a + PASSO) * 60000);
     };
-    const cancelar = () => { document.removeEventListener('pointermove', mover); document.removeEventListener('pointerup', soltar); document.removeEventListener('pointercancel', cancelar); fantasma?.remove(); };
+    const cancelar = () => { fimToque(); document.removeEventListener('pointermove', mover); document.removeEventListener('pointerup', soltar); document.removeEventListener('pointercancel', cancelar); fantasma?.remove(); };
     document.addEventListener('pointermove', mover); document.addEventListener('pointerup', soltar); document.addEventListener('pointercancel', cancelar);
    });
   });
 
   corpo.addEventListener('pointerdown', ev => {
    const botaoEvento = ev.target.closest('.ag-evento');
-   if (!botaoEvento || !mouse(ev)) return;
+   if (!botaoEvento || !principal(ev)) return;
    const evento = eventos.find(x => x.id === botaoEvento.dataset.id);
    if (!evento || salvando.has(evento.id)) return;
    const esticar = ev.target.classList.contains('ag-alca');
@@ -357,7 +367,12 @@ export function setupTracking({ api, openTenant }) {
    const larg = colunas[0].getBoundingClientRect().width;
    const x0 = ev.clientX, y0 = ev.clientY, altura0 = botaoEvento.getBoundingClientRect().height;
    let arrastando = false, deltaMin = 0, deltaDias = 0;
+   const toque = ev.pointerType === 'touch';
+   let pego = !toque || esticar, timer = null, destravar = null;   // a alça já nasce "pega" (touch-action: none); o corpo só depois de segurar
+   if (toque && esticar) destravar = travarRolagem();
+   if (toque && !esticar) timer = setTimeout(() => { pego = true; destravar = travarRolagem(); vibrar(); arrastando = true; botaoEvento.classList.add('ag-arrastando'); }, SEGURAR_MS);
    const mover = m => {
+    if (!pego) { if (Math.hypot(m.clientX - x0, m.clientY - y0) > TOLERANCIA_TOQUE) cancelar(); return; }
     if (!arrastando && Math.hypot(m.clientX - x0, m.clientY - y0) < LIMIAR) return;
     if (!arrastando) { arrastando = true; botaoEvento.classList.add(esticar ? 'ag-esticando' : 'ag-arrastando'); }
     deltaMin = M.arredondar((m.clientY - y0) / ALTURA_HORA * 60, PASSO);
@@ -368,7 +383,7 @@ export function setupTracking({ api, openTenant }) {
      estilo(botaoEvento, { transform: `translate(${deltaDias * larg}px, ${deltaMin / 60 * ALTURA_HORA}px)` });
     }
    };
-   const limpar = () => { document.removeEventListener('pointermove', mover); document.removeEventListener('pointerup', soltar); document.removeEventListener('pointercancel', cancelar); document.removeEventListener('keydown', tecla, true); };   // true: tem de ser a mesma fase do addEventListener, senão o ouvinte fica e engole o Esc da página inteira
+   const limpar = () => { clearTimeout(timer); destravar?.(); document.removeEventListener('pointermove', mover); document.removeEventListener('pointerup', soltar); document.removeEventListener('pointercancel', cancelar); document.removeEventListener('keydown', tecla, true); };   // true: tem de ser a mesma fase do addEventListener, senão o ouvinte fica e engole o Esc da página inteira
    const desfazer = () => { botaoEvento.classList.remove('ag-arrastando', 'ag-esticando'); botaoEvento.style.removeProperty('transform'); };
    const soltar = () => {
     limpar();
@@ -383,6 +398,7 @@ export function setupTracking({ api, openTenant }) {
    const tecla = k => { if (k.key === 'Escape') { k.stopPropagation(); cancelar(); } };
    document.addEventListener('pointermove', mover); document.addEventListener('pointerup', soltar); document.addEventListener('pointercancel', cancelar); document.addEventListener('keydown', tecla, true);
    if (esticar) ev.preventDefault();
+   if (toque) botaoEvento.addEventListener('contextmenu', c => c.preventDefault(), { once: true });
   });
  }
 

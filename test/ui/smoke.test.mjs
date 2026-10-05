@@ -1331,6 +1331,45 @@ test('agenda: arrastar move, esticar muda a duração, Esc cancela e recusa do s
  semExcecoes();
 });
 
+test('agenda: no toque, arrastar exige segurar; mexer antes de segurar é rolagem e a alça estica de imediato', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ const ID = '00000000-0000-4000-8000-000000000001';
+ const SEL = `document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]')`;
+ const medir = () => pagina.avaliar(`(() => { const b = ${SEL}; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top, bottom: r.bottom, classes: b.className }; })()`);
+ const toque = (tipo, x, y, alvo = 'document') => pagina.avaliar(`${alvo}.dispatchEvent(new PointerEvent('${tipo}', { bubbles: true, clientX: ${x}, clientY: ${y}, button: 0, pointerType: 'touch', pointerId: 9 }))`);
+ const puts0 = await pagina.avaliar(`${NO_AGENDA}.puts.length`);
+
+ // dedo que anda antes de segurar = rolagem: não pega o evento, não grava
+ let m = await medir();
+ await toque('pointerdown', m.x, m.y + 8, SEL);
+ await toque('pointermove', m.x, m.y + 8 + 2 * ALTURA_HORA);
+ await toque('pointerup', m.x, m.y + 8 + 2 * ALTURA_HORA);
+ await new Promise(r => setTimeout(r, 600));
+ assert.equal(await pagina.avaliar(`${NO_AGENDA}.puts.length`), puts0, 'rolar não move o evento');
+ assert.ok(!(await medir()).classes.includes('ag-arrastando'));
+
+ // segurar ~0,4 s "pega" o evento; depois o dedo arrasta e solta grava
+ m = await medir();
+ await toque('pointerdown', m.x, m.y + 8, SEL);
+ await pagina.esperar(`${SEL}.classList.contains('ag-arrastando')`, { descricao: 'evento pego após segurar' });
+ await toque('pointermove', m.x, m.y + 8 + ALTURA_HORA);
+ await toque('pointerup', m.x, m.y + 8 + ALTURA_HORA);
+ await pagina.esperar(`${NO_AGENDA}.puts.length === ${puts0 + 1}`, { descricao: 'PUT do arraste por toque' });
+ const mov = await pagina.avaliar(`${NO_AGENDA}.puts.at(-1)`);
+ assert.equal(new Date(mov.corpo.ends_at).getTime() - new Date(mov.corpo.starts_at).getTime(), Math.round((m.bottom - m.y) / ALTURA_HORA) * 3600000, 'a duração se mantém');
+ assert.ok(!(await pagina.avaliar(PAINEL_ABERTO)), 'arrastar com o dedo não abre o painel');
+
+ // soltar antes de segurar é só um toque: abre o evento como sempre
+ // alça: estica de imediato, sem segurar
+ m = await medir();
+ await toque('pointerdown', m.x, m.bottom - 3, `document.querySelector('#view-tracking .ag-evento[data-id="${ID}"] .ag-alca')`);
+ await toque('pointermove', m.x, m.bottom - 3 + ALTURA_HORA);
+ assert.match((await medir()).classes, /ag-esticando/);
+ await toque('pointerup', m.x, m.bottom - 3 + ALTURA_HORA);
+ await pagina.esperar(`${NO_AGENDA}.puts.length === ${puts0 + 2}`, { descricao: 'PUT do esticar por toque' });
+ semExcecoes();
+});
+
 // ---- lembrete e repetição (migração 048) ----
 const CAMPO_DO_FORM = nome => `[...document.querySelectorAll('dialog.tracking-editor label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)}).querySelector('input,select,textarea')`;
 const DEFINIR = (c, v, ev = 'change') => `(() => { const c = ${c}; c.value = ${JSON.stringify(v)}; c.dispatchEvent(new Event(${JSON.stringify(ev)}, { bubbles: true })); })()`;

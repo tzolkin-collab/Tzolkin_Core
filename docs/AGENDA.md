@@ -12,9 +12,9 @@ calendários externos (Fases 1 a 3) ainda não existem.
   prazos de um dia ou mais, evento que atravessa a meia-noite aparece nos dois dias.
 - **Sobreposição como no Google:** dois eventos que começam em horas diferentes (30 min ou mais) ficam em cascata (o de baixo recua e
   fica por cima); começando juntos, ou três ou mais, dividem a largura em colunas iguais.
-- **Criar:** clicar numa hora vazia (1h a partir da meia hora anterior) ou arrastar na grade (mouse).
+- **Criar:** clicar numa hora vazia (1h a partir da meia hora anterior) ou arrastar na grade (mouse; no toque, segurar e arrastar).
 - **Mover e esticar:** arrastar o evento (muda hora e dia, gruda de 15 em 15 min) e a alça de baixo (muda o fim). Esc cancela. O
-  servidor recusando (409) desfaz e avisa. Toque não arrasta: toque abre o evento.
+  servidor recusando (409) desfaz e avisa. No celular: toque abre o evento; **segurar ~0,4 s** o evento (ou uma hora vazia) "pega" e o dedo arrasta (a rolagem trava só nesse momento); a alça de baixo, maior no toque, estica de imediato.
 - **Painel do evento:** Detalhes (com Concluir, Reabrir, Cancelar, Editar) e Tempo (apontamentos). **Editar** envia só o que mudou.
 - **Filtros:** busca (sem acento), categorias, situação e cliente. Cor do evento = categoria.
 - **Tema:** só tokens, vale no claro e no escuro. Abaixo de 1100 px os filtros viram um bloco recolhido.
@@ -59,7 +59,7 @@ Depois de aplicar, a primeira consulta (até 1 minuto) já passa a oferecer os c
 ## Limites da fase 0
 
 - Prazo de vários dias aparece repetido em cada dia coberto (faixa "dia todo" e chips do mês), não como barra contínua.
-- Arrastar e esticar só com mouse. Por teclado, o caminho é abrir o evento e **Editar**.
+- No toque, arrastar exige segurar antes (senão é rolagem). Por teclado, setas e Shift+setas movem e esticam o evento focado.
 - Sem convidados e sem fuso por pessoa (Brasília fixo, UTC-3). Repetição só semanal e mensal (sem anual nem "todo 1º dia útil"); lembrete só por push.
 - Eventos de dia inteiro de verdade (sem horário) não existem no modelo: um prazo é um intervalo de 24 h ou mais.
 - Nenhuma integração externa. Fases 1 a 3 (Google Calendar e Meet, Outlook e Teams, Zoom e iCloud) dependem de credenciais OAuth que

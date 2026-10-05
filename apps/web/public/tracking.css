@@ -100,6 +100,12 @@
 #view-tracking .ag-evento.ag-arrastando { z-index: 6; opacity: .88; cursor: grabbing; box-shadow: var(--shadow-pop); }
 #view-tracking .ag-evento.ag-esticando { z-index: 6; box-shadow: var(--shadow-pop); }
 .ag-alca { position: absolute; left: 0; right: 0; bottom: 0; height: 7px; cursor: ns-resize; }
+/* Toque: alça grande (alvo de dedo), com um pegador visível, e sem seleção nem menu de pressão longa nos eventos. */
+@media (pointer: coarse) {
+ .ag-evento { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+ .ag-alca { height: 22px; touch-action: none; }
+ .ag-alca::after { content: ""; position: absolute; left: 50%; bottom: 4px; width: 28px; height: 4px; margin-left: -14px; border-radius: 2px; background: currentColor; opacity: .45; }
+}
 .ag-fantasma { position: absolute; left: 2px; right: 2px; z-index: 2; border: 1px solid var(--focus-ring); border-radius: 6px; background: color-mix(in srgb, var(--focus-ring) 22%, transparent); pointer-events: none; }
 .ag-agora { position: absolute; left: 0; right: 0; z-index: 3; height: 0; border-top: 2px solid var(--badge-danger-dot); pointer-events: none; }
 .ag-agora::before { content: ""; position: absolute; left: -5px; top: -6px; width: 10px; height: 10px; border-radius: 50%; background: var(--badge-danger-dot); }
