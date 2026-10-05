@@ -106,7 +106,7 @@ e se a Pluggy lê o Contabilizei.bank — pergunta em aberto.
 - Criação de cobrança Asaas (Pix, boleto, cartão tokenizado) — API diferente da Stripe, ainda não desenhada aqui.
 - Split, repasse e conta conectada (fluxo 2) — bloqueado em D3.
 - Parcelamento Stripe e métodos além de cartão (Pix/boleto via Stripe) na sessão de checkout.
-- Fila transacional de envio de e-mail, worker com retries e idempotência, templates reais, inbound e acompanhamento de entregas.
+- E-mail de COBRANÇA (pagamento, atraso, renovação…). A fila transacional, o consumidor com retentativa e a idempotência JÁ existem, para e-mail de lead (ver `docs/EMAIL-AUTOMACOES.md`); falta ligar a cobrança a um cliente e uma oferta, o que o webhook ainda não guarda. Inbound (respostas) e bounces seguem de fora.
 - Snapshot de cobrança no painel do cliente e seleção visual de ofertas no formulário de contratos.
 - Efeitos de pagamentos sobre acesso. Nenhum atraso/cancelamento suspende acesso nesta versão.
 

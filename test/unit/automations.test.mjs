@@ -5,9 +5,9 @@ import { ACTIONS, EVENTS, emitEvent, validateActions } from '../../apps/api/src/
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const TENANT = '22222222-2222-4222-8222-222222222222';
 
-test('catálogo: dez eventos e duas ações, e os nomes batem com o CHECK da migração 044', async () => {
+test('catálogo: dez eventos e três ações, e os nomes batem com o CHECK da migração 044', async () => {
  assert.equal(Object.keys(EVENTS).length, 10);
- assert.deepEqual(Object.keys(ACTIONS), ['tarefa.criar', 'responsavel.atribuir']);
+ assert.deepEqual(Object.keys(ACTIONS), ['tarefa.criar', 'responsavel.atribuir', 'email.enviar']);
  const { readFileSync } = await import('node:fs');
  const sql = readFileSync(new URL('../../db/migrations/044_eventos_e_automacoes.sql', import.meta.url), 'utf8');
  const bloco = sql.slice(sql.indexOf('trigger_event text NOT NULL CHECK'), sql.indexOf('actions jsonb'));

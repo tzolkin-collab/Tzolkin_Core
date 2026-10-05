@@ -77,8 +77,8 @@ const CONTEXTS = {
    clients: { title: 'Clientes', desc: "Quem a TZOLKIN atende e o que cada um contratou.", section: 'view-clients', action: ['Novo cliente', 'tenant-dialog'], metrics:false },
    leads: { title: 'Inbound', desc: "Oportunidades em prospecção, por etapa.", section: 'view-commercial', metrics:false },
    // Campanhas mora dentro de Inbound, como uma aba (montarInbound).
-   // Oculta até enviar e receber de verdade: a própria tela diz que ainda são rascunhos.
-   emails: { title: 'E-mails', section: 'view-emails', metrics:false, hidden:true },
+   // Antes oculta (eram só rascunhos). Agora tem fila de envio de verdade: Atividade mostra o que saiu, o que está na fila e o que falhou.
+   emails: { title: 'E-mails', section: 'view-emails', metrics:false },
    client: { title: 'Cliente', section: 'view-client', hidden:true, metrics:false },
    // PORTFÓLIO — o que a TZOLKIN tem para vender.
    products: { title: 'Portfólio', desc: "O que a TZOLKIN vende e opera.", section: 'view-products', action: ['Novo espaço', 'space-dialog'], metrics:false },
@@ -283,7 +283,7 @@ function renderNav() {
   const atual = state.view === 'client' ? state.clientBack : state.view;
   const button = node('button', undefined, 'nav-item' + (key === atual ? ' active' : ''));
   button.type = 'button'; button.dataset.view = key;
-  const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',metrics:'chart',leads:'user-plus',products:'package',services:'briefcase',connections:'branch',vercel:'cloud',github:'repo',easypanel:'server',dns:'globe',access:'shield',database:'database',redis:'cache',settings:'sliders',security:'lock',serverMetrics:'activity',product:'package','product-inbound':'user-plus','product-keys':'lock','product-orgs':'people','product-engagements':'briefcase','product-payments':'wallet','product-receivables':'calendar','product-emails':'mail',campaigns:'chart','product-campaigns':'chart'})[key]);
+  const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',metrics:'chart',leads:'user-plus',emails:'mail',products:'package',services:'briefcase',connections:'branch',vercel:'cloud',github:'repo',easypanel:'server',dns:'globe',access:'shield',database:'database',redis:'cache',settings:'sliders',security:'lock',serverMetrics:'activity',product:'package','product-inbound':'user-plus','product-keys':'lock','product-orgs':'people','product-engagements':'briefcase','product-payments':'wallet','product-receivables':'calendar','product-emails':'mail',campaigns:'chart','product-campaigns':'chart'})[key]);
   icon.classList.add('nav-icon'); button.append(icon, document.createTextNode(view.title));
   if (key === atual) button.setAttribute('aria-current', 'page');
   button.onclick = () => {switchView(key);closeNavigation();};

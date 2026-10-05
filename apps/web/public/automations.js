@@ -67,7 +67,7 @@ export function automationsManager({ api, spaces, pipelines, initialSpace }) {
   for (const a of automations) {
    const linha = el('div', null, 'automation-row');
    const filtro = [a.pipeline_id ? 'funil ' + nomeFunil(a.pipeline_id) : 'qualquer funil', a.stage_id ? 'etapa ' + nomeEtapa(a.stage_id) : null].filter(Boolean).join(', ');
-   const faz = a.actions.map(x => x.action === 'tarefa.criar' ? `criar tarefa "${x.title}"${x.delay_days ? ` (prazo ${x.delay_days} dias)` : ''}` : `atribuir a ${donos.find(d => d.id === x.owner_id)?.name || 'responsável'}`).join('; ');
+   const faz = a.actions.map(x => x.action === 'tarefa.criar' ? `criar tarefa "${x.title}"${x.delay_days ? ` (prazo ${x.delay_days} dias)` : ''}` : x.action === 'email.enviar' ? `enviar o e-mail "${x.template}" ao lead` : `atribuir a ${donos.find(d => d.id === x.owner_id)?.name || 'responsável'}`).join('; ');
    const texto = el('div'); texto.append(el('strong', a.name + (a.is_enabled ? '' : ' (desativada)')), el('p', `Quando: ${catalog.events[a.trigger_event]} · ${filtro}`, 'detail'), el('p', `Faz: ${faz}`, 'detail'));
    if (a.last_run_at) texto.append(el('p', `Última execução: ${hora(a.last_run_at)} · ${a.last_result === 'OK' ? 'deu certo' : 'FALHOU'}`, 'detail'));
    const acoes = el('div', null, 'field-row');
@@ -101,13 +101,27 @@ export function automationsManager({ api, spaces, pipelines, initialSpace }) {
   const titulo = campo(form, 'Título da tarefa'); titulo.maxLength = 200;
   const prazo = campo(form, 'Prazo da tarefa, em dias (0 = sem prazo)', 'number'); prazo.min = '0'; prazo.max = '365'; prazo.value = '0';
   const dono = lista(form, 'Responsável', donos.map(o => [o.id, o.name || o.email]));
-  const mostra = () => { const tarefa = acao.value === 'tarefa.criar'; titulo.parentElement.hidden = prazo.parentElement.hidden = !tarefa; dono.l.hidden = tarefa; };
+  // E-mail ao lead: o template é do espaço; a mensagem sai pela fila de e-mail (E-mails → Atividade), nunca na hora e nunca sem e-mail configurado.
+  const modelo = lista(form, 'Template do e-mail', []);
+  const ajudaModelo = el('p', null, 'detail'); modelo.l.append(ajudaModelo);
+  const carregarModelos = async () => {
+   try {
+    const { templates } = await api('/api/email-templates?product_id=' + encodeURIComponent(espaco));
+    modelo.s.replaceChildren(...templates.map(t => { const o = el('option', `${t.payload.name} (${t.slug})`); o.value = t.slug; return o; }));
+    ajudaModelo.textContent = templates.length ? 'Dados do lead no e-mail: {{name}}, {{email}}, {{product_name}}, {{company_name}}. Todo e-mail leva um aviso de como pedir para sair.' : 'Este espaço ainda não tem template. Crie um em E-mails → Templates (no contexto do espaço).';
+   } catch (e) { ajudaModelo.textContent = e.message; }
+  };
+  const mostra = () => {
+   const tarefa = acao.value === 'tarefa.criar', email = acao.value === 'email.enviar';
+   titulo.parentElement.hidden = prazo.parentElement.hidden = !tarefa; dono.l.hidden = tarefa || email; modelo.l.hidden = !email;
+   if (email && !modelo.s.options.length) carregarModelos();
+  };
   acao.onchange = mostra; mostra();
   const enviar = el('button', 'Criar automação', 'primary'); enviar.type = 'submit'; form.append(enviar);
   form.onsubmit = async e => {
    e.preventDefault(); enviar.disabled = true;
    try {
-    const acaoCorpo = acao.value === 'tarefa.criar' ? { action: 'tarefa.criar', title: titulo.value, delay_days: Number(prazo.value || 0) } : { action: 'responsavel.atribuir', owner_id: dono.s.value };
+    const acaoCorpo = acao.value === 'tarefa.criar' ? { action: 'tarefa.criar', title: titulo.value, delay_days: Number(prazo.value || 0) } : acao.value === 'email.enviar' ? { action: 'email.enviar', template: modelo.s.value } : { action: 'responsavel.atribuir', owner_id: dono.s.value };
     await api('/api/commercial/automations', 'POST', { space_id: espaco, name: nome.value, trigger_event: evento.value, ...(funil.value ? { pipeline_id: funil.value } : {}), ...(etapa.s.value ? { stage_id: etapa.s.value } : {}), actions: [acaoCorpo] });
     await desenhar();
    } catch (err) { aviso(form, err); enviar.disabled = false; }

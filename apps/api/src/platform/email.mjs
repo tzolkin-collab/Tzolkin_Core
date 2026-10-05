@@ -44,13 +44,13 @@ export async function conferirResend({ chave, remetente, fetchImpl = fetch }) {
 }
 
 /** Envia UM e-mail de texto. A resposta do Resend nunca ecoa a chave (mascarada); a mensagem dele ("domínio não verificado", etc.) é repassada. */
-export async function enviarEmail({ env, para, assunto, texto, fetchImpl = fetch }) {
+export async function enviarEmail({ env, para, assunto, texto, html = null, fetchImpl = fetch }) {
  const provedor = String(env.EMAIL_PROVIDER ?? '').trim().toLowerCase();
  const chave = String(env.EMAIL_API_KEY ?? '').trim();
  const de = String(env.EMAIL_FROM ?? '').trim();
  if (provedor !== 'resend' || !chave || !lerRemetente(de)) throw new ErroDeEmail('O e-mail ainda não está configurado: faltam provedor, chave e remetente em Configurações → Integrações.', 503);
  if (!enderecoValido(para)) throw new ErroDeEmail('Destinatário inválido.', 400);
- const r = await fetchImpl(`${RESEND}/emails`, { method: 'POST', redirect: 'error', headers: cabecalho(chave), body: JSON.stringify({ from: de, to: [para], subject: assunto, text: texto }), signal: AbortSignal.timeout(15000) });
+ const r = await fetchImpl(`${RESEND}/emails`, { method: 'POST', redirect: 'error', headers: cabecalho(chave), body: JSON.stringify({ from: de, to: [para], subject: assunto, text: texto, ...(html ? { html } : {}) }), signal: AbortSignal.timeout(15000) });
  let corpo = {}; try { corpo = await r.json(); } catch { /* sem corpo */ }
  if (!r.ok) {
   const motivo = scrub(String(corpo?.message || '').slice(0, 200), chave);

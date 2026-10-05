@@ -1,7 +1,7 @@
 import { fail, input, isProductId, isUuid, onlyParams, text } from '../platform/http.mjs';
 import { commercialPermission } from './commercial-keys.mjs';
 import { spaceOf } from './commercial-pipelines.mjs';
-import { ACTIONS, EVENTS, validateActions } from '../platform/automations.mjs';
+import { ACTIONS, EVENTS, EVENTOS_COM_LEAD, validateActions } from '../platform/automations.mjs';
 
 // Automações e tarefas (fase 5). As regras do motor moram em platform/automations.mjs; aqui ficam as rotas de
 // cadastro (automação por espaço, com funil e etapa opcionais), o histórico de execuções e as tarefas mínimas.
@@ -50,6 +50,15 @@ export function commercialAutomationRoutes(router) {
   return reply(200, { automations: rows, catalog: { events: EVENTS, actions: ACTIONS } });
  });
 
+
+ // "Enviar e-mail" só faz sentido onde há um lead com e-mail, e o template precisa existir NESTE espaço (ou o erro só apareceria na hora de rodar).
+ async function checkEmails(client, spaceId, evento, actions) {
+  for (const a of actions.filter(x => x.action === 'email.enviar')) {
+   if (!EVENTOS_COM_LEAD.includes(evento)) throw fail(400, 'Enviar e-mail só funciona em eventos de lead (criado, mudou de etapa, qualificado, descartado, restaurado).');
+   if (!(await client.query('SELECT 1 FROM email_templates WHERE product_id=$1 AND slug=$2', [spaceId, a.template])).rowCount) throw fail(400, `O template "${a.template}" não existe neste espaço.`);
+  }
+ }
+
  router.post('/api/commercial/automations', async ({ client, body, operator }) => {
   await commercialPermission(client, operator, true);
   input(body, ['space_id', 'name', 'trigger_event', 'pipeline_id', 'stage_id', 'actions']);
@@ -58,6 +67,7 @@ export function commercialAutomationRoutes(router) {
   const name = text(body.name, 2, 120), actions = validateActions(body.actions);
   const { pipelineId, stageId } = await scope(client, space.id, body);
   await checkOwners(client, actions);
+  await checkEmails(client, space.id, body.trigger_event, actions);
   if (Number((await client.query('SELECT count(*) FROM automations WHERE space_id=$1', [space.id])).rows[0].count) >= MAX_PER_SPACE) throw fail(409, `Cada espaço tem no máximo ${MAX_PER_SPACE} automações.`);
   const id = (await client.query(
    'INSERT INTO automations(space_id,pipeline_id,stage_id,name,trigger_event,actions) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',
@@ -79,7 +89,7 @@ export function commercialAutomationRoutes(router) {
   const filtro = Object.hasOwn(body, 'pipeline_id') || Object.hasOwn(body, 'stage_id')
    ? await scope(client, old.space_id, { pipeline_id: body.pipeline_id ?? null, stage_id: body.stage_id ?? null })
    : { pipelineId: old.pipeline_id, stageId: old.stage_id };
-  if (body.actions != null) await checkOwners(client, actions);
+  if (body.actions != null) { await checkOwners(client, actions); await checkEmails(client, old.space_id, old.trigger_event, actions); }
   await client.query('UPDATE automations SET name=$2,is_enabled=$3,pipeline_id=$4,stage_id=$5,actions=$6,version=version+1,updated_at=now() WHERE id=$1',
    [old.id, name, body.is_enabled ?? old.is_enabled, filtro.pipelineId, filtro.stageId, JSON.stringify(actions)]);
   return { body: { ok: true } };

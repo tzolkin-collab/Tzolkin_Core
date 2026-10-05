@@ -1,4 +1,5 @@
-import { fail, input, isUuid, text } from './http.mjs';
+import { fail, input, isUuid, isProductId, text } from './http.mjs';
+import { enfileirarParaLead } from './email-saida.mjs';
 
 // Eventos e automações (fase 5). Regras puras: o catálogo de eventos e de ações, a validação das ações e o
 // motor `emitEvent`, que roda as automações ligadas a um evento dentro da transação de quem emitiu.
@@ -22,7 +23,10 @@ export const EVENTS = Object.freeze({
 export const ACTIONS = Object.freeze({
  'tarefa.criar': 'Criar tarefa',
  'responsavel.atribuir': 'Atribuir responsável',
+ 'email.enviar': 'Enviar e-mail ao lead',
 });
+// Eventos em que existe um lead com e-mail para receber a mensagem.
+export const EVENTOS_COM_LEAD = Object.freeze(['lead.criado', 'lead.mudou_de_etapa', 'lead.qualificado', 'lead.descartado', 'lead.restaurado']);
 export const MAX_ACTIONS = 5;
 
 /**
@@ -39,6 +43,11 @@ export function validateActions(actions) {
    if (!Number.isInteger(delay) || delay < 0 || delay > 365) throw fail(400, 'O prazo da tarefa vai de 0 a 365 dias.');
    return { action: 'tarefa.criar', title: text(a.title, 2, 200), tag: a.tag == null || a.tag === '' ? 'Geral' : text(a.tag, 1, 40), delay_days: delay };
   }
+  if (a.action === 'email.enviar') {
+   input(a, ['action', 'template']);
+   if (!isProductId(a.template)) throw fail(400, 'Escolha o template do e-mail.');
+   return { action: 'email.enviar', template: a.template };
+  }
   if (a.action === 'responsavel.atribuir') {
    input(a, ['action', 'owner_id']);
    if (!isUuid(a.owner_id)) throw fail(400, 'Escolha o responsável.');
@@ -52,7 +61,7 @@ const ownerAtivo = async (client, id) =>
  (await client.query("SELECT 1 FROM operator_accounts WHERE id=$1 AND status='active' AND role IN ('owner','member')", [id])).rowCount > 0;
 
 /** Executa uma ação sobre o registro do evento. Lança com mensagem clara; quem chama grava o resultado. */
-async function runAction(client, action, ctx, automationId) {
+async function runAction(client, action, ctx, automationId, event) {
  if (action.action === 'tarefa.criar') {
   if (!ctx.leadId && !ctx.opportunityId) throw new Error('Sem lead nem oportunidade para ligar a tarefa.');
   const due = action.delay_days > 0 ? new Date(Date.now() + action.delay_days * 86_400_000).toISOString() : null;
@@ -68,6 +77,11 @@ async function runAction(client, action, ctx, automationId) {
   if (ctx.opportunityId) alterados += (await client.query('UPDATE commercial_opportunities SET owner_id=$2,version=version+1,updated_at=now() WHERE id=$1', [ctx.opportunityId, action.owner_id])).rowCount;
   if (!alterados) throw new Error('Sem lead nem oportunidade para atribuir.');
   return 'Responsável atribuído';
+ }
+ if (action.action === 'email.enviar') {
+  if (!ctx.leadId) throw new Error('Enviar e-mail só funciona em evento de lead.');
+  // Não envia: grava na fila, na MESMA transação do evento. Quem envia é o consumidor da fila.
+  return enfileirarParaLead(client, { modelo: action.template, spaceId: ctx.spaceId, leadId: ctx.leadId, automationId, evento: event });
  }
  throw new Error(`Ação desconhecida: ${action.action}`);
 }
@@ -94,7 +108,7 @@ export async function emitEvent(client, event, ctx) {
    const notas = []; let resultado = 'OK';
    await client.query('SAVEPOINT automacao');
    try {
-    for (const acao of auto.actions) notas.push(await runAction(client, acao, ctx, auto.id));
+    for (const acao of auto.actions) notas.push(await runAction(client, acao, ctx, auto.id, event));
     await client.query('RELEASE SAVEPOINT automacao');
    } catch (erro) {
     await client.query('ROLLBACK TO SAVEPOINT automacao');

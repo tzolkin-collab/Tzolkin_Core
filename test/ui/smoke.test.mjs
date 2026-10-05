@@ -18,7 +18,7 @@ import * as AM from '../../apps/web/public/agenda-model.js';
 const PULAR = acharNavegador() ? false : 'Chrome/Edge não encontrado (defina CHROME_PATH)';
 const ARTEFATOS = fileURLToPath(new URL('./artifacts/', import.meta.url));
 
-const MENU_ESPERADO = ['Visão geral', 'Financeiro', 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Portfólio', 'Serviços', 'Acompanhamento', 'Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS', 'Banco de dados', 'Configurações'];
+const MENU_ESPERADO = ['Visão geral', 'Financeiro', 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'E-mails', 'Portfólio', 'Serviços', 'Acompanhamento', 'Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS', 'Banco de dados', 'Configurações'];
 const SECAO = `[...document.querySelectorAll('main section')].find(s => !s.hidden && s.offsetParent)`;
 /**
  * Lê, de dentro da página, os defeitos de uma tela: título, estouro de largura, texto com valor
@@ -390,6 +390,11 @@ test('Inbound: o gerenciador de automações lista, mostra o histórico e só pe
  assert.equal(await pagina.avaliar(`${campo('Título da tarefa')}.hidden`), true);
  assert.equal(await pagina.avaliar(`${campo('Responsável')}.hidden`), false);
  assert.deepEqual(await pagina.avaliar(`[...${campo('Responsável')}.querySelector('select').options].map(o => o.textContent)`), ['Dono Teste']);
+ // E-mail ao lead: pede o template do espaço, e nada de título, prazo ou responsável
+ await escolher('Então', 'email.enviar');
+ assert.equal(await pagina.avaliar(`${campo('Template do e-mail')}.hidden`), false);
+ assert.equal(await pagina.avaliar(`${campo('Título da tarefa')}.hidden`), true);
+ assert.equal(await pagina.avaliar(`${campo('Responsável')}.hidden`), true);
  semExcecoes();
 });
 
@@ -2141,6 +2146,74 @@ test('configurações → Integrações → E-mail: o botão de teste só vale c
  await pagina.avaliar(`${botao}.click()`);
  await pagina.esperar(`${aviso}.textContent.includes('domain is not verified')`);
  assert.equal(await pagina.avaliar(`${aviso}.classList.contains('erro')`), true);
+ semExcecoes();
+ await d?.();
+});
+
+const COM_FILA = disponivel => `(() => {
+ window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
+ const E = window.__fila = { reenviados: [], suprimidos: [], itens: [
+  { id: '00000000-0000-4000-8000-0000000000a1', kind: 'automacao', to_email: 'maria@exemplo.com', subject: 'Bem-vinda à Tzolkin', status: 'sent', attempts: 1, last_error: null, created_at: '2026-10-05T12:00:00Z', sent_at: '2026-10-05T12:00:40Z' },
+  { id: '00000000-0000-4000-8000-0000000000a2', kind: 'automacao', to_email: 'joao@exemplo.com', subject: 'Bem-vindo à Tzolkin', status: 'failed', attempts: 1, last_error: 'O Resend não enviou: The tzolkin.cloud domain is not verified.', created_at: '2026-10-05T12:10:00Z', sent_at: null },
+  { id: '00000000-0000-4000-8000-0000000000a3', kind: 'automacao', to_email: 'ana@exemplo.com', subject: 'Olá Ana', status: 'queued', attempts: 2, last_error: 'O Resend não respondeu como esperado.', created_at: '2026-10-05T12:20:00Z', sent_at: null },
+ ] };
+ const json = (c, s = 200) => new Response(JSON.stringify(c), { status: s, headers: { 'content-type': 'application/json' } });
+ window.fetch = async (url, o = {}) => {
+  const u = String(url), m = (o.method || 'GET').toUpperCase(), corpo = o.body ? JSON.parse(o.body) : {};
+  if (u === '/api/emails/outbox') return json(${disponivel} ? { disponivel: true, envio_configurado: E.configurado !== false, itens: E.itens, contagem: { sent: 1, failed: 1, queued: 1 }, suprimidos: 1 } : { disponivel: false, itens: [], contagem: {}, suprimidos: 0 });
+  if (u.endsWith('/reenviar') && m === 'POST') { E.reenviados.push(u); E.itens[1].status = 'queued'; E.itens[1].last_error = null; return json({ ok: true }); }
+  if (u === '/api/emails/suppress' && m === 'POST') { E.suprimidos.push(corpo); return json({ ok: true, email: corpo.email, tirados_da_fila: 1 }); }
+  return window.__fetchOriginal(url, o);
+ };
+})()`;
+
+test('E-mails → Atividade: mostra a fila e o que saiu, reenvia o que falhou e para de enviar a um endereço', { skip: PULAR }, async () => {
+ const d = await pagina.injetar(COM_FILA(true));
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await pagina.avaliar(CLICAR_NO_MENU('E-mails'));
+ await pagina.esperar(`document.querySelector('#view-emails .email-nav')`, { descricao: 'tela de e-mails' });
+ await pagina.avaliar(`[...document.querySelectorAll('#view-emails .email-nav button')].find(b => b.textContent.trim() === 'Atividade').click()`);
+ await pagina.esperar(`document.querySelectorAll('#view-emails .email-outbox-item').length === 3`, { descricao: 'três e-mails' });
+ const itens = await pagina.avaliar(`[...document.querySelectorAll('#view-emails .email-outbox-item')].map(i => ({ status: i.dataset.status, selo: i.querySelector('.status').textContent, assunto: i.querySelector('strong').textContent, botoes: [...i.querySelectorAll('button')].map(b => b.textContent) }))`);
+ assert.deepEqual(itens.map(i => [i.status, i.selo]), [['sent', 'Enviado'], ['failed', 'Falhou'], ['queued', 'Na fila']]);
+ assert.deepEqual(itens[1].botoes, ['Reenviar', 'Não enviar mais a este endereço']); assert.deepEqual(itens[0].botoes, ['Não enviar mais a este endereço']);
+ assert.match(await pagina.avaliar(`document.querySelector('#view-emails .email-outbox-item[data-status=failed]').textContent`), /domain is not verified/, 'o motivo da falha aparece');
+ if (process.env.UI_SCREENSHOTS) for (const esq of ['light', 'dark']) { await pagina.esquema(esq); await new Promise(r => setTimeout(r, 400)); await pagina.imagem(join(ARTEFATOS, `1013-Emails-atividade-${esq === 'dark' ? 'Escuro' : 'Claro'}.png`)); await pagina.esquema('light'); }
+ assert.match(await pagina.avaliar(`document.querySelector('#view-emails .email-activity .email-note').textContent`), /1 enviado, 1 na fila, 1 com falha · 1 endereço bloqueado/);
+ assert.equal(await pagina.avaliar(`document.querySelector('#view-emails').textContent.includes('Os e-mails para leads saem pelas automações')`), false, 'na Atividade não repete o aviso das outras abas');
+ // reenviar o que falhou
+ await pagina.avaliar(`document.querySelector('#view-emails .email-outbox-item[data-status=failed] button').click()`);
+ await pagina.esperar(`window.__fila.reenviados.length === 1`);
+ assert.equal(await pagina.avaliar(`window.__fila.reenviados[0]`), '/api/emails/outbox/00000000-0000-4000-8000-0000000000a2/reenviar');
+ // parar de enviar a um endereço
+ await pagina.esperar(`document.querySelectorAll('#view-emails .email-outbox-item').length === 3`);
+ await pagina.avaliar(`[...document.querySelectorAll('#view-emails .email-outbox-item')][2].querySelectorAll('button')[0].click()`);
+ await pagina.esperar(`window.__fila.suprimidos.length === 1`);
+ assert.deepEqual(await pagina.avaliar(`window.__fila.suprimidos[0]`), { email: 'ana@exemplo.com', reason: 'manual' });
+ await pagina.esperar(`document.querySelector('#view-emails .email-activity .email-note[role=status]').textContent.includes('ana@exemplo.com não receberá mais e-mails do Core (1 saíram da fila)')`);
+ // e-mail ainda não configurado: avisa e diz o que acontece com o que está parado
+ await pagina.avaliar(`window.__fila.configurado = false`);
+ await pagina.avaliar(`[...document.querySelectorAll('#view-emails .email-nav button')].find(b => b.textContent.trim() === 'Templates').click()`);
+ await pagina.avaliar(`[...document.querySelectorAll('#view-emails .email-nav button')].find(b => b.textContent.trim() === 'Atividade').click()`);
+ await pagina.esperar(`document.querySelector('#view-emails .email-activity .email-note[role=alert]')`);
+ assert.match(await pagina.avaliar(`document.querySelector('#view-emails .email-activity .email-note[role=alert]').textContent`), /ainda não está configurado.*mais de 48 horas é cancelado/);
+ semExcecoes();
+ await d?.();
+});
+
+test('E-mails → Atividade sem a migração 051 explica em vez de mostrar uma fila vazia', { skip: PULAR }, async () => {
+ const d = await pagina.injetar(COM_FILA(false));
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
+ await pagina.avaliar(CLICAR_NO_MENU('E-mails'));
+ await pagina.esperar(`document.querySelector('#view-emails .email-nav')`);
+ await pagina.avaliar(`[...document.querySelectorAll('#view-emails .email-nav button')].find(b => b.textContent.trim() === 'Atividade').click()`);
+ await pagina.esperar(`document.querySelector('#view-emails .email-activity .email-empty')`);
+ assert.match(await pagina.avaliar(`document.querySelector('#view-emails .email-activity').textContent`), /migração 051/);
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#view-emails .email-outbox-item').length`), 0);
  semExcecoes();
  await d?.();
 });

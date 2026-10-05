@@ -3,6 +3,7 @@ import {createGoogleIdentity} from './platform/google-identity.mjs';
 import {createAccountGate} from './modules/accounts.mjs';
 import {createCore} from './app.mjs';
 import {iniciarJobsDaAgenda} from './modules/agenda-jobs.mjs';
+import {iniciarFilaDeEmail} from './modules/email-fila.mjs';
 import {serveAsset} from '../../web/assets.mjs';
 
 if(process.env.NODE_ENV!=='production')throw Error('Production entrypoint requires NODE_ENV=production.');
@@ -41,8 +42,9 @@ const identity=createGoogleIdentity({pool,clientId:process.env.GOOGLE_CLIENT_ID,
 const server=createCore({pool,identity,security,webOrigin:origin.origin,serveAsset});
 // Lembretes da agenda (push) e extensão das séries sem fim. Sem chaves VAPID os lembretes ficam desligados; as séries seguem.
 const pararAgenda=iniciarJobsDaAgenda({pool});
+const pararEmail=iniciarFilaDeEmail({pool});
 // A porta vai para o log: é a única forma de o operador ver, no painel, que a
 // app subiu num lugar diferente do que o healthcheck e o proxy procuram.
 const porta=Number(process.env.PORT||3000);
 server.listen(porta,'0.0.0.0',()=>console.log(`TZOLKIN Core production ready on 0.0.0.0:${porta}`));
-const stop=()=>{pararAgenda();server.closeAllConnections();server.close(()=>pool.end().finally(()=>process.exit(0)));};process.on('SIGTERM',stop);process.on('SIGINT',stop);
+const stop=()=>{pararAgenda();pararEmail();server.closeAllConnections();server.close(()=>pool.end().finally(()=>process.exit(0)));};process.on('SIGTERM',stop);process.on('SIGINT',stop);
