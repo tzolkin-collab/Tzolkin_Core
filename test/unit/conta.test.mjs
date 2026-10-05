@@ -105,8 +105,9 @@ test('auditoria: junta a trilha das empresas e a das credenciais em ordem, sem v
  await m.rotas['GET /api/audit']({ pool: db, url: new URL('http://x.test/api/audit'), reply: r.fn });
  assert.deepEqual(r.s.corpo.itens.map(i => [i.tipo, i.fonte]), [['engagement.created', 'empresas'], ['credencial.definida', 'integracoes'], ['lead.moved', 'empresas'], ['credencial.removida', 'integracoes']]);
  assert.equal(r.s.corpo.itens[1].onde, 'stripe · STRIPE_SECRET_KEY');
- assert.deepEqual(r.s.corpo.fora_da_trilha, ['alterações de contas e times']);
- assert.ok(!db.log.some(q => /details|ciphertext|token_/.test(q.sql)), 'a consulta nem lê detalhes nem valores');
+ assert.deepEqual(r.s.corpo.fora_da_trilha, [], 'com a trilha de operadores presente, nada fica de fora');
+ assert.ok(!db.log.some(q => /ciphertext|token_/.test(q.sql)), 'a consulta nem lê valores');
+ assert.ok(!db.log.some(q => /details/.test(q.sql.replace(/details->>'resumo'/g, ''))), 'detalhes só pelo resumo pronto, nunca o jsonb inteiro');
  const lim = reply();
  await m.rotas['GET /api/audit']({ pool: db, url: new URL('http://x.test/api/audit?limite=1'), reply: lim.fn });
  assert.equal(lim.s.corpo.itens.length, 1);

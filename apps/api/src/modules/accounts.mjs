@@ -9,6 +9,7 @@
 // Suspender no cadastro NÃO revoga quem está no ambiente — para revogar de
 // verdade um endereço do ambiente, edita-se o ambiente. A tela diz isso.
 import { fail, input, onlyParams, text } from '../platform/http.mjs';
+import { registrarAuditoria, resumirConta, resumirTime } from '../platform/auditoria-operadores.mjs';
 
 // A lista do ambiente é a autoridade atual. Normalizada aqui do mesmo jeito que
 // a sessão a compara, para a divergência ser real e não artefato de maiúscula.
@@ -110,11 +111,17 @@ export function accountRoutes(router, { env = process.env } = {}) {
     throw fail(409, 'Não é possível remover o último administrador.');
   }
 
+  const antes = (await client.query('SELECT role,status,name FROM operator_accounts WHERE email=$1', [email])).rows[0] ?? null;
+  const nome = body.name == null ? null : text(body.name, 2, 160);
   await client.query(
    `INSERT INTO operator_accounts(email,name,role,status,source) VALUES($1,$2,$3,$4,'manual')
     ON CONFLICT(email) DO UPDATE SET name=EXCLUDED.name, role=EXCLUDED.role,
       status=EXCLUDED.status, updated_at=now()`,
-   [email, body.name == null ? null : text(body.name, 2, 160), role, status]);
+   [email, nome, role, status]);
+  // Rastro (Configurações → Auditoria): só quando algo mudou, com o antes e o depois do cadastro.
+  const depois = { role, status, name: nome };
+  const resumo = resumirConta(antes, depois);
+  if (!antes || resumo) await registrarAuditoria(client, { acao: antes ? 'conta.alterada' : 'conta.criada', alvo: email, operator, detalhes: { antes: antes && { role: antes.role, status: antes.status, name: antes.name ?? null }, depois, resumo } });
   // Sem tenant: conta de operador é da TZOLKIN, não de um cliente.
   return { tenant: null, type: 'operator_account.saved' };
  }, { transactional: true, audit: false });
@@ -126,6 +133,8 @@ export function accountRoutes(router, { env = process.env } = {}) {
   if (!/^[a-z0-9][a-z0-9-]{1,63}$/.test(slug)) throw fail(400, 'Use letras minúsculas, números e hífen no identificador.');
   if (body.members != null && !Array.isArray(body.members)) throw fail(400, 'Membros inválidos.');
 
+  const timeAntes = (await client.query('SELECT id,name,description FROM teams WHERE slug=$1', [slug])).rows[0] ?? null;
+  const membrosAntes = timeAntes ? (await client.query('SELECT a.email,tm.role FROM team_members tm JOIN operator_accounts a ON a.id=tm.account_id WHERE tm.team_id=$1 ORDER BY a.email', [timeAntes.id])).rows : [];
   const time = await client.query(
    `INSERT INTO teams(slug,name,description) VALUES($1,$2,$3)
     ON CONFLICT(slug) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description, updated_at=now()
@@ -149,6 +158,12 @@ export function accountRoutes(router, { env = process.env } = {}) {
      [teamId, conta.rows[0].id, papel]);
    }
   }
+  const descricao = body.description == null ? null : text(body.description, 1, 500);
+  const membrosDepois = body.members ? body.members.map(m => ({ email: m.email.trim().toLowerCase(), role: m.role ?? 'member' })).sort((x, y) => x.email.localeCompare(y.email)) : membrosAntes;
+  const antes = timeAntes && { name: timeAntes.name, description: timeAntes.description ?? null, membros: membrosAntes };
+  const depois = { name: text(body.name, 2, 120), description: descricao, membros: membrosDepois };
+  const resumo = resumirTime(antes, depois);
+  if (!antes || resumo) await registrarAuditoria(client, { acao: 'time.salvo', alvo: slug, operator, detalhes: { antes, depois, resumo } });
   return { tenant: null, type: 'team.saved' };
  }, { transactional: true, audit: false });
 }

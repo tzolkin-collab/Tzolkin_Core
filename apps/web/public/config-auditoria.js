@@ -10,6 +10,10 @@ const quando = iso => { try { return new Date(iso).toLocaleString('pt-BR', { dat
 const NOMES = {
  'credencial.definida': 'Credencial de integração definida',
  'credencial.removida': 'Credencial de integração removida',
+ 'conta.criada': 'Conta criada',
+ 'conta.alterada': 'Conta alterada',
+ 'time.salvo': 'Time salvo',
+ 'sessoes.encerradas': 'Outras sessões encerradas',
 };
 /** "engagement.created" -> o próprio tipo, legível; os que o Core conhece ganham nome em português. */
 export const nomeDoTipo = tipo => NOMES[tipo] ?? tipo;
@@ -27,6 +31,7 @@ export function montar(raiz, { api }) {
    const l = no('div', undefined, 'cfg-linha cfg-registro'); l.dataset.fonte = i.fonte;
    const t = no('div', undefined, 'cfg-linha-texto');
    t.append(no('strong', nomeDoTipo(i.tipo)), no('small', [i.quem || 'sistema', i.onde].filter(Boolean).join(' · ')));
+   if (i.resumo) t.append(no('small', i.resumo, 'cfg-resumo-registro'));
    l.append(t, no('span', quando(i.quando), 'cfg-valor'));
    lista.append(l);
   }
