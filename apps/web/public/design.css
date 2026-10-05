@@ -335,15 +335,16 @@ dialog {
   width: 440px;
   max-width: calc(100vw - 32px);
   color: var(--text);
-  box-shadow: 0 24px 80px #0002;
+  box-shadow: var(--shadow-pop);
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
+/* Fundo da janela: cor chapada, SEM desfoque. backdrop-filter obriga o navegador a redesenhar a página inteira atrás da janela a cada
+   quadro; num painel com tabela e calendário atrás isso pesa. O escurecimento vem do --scrim do tema. */
 dialog::backdrop {
-  background: #17171765;
-  backdrop-filter: blur(3px);
+  background: var(--scrim);
 }
 
 dialog form {
