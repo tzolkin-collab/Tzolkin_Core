@@ -38,7 +38,7 @@ export function setupEmails({api,configure}){
   const nav=el('nav',undefined,'email-nav');nav.setAttribute('aria-label','Seções de e-mail');
   for(const [key,label,icon]of [['rules','Automações','zap'],['templates','Templates','book-open'],['activity','Atividade','clock']]){const b=el('button');b.type='button';b.append(createIcon(icon),document.createTextNode(label));b.setAttribute('aria-pressed',String(section===key));b.onclick=()=>{section=key;if(key==='activity')fila=null;render();};nav.append(b);}root.append(nav);
   if(!data){root.append(el('p','Carregando configurações salvas…','email-empty'));return;}
-  if(section!=='activity'){const note=el('p','Os e-mails para leads saem pelas automações do funil (Inbound → Automações → "Enviar e-mail ao lead"), usando os templates do espaço. As mensagens de cobrança (pagamento, atraso…) ainda são rascunho: o Core não as envia.','email-note');root.append(note);}
+  if(section!=='activity'){const note=el('p','Os e-mails para leads saem pelas automações do funil (Inbound → Automações → "Enviar e-mail ao lead"), usando os templates do espaço. Os de cobrança (pagamento confirmado, renovação, falha, estorno, cancelamento) saem quando a oferta tem o Core como responsável pelos e-mails e um template para o evento, hoje só nas compras feitas pelo checkout do Core, na Stripe.','email-note');root.append(note);}
   if(section==='activity'){atividade(root);return;}
   const search=el('input');search.type='search';search.placeholder='Buscar produto, oferta ou template';search.setAttribute('aria-label','Buscar configurações de e-mail');search.value=query;
   const list=el('div',undefined,'email-list');

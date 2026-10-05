@@ -7,8 +7,11 @@
 //  - O que foi enviado fica gravado já renderizado (email_outbox), então mudar o modelo depois não reescreve o passado.
 
 export const VARIAVEIS_DO_LEAD = Object.freeze(['name', 'email', 'product_name', 'company_name']);
-/** Todas as variáveis que o editor conhece (as de cobrança entram quando houver e-mail de pagamento). */
-export const VARIAVEIS_CONHECIDAS = Object.freeze([...VARIAVEIS_DO_LEAD, 'plan', 'due_date']);
+/** E-mail de cobrança: sobre UMA compra. `amount` já vem formatado (R$ 49,00); `due_date` só tem valor em falha de pagamento. */
+export const VARIAVEIS_DE_COBRANCA = Object.freeze(['name', 'email', 'product_name', 'plan', 'amount', 'due_date']);
+export const VARIAVEIS_CONHECIDAS = Object.freeze([...new Set([...VARIAVEIS_DO_LEAD, ...VARIAVEIS_DE_COBRANCA])]);
+/** Eventos de e-mail que falam de uma compra. `welcome` é e-mail de lead. */
+export const EVENTOS_DE_COBRANCA = Object.freeze(['charge_created', 'payment_confirmed', 'due_reminder', 'overdue', 'renewal', 'canceled', 'refunded']);
 
 export class ErroDeModelo extends Error {
  constructor(mensagem) { super(mensagem); this.status = 400; }
@@ -53,3 +56,7 @@ export function renderizar(modelo, valores, { permitidas = VARIAVEIS_DO_LEAD, ro
 
 /** Texto de rodapé dos e-mails automáticos: diz por que a pessoa recebeu e como parar. */
 export const rodapeDoLead = produto => `Você recebeu este e-mail porque entrou em contato com ${LIMPAR(produto) || 'a TZOLKIN'}. Para não receber mais mensagens, responda este e-mail pedindo para sair.`;
+
+/** Rodapé dos e-mails de cobrança: fala da compra, não de "entrar em contato". */
+export const rodapeDeCobranca = produto => `Você recebeu este e-mail por causa da sua compra de ${LIMPAR(produto) || 'um produto da TZOLKIN'}. Dúvidas? Responda este e-mail.`;
+

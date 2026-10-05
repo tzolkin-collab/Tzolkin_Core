@@ -1,6 +1,6 @@
 # Automações de e-mail
 
-Status: **construído para leads** (migração 051 **ainda não aplicada**). **E-mail de cobrança (pagamento, atraso…) NÃO está ligado**: veja "O que falta".
+Status: **leads** (migração 051 aplicada) e **cobrança no Stripe** (migração 052 ainda não aplicada). Asaas e compra fora do checkout do Core: veja "O que falta".
 
 ## O que existe
 
@@ -46,8 +46,37 @@ evento do funil (lead criado, mudou de etapa, qualificado, descartado, restaurad
 3. Criar um template do espaço, usar "Enviar teste para mim" e conferir a caixa de entrada (e o spam).
 4. Criar a automação (Inbound → Automações → Quando: Lead criado → Então: Enviar e-mail ao lead). **Comece por um funil ou etapa específicos** e confira em Atividade antes de abrir para todos os leads.
 
+## E-mail de cobrança (Stripe, checkout do Core) — migração 052 **ainda não aplicada**
+
+```
+checkout do Core cria a sessão no Stripe COM produto e oferta (metadata)         (modules/checkout-gateway.mjs)
+   └─ webhook checkout.session.completed traz comprador + metadata
+        └─ UMA linha em billing_purchases (ids do Stripe, e-mail e nome do comprador, produto, oferta)
+             └─ se está pago e a oferta manda o Core enviar: renderiza e ENFILEIRA   (platform/email-cobranca.mjs)
+   └─ eventos seguintes chegam só com ids do Stripe: acha-se a compra por eles
+```
+
+| Evento do Stripe | E-mail (evento da oferta) | Achado por |
+|---|---|---|
+| `checkout.session.completed` pago / `async_payment_succeeded` | `payment_confirmed` | sessão |
+| `invoice.paid` de ciclo de assinatura | `renewal` (a 1ª fatura é a própria compra: não repete) | assinatura |
+| `invoice.payment_failed` | `overdue` (com `{{due_date}}` = próxima tentativa) | assinatura |
+| `charge.refunded` | `refunded` (valor ESTORNADO) | intenção de pagamento |
+| `customer.subscription.deleted` | `canceled` | assinatura |
+
+- **Quem envia.** Só quando a oferta tem `email_owner = core` **e** template definido para o evento. Se o responsável é o provedor (o Stripe manda o dele), nada é enfileirado: sem duplicidade. A compra é registrada nos dois casos (os eventos seguintes precisam dela).
+- **Variáveis de cobrança:** `{{name}}`, `{{email}}`, `{{product_name}}`, `{{plan}}` (nome da oferta), `{{amount}}` (já formatado: R$ 49,00), `{{due_date}}` (só tem valor em falha de pagamento). `{{company_name}}` não existe aqui. A pré-visualização e o teste usam as variáveis do tipo do template (pelo evento dele); template com variável de outro tipo não vira e-mail: o motivo fica registrado e nada quebrado sai.
+- **Não derruba o webhook.** O gancho roda num savepoint na transação do webhook: se falhar, só ele é desfeito e o webhook é registrado e respondido 200 do mesmo jeito (o Stripe reentregaria sem fim). Sem a 052 (ou a 051), ignora em silêncio.
+- **Uma vez só.** Chave `cobranca:stripe:<evento>:<id do objeto>`; o Stripe já deduplica por evento, e a chave cobre o resto.
+- **Rodapé** próprio: "Você recebeu este e-mail por causa da sua compra de …".
+- **Dado pessoal.** `billing_purchases` guarda e-mail e nome de quem comprou, só para falar com a pessoa sobre a própria compra. Compra fora do checkout do Core não entra.
+
+### Para ligar
+1. Aplicar a 051 (fila) e a 052 (compras). 2. Em Produtos e planos → Cobrança e e-mails, na oferta: responsável pelos e-mails = **Core** e os templates dos eventos. 3. Criar os templates (evento certo em cada um) e usar **Enviar teste para mim**. 4. Fazer UMA compra de teste de ponta a ponta com o cartão de teste do Stripe (modo test) e conferir em E-mails → Atividade. **Só então** virar a chave para live.
+
 ## O que falta (decisões, não código)
 
-- **E-mail de cobrança** (pagamento confirmado, atraso, renovação…). Hoje o webhook só registra o estado da cobrança (`payment_charges`), e **nada liga uma cobrança a um cliente, uma oferta ou um e-mail**: o checkout não manda metadados e o webhook não guarda e-mail nem oferta. Para enviar, é preciso decidir e construir: (1) gravar no checkout qual oferta e quem comprou, (2) resolver o destinatário (Stripe traz o e-mail no evento; no Asaas é preciso consultar o cliente), (3) quem envia: o Core ou o próprio provedor (`email_owner` na oferta, hoje só intenção), para não duplicar, e (4) os eventos de cobrança entrarem na mesma fila. A fila e o consumidor já servem; é a origem dos dados que falta.
-- **Consentimento e descadastro de verdade** (link de sair, não só "responda pedindo"): vale para mensagem de marketing; os e-mails de hoje são resposta a quem pediu contato.
+- **Asaas** e **compra fora do checkout do Core**: sem a oferta ligada à cobrança, não há template. O Asaas só passa a entrar quando o Core criar as cobranças dele (fase 2 de `BILLING.md`) e gravar a oferta na `externalReference`.
+- **`charge_created` e `due_reminder`**: avisar ANTES do vencimento exige agendador. `welcome` de compra: poderia sair do `payment_confirmed` da 1ª compra; não foi pedido.
+- **Consentimento e descadastro de verdade** (link de sair, não só "responda pedindo"): vale para marketing; os e-mails de hoje são resposta a quem pediu contato ou sobre a própria compra.
 - **Respostas e bounces** (inbound): o Core não lê caixa de entrada; um endereço que devolve erro só aparece como falha.

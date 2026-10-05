@@ -31,7 +31,7 @@ test('modelo: variável desconhecida ou de outro tipo de e-mail é erro claro, e
  assert.throws(() => renderizar({ subject: 'Pagamento {{plan}}', body: 'x' }, { plan: 'Pro' }), e => /\{\{plan\}\} não existe neste tipo de e-mail/.test(e.message) && /\{\{name\}\}/.test(e.message));
  assert.throws(() => renderizar({ subject: '   ', body: 'x' }, {}), /assunto ficou vazio/);
  assert.throws(() => renderizar({ subject: 'ok', body: ' \n ' }, {}), /corpo ficou vazio/);
- assert.deepEqual(VARIAVEIS_CONHECIDAS, ['name', 'email', 'product_name', 'company_name', 'plan', 'due_date']);
+ assert.deepEqual(VARIAVEIS_CONHECIDAS, ['name', 'email', 'product_name', 'company_name', 'plan', 'amount', 'due_date']);
  assert.deepEqual(VARIAVEIS_DO_LEAD, ['name', 'email', 'product_name', 'company_name']);
  assert.equal(renderizar({ subject: 'A {{ name }}', body: 'B' }, { name: 'x' }).assunto, 'A x', 'espaços dentro das chaves valem');
 });

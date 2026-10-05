@@ -11,6 +11,7 @@ import { vivo } from '../platform/env-vivo.mjs';
 // Ver docs/BILLING.md#5-requisitos-inegociáveis-para-qualquer-implementação-decidido
 import { fail, onlyParams } from '../platform/http.mjs';
 import { verifyStripe, verifyAsaas, normalize, RANKS, CORPO_MAXIMO } from '../integrations/payment-webhooks.mjs';
+import { extrairDoStripe, processarEmailDeCobranca } from '../platform/email-cobranca.mjs';
 
 // Corpo CRU: a assinatura da Stripe é sobre os bytes recebidos.
 // Reserializar o JSON muda espaços e ordem, e invalida a verificação.
@@ -30,7 +31,7 @@ const MARCAS = { overdue: 'overdue_at', refunded: 'refunded_at', disputed: 'disp
  * Grava o evento e concilia o estado da cobrança, numa transação só.
  * Devolve o desfecho para o histórico — nunca lança por evento desconhecido.
  */
-async function registrar(pool, evento) {
+async function registrar(pool, evento, corpoJson = null) {
  const client = await pool.connect();
  try {
   await client.query('BEGIN');
@@ -80,6 +81,17 @@ async function registrar(pool, evento) {
     [evento.provider, evento.charge_ref, RANKS.created]);
   }
 
+  // E-mail de cobrança: registra a compra e ENFILEIRA o e-mail (não envia: quem envia é a fila), na mesma transação. Num savepoint: o que
+  // falhar aqui nunca impede o webhook de ser registrado (o provedor reentregaria sem fim). Migração 052/051 ausente: ignora em silêncio.
+  if (evento.provider === 'stripe' && corpoJson) {
+   await client.query('SAVEPOINT email_cobranca');
+   try { await processarEmailDeCobranca(client, extrairDoStripe(corpoJson)); await client.query('RELEASE SAVEPOINT email_cobranca'); }
+   catch (erro) {
+    await client.query('ROLLBACK TO SAVEPOINT email_cobranca'); await client.query('RELEASE SAVEPOINT email_cobranca');
+    if (erro?.code !== '42P01') console.error('[email-cobranca] falhou:', erro?.message);
+   }
+  }
+
   await client.query('UPDATE payment_webhook_events SET outcome=$2 WHERE id=$1', [inserido.rows[0].id, desfecho]);
   await client.query('COMMIT');
   return desfecho;
@@ -105,7 +117,7 @@ export function paymentWebhookRoutes(router, { env = vivo.env, clock = Date.now 
   const evento = normalize(provider, corpoJson);
   if (!evento) throw fail(400, 'Evento não reconhecido.');
 
-  const outcome = await registrar(pool, evento);
+  const outcome = await registrar(pool, evento, corpoJson);
   // 2xx inclusive para 'unhandled'. O Asaas interrompe a fila depois de 15
   // falhas seguidas, e os eventos expiram em 14 dias: recusar o que não
   // tratamos derrubaria também a entrega do que tratamos.

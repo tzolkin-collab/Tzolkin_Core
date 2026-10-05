@@ -129,6 +129,7 @@ export function checkoutGatewayRoutes(router, { env = vivo.env, adapterFactory =
     successUrl: `${url.origin}/c/${productId}/${offerSlug}?status=success&session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: `${url.origin}/c/${productId}/${offerSlug}?status=cancel`,
     returnUrl: `${url.origin}/c/${productId}/${offerSlug}?status=return&session_id={CHECKOUT_SESSION_ID}`,
+    metadata: { product_id: productId, offer_slug: offerSlug },
    });
   } catch (error) { throw fail(502, error.message); }
 

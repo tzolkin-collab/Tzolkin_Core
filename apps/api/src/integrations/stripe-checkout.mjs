@@ -38,11 +38,13 @@ export function createStripeCheckoutAdapter({ secretKey, baseUrl = BASE, fetchIm
    * `uiMode`: 'hosted' devolve `url` para redirecionar; 'embedded' devolve
    * `client_secret` para montar o Embedded Checkout na própria página.
    */
-  async createSession({ uiMode, mode, lineItem, successUrl, cancelUrl, returnUrl }) {
+  async createSession({ uiMode, mode, lineItem, successUrl, cancelUrl, returnUrl, metadata }) {
    const params = {
     mode,
     ...(uiMode === 'embedded' ? { ui_mode: 'embedded', return_url: returnUrl } : { success_url: successUrl, cancel_url: cancelUrl }),
     payment_method_types: ['card'],
+    // Produto e oferta ficam na sessão: é o que, no webhook, liga a cobrança à oferta (e-mail de cobrança). Só ids, nada pessoal.
+    ...(metadata ? { metadata } : {}),
     line_items: [{
      quantity: 1,
      price_data: {

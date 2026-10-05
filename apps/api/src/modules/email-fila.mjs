@@ -1,6 +1,6 @@
 import { fail, input, json, isProductId, isUuid } from '../platform/http.mjs';
 import { enviarEmail, ErroDeEmail, enderecoValido } from '../platform/email.mjs';
-import { renderizar, ErroDeModelo, VARIAVEIS_DO_LEAD } from '../platform/email-modelo.mjs';
+import { renderizar, ErroDeModelo, VARIAVEIS_DO_LEAD, VARIAVEIS_DE_COBRANCA, EVENTOS_DE_COBRANCA } from '../platform/email-modelo.mjs';
 import { MENSAGEM_051 } from '../platform/email-saida.mjs';
 import { vivo } from '../platform/env-vivo.mjs';
 
@@ -82,7 +82,7 @@ export function iniciarFilaDeEmail({ pool, env = vivo.env, enviar = enviarEmail,
  return () => clearInterval(t);
 }
 
-const VALORES_DE_EXEMPLO = { name: 'Maria Souza', email: 'maria@exemplo.com', company_name: 'Empresa Exemplo' };
+const VALORES_DE_EXEMPLO = { name: 'Maria Souza', email: 'maria@exemplo.com', company_name: 'Empresa Exemplo', plan: 'Plano Pro', amount: 'R$ 49,00', due_date: '10/10/2026' };
 
 export function emailFilaRoutes(router, { env = vivo.env, fetchImpl = fetch, clock = Date.now } = {}) {
  const ultimoTeste = new Map();
@@ -95,8 +95,10 @@ export function emailFilaRoutes(router, { env = vivo.env, fetchImpl = fetch, clo
   if (!t) throw fail(404, 'Template não encontrado.');
   return { modelo: t.payload, produto: p.name };
  }
+ // O template de um evento de cobrança é renderizado com as variáveis de cobrança; os demais, com as de lead.
  const renderDeExemplo = (modelo, produto) => {
-  try { return renderizar(modelo, { ...VALORES_DE_EXEMPLO, product_name: produto }, { permitidas: VARIAVEIS_DO_LEAD }); }
+  const cobranca = EVENTOS_DE_COBRANCA.includes(modelo.event);
+  try { return renderizar(modelo, { ...VALORES_DE_EXEMPLO, product_name: produto }, { permitidas: cobranca ? VARIAVEIS_DE_COBRANCA : VARIAVEIS_DO_LEAD }); }
   catch (e) { if (e instanceof ErroDeModelo) throw fail(400, e.message); throw e; }
  };
 
@@ -117,7 +119,7 @@ export function emailFilaRoutes(router, { env = vivo.env, fetchImpl = fetch, clo
   const b = await json(req); input(b, ['product_id', 'slug']);
   const { modelo, produto } = await carregarModelo(pool, b.product_id, b.slug);
   const r = renderDeExemplo(modelo, produto);
-  reply(200, { assunto: r.assunto, texto: r.texto, variaveis: VARIAVEIS_DO_LEAD });
+  reply(200, { assunto: r.assunto, texto: r.texto, variaveis: EVENTOS_DE_COBRANCA.includes(modelo.event) ? VARIAVEIS_DE_COBRANCA : VARIAVEIS_DO_LEAD });
  });
 
  // Teste: manda o modelo, com dados de exemplo, SÓ para o e-mail de quem está logado.

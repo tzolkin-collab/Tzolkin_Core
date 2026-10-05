@@ -16,7 +16,7 @@ Ao salvar contrato com Plano igual ao slug de uma oferta do mesmo produto, o Cor
 
 ## Webhooks — registro, não emissão
 
-`POST /api/webhooks/stripe` e `POST /api/webhooks/asaas` são as únicas rotas do Core alcançáveis sem sessão e sem header Origin, autenticadas pela assinatura/token do próprio provedor. Deduplicam por `(provider,event_id)`, conciliam `payment_charges` sem retroceder estado (fila `NON_SEQUENTIALLY`) e preservam a primeira data de estorno/contestação/cancelamento. Só registram — não emitem cobrança, não alteram contrato, não mandam e-mail. Leitura em `GET /api/payments/webhooks`, admin.
+`POST /api/webhooks/stripe` e `POST /api/webhooks/asaas` são as únicas rotas do Core alcançáveis sem sessão e sem header Origin, autenticadas pela assinatura/token do próprio provedor. Deduplicam por `(provider,event_id)`, conciliam `payment_charges` sem retroceder estado (fila `NON_SEQUENTIALLY`) e preservam a primeira data de estorno/contestação/cancelamento. Só registram — não emitem cobrança, não alteram contrato e **não mandam e-mail**. Uma coisa a mais, no Stripe: quando a oferta tem `email_owner = core` e template para o evento, o webhook **enfileira** o e-mail de cobrança (linha em `email_outbox`, na mesma transação, num savepoint que nunca derruba o registro); quem envia é o consumidor da fila. Ver `docs/EMAIL-AUTOMACOES.md`. Leitura em `GET /api/payments/webhooks`, admin.
 
 ## Gateway de checkout — cria sessão, só fluxo 1
 
@@ -106,7 +106,7 @@ e se a Pluggy lê o Contabilizei.bank — pergunta em aberto.
 - Criação de cobrança Asaas (Pix, boleto, cartão tokenizado) — API diferente da Stripe, ainda não desenhada aqui.
 - Split, repasse e conta conectada (fluxo 2) — bloqueado em D3.
 - Parcelamento Stripe e métodos além de cartão (Pix/boleto via Stripe) na sessão de checkout.
-- E-mail de COBRANÇA (pagamento, atraso, renovação…). A fila transacional, o consumidor com retentativa e a idempotência JÁ existem, para e-mail de lead (ver `docs/EMAIL-AUTOMACOES.md`); falta ligar a cobrança a um cliente e uma oferta, o que o webhook ainda não guarda. Inbound (respostas) e bounces seguem de fora.
+- E-mail de cobrança do ASAAS e de compra feita FORA do checkout do Core (sem metadata não há como saber a oferta), `charge_created`, `due_reminder` (precisa de agendador) e `welcome` de compra. Inbound (respostas) e bounces seguem de fora. O de cobrança Stripe do checkout do Core está feito (`docs/EMAIL-AUTOMACOES.md`).
 - Snapshot de cobrança no painel do cliente e seleção visual de ofertas no formulário de contratos.
 - Efeitos de pagamentos sobre acesso. Nenhum atraso/cancelamento suspende acesso nesta versão.
 

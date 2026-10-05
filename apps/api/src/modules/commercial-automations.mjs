@@ -2,6 +2,7 @@ import { fail, input, isProductId, isUuid, onlyParams, text } from '../platform/
 import { commercialPermission } from './commercial-keys.mjs';
 import { spaceOf } from './commercial-pipelines.mjs';
 import { ACTIONS, EVENTS, EVENTOS_COM_LEAD, validateActions } from '../platform/automations.mjs';
+import { renderizar, ErroDeModelo, VARIAVEIS_DO_LEAD } from '../platform/email-modelo.mjs';
 
 // Automações e tarefas (fase 5). As regras do motor moram em platform/automations.mjs; aqui ficam as rotas de
 // cadastro (automação por espaço, com funil e etapa opcionais), o histórico de execuções e as tarefas mínimas.
@@ -55,7 +56,11 @@ export function commercialAutomationRoutes(router) {
  async function checkEmails(client, spaceId, evento, actions) {
   for (const a of actions.filter(x => x.action === 'email.enviar')) {
    if (!EVENTOS_COM_LEAD.includes(evento)) throw fail(400, 'Enviar e-mail só funciona em eventos de lead (criado, mudou de etapa, qualificado, descartado, restaurado).');
-   if (!(await client.query('SELECT 1 FROM email_templates WHERE product_id=$1 AND slug=$2', [spaceId, a.template])).rowCount) throw fail(400, `O template "${a.template}" não existe neste espaço.`);
+   const tpl = (await client.query('SELECT payload FROM email_templates WHERE product_id=$1 AND slug=$2', [spaceId, a.template])).rows[0]?.payload;
+   if (!tpl) throw fail(400, `O template "${a.template}" não existe neste espaço.`);
+   // Já aqui, e não só na hora de rodar: um template com variável que não existe em e-mail de lead não pode virar automação.
+   try { renderizar(tpl, { name: 'x', email: 'x@x.co', product_name: 'x', company_name: 'x' }, { permitidas: VARIAVEIS_DO_LEAD }); }
+   catch (e) { if (e instanceof ErroDeModelo) throw fail(400, `O template "${a.template}" não serve para e-mail de lead: ${e.message}`); throw e; }
   }
  }
 
