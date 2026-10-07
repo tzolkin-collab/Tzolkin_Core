@@ -710,6 +710,8 @@
 /* Links da contratação alinhados (a ficha agora é o painel lateral: ver peek.css) */
 .client-engagement-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
 .client-engagement-links .table-action { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; margin-left: -8px; }
+.client-engagement-links .table-action.danger-action { color: var(--danger); margin-left: auto; }
+.client-engagement-links .table-action.danger-action:hover { background: var(--surface-hover); color: var(--badge-danger-fg, var(--danger)); }
 .client-engagement-links .table-action svg { width: 16px; height: 16px; }
 .client-engagement > header strong { font-size: 14px; }
 

@@ -667,6 +667,10 @@ function clientEngagement(engagement,summary){
  const ads=node('button',undefined,'table-action');ads.type='button';ads.append(createIcon('chart'),document.createTextNode(mine.length?`Campanhas · ${mine.length}`:'Campanhas'));
  ads.onclick=()=>{switchView('serviceCampaigns');campaigns.loadService(engagement.id,engagement.label).catch(reportError);};links.append(ads);
  if(mine.length){const spend=new Map();for(const c of mine)spend.set(c.currency||'BRL',(spend.get(c.currency||'BRL')||0)+Number(c.spend_cents||0));links.append(node('span','Investido no mês: '+[...spend].map(([currency,cents])=>minorAmount(cents,currency)).join(' + '),'detail'));}
+ const del=node('button',undefined,'table-action danger-action');del.type='button';
+ del.append(createIcon('close'),document.createTextNode('Excluir'));
+ del.onclick=()=>openArchiveEngagementDialog(engagement,summary.tenant?.id||engagement.tenant_id);
+ links.append(del);
  block.append(head,links);
  for(const binding of summary.deploys.available?summary.deploys.items.filter(d=>d.engagement_id===engagement.id):[]){
   const project=projectForServiceBinding(binding),latest=project?.deployments?.[0];
@@ -848,6 +852,15 @@ function fillEngagementProducts(){
  select.replaceChildren(option('',model==='product'?'Selecione o produto':'Sem item do portfólio'),...items.map(item=>option(item.id,`${item.name} · ${kindLabelOf(item.portfolio_kind)}`)));
  select.required=model==='product';
  if(items.some(item=>item.id===previous))select.value=previous;
+}
+let archivingEngagement=null,archivingTenantId=null;
+function openArchiveEngagementDialog(engagement,tenantId){
+ const dialog=$('archive-engagement-dialog');
+ if(!dialog)return;
+ archivingEngagement=engagement;archivingTenantId=tenantId;
+ $('archive-engagement-label').textContent=engagement.label||'Contratação';
+ dialog.querySelector('.dialog-error').textContent='';
+ dialog.showModal();
 }
 
 // 11999990000 -> (11) 99999-0000. O que não for número de telefone brasileiro segue como veio.
@@ -1739,6 +1752,23 @@ $('engagement-form').addEventListener('submit',async event=>{
   dialog.close();form.reset();
   if(state.selectedTenant===tenant.id){clientPending=null;await loadClientSummary(tenant.id);}
   $('notice').textContent='Contratação criada.';
+ }catch(reason){error.textContent=reason.message;}
+ finally{button.disabled=false;}
+});
+$('archive-engagement-form')?.addEventListener('submit',async event=>{
+ event.preventDefault();
+ const form=event.currentTarget,dialog=form.closest('dialog'),button=form.querySelector('button.primary'),error=dialog.querySelector('.dialog-error');
+ if(!archivingEngagement||!archivingTenantId)return;
+ error.textContent='';button.disabled=true;
+ try{
+  await api('/api/engagements/'+encodeURIComponent(archivingEngagement.id)+'/archive','POST',{revision:archivingEngagement.revision});
+  if(state.overview?.engagements){
+   state.overview.engagements=state.overview.engagements.filter(e=>e.id!==archivingEngagement.id);
+  }
+  dialog.close();
+  state.clientSummary=null;
+  if(state.selectedTenant===archivingTenantId){clientPending=null;await loadClientSummary(archivingTenantId);}
+  $('notice').textContent='Contratação excluída.';
  }catch(reason){error.textContent=reason.message;}
  finally{button.disabled=false;}
 });
