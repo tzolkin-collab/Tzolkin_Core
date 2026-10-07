@@ -312,7 +312,18 @@ export function setupFinance({api}){
   const summary=cashSummary(picked(),rows,currency),metrics=node('div',undefined,'fin-metrics');
   const usable=picked().some(a=>a.type==='BANK'&&a.currency===currency&&a.snapshot);
   const balance=bankBalance(picked(),currency);
-  for(const [title,amount,help]of [['Saldo em contas',balance,'Último saldo consultado · cartões excluídos'],['Entradas',usable?summary.incoming:null,'Efetivadas no período ('+currentPeriodLabel()+')'],['Saídas',usable?summary.outgoing:null,'Inclui transferências não conciliadas']]){const card=node('article',undefined,'fin-metric');card.append(node('span',title),node('strong',money(amount,currency)),node('small',help));metrics.append(card);}root.append(metrics);
+  // HANDOFF MOCK FINANCEIRO (docs/handoff-mocks-financeiro-2026-10-07.md): remover estes valores ao encerrar a demonstração.
+  const mockBRL=currency==='BRL';
+  // Mantido para reativação: ['Saldo em contas',balance,'Último saldo consultado · cartões excluídos'].
+  // Mantido para reativação: ['Saídas',usable?summary.outgoing:null,'Inclui transferências não conciliadas'].
+  // Entradas seguem lendo summary.incoming, vindo da API, sem mock.
+  const topMetrics=[
+   ['Saldo em contas',mockBRL?8143.29:balance,mockBRL?'Valor de demonstração · cartões excluídos':'Último saldo consultado · cartões excluídos'],
+   ['Entradas',usable?summary.incoming:null,'Efetivadas no período ('+currentPeriodLabel()+')'],
+   ['Saídas',mockBRL?16284.73:(usable?summary.outgoing:null),mockBRL?'Valor de demonstração':'Inclui transferências não conciliadas'],
+   ['Investimentos diversos',mockBRL?3286.47:null,mockBRL?'Valor de demonstração':'Disponível em BRL']
+  ];
+  for(const [title,amount,help]of topMetrics){const card=node('article',undefined,'fin-metric');card.append(node('span',title),node('strong',money(amount,currency)),node('small',help));metrics.append(card);}root.append(metrics);
 
   root.append(salesPanel());
 

@@ -193,7 +193,7 @@
 /* Financial summaries and section hierarchy */
 .fin-metrics {
   display: grid;
-  grid-template-columns: 1.35fr 1fr 1fr;
+  grid-template-columns: 1.25fr repeat(3, minmax(0, 1fr));
   align-items: end;
   gap: 32px;
   margin: 8px 0 18px;
