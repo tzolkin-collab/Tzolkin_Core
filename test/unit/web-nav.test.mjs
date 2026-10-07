@@ -24,8 +24,13 @@ const NAVEGACAO = [
  ['Entrega', ['Serviços', 'Acompanhamento']],
  ['Tecnologia', ['Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS']],
  ['Bases de dados', ['Banco de dados']],
- ['Administração', ['Configurações']],
 ];
+
+test('Configurações continua acessível pelo botão fixo do rodapé', () => {
+ const index = fonte('index.html'), app = fonte('app.js');
+ assert.match(index, /id="open-settings"[^>]*>Configurações/);
+ assert.match(app, /\$\('open-settings'\)\.onclick\s*=\s*\(\)\s*=>\s*\{switchView\('settings'\)/);
+});
 
 // Esvazia o conteúdo das aspas simples preservando o tamanho: os blocos lidos aqui
 // não têm template literal nem aspas escapadas, e sem isso um título com chave

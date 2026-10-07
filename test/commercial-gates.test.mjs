@@ -106,7 +106,10 @@ test('requisitos de etapa, contra PostgreSQL isolado', async t => {
    const bloqueado = await moverLead(id, 'Novos');
    assert.equal(bloqueado.body.blocked, true);
    assert.deepEqual(bloqueado.body.blockers.map(x => x.title), ['Registrar o contato', 'Anotar o interesse']);
-   const [t1, t2] = await tarefas({ col: 'lead_id', id });
+   const pendentes = await tarefas({ col: 'lead_id', id });
+   const t1 = pendentes.find(t => t.title === 'Registrar o contato');
+   const t2 = pendentes.find(t => t.title === 'Anotar o interesse');
+   assert.ok(t1 && t2, 'cada requisito de saída gerou sua própria tarefa');
    await concluir(t1.id);
    assert.deepEqual((await moverLead(id, 'Novos')).body.blockers.map(x => x.title), ['Anotar o interesse'], 'fechar só uma não basta');
    await concluir(t2.id);
