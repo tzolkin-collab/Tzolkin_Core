@@ -26,6 +26,15 @@ Object.assign(icons,{
  ,pencil:[['path',{d:'M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z'}],['path',{d:'m15 5 4 4'}]]
  ,globe:[['circle',{cx:12,cy:12,r:10}],['path',{d:'M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20'}],['path',{d:'M2 12h20'}]]
 });
+
+// Formas desenhadas aqui (não vêm do lucide): como a janela da atividade aparece — centralizada, popup num canto
+// ou lateral de altura cheia. São o mesmo retângulo de tela com o conteúdo em três lugares, para a escolha se ler
+// de relance; ficam neste arquivo porque é de onde createIcon lê, e o teste icons-registry confere nome por nome.
+Object.assign(icons,{
+ "window-center":[['rect',{x:2,y:3,width:20,height:18,rx:2}],['rect',{x:7,y:8,width:10,height:8,rx:1}]]
+ ,"window-popup":[['rect',{x:2,y:3,width:20,height:18,rx:2}],['rect',{x:11,y:11,width:9,height:7,rx:1}]]
+ ,"window-side":[['rect',{x:2,y:3,width:20,height:18,rx:2}],['path',{d:'M14 3v18'}]]
+});
 const PLATFORM_LOGOS=['github','vercel','easypanel'];
 export function providerLogo(name){
  // A allowlist vem de BANK_LOGOS para não divergir de assets.mjs: nome fora da

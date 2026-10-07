@@ -33,6 +33,10 @@ participantes, objetivos e anexos. Categoria da atividade não substitui a categ
 
 ## Próximas camadas, ainda não implementadas
 
+O pedido do dono de 2026-10-06 sobre a tela de atividade está destrinchado em
+[ACOMPANHAMENTO-REDESENHO.md](ACOMPANHAMENTO-REDESENHO.md), item a item, com o que falta para cada um existir —
+participantes (item 9) e anexos (item 4) do número 1 abaixo são de lá.
+
 1. Contratação (restante): responsáveis, participantes, orçamento de horas, objetivos, critérios de aceite
    e anexos.
 2. Métricas: definições versionadas com slug, nome, unidade, fonte, dimensões,

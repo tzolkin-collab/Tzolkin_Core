@@ -1,6 +1,12 @@
 import {input,text,isUuid,fail} from './http.mjs';
 export const CATEGORIES=['mentoria','consultoria','software','educacional','outro'];
-export const KINDS=['sessao','entregavel','feature','tarefa'];
+// O tipo da atividade virou aba na tela (Call · Task · Registro). Os valores são os mesmos de antes mais 'registro':
+// 'sessao' é Call; 'tarefa', 'entregavel' e 'feature' são Task (os dois últimos vêm de antes das abas e seguem válidos).
+// 'registro' depende da migração 054 no banco — a rota pergunta ao detector antes de gravar e recusa com MENSAGEM_054.
+export const KINDS=['sessao','entregavel','feature','tarefa','registro'];
+// Série é atividade que se repete; registro é o que já aconteceu e se guarda. Repetir um registro não quer dizer nada,
+// então a série não aceita esse tipo — e, com isso, a 054 não precisa mexer no CHECK de service_activity_series.
+export const KINDS_DE_SERIE=['sessao','entregavel','feature','tarefa'];
 // Campos de agenda (migração 047). Opcionais: sem eles o evento é o mesmo de antes, e o SQL só os toca quando vêm preenchidos.
 export const OPCIONAIS=['description','location','meeting_url'];
 const LIMITES={description:2000,location:200,meeting_url:500};
@@ -98,7 +104,7 @@ export function serieInput(b){
  input(b,['id','tenant_id','engagement_id','category','kind','title','description','location','meeting_url','frequency','interval_n','weekdays','month_day','start_time','duration_minutes','starts_on','ends_on','count_limit','reminders']);
  const frequency=choice(b.frequency,['weekly','monthly']);
  const out={id:uuid(b.id),tenant_id:uuid(b.tenant_id),engagement_id:b.engagement_id==null||b.engagement_id===''?null:uuid(b.engagement_id),
-  category:choice(b.category,CATEGORIES),kind:choice(b.kind,KINDS),title:text(b.title,2,160),frequency,
+  category:choice(b.category,CATEGORIES),kind:choice(b.kind,KINDS_DE_SERIE),title:text(b.title,2,160),frequency,
   interval_n:b.interval_n===undefined?1:inteiro(b.interval_n,1,12,'Intervalo de repetição inválido (de 1 a 12).'),
   start_time:horario(b.start_time),duration_minutes:duracao(b.duration_minutes),starts_on:dataDia(b.starts_on,'Data de início inválida.')};
  if(frequency==='weekly'){
@@ -126,7 +132,7 @@ export function serieUpdateInput(b){
  const campos={};
  if('title' in b)campos.title=text(b.title,2,160);
  if('category' in b)campos.category=choice(b.category,CATEGORIES);
- if('kind' in b)campos.kind=choice(b.kind,KINDS);
+ if('kind' in b)campos.kind=choice(b.kind,KINDS_DE_SERIE);
  for(const campo of OPCIONAIS)if(campo in b)campos[campo]=opcional(campo,b[campo]);
  if('start_time' in b)campos.start_time=horario(b.start_time);
  if('duration_minutes' in b)campos.duration_minutes=duracao(b.duration_minutes);

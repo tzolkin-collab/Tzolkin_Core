@@ -3,16 +3,33 @@ import { el, botao, campo, preencher } from './agenda-dom.js';
 import { criarPeek } from './peek.js';
 import { pares } from './inline-edit.js';
 import { selo } from './data-table.js';
+import { mountTabs } from './tabs.js';
 import * as M from './agenda-model.js';
-import { duracaoPadraoMin, meetAutomatico, localDoMeet, convidarContatoPrincipal } from './agenda-prefs.js';
+import { duracaoPadraoMin, meetAutomatico, localDoMeet, convidarContatoPrincipal, JANELAS, janelaDoEvento, definirJanelaDoEvento } from './agenda-prefs.js';
 import { blocoDeLembrete, blocoDeRepeticao } from './agenda-repeticao.js';
 
 const TOM_DA_SITUACAO = { planned: 'info', done: 'success', cancelled: 'neutral' };
-const opcoes = chaves => chaves.map(k => [k, M.ROTULOS[k]]);
-const TIPOS = ['sessao', 'entregavel', 'feature', 'tarefa'];
 const maiuscula = t => t.charAt(0).toUpperCase() + t.slice(1);
+/** Troca o texto de um campo feito por `campo` (o rótulo é o primeiro nó do <label>, e é o que o leitor de tela lê). */
+const rotular = (controle, texto) => { controle.parentElement.firstChild.textContent = texto; };
+/** Tipo na visualização, pelo nome da aba. Entregável e Feature, que são de antes das abas, dizem as duas coisas. */
+const textoDoTipo = kind => {
+ const aba = M.abaDoKind(kind);
+ return M.KINDS_DA_ABA[aba][0] === kind ? M.ROTULO_DA_ABA[aba] : `${M.ROTULO_DA_ABA[aba]} · ${M.ROTULOS[kind] || kind}`;
+};
 const contratacoesDe = (dados, tenantId, vazio) => [['', vazio], ...(dados.engagements || []).filter(e => e.tenant_id === tenantId).map(e => [e.id, e.label])];
 const GERAL = 'Geral da empresa (sem contratação)';
+// O que cada aba é, em uma linha, para a pessoa não ter de descobrir pela diferença dos campos.
+const EXPLICACAO_DA_ABA = Object.freeze({
+ call: 'Conversa com hora marcada: sala do Meet e convidados.',
+ task: 'Trabalho com início e prazo de entrega.',
+ registro: 'Algo para guardar na base; a data é opcional.',
+});
+// Ícones ao lado do X: o mesmo formulário, em três tamanhos de janela (preferência deste navegador, agenda-prefs.js).
+const ICONE_DA_JANELA = Object.freeze({ centro: 'window-center', popup: 'window-popup', lateral: 'window-side' });
+const AJUDA_DA_JANELA = Object.freeze({ centro: 'Mostrar centralizado', popup: 'Mostrar como popup no canto', lateral: 'Mostrar na lateral' });
+// Valor do <select> de Local que abre o campo livre: último caso, para não perder local antigo nem travar um novo.
+const LOCAL_LIVRE = '__outro';
 
 /** Hora cheia seguinte: o início padrão de "Nova atividade" quando a pessoa não clicou num horário. */
 const proximaHora = () => { const ms = Date.now(); return ms - (ms % 3600000) + 3600000; };
@@ -25,32 +42,54 @@ const proximaHora = () => { const ms = Date.now(); return ms - (ms % 3600000) + 
 export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = null, inicio = null, fim = null, tenantPadrao = '', aoSalvar }) {
  const anterior = document.activeElement;
  const dialog = el('dialog', null, 'tracking-editor');
+ // Prefixo único por diálogo: os ids das abas e do painel não podem colidir com nada que já esteja na página.
+ const prefixo = 'ag-tipo-' + Math.random().toString(36).slice(2, 8);
  const form = el('form', null, 'tracking-form');
- dialog.append(form);
+ form.id = prefixo + '-painel';
+ form.setAttribute('role', 'tabpanel');   // a aba escolhida é o tipo, e o formulário inteiro é o painel dela
 
  const titulo = el('h2', evento ? 'Editar atividade' : 'Nova atividade');
- titulo.id = 'tracking-editor-title';
+ titulo.id = prefixo + '-titulo';
  dialog.setAttribute('aria-labelledby', titulo.id);
  const topo = el('header', null, 'tracking-editor-heading');
  const intro = el('div');
- intro.append(titulo, el('p', evento ? 'Altere o que mudou; o resto fica como está.' : 'Organize uma sessão, tarefa ou entrega.', 'detail'));
- topo.append(intro, botao('Fechar', 'close', () => dialog.close()));
- form.append(topo);
+ const dica = el('p', null, 'detail');
+ intro.append(titulo, dica);
+ // Canto: como mostrar a janela (centralizada, popup, lateral) e fechar.
+ const modos = el('div', null, 'ag-janelas'); modos.setAttribute('role', 'group'); modos.setAttribute('aria-label', 'Como mostrar esta janela');
+ let janela = janelaDoEvento();
+ const botoesDaJanela = new Map();
+ const aplicarJanela = () => {
+  for (const [chave] of JANELAS) dialog.classList.toggle('ag-janela-' + chave, chave === janela);
+  for (const [chave, b] of botoesDaJanela) b.setAttribute('aria-pressed', String(chave === janela));
+ };
+ for (const [chave] of JANELAS) {
+  const b = botao('', ICONE_DA_JANELA[chave], () => { janela = chave; definirJanelaDoEvento(chave); aplicarJanela(); }, 'quiet ag-icone');
+  b.setAttribute('aria-label', AJUDA_DA_JANELA[chave]); b.title = AJUDA_DA_JANELA[chave];
+  botoesDaJanela.set(chave, b); modos.append(b);
+ }
+ aplicarJanela();
+ const canto = el('div', null, 'tracking-editor-tools');
+ canto.append(modos, botao('Fechar', 'close', () => dialog.close()));
+ topo.append(intro, canto);
+ // Abas do tipo (Call · Task · Registro) entre o cabeçalho e o formulário: o cabeçalho não entra no painel que elas comandam.
+ const abasHost = el('div', null, 'ag-abas');
+ dialog.append(topo, abasHost, form);
 
  const nome = campo(form, 'Título'); nome.required = true; nome.minLength = 2; nome.maxLength = 160; nome.placeholder = 'Ex.: Revisão dos objetivos da mentoria';
  const cliente = campo(form, 'Cliente', 'text', [['', 'Selecione'], ...tenants.map(t => [t.id, t.name])]); cliente.required = true;
+ // No lugar do campo Categoria, que saiu: a categoria vem da contratação do cliente, e aqui ela é dita, não escolhida.
+ const linhaDaCategoria = el('p', null, 'detail ag-categoria-vem');
+ form.append(linhaDaCategoria);
  const contratacao = campo(form, 'Contratação (opcional)', 'text', contratacoesDe(dados, '', GERAL));
- cliente.addEventListener('change', () => preencher(contratacao, contratacoesDe(dados, cliente.value, GERAL), ''));
-
- const organizacao = el('fieldset', null, 'tracking-field-grid');
- const categoria = campo(organizacao, 'Categoria', 'text', opcoes(M.CATEGORIAS));
- const tipo = campo(organizacao, 'Tipo', 'text', opcoes(TIPOS));
- organizacao.prepend(el('legend', 'Organização'));
- form.append(organizacao);
+ const contratacaoEscolhida = () => (dados.engagements || []).find(e => e.id === contratacao.value) || null;
+ const mostrarCategoria = () => { linhaDaCategoria.textContent = M.textoDaCategoria(contratacaoEscolhida(), evento ? evento.category : null); };
+ cliente.addEventListener('change', () => { preencher(contratacao, contratacoesDe(dados, cliente.value, GERAL), ''); mostrarCategoria(); });
+ contratacao.addEventListener('change', mostrarCategoria);
 
  const quando = el('fieldset', null, 'tracking-field-grid');
- const comeco = campo(quando, 'Início · Brasília', 'datetime-local'); comeco.required = true;
- const termino = campo(quando, 'Fim / prazo · Brasília', 'datetime-local'); termino.required = true;
+ const comeco = campo(quando, 'Início · Brasília', 'datetime-local');
+ const termino = campo(quando, 'Fim / prazo · Brasília', 'datetime-local');
  quando.prepend(el('legend', 'Quando acontece'));
  form.append(quando);
  // Mudou o início e o fim ficou antes dele: o fim vai para uma hora depois, como nos calendários.
@@ -60,12 +99,21 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   termino.min = comeco.value;
  });
 
- // Descrição, local e link dependem da migração 047. Sem ela (dados.agenda_campos falso) os campos nem aparecem.
+ // Descrição e local dependem da migração 047. Sem ela (dados.agenda_campos falso) os campos nem aparecem.
+ // O "Link da reunião" saiu do formulário: a sala vem do Meet pela API do Google. O que já estava gravado continua
+ // aparecendo na visualização (o painel ao lado) e não é tocado ao salvar — o campo é que não é mais oferecido.
  const comCampos = dados.agenda_campos === true;
  const extra = el('div', null, 'tracking-extra');   // display: contents: os campos entram na grade do formulário como se não houvesse o bloco
  const descricao = campo(extra, 'Descrição (opcional)', 'area'); descricao.maxLength = 2000; descricao.rows = 3;
- const local = campo(extra, 'Local (opcional)'); local.maxLength = 200;
- const link = campo(extra, 'Link da reunião (opcional)', 'url'); link.maxLength = 500; link.placeholder = 'https://…';
+ // Local é escolhido, não digitado: o padrão de Configurações → Agenda, os locais já usados e o da atividade aberta.
+ const locais = M.locaisConhecidos(dados.activities || [], [localDoMeet(), evento?.location]);
+ const local = campo(extra, 'Local (opcional)', 'text', [['', 'Sem local'], ...locais.map(l => [l, l]), [LOCAL_LIVRE, 'Outro local…']]);
+ const localLivre = campo(extra, 'Qual local', 'text'); localLivre.maxLength = 200; localLivre.placeholder = 'Ex.: Escritório do cliente';
+ const caixaDoLivre = localLivre.parentElement; caixaDoLivre.hidden = true;
+ let localAutomatico = false;   // o Local foi preenchido pela sala do Meet, não pela pessoa: desmarcar a sala pode limpá-lo
+ const sincronizarLocal = () => { caixaDoLivre.hidden = local.value !== LOCAL_LIVRE; };
+ local.addEventListener('change', () => { localAutomatico = false; sincronizarLocal(); });
+ const valorDoLocal = () => (local.value === LOCAL_LIVRE ? localLivre.value.trim() : local.value);
  if (comCampos) form.append(extra);
 
  // Lembrete e repetição dependem da migração 048 (dados.agenda_lembretes). Sem ela, nem aparecem.
@@ -110,31 +158,29 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
    };
    busca.addEventListener('input', adicionar); busca.addEventListener('change', adicionar);
    cliente.addEventListener('change', desenharContatos); desenharContatos();
-   // Sala escolhida: o local vira "Google Meet" (se estava vazio) e o link é gerado pelo Google, então o campo fica travado.
-   let localAutomatico = false;
+   // Sala escolhida: o Local passa a ser "Google Meet" (se estava sem local). O link não é mais perguntado — quem o gera é o Google.
    const principalDe = tenantId => comEmail.find(p => p.tenant_id === tenantId && p.is_primary) || comEmail.find(p => p.tenant_id === tenantId);
    const sincronizarSala = () => {
     const comSala = meet.value === 'meet';
     rotuloConvidados.hidden = !comSala; rotuloBusca.hidden = !comSala;
     if (comSala && convidarContatoPrincipal() && !convidados.value.trim()) { const p = principalDe(cliente.value); if (p) convidados.value = p.email; }
-    if (comSala) { if (!local.value.trim() && localDoMeet()) { local.value = localDoMeet(); localAutomatico = true; } link.disabled = true; link.placeholder = 'O Google gera o link ao criar a sala'; link.value = ''; }
-    else { if (localAutomatico && local.value === localDoMeet()) local.value = ''; localAutomatico = false; link.disabled = false; link.placeholder = 'https://…'; }
+    if (comSala) { if (!local.value && localDoMeet() && locais.includes(localDoMeet())) { local.value = localDoMeet(); localAutomatico = true; sincronizarLocal(); } }
+    else if (localAutomatico) { if (local.value === localDoMeet()) local.value = ''; localAutomatico = false; sincronizarLocal(); }
    };
-   local.addEventListener('input', () => { localAutomatico = false; });
    meet.addEventListener('change', sincronizarSala);
    cliente.addEventListener('change', () => { if (meet.value === 'meet') sincronizarSala(); });
    // Como no Calendly: quem quer sala em toda atividade nova liga isso em Configurações → Agenda e já abre com ela marcada.
    if (!evento && meetAutomatico()) { meet.value = 'meet'; sincronizarSala(); }
   }
   form.append(blocoMeet);
-  if (comCampos) form.append(local.parentElement, link.parentElement);   // Local e link logo abaixo da sala
+  if (comCampos) form.append(local.parentElement, caixaDoLivre);   // Local logo abaixo da sala
  }
+ let sincronizarRepeticao = null;
  if (repeticao) {
   form.append(repeticao.no);
   const curto = () => { const i = M.doCampoLocal(comeco.value), f = M.doCampoLocal(termino.value); return !i || !f || Date.parse(f) - Date.parse(i) <= 86400000; };
-  const sincronizar = () => { repeticao.inicioMudou(); repeticao.limitar(curto()); if (blocoMeet) blocoMeet.hidden = repeticao.escolhida(); };
-  comeco.addEventListener('change', sincronizar); termino.addEventListener('change', sincronizar); repeticao.no.addEventListener('change', sincronizar);
-  sincronizar();
+  sincronizarRepeticao = () => { repeticao.inicioMudou(); repeticao.limitar(curto()); sincronizarAba(); };
+  comeco.addEventListener('change', sincronizarRepeticao); termino.addEventListener('change', sincronizarRepeticao); repeticao.no.addEventListener('change', sincronizarRepeticao);
  }
  if (serie && !serie.ended_at) {
   const bloco = el('fieldset', null, 'ag-bloco');
@@ -142,22 +188,51 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   bloco.append(el('p', `${serie.descricao}.`, 'detail'));
   escopo = campo(bloco, 'Aplicar a', 'text', [['um', 'Só este evento'], ['proximos', 'Este e os próximos']]);
   escopo.addEventListener('change', () => { contratacao.disabled = escopo.value === 'proximos'; });
-  form.insertBefore(bloco, form.children[1]);
+  form.insertBefore(bloco, form.firstChild);
  }
+
+ // ---------- a aba é o tipo: ela decide quais campos aparecem ----------
+ // 'registro' precisa da migração 054 no banco; sem ela a aba não é oferecida (como lembrete e repetição fazem com a 048).
+ // Uma atividade que já esteja gravada como registro abre na aba dela de qualquer forma: nunca esconder o que existe.
+ let aba = evento ? M.abaDoKind(evento.kind) : 'call';
+ const comRegistro = dados.agenda_registro === true || aba === 'registro';
+ function sincronizarAba() {
+  const comHorario = M.abaExigeHorario(aba);
+  comeco.required = termino.required = comHorario;
+  rotular(comeco, comHorario ? 'Início · Brasília' : 'Início (opcional) · Brasília');
+  rotular(termino, aba === 'task' ? 'Prazo de entrega · Brasília' : comHorario ? 'Fim · Brasília' : 'Fim (opcional) · Brasília');
+  dica.textContent = EXPLICACAO_DA_ABA[aba];
+  // Meet é coisa de Call (e uma série não cria sala: a repetição já esconde o bloco).
+  if (blocoMeet) blocoMeet.hidden = !M.abaComMeet(aba) || Boolean(repeticao?.escolhida());
+  // Registro é o que já aconteceu: não tem o que avisar antes nem o que repetir.
+  if (lembrete) lembrete.no.hidden = aba === 'registro';
+  if (repeticao) repeticao.no.hidden = aba === 'registro';
+  form.setAttribute('aria-labelledby', `${prefixo}-tab-${aba}`);
+ }
+ const abasDoTipo = M.ABAS.filter(a => a !== 'registro' || comRegistro);
+ mountTabs({
+  host: abasHost, tabs: abasDoTipo.map(a => ({ key: a, label: M.ROTULO_DA_ABA[a] })), active: aba,
+  label: 'Tipo da atividade', prefix: prefixo, panelId: form.id,
+  onChange: chave => { aba = chave; sincronizarAba(); },
+ });
+ if (!comRegistro) abasHost.append(el('p', 'Registro fica disponível quando a atualização do banco (migração 054) for aplicada.', 'detail'));
 
  // Valores iniciais
  if (evento) {
   nome.value = evento.title; cliente.value = evento.tenant_id; cliente.disabled = true;
   preencher(contratacao, contratacoesDe(dados, evento.tenant_id, GERAL), evento.engagement_id || '');
-  categoria.value = evento.category; tipo.value = evento.kind;
   comeco.value = M.paraCampoLocal(evento.ini); termino.value = M.paraCampoLocal(evento.fim);
-  descricao.value = evento.description || ''; local.value = evento.location || ''; link.value = evento.meeting_url || '';
+  descricao.value = evento.description || '';
+  // O local gravado está na lista (locaisConhecidos o incluiu). Se ainda assim não casar, vai no campo livre: editar não perde dado.
+  local.value = evento.location || '';
+  if (local.value !== (evento.location || '')) { local.value = LOCAL_LIVRE; localLivre.value = evento.location; }
  } else {
   cliente.value = tenantPadrao;
   preencher(contratacao, contratacoesDe(dados, cliente.value, GERAL), '');
   const ini = inicio ?? proximaHora();
   comeco.value = M.paraCampoLocal(ini); termino.value = M.paraCampoLocal(fim ?? ini + duracaoPadraoMin() * 60000);
  }
+ mostrarCategoria(); sincronizarLocal(); sincronizarAba(); sincronizarRepeticao?.();
  termino.min = comeco.value;
  if (meet?.value === 'meet') meet.dispatchEvent(new Event('change'));   // sala já marcada (Meet automático): completa com a empresa escolhida
 
@@ -172,18 +247,25 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   e.preventDefault();
   if (salvar.disabled) return;
   erro.textContent = '';
-  const ini = M.doCampoLocal(comeco.value), term = M.doCampoLocal(termino.value);
-  if (!ini || !term) { erro.textContent = 'Informe um início e um fim válidos.'; erro.focus(); return; }
+  let ini = M.doCampoLocal(comeco.value), term = M.doCampoLocal(termino.value);
+  // Registro sem data: o banco exige início e fim (ver M.horarioDoRegistro). Call e Task continuam exigindo os dois.
+  if (!M.abaExigeHorario(aba) && !comeco.value && !termino.value) {
+   const h = M.horarioDoRegistro(Date.now());
+   ini = new Date(h.ini).toISOString(); term = new Date(h.fim).toISOString();
+  }
+  if (!ini || !term) { erro.textContent = M.abaExigeHorario(aba) ? 'Informe um início e um fim válidos.' : 'Informe início e fim, ou deixe os dois em branco.'; erro.focus(); return; }
   if (Date.parse(term) <= Date.parse(ini)) { erro.textContent = 'O fim precisa ser depois do início.'; erro.focus(); return; }
   const rotuloOriginal = salvar.textContent;
   salvar.disabled = true; salvar.textContent = 'Salvando…'; form.setAttribute('aria-busy', 'true');
   try {
-   const extras = comCampos ? { description: descricao.value.trim(), location: local.value.trim(), ...(link.disabled ? {} : { meeting_url: link.value.trim() }) } : {};
+   const extras = comCampos ? { description: descricao.value.trim(), location: valorDoLocal() } : {};
+   const kind = M.kindDaAba(aba, evento?.kind);   // a aba É o tipo; editando, mantém 'entregavel'/'feature' como estavam
    let atividade;
-   const regra = repeticao ? repeticao.valor(Date.parse(ini), Date.parse(term)) : null;   // lança com a mensagem certa se a repetição está incompleta
+   // Registro não se repete: o bloco está escondido na aba dele, e o que estiver escolhido ali não vale.
+   const regra = repeticao && aba !== 'registro' ? repeticao.valor(Date.parse(ini), Date.parse(term)) : null;   // lança com a mensagem certa se a repetição está incompleta
    if (!evento && regra) {
     // Atividade que se repete é uma série: o servidor cria a regra e já gera as ocorrências.
-    const corpo = { id: crypto.randomUUID(), tenant_id: cliente.value, engagement_id: contratacao.value || null, category: categoria.value, kind: tipo.value, title: nome.value, ...regra };
+    const corpo = { id: crypto.randomUUID(), tenant_id: cliente.value, engagement_id: contratacao.value || null, category: M.categoriaDaContratacao(contratacaoEscolhida()), kind, title: nome.value, ...regra };
     for (const [k, v] of Object.entries(extras)) if (v) corpo[k] = v;
     const rem = lembrete.valor(); if (rem !== null) corpo.reminders = rem;
     await api('/api/tracking/series', 'POST', corpo);
@@ -196,8 +278,7 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     if (M.diaDe(Date.parse(ini)) !== M.diaDe(evento.ini)) throw new Error('Para mudar o dia, escolha "Só este evento".');
     const campos = {};
     if (nome.value.trim() !== evento.title) campos.title = nome.value;
-    if (categoria.value !== evento.category) campos.category = categoria.value;
-    if (tipo.value !== evento.kind) campos.kind = tipo.value;
+    if (kind !== evento.kind) campos.kind = kind;   // a categoria não está mais no formulário: ela vem da contratação e não se troca aqui
     if (M.hora(Date.parse(ini)) !== M.hora(evento.ini)) campos.start_time = M.hora(Date.parse(ini));
     if (Date.parse(term) - Date.parse(ini) !== evento.fim - evento.ini) campos.duration_minutes = Math.round((Date.parse(term) - Date.parse(ini)) / 60000);
     for (const [k, v] of Object.entries(extras)) if (v !== (evento[k] || '')) campos[k] = v || null;
@@ -209,18 +290,17 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     return;
    }
    if (!evento) {
-    const corpo = { id: crypto.randomUUID(), tenant_id: cliente.value, engagement_id: contratacao.value || null, category: categoria.value, kind: tipo.value, title: nome.value, starts_at: ini, ends_at: term };
+    const corpo = { id: crypto.randomUUID(), tenant_id: cliente.value, engagement_id: contratacao.value || null, category: M.categoriaDaContratacao(contratacaoEscolhida()), kind, title: nome.value, starts_at: ini, ends_at: term };
     for (const [k, v] of Object.entries(extras)) if (v) corpo[k] = v;
-    if (lembrete) { const rem = lembrete.valor(); if (rem !== null) corpo.reminders = rem; }   // padrão = não manda: a atividade segue o padrão da agenda
+    if (lembrete && aba !== 'registro') { const rem = lembrete.valor(); if (rem !== null) corpo.reminders = rem; }   // padrão = não manda: a atividade segue o padrão da agenda
     atividade = (await api('/api/tracking', 'POST', corpo)).activity;
    } else {
     const campos = {};
     if (nome.value.trim() !== evento.title) campos.title = nome.value;
-    if (categoria.value !== evento.category) campos.category = categoria.value;
-    if (tipo.value !== evento.kind) campos.kind = tipo.value;
+    if (kind !== evento.kind) campos.kind = kind;   // a categoria saiu do formulário: fica a que foi gravada na criação
     if (Date.parse(ini) !== evento.ini || Date.parse(term) !== evento.fim) { campos.starts_at = ini; campos.ends_at = term; }
     for (const [k, v] of Object.entries(extras)) if (v !== (evento[k] || '')) campos[k] = v || null;   // vazio limpa o campo
-    if (lembrete && JSON.stringify(lembrete.valor()) !== JSON.stringify(evento.reminders ?? null)) campos.reminders = lembrete.valor();
+    if (lembrete && aba !== 'registro' && JSON.stringify(lembrete.valor()) !== JSON.stringify(evento.reminders ?? null)) campos.reminders = lembrete.valor();
     atividade = evento;
     if (Object.keys(campos).length) atividade = (await api('/api/tracking/' + evento.id, 'PUT', { revision: evento.revision, ...campos })).activity;
     // A contratação tem rota própria e exige a revisão que acabou de subir.
@@ -229,7 +309,7 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
    }
    // Sala do Meet: depois de a atividade estar gravada. Se o Google falhar, a atividade fica e a pessoa é avisada (sem criar duas vezes).
    let extra = null;
-   if (meet?.value === 'meet') {
+   if (M.abaComMeet(aba) && meet?.value === 'meet') {
     try { atividade = (await api(`/api/tracking/${atividade.id}/meet`, 'POST', { convidados: convidados.value.trim() })).activity; }
     catch (falha) { extra = { aviso: `A atividade foi salva, mas a sala do Meet não foi criada: ${falha.message}` }; }
    }
@@ -273,7 +353,7 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
    { rotulo: 'Cliente', valor: clienteLink(e) },
    { rotulo: 'Contratação', valor: e.engagement_label || 'Geral da empresa' },
    { rotulo: 'Categoria', valor: selo(M.ROTULOS[e.category], M.TOM_DA_CATEGORIA[e.category]) },
-   { rotulo: 'Tipo', valor: M.ROTULOS[e.kind] },
+   { rotulo: 'Tipo', valor: textoDoTipo(e.kind) },
    { rotulo: 'Situação', valor: selo(M.ROTULOS[e.status], TOM_DA_SITUACAO[e.status] || 'neutral') },
    { rotulo: 'Local', valor: e.location || null },
    { rotulo: 'Link da reunião', valor: e.meeting_url ? linkExterno(e.meeting_url) : null },
@@ -333,7 +413,8 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
   const mudar = (rotulo, status, icone, classe) => { const b = botao(rotulo, icone, () => acao(b, erroNo, () => api(`/api/tracking/${e.id}/status`, 'PUT', { status, revision: e.revision })), classe); return b; };
   const nos = [botao('Editar', 'pencil', () => aoEditar(e))];
   const serie = serieDe(e, dadosAtuais || {});
-  if (dadosAtuais?.google_meet && !e.google_event_id && e.status !== 'cancelled') { const m = botao('Adicionar videoconferência do Meet', 'plus', () => acao(m, erroNo, () => api(`/api/tracking/${e.id}/meet`, 'POST', {})), 'secondary'); nos.push(m); }
+  // Sala do Meet só em Call: numa Task ou num Registro a videoconferência não tem o que fazer.
+  if (dadosAtuais?.google_meet && M.abaComMeet(M.abaDoKind(e.kind)) && !e.google_event_id && e.status !== 'cancelled') { const m = botao('Adicionar videoconferência do Meet', 'plus', () => acao(m, erroNo, () => api(`/api/tracking/${e.id}/meet`, 'POST', {})), 'secondary'); nos.push(m); }
   if (serie && !serie.ended_at) nos.push(botao('Encerrar repetição', 'close', () => confirmarEncerrar(e, serie, erroNo), 'quiet'));
   if (e.status === 'planned') nos.push(mudar('Cancelar atividade', 'cancelled', 'close', 'quiet'), mudar('Concluir', 'done', 'check', 'primary'));
   else nos.push(mudar(e.status === 'done' ? 'Reabrir' : 'Reativar', 'planned', 'clock', 'secondary'));

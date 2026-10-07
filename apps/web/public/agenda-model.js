@@ -14,11 +14,75 @@ export const CATEGORIAS = ['mentoria', 'consultoria', 'software', 'educacional',
 export const TOM_DA_CATEGORIA = Object.freeze({ mentoria: 'accent', consultoria: 'info', software: 'success', educacional: 'warning', outro: 'neutral' });
 export const ROTULOS = Object.freeze({
  mentoria: 'Mentoria', consultoria: 'Consultoria', software: 'Software', educacional: 'Educacional', outro: 'Outro',
- sessao: 'Sessão', entregavel: 'Entregável', feature: 'Feature', tarefa: 'Tarefa',
+ sessao: 'Sessão', entregavel: 'Entregável', feature: 'Feature', tarefa: 'Tarefa', registro: 'Registro',
  planned: 'Planejado', done: 'Concluído', cancelled: 'Cancelado',
 });
 export const VISOES = ['dia', 'semana', 'mes', 'agenda'];
 export const ROTULO_DA_VISAO = Object.freeze({ dia: 'Dia', semana: 'Semana', mes: 'Mês', agenda: 'Agenda' });
+
+// ---------- tipo da atividade: três abas, não um campo ----------
+// O tipo era um <select> no meio do formulário. Virou aba (Call · Task · Registro) porque ele não é um detalhe da
+// atividade: é o que decide QUAIS campos fazem sentido. Call tem sala e convidados; Task tem início e prazo; Registro
+// é só o que se quer guardar. Trocar de aba troca o formulário, e a aba escolhida é o tipo que se grava.
+//
+// Os valores gravados continuam os da coluna `kind` (migração 004). 'entregavel' e 'feature' são de antes das abas e
+// seguem valendo como Task: abrir uma atividade antiga e salvar não pode convertê-la em 'tarefa' sem a pessoa pedir.
+// 'registro' é novo e exige a migração 054 — enquanto ela não estiver no banco, a aba não aparece (dados.agenda_registro).
+export const ABAS = ['call', 'task', 'registro'];
+export const ROTULO_DA_ABA = Object.freeze({ call: 'Call', task: 'Task', registro: 'Registro' });
+export const KINDS_DA_ABA = Object.freeze({ call: ['sessao'], task: ['tarefa', 'entregavel', 'feature'], registro: ['registro'] });
+const kindsDa = aba => KINDS_DA_ABA[aba] || KINDS_DA_ABA.task;
+/** Aba em que uma atividade já gravada abre. Tipo desconhecido (banco à frente da tela) cai em Task, que mostra mais. */
+export const abaDoKind = kind => ABAS.find(aba => KINDS_DA_ABA[aba].includes(kind)) || 'task';
+/** Tipo que a aba grava. Mantém o tipo atual quando ele já pertence à aba, para não reescrever 'entregavel' como 'tarefa'. */
+export const kindDaAba = (aba, kindAtual = null) => (kindsDa(aba).includes(kindAtual) ? kindAtual : kindsDa(aba)[0]);
+/** Videoconferência é coisa de Call: em Task e Registro o bloco do Meet não aparece. */
+export const abaComMeet = aba => aba === 'call';
+/** Call e Task têm hora; Task exige também o prazo — é a diferença dela para Registro, que pode não ter data nenhuma. */
+export const abaExigeHorario = aba => aba !== 'registro';
+/**
+ * Horário de um Registro que a pessoa não datou. O banco exige início e fim, com fim > início (migração 004), então
+ * grava-se o instante em que o registro foi feito, arredondado para baixo no passo da grade e com a duração mínima dela:
+ * cai no dia certo, aparece onde a pessoa estava olhando e não finge um compromisso de uma hora.
+ */
+export function horarioDoRegistro(agora = Date.now(), passoMin = 15, duracaoMin = 30) {
+ const passo = passoMin * 60000, ini = Math.floor(agora / passo) * passo;
+ return { ini, fim: ini + duracaoMin * 60000 };
+}
+
+// ---------- categoria: vem da contratação, não do formulário ----------
+// A categoria já está dita na contratação do cliente (mentoria, assessoria…), então o formulário deixou de perguntar e
+// passou a mostrar: uma linha de descrição abaixo do Cliente. Os filtros da tela continuam por `category`, que é o que
+// está gravado em cada atividade — tirar o campo não muda nem o dado nem a cor do evento.
+//
+// `advisory` (Assessoria) cai em 'consultoria' porque a lista de categorias do banco não tem 'assessoria'; abrir uma
+// categoria própria é migração, e está registrada em docs/ACOMPANHAMENTO-REDESENHO.md.
+export const CATEGORIA_DO_SERVICE_MODEL = Object.freeze({ education: 'mentoria', consulting: 'consultoria', advisory: 'consultoria', product: 'software', on_demand: 'outro', unclassified: 'outro' });
+/** Categoria herdada da contratação escolhida. Sem contratação (geral da empresa) não há o que herdar: 'outro'. */
+export const categoriaDaContratacao = contratacao => CATEGORIA_DO_SERVICE_MODEL[contratacao?.service_model] || 'outro';
+/** A linha que entrou no lugar do campo. `gravada` (edição) mostra a categoria da atividade, que não se troca sozinha. */
+export function textoDaCategoria(contratacao, gravada = null) {
+ if (gravada) return `Categoria ${ROTULOS[gravada] || ROTULOS.outro}, escolhida quando a atividade foi criada.`;
+ const cat = ROTULOS[categoriaDaContratacao(contratacao)];
+ return contratacao ? `Categoria ${cat}, da contratação ${contratacao.label}.` : `Categoria ${cat}: sem contratação, vale o geral da empresa.`;
+}
+
+// ---------- local: escolhido, não digitado ----------
+/**
+ * Locais que o Core já conhece, para o Local ser uma lista em vez de um campo livre: o padrão de Configurações → Agenda
+ * e os que já foram usados nas atividades carregadas (mais o da atividade aberta, para edição nenhuma perder o que estava
+ * gravado). Sem acento e sem caixa na comparação, senão "Sala 2" e "sala 2" viram duas opções.
+ */
+export function locaisConhecidos(atividades = [], extras = []) {
+ const vistos = [], chaves = new Set();
+ for (const bruto of [...extras, ...atividades.map(a => a?.location)]) {
+  const texto = String(bruto ?? '').trim();
+  const chave = semAcento(texto);
+  if (!texto || chaves.has(chave)) continue;
+  chaves.add(chave); vistos.push(texto);
+ }
+ return vistos.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
 
 // ---------- datas ----------
 export const partes = ms => { const d = new Date(ms + OFFSET); return { ano: d.getUTCFullYear(), mes: d.getUTCMonth() + 1, dia: d.getUTCDate(), hora: d.getUTCHours(), min: d.getUTCMinutes(), sem: (d.getUTCDay() + 6) % 7 }; };

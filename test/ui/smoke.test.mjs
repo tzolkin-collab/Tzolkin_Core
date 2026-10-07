@@ -996,7 +996,8 @@ function eventosDaSemana() {
 }
 const COM_AGENDA = lista => `(() => {
  const EVENTOS = ${JSON.stringify(lista)};
- window.__agenda = { eventos: EVENTOS, gets: [], puts: [], posts: [], tempos: [], recusar: null, semCampos: false, lembretes: false, series: [], seriesPosts: [], seriesPuts: [], seriesFins: [], padrao: [15], meet: false, meets: [], meetFalha: false };
+ // registro começa falso como o banco de hoje: a migração 054 (tipo 'registro', aba Registro) ainda não foi aplicada.
+ window.__agenda = { eventos: EVENTOS, gets: [], puts: [], posts: [], tempos: [], recusar: null, semCampos: false, lembretes: false, registro: false, series: [], seriesPosts: [], seriesPuts: [], seriesFins: [], padrao: [15], meet: false, meets: [], meetFalha: false };
  window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
  const json = (corpo, status = 200) => Promise.resolve(new Response(JSON.stringify(corpo), { status, headers: { 'content-type': 'application/json' } }));
  window.fetch = async (url, opcoes = {}) => {
@@ -1009,7 +1010,7 @@ const COM_AGENDA = lista => `(() => {
    window.__agenda.gets.push({ from: q.get('from'), to: q.get('to'), tenant: q.get('tenant_id') });
    const de = Date.parse(q.get('from') + 'T00:00:00-03:00'), ate = Date.parse(q.get('to') + 'T00:00:00-03:00');
    const dentro = EVENTOS.filter(e => Date.parse(e.ends_at) > de && Date.parse(e.starts_at) < ate && (!q.get('tenant_id') || e.tenant_id === q.get('tenant_id')));
-   return json({ activities: dentro.map(e => ({ ...e })), logs: [], engagements: [], truncated: false, time_zone: 'America/Sao_Paulo', agenda_campos: !window.__agenda.semCampos, agenda_lembretes: window.__agenda.lembretes, series: window.__agenda.lembretes ? window.__agenda.series : [], agenda_prefs: window.__agenda.lembretes ? { default_reminders: window.__agenda.padrao, revision: 1 } : null, google_meet: window.__agenda.meet });
+   return json({ activities: dentro.map(e => ({ ...e })), logs: [], engagements: [], truncated: false, time_zone: 'America/Sao_Paulo', agenda_campos: !window.__agenda.semCampos, agenda_lembretes: window.__agenda.lembretes, agenda_registro: window.__agenda.registro, series: window.__agenda.lembretes ? window.__agenda.series : [], agenda_prefs: window.__agenda.lembretes ? { default_reminders: window.__agenda.padrao, revision: 1 } : null, google_meet: window.__agenda.meet });
   }
   if (partes[3] === 'series') {
    const a = window.__agenda;
@@ -1207,20 +1208,26 @@ test('agenda: clicar numa hora vazia abre o formulário com a hora; criar manda 
  await pagina.esperar(`document.querySelector('dialog.tracking-editor[open]')`, { descricao: 'formulário aberto pelo clique' });
  const campoDe = nome => `[...document.querySelectorAll('dialog.tracking-editor label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)}).querySelector('input,select,textarea')`;
  assert.equal(await pagina.avaliar(`${campoDe('Início · Brasília')}.value`), `${dia}T10:00`);
- assert.equal(await pagina.avaliar(`${campoDe('Fim / prazo · Brasília')}.value`), `${dia}T11:00`);
+ // O formulário abre na aba Call, onde o segundo horário é o fim da conversa (na aba Task ele é o prazo de entrega).
+ assert.equal(await pagina.avaliar(`${campoDe('Fim · Brasília')}.value`), `${dia}T11:00`);
  // início depois do fim: o fim acompanha (mais 1h), como nos calendários
  await pagina.avaliar(`(() => { const i = ${campoDe('Início · Brasília')}; i.value = '${dia}T15:30'; i.dispatchEvent(new Event('change', { bubbles: true })); })()`);
- assert.equal(await pagina.avaliar(`${campoDe('Fim / prazo · Brasília')}.value`), `${dia}T16:30`);
+ assert.equal(await pagina.avaliar(`${campoDe('Fim · Brasília')}.value`), `${dia}T16:30`);
+ // Local é escolhido numa lista (os locais que o Core já conhece), não digitado: 'Sala 2' vem da Mentoria Alfa.
+ assert.deepEqual(await pagina.avaliar(`[...${campoDe('Local (opcional)')}.options].map(o => o.textContent)`), ['Sem local', 'Google Meet', 'Sala 2', 'Outro local…']);
  await pagina.avaliar(`(() => { const set = (c, v, ev = 'input') => { c.value = v; c.dispatchEvent(new Event(ev, { bubbles: true })); };
   set(${campoDe('Título')}, 'Kickoff do projeto'); set(${campoDe('Cliente')}, ${JSON.stringify(EMPRESA)}, 'change'); set(${campoDe('Descrição (opcional)')}, 'Alinhar escopo');
-  set(${campoDe('Link da reunião (opcional)')}, 'https://zoom.us/j/123'); document.querySelector('dialog.tracking-editor form').requestSubmit(); })()`);
+  set(${campoDe('Local (opcional)')}, 'Sala 2', 'change'); document.querySelector('dialog.tracking-editor form').requestSubmit(); })()`);
  await pagina.esperar(`${NO_AGENDA}.posts.length === 1`, { descricao: 'POST enviado' });
  const post = await pagina.avaliar(`${NO_AGENDA}.posts[0]`);
- assert.equal(post.title, 'Kickoff do projeto'); assert.equal(post.tenant_id, EMPRESA); assert.equal(post.category, 'mentoria');
+ assert.equal(post.title, 'Kickoff do projeto'); assert.equal(post.tenant_id, EMPRESA);
+ // A categoria saiu do formulário: ela vem da contratação, e sem contratação ("geral da empresa") vale 'outro'.
+ assert.equal(post.category, 'outro');
+ assert.equal(post.kind, 'sessao', 'a aba escolhida é o tipo que se grava');
  assert.equal(post.starts_at, new Date(`${dia}T15:30:00-03:00`).toISOString(), 'horário de Brasília convertido para UTC');
  assert.equal(post.ends_at, new Date(`${dia}T16:30:00-03:00`).toISOString());
- assert.equal(post.description, 'Alinhar escopo'); assert.equal(post.meeting_url, 'https://zoom.us/j/123');
- assert.ok(!('location' in post), 'campo vazio não é enviado');
+ assert.equal(post.description, 'Alinhar escopo'); assert.equal(post.location, 'Sala 2');
+ assert.ok(!('meeting_url' in post), 'o link da reunião saiu do formulário: quem gera a sala é o Google');
  assert.match(post.id, /^[0-9a-f-]{36}$/);
  await pagina.esperar(`!document.querySelector('dialog.tracking-editor[open]')`, { descricao: 'formulário fechou' });
  await pagina.esperar(`[...document.querySelectorAll('#view-tracking .ag-ev-titulo')].some(t => t.textContent === 'Kickoff do projeto')`, { descricao: 'evento novo na grade' });
@@ -1229,14 +1236,14 @@ test('agenda: clicar numa hora vazia abre o formulário com a hora; criar manda 
  // fim antes do início é recusado na tela, sem ir ao servidor
  await pagina.avaliar(`document.querySelector('#view-tracking .ag-acoes .primary').click()`);
  await pagina.esperar(`document.querySelector('dialog.tracking-editor[open]')`);
- await pagina.avaliar(`(() => { const set = (c, v, ev = 'input') => { c.value = v; c.dispatchEvent(new Event(ev, { bubbles: true })); }; set(${campoDe('Título')}, 'Sem sentido'); set(${campoDe('Cliente')}, ${JSON.stringify(EMPRESA)}, 'change'); set(${campoDe('Início · Brasília')}, '${dia}T10:00', 'change'); const f = ${campoDe('Fim / prazo · Brasília')}; f.removeAttribute('min'); f.value = '${dia}T09:00'; document.querySelector('dialog.tracking-editor form').requestSubmit(); })()`);
+ await pagina.avaliar(`(() => { const set = (c, v, ev = 'input') => { c.value = v; c.dispatchEvent(new Event(ev, { bubbles: true })); }; set(${campoDe('Título')}, 'Sem sentido'); set(${campoDe('Cliente')}, ${JSON.stringify(EMPRESA)}, 'change'); set(${campoDe('Início · Brasília')}, '${dia}T10:00', 'change'); const f = ${campoDe('Fim · Brasília')}; f.removeAttribute('min'); f.value = '${dia}T09:00'; document.querySelector('dialog.tracking-editor form').requestSubmit(); })()`);
  await pagina.esperar(`document.querySelector('dialog.tracking-editor .form-error').textContent.includes('depois do início')`, { descricao: 'aviso de fim antes do início' });
  assert.equal(await pagina.avaliar(`${NO_AGENDA}.posts.length`), 1, 'nada foi enviado');
  await pagina.avaliar(`document.querySelectorAll('dialog[open]').forEach(d => d.close())`);
  semExcecoes();
 });
 
-test('agenda: sem a migração 047 o formulário não oferece descrição, local nem link (e volta quando o banco os tem)', { skip: PULAR }, async () => {
+test('agenda: sem a migração 047 o formulário não oferece descrição nem local (e voltam quando o banco os tem)', { skip: PULAR }, async () => {
  await SEMANA_DE_HOJE();
  const rotulos = () => pagina.avaliar(`[...document.querySelectorAll('dialog.tracking-editor label')].map(l => l.firstChild.textContent)`);
  const recarregar = async () => { const n = await pagina.avaliar(`${NO_AGENDA}.gets.length`); await pagina.avaliar(`[...document.querySelectorAll('#view-tracking .ag-hoje')][0].click()`); await pagina.esperar(`${NO_AGENDA}.gets.length > ${n} && !document.querySelector('#view-tracking [aria-busy]')`); };
@@ -1245,11 +1252,14 @@ test('agenda: sem a migração 047 o formulário não oferece descrição, local
  await recarregar();
  const sem = await abrirEFechar();
  assert.ok(sem.includes('Título') && sem.includes('Início · Brasília'), 'o resto do formulário segue igual: ' + sem);
- for (const campo of ['Descrição (opcional)', 'Local (opcional)', 'Link da reunião (opcional)']) assert.ok(!sem.includes(campo), campo + ' não pode aparecer sem a migração');
+ // 'Qual local' é o campo livre que acompanha o seletor de Local: sem a 047 nenhum dos dois existe.
+ for (const campo of ['Descrição (opcional)', 'Local (opcional)', 'Qual local']) assert.ok(!sem.includes(campo), campo + ' não pode aparecer sem a migração');
  await pagina.avaliar(`${NO_AGENDA}.semCampos = false`);
  await recarregar();
  const com = await abrirEFechar();
- for (const campo of ['Descrição (opcional)', 'Local (opcional)', 'Link da reunião (opcional)']) assert.ok(com.includes(campo), campo + ' aparece quando o banco tem as colunas');
+ for (const campo of ['Descrição (opcional)', 'Local (opcional)', 'Qual local']) assert.ok(com.includes(campo), campo + ' aparece quando o banco tem as colunas');
+ // O link da reunião não é mais oferecido em nenhum dos dois casos: a sala vem do Meet pela API do Google.
+ for (const rotulos of [sem, com]) assert.ok(!rotulos.some(r => r.startsWith('Link da reunião')), 'o link saiu do formulário: ' + rotulos);
  semExcecoes();
 });
 
@@ -1456,7 +1466,7 @@ test('agenda: repetir toda semana ou todo mês cria uma série com a regra certa
  const dia = AM.somarDias(AM.segundaDe(AM.diaDe(Date.now())), 2);   // quarta-feira desta semana
  const base = titulo => pagina.avaliar(`(() => { const set = (c, v, ev = 'input') => { c.value = v; c.dispatchEvent(new Event(ev, { bubbles: true })); };
   set(${CAMPO_DO_FORM('Título')}, ${JSON.stringify(titulo)}); set(${CAMPO_DO_FORM('Cliente')}, ${JSON.stringify(EMPRESA)}, 'change');
-  set(${CAMPO_DO_FORM('Início · Brasília')}, '${dia}T10:00', 'change'); set(${CAMPO_DO_FORM('Fim / prazo · Brasília')}, '${dia}T11:00', 'change'); })()`);
+  set(${CAMPO_DO_FORM('Início · Brasília')}, '${dia}T10:00', 'change'); set(${CAMPO_DO_FORM('Fim · Brasília')}, '${dia}T11:00', 'change'); })()`);
  await ABRIR_NOVA(); await base('Mentoria semanal');
  assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Repete')}.value`), '', 'começa sem repetir');
  await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Repete'), 'weekly'));
@@ -1611,9 +1621,8 @@ test('agenda: com a conta Google conectada o formulário oferece a sala do Meet;
  await pagina.avaliar(`(() => { const set = (c, v, ev = 'input') => { c.value = v; c.dispatchEvent(new Event(ev, { bubbles: true })); }; set(${CAMPO_DO_FORM('Título')}, 'Reunião com Meet'); set(${CAMPO_DO_FORM('Cliente')}, ${JSON.stringify(EMPRESA)}, 'change'); })()`);
  await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Sala'), 'meet'));
  assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Convidados (e-mails, separados por vírgula)')}.parentElement.hidden`), false);
- // Sala escolhida: local vira "Google Meet", o link fica travado (o Google gera) e os dois ficam logo abaixo da sala
+ // Sala escolhida: o Local vira "Google Meet" e fica logo abaixo da sala. O link não é mais perguntado (o Google gera).
  assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Local (opcional)')}.value`), 'Google Meet');
- assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Link da reunião (opcional)')}.disabled`), true);
  assert.equal(await pagina.avaliar(`(() => { const f = document.querySelector('dialog.tracking-editor form'); const i = n => [...f.children].findIndex(c => c.contains(${CAMPO_DO_FORM('Sala')}) && n === 'sala' || (n === 'local' && c.contains(${CAMPO_DO_FORM('Local (opcional)')}))); return i('local') > i('sala'); })()`), true, 'local depois da sala');
  // contatos: escolher na lista põe o e-mail nos convidados, sem repetir
  await pagina.avaliar(`(() => { const b = ${CAMPO_DO_FORM('Adicionar contato como convidado')}; b.value = 'ana@exemplo.test'; b.dispatchEvent(new Event('input', { bubbles: true })); b.value = 'ana@exemplo.test'; b.dispatchEvent(new Event('input', { bubbles: true })); })()`);
@@ -1653,9 +1662,14 @@ test('agenda: se o Google falhar depois de salvar, a atividade fica e a tela avi
  await pagina.esperar(`document.querySelector('#view-tracking .ag-aviso')?.textContent.includes('a sala do Meet não foi criada')`, { descricao: 'aviso de falha do Meet' });
  assert.match(await pagina.avaliar(`document.querySelector('#view-tracking .ag-aviso').textContent`), /A atividade foi salva/);
  assert.equal(await pagina.avaliar(`${NO_AGENDA}.posts.length`), 1, 'a atividade foi gravada uma vez só');
- // painel: botão "Criar sala do Meet" quando há conta e a atividade ainda não tem
+ // painel: botão "Criar sala do Meet" quando há conta e a atividade ainda não tem. Só em Call (kind 'sessao'):
+ // numa Task ou num Registro a videoconferência não tem o que fazer, e o botão não é oferecido.
  await pagina.avaliar(`${NO_AGENDA}.meetFalha = false`);
- const ID = '00000000-0000-4000-8000-000000000004';   // Daily
+ const ID = '00000000-0000-4000-8000-000000000001';   // Mentoria Alfa — sessão 1 (Call, sem sala)
+ const TAREFA = '00000000-0000-4000-8000-000000000004';   // Daily (Task)
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="${TAREFA}"]').click()`);
+ await pagina.esperar(PAINEL_ABERTO);
+ assert.ok(!(await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].some(b => b.textContent.trim() === 'Adicionar videoconferência do Meet')`)), 'Task não oferece sala do Meet');
  await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]').click()`);
  await pagina.esperar(PAINEL_ABERTO);
  assert.ok(await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].some(b => b.textContent.trim() === 'Adicionar videoconferência do Meet')`));
@@ -1688,6 +1702,96 @@ test('agenda: com "Meet em toda atividade nova" ligado em Configurações o form
  assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Sala')}.value`), '', 'desligado, abre sem sala');
  await FECHAR_TUDO();
  await pagina.avaliar(`${NO_AGENDA}.meet = false`); await RECARREGAR_AGENDA();
+ semExcecoes();
+});
+
+// ---- o tipo virou aba: Call · Task · Registro (migração 054 para a terceira) ----
+const ABAS_DO_FORM = `[...document.querySelectorAll('dialog.tracking-editor [role=tab]')]`;
+const ABA_ATIVA = `document.querySelector('dialog.tracking-editor [role=tab][aria-selected="true"]').textContent.trim()`;
+const IR_PARA_ABA = rotulo => `${ABAS_DO_FORM}.find(t => t.textContent.trim() === ${JSON.stringify(rotulo)}).click()`;
+const ROTULOS_DO_FORM = `[...document.querySelectorAll('dialog.tracking-editor label')].map(l => l.firstChild.textContent)`;
+
+test('agenda: o tipo da atividade é a aba, e cada aba mostra só o que faz sentido', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ await pagina.avaliar(`${NO_AGENDA}.lembretes = true; ${NO_AGENDA}.meet = true; ${NO_AGENDA}.posts.length = 0; ${NO_AGENDA}.meets.length = 0`); await RECARREGAR_AGENDA();
+ await ABRIR_NOVA();
+ // Sem a 054 o banco não aceita 'registro': a aba não é oferecida e a tela diz por quê, como a 047 e a 048 fazem.
+ assert.deepEqual(await pagina.avaliar(`${ABAS_DO_FORM}.map(t => t.textContent.trim())`), ['Call', 'Task']);
+ assert.match(await pagina.avaliar(`document.querySelector('dialog.tracking-editor .ag-abas .detail').textContent`), /migração 054/);
+ await FECHAR_TUDO();
+ await pagina.avaliar(`${NO_AGENDA}.registro = true`); await RECARREGAR_AGENDA();
+ await ABRIR_NOVA();
+ assert.deepEqual(await pagina.avaliar(`${ABAS_DO_FORM}.map(t => t.textContent.trim())`), ['Call', 'Task', 'Registro']);
+ assert.equal(await pagina.avaliar(ABA_ATIVA), 'Call', 'atividade nova começa em Call');
+
+ // O que foi digitado nos campos comuns sobrevive à troca de aba.
+ const dia = AM.somarDias(AM.segundaDe(AM.diaDe(Date.now())), 2);
+ await pagina.avaliar(`(() => { const set = (c, v, ev = 'input') => { c.value = v; c.dispatchEvent(new Event(ev, { bubbles: true })); };
+  set(${CAMPO_DO_FORM('Título')}, 'Ajuste no checkout'); set(${CAMPO_DO_FORM('Cliente')}, ${JSON.stringify(EMPRESA)}, 'change');
+  set(${CAMPO_DO_FORM('Início · Brasília')}, '${dia}T10:00', 'change'); })()`);
+ // Call mostra a videoconferência; Task e Registro, não (lá a sala não tem o que fazer).
+ assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor .ag-meet').hidden`), false);
+ await pagina.avaliar(IR_PARA_ABA('Task'));
+ assert.equal(await pagina.avaliar(ABA_ATIVA), 'Task');
+ assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor .ag-meet').hidden`), true, 'Task não mostra o Meet');
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Título')}.value`), 'Ajuste no checkout', 'trocar de aba não apaga o que foi digitado');
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Cliente')}.value`), EMPRESA);
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Início · Brasília')}.value`), `${dia}T10:00`);
+ // Task: início e prazo são obrigatórios — é a diferença dela para o Registro — e o segundo horário muda de nome.
+ assert.ok((await pagina.avaliar(ROTULOS_DO_FORM)).includes('Prazo de entrega · Brasília'), 'na Task o fim é o prazo de entrega');
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Início · Brasília')}.required`), true);
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Prazo de entrega · Brasília')}.required`), true);
+ // Registro: a data deixa de ser obrigatória, e não há o que avisar antes nem o que repetir.
+ await pagina.avaliar(IR_PARA_ABA('Registro'));
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Início (opcional) · Brasília')}.required`), false);
+ assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor .ag-meet').hidden`), true, 'Registro não mostra o Meet');
+ assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor .ag-repetir').hidden`), true, 'registro não se repete');
+
+ // Teclado: as setas andam pelas abas, como manda o padrão de abas da casa.
+ await pagina.avaliar(`document.querySelector('dialog.tracking-editor [role=tab][aria-selected="true"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))`);
+ assert.equal(await pagina.avaliar(ABA_ATIVA), 'Task', 'seta para a esquerda volta uma aba');
+ assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor form').getAttribute('role')`), 'tabpanel');
+ assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor [role=tab][aria-selected="true"]').getAttribute('aria-controls')`),
+  await pagina.avaliar(`document.querySelector('dialog.tracking-editor form').id`), 'a aba aponta para o painel que ela comanda');
+
+ // A aba escolhida é o tipo que se grava.
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Prazo de entrega · Brasília'), `${dia}T18:00`));
+ await ENVIAR_FORM();
+ await pagina.esperar(`${NO_AGENDA}.posts.length === 1`, { descricao: 'POST da Task' });
+ const post = await pagina.avaliar(`${NO_AGENDA}.posts[0]`);
+ assert.equal(post.kind, 'tarefa', 'a aba Task grava o tipo tarefa');
+ assert.equal(await pagina.avaliar(`${NO_AGENDA}.meets.length`), 0, 'Task não pede sala do Meet, mesmo com a conta conectada');
+ await pagina.esperar(`!document.querySelector('dialog.tracking-editor[open]')`);
+
+ // Atividade já gravada abre na aba do tipo dela: 'feature' é de antes das abas e abre em Task.
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="00000000-0000-4000-8000-000000000005"]').click()`);
+ await pagina.esperar(PAINEL_ABERTO);
+ await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].find(b => b.textContent.trim() === 'Editar').click()`);
+ await pagina.esperar(`document.querySelector('dialog.tracking-editor[open]')`);
+ assert.equal(await pagina.avaliar(ABA_ATIVA), 'Task');
+ await FECHAR_TUDO();
+ await pagina.avaliar(`${NO_AGENDA}.registro = false; ${NO_AGENDA}.meet = false`); await RECARREGAR_AGENDA();
+ semExcecoes();
+});
+
+test('agenda: ao lado do X, os três modos de janela (centralizado, popup, lateral) valem na próxima abertura', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ await pagina.avaliar(`try { localStorage.removeItem('tzolkin-agenda-janela'); } catch {}`);
+ await ABRIR_NOVA();
+ const ICONES = `[...document.querySelectorAll('dialog.tracking-editor .ag-janelas button')]`;
+ assert.deepEqual(await pagina.avaliar(`${ICONES}.map(b => b.getAttribute('aria-label'))`),
+  ['Mostrar centralizado', 'Mostrar como popup no canto', 'Mostrar na lateral']);
+ assert.deepEqual(await pagina.avaliar(`${ICONES}.map(b => b.getAttribute('aria-pressed'))`), ['true', 'false', 'false'], 'começa centralizado');
+ await pagina.avaliar(`${ICONES}.find(b => b.getAttribute('aria-label') === 'Mostrar na lateral').click()`);
+ assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor').classList.contains('ag-janela-lateral')`), true);
+ assert.equal(await pagina.avaliar(`localStorage.getItem('tzolkin-agenda-janela')`), 'lateral');
+ await FECHAR_TUDO();
+ // Vale da próxima abertura em diante, como as outras preferências da agenda.
+ await ABRIR_NOVA();
+ assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor').classList.contains('ag-janela-lateral')`), true, 'a escolha sobrevive ao fechar');
+ await pagina.avaliar(`${ICONES}.find(b => b.getAttribute('aria-label') === 'Mostrar centralizado').click()`);
+ assert.equal(await pagina.avaliar(`localStorage.getItem('tzolkin-agenda-janela')`), null, 'voltar ao padrão apaga a chave');
+ await FECHAR_TUDO();
  semExcecoes();
 });
 
@@ -1737,7 +1841,10 @@ test('agenda: o painel do evento mostra os detalhes, conclui, edita só o que mu
  assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor h2').textContent`), 'Editar atividade');
  assert.equal(await pagina.avaliar(`${campoDe('Título')}.value`), 'Consultoria Beta');
  assert.equal(await pagina.avaliar(`${campoDe('Cliente')}.disabled`), true);
- assert.equal(await pagina.avaliar(`${campoDe('Link da reunião (opcional)')}.value`), 'https://meet.google.com/abc-defg-hij');
+ // O link já gravado continua à vista no painel (conferido acima), mas o formulário não o oferece mais para editar.
+ assert.ok(!(await pagina.avaliar(`[...document.querySelectorAll('dialog.tracking-editor label')].map(l => l.firstChild.textContent)`)).some(r => r.startsWith('Link da reunião')), 'o campo do link saiu do formulário');
+ // Atividade do tipo 'sessao' abre na aba Call, que é a que a mostra inteira.
+ assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor [role=tab][aria-selected="true"]').textContent.trim()`), 'Call');
  await pagina.avaliar(`(() => { const t = ${campoDe('Título')}; t.value = 'Consultoria Beta — revisão'; t.dispatchEvent(new Event('input', { bubbles: true })); document.querySelector('dialog.tracking-editor form').requestSubmit(); })()`);
  await pagina.esperar(`${NO_AGENDA}.puts.length === ${puts0 + 2}`, { descricao: 'PUT de edição' });
  assert.deepEqual(await pagina.avaliar(`${NO_AGENDA}.puts.at(-1)`), { id: ID, sub: null, corpo: { revision: 2, title: 'Consultoria Beta — revisão' } }, 'só o título muda, com a revisão que subiu ao concluir');
@@ -1930,7 +2037,7 @@ test('configurações → Agenda: lembrete padrão (espaço) e preferências des
  assert.equal(await pagina.avaliar(VISAO_ATIVA), 'mes', 'abre na visão escolhida, mesmo que a última usada fosse outra');
  await pagina.avaliar(`document.querySelector('#view-tracking .ag-acoes .primary').click()`);
  await pagina.esperar(`document.querySelector('dialog.tracking-editor[open]')`);
- const ini = await pagina.avaliar(`${CAMPO_DO_FORM('Início · Brasília')}.value`), fim = await pagina.avaliar(`${CAMPO_DO_FORM('Fim / prazo · Brasília')}.value`);
+ const ini = await pagina.avaliar(`${CAMPO_DO_FORM('Início · Brasília')}.value`), fim = await pagina.avaliar(`${CAMPO_DO_FORM('Fim · Brasília')}.value`);
  assert.equal((Date.parse(fim + ':00-03:00') - Date.parse(ini + ':00-03:00')) / 60000, 30, 'duração padrão aplicada');
  await FECHAR_TUDO();
  // voltar ao padrão apaga as chaves

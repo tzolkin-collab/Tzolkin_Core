@@ -7,6 +7,7 @@ const CHAVE_DURACAO = 'tzolkin-agenda-duracao';
 const CHAVE_MEET = 'tzolkin-agenda-meet-auto';
 const CHAVE_LOCAL_MEET = 'tzolkin-agenda-meet-local';
 const CHAVE_CONVIDAR = 'tzolkin-agenda-meet-convidar-principal';
+const CHAVE_JANELA = 'tzolkin-agenda-janela';
 
 export const DURACOES = Object.freeze([[15, '15 minutos'], [30, '30 minutos'], [45, '45 minutos'], [60, '1 hora'], [90, '1 hora e 30 minutos'], [120, '2 horas']]);
 export const DURACAO_PADRAO = 60;
@@ -44,3 +45,16 @@ export const definirLocalDoMeet = texto => { const t = String(texto ?? '').trim(
 /** Com a sala do Meet escolhida, o convidado já vem preenchido com o contato principal (com e-mail) da empresa. */
 export const convidarContatoPrincipal = () => ler(CHAVE_CONVIDAR) === '1';
 export const definirConvidarContatoPrincipal = ligado => gravar(CHAVE_CONVIDAR, ligado ? '1' : null);
+
+/**
+ * Como a janela da atividade aparece, escolhido nos ícones ao lado do X: centralizada (a de sempre), popup no canto
+ * ou lateral de altura cheia. Fica neste navegador como as demais preferências da agenda, e vale da próxima abertura
+ * em diante (trocar no meio do preenchimento só muda o tamanho; nada do formulário se perde).
+ */
+export const JANELAS = Object.freeze([['centro', 'Centralizado'], ['popup', 'Popup'], ['lateral', 'Lateral']]);
+export const JANELA_PADRAO = 'centro';
+export function janelaDoEvento() {
+ const v = ler(CHAVE_JANELA);
+ return JANELAS.some(([k]) => k === v) ? v : JANELA_PADRAO;
+}
+export const definirJanelaDoEvento = chave => gravar(CHAVE_JANELA, JANELAS.some(([k]) => k === chave) && chave !== JANELA_PADRAO ? chave : null);

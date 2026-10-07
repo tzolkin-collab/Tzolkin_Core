@@ -1,15 +1,19 @@
 import {json,input,isUuid,fail} from '../platform/http.mjs';
 import {activityInput,activityUpdateInput,timeInput,trackingRange,OPCIONAIS} from '../platform/tracking-model.mjs';
-import {criarDetector,MENSAGEM_047,MENSAGEM_048} from '../platform/agenda-recursos.mjs';
+import {criarDetector,criarDetectorRegistro,MENSAGEM_047,MENSAGEM_048,MENSAGEM_054} from '../platform/agenda-recursos.mjs';
 import {descrever} from '../platform/recorrencia.mjs';
 // Comparar o que veio no pedido com o que já está gravado (repetir um cadastro idêntico devolve o que existe). Lista (lembretes) compara por conteúdo.
 const diferente=(gravado,pedido)=>Array.isArray(pedido)?JSON.stringify(gravado)!==JSON.stringify(pedido):gravado!==pedido;
 // Admin interno apenas. Nunca oferecer este endpoint ao portal de clientes sem
 // autenticação por pessoa e autorização de tenant no servidor.
 //
-// `detector` diz se as migrações 047 (descrição, local, link) e 048 (lembretes, séries) já estão no banco. Enquanto não estão, a tela
-// esconde o recurso e a API recusa o uso com mensagem clara, e o resto funciona como antes (ver platform/agenda-recursos.mjs).
-export function trackingRoutes(router,{detector=criarDetector(),google=null}={}){
+// `detector` diz se as migrações 047 (descrição, local, link) e 048 (lembretes, séries) já estão no banco, e `registro` se a 054
+// (o tipo 'registro', da aba Registro) já está. Enquanto não estão, a tela esconde o recurso e a API recusa o uso com mensagem
+// clara, e o resto funciona como antes (ver platform/agenda-recursos.mjs).
+export function trackingRoutes(router,{detector=criarDetector(),registro=criarDetectorRegistro(),google=null}={}){
+ // 'registro' (aba Registro) depende da migração 054. Mesma regra da 047/048: enquanto o banco não a tem, a tela não
+ // oferece a aba e quem insistir recebe 409 com texto claro, nunca a violação do CHECK vinda do Postgres.
+ const exigirRegistro=async(db,kind)=>{if(kind==='registro'&&!(await registro(db)))throw fail(409,MENSAGEM_054);};
  router.get('/api/tracking',async({pool,url,reply,operator})=>{
   const {start,end,tenant,engagement}=trackingRange(url.searchParams);
   const rec=await detector(pool);
@@ -34,7 +38,7 @@ export function trackingRoutes(router,{detector=criarDetector(),google=null}={})
   // Google (Meet): só diz se a pessoa pode criar sala; o resto fica em /api/google/calendar/status.
   let meet=false;
   if(google&&operator&&await google.detector(pool).catch(()=>false))meet=Boolean((await pool.query('SELECT 1 FROM google_calendar_connections WHERE operator_subject=$1 AND revoked_at IS NULL',[operator.subject])).rows.length);
-  reply(200,{activities:activities.rows.slice(0,500),logs:logs.rows.slice(0,500),engagements:engagements.rows,truncated:activities.rows.length>500||logs.rows.length>500,time_zone:'America/Sao_Paulo',agenda_campos:rec.campos,agenda_lembretes:rec.lembretes,series,agenda_prefs:prefs,google_meet:meet});
+  reply(200,{activities:activities.rows.slice(0,500),logs:logs.rows.slice(0,500),engagements:engagements.rows,truncated:activities.rows.length>500||logs.rows.length>500,time_zone:'America/Sao_Paulo',agenda_campos:rec.campos,agenda_lembretes:rec.lembretes,agenda_registro:await registro(pool),series,agenda_prefs:prefs,google_meet:meet});
  });
  async function transaction(pool,fn){const c=await pool.connect();try{await c.query('BEGIN');const result=await fn(c);await c.query('COMMIT');return result;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}
  const audit=(c,id,action,details,operator)=>c.query('INSERT INTO service_activity_audit(activity_id,action,actor,details) VALUES($1,$2,$3,$4)',[id,action,operator?.email||operator?.subject||'unknown',details]);
@@ -48,6 +52,7 @@ export function trackingRoutes(router,{detector=criarDetector(),google=null}={})
     if(usaCampos&&!rec.campos)throw fail(409,MENSAGEM_047);
     if(usaLembretes&&!rec.lembretes)throw fail(409,MENSAGEM_048);
    }
+   await exigirRegistro(c,b.kind);
    // A contratação tem de ser da mesma empresa. Conferida antes do INSERT: a chave composta também recusa, mas como erro de banco (409), não como 400 claro.
    let engagement=null;
    if(b.engagement_id){engagement=(await c.query('SELECT tenant_id,archived_at FROM client_engagements WHERE id=$1',[b.engagement_id])).rows[0];if(!engagement||engagement.tenant_id!==b.tenant_id)throw fail(400,'A contratação não é desta empresa ou está arquivada.');}
@@ -73,6 +78,7 @@ export function trackingRoutes(router,{detector=criarDetector(),google=null}={})
     if(usaCampos&&!rec.campos)throw fail(409,MENSAGEM_047);
     if(usaLembretes&&!rec.lembretes)throw fail(409,MENSAGEM_048);
    }else if(nomes.length)rec=await detector(c);
+   await exigirRegistro(c,campos.kind);
    // Ocorrência de série mexida à mão deixa de acompanhar a série: editar a série depois não a sobrescreve.
    const solta=rec.lembretes?',series_detached=(series_detached OR series_id IS NOT NULL)':'';
    const result=(await c.query(`UPDATE service_activities SET ${nomes.map((n,i)=>n+'=$'+(i+3)).join(',')}${solta},revision=revision+1,updated_at=now() WHERE id=$1 AND revision=$2 RETURNING *`,[params.id,revision,...nomes.map(n=>campos[n])])).rows[0];

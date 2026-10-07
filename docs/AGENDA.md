@@ -32,6 +32,9 @@ calendários externos (Fases 1 a 3) ainda não existem.
 | `apps/api/src/modules/tracking.mjs` | `GET /api/tracking`, `POST /api/tracking`, **`PUT /api/tracking/:id`** (novo), status, contratação, tempo. |
 | `apps/api/src/platform/tracking-model.mjs` | Validação: `activityInput`, `activityUpdateInput`, `trackingRange`. |
 | `db/migrations/047_agenda_campos.sql` | Colunas `description`, `location`, `meeting_url`. **Aplicada em 2026-10-04.** |
+| `apps/web/public/tabs.js` | Abas da casa (WAI-ARIA), reusadas no topo do diálogo para o tipo da atividade. |
+| `apps/api/src/platform/agenda-recursos.mjs` | Detectores de migração: 047/048 (`criarDetector`) e 054 (`criarDetectorRegistro`). |
+| `db/migrations/054_acompanhamento_registro.sql` | Abre `'registro'` no CHECK de `kind`. **Escrita em 2026-10-06, aplicada em 2026-10-07.** |
 
 ## API
 
@@ -100,4 +103,57 @@ Depois de aplicar, a primeira consulta (até 1 minuto) já passa a oferecer os c
 
 - **Local quando a sala é escolhida** (padrão "Google Meet"; vazio = não preencher). Só preenche se o Local estiver vazio.
 - **Convidar o contato principal da empresa**: ao escolher a sala, o e-mail do contato principal (ou o primeiro com e-mail) entra em Convidados. Dá para remover ou somar outros pelo campo "Adicionar contato como convidado".
-- Com a sala marcada, o Link fica travado: o Google gera.
+- O link da reunião **não é perguntado**: quem gera é o Google (veja a seção seguinte).
+
+## O tipo é uma aba: Call · Task · Registro (2026-10-06)
+
+O tipo da atividade era um `<select>` no meio do formulário. Virou **aba no topo do diálogo**, porque ele não é um detalhe da
+atividade: é o que decide quais campos fazem sentido. A aba escolhida **é** o `kind` que se grava.
+
+- **Abas.** Call (`sessao`), Task (`tarefa`, e também `entregavel` e `feature`, que são de antes das abas) e Registro (`registro`).
+  Usa o componente de abas da casa (`tabs.js`): `role=tablist/tab`, o formulário inteiro é o `tabpanel`, setas, Home e End andam.
+  Trocar de aba **não apaga** o que já foi digitado nos campos comuns (título, cliente, contratação, quando).
+- **Atividade já gravada** abre na aba do tipo dela, e salvar não reescreve o tipo: editar um `entregavel` na aba Task continua
+  gravando `entregavel`. Tipo desconhecido (banco à frente da tela) abre em Task, que mostra mais.
+- **Call** mostra a videoconferência (sala do Meet e convidados). **Task** e **Registro** não — lá a sala não tem o que fazer, e o
+  painel do evento também só oferece "Adicionar videoconferência do Meet" em Call.
+- **Task** exige início e prazo de entrega (é a diferença dela para o Registro); o segundo horário chama-se "Prazo de entrega".
+- **Registro** é o que já aconteceu e se guarda: data e hora são opcionais, e não há lembrete nem repetição. Sem data, grava-se o
+  instante em que o registro foi feito, descendo ao passo da grade (15 min) com a duração mínima dela (30 min) — o banco exige início
+  e fim desde a migração 004, e inventar um compromisso de uma hora seria mentira. Ver `horarioDoRegistro` em `agenda-model.js`.
+- **Registro não vira série:** repetir um registro não quer dizer nada. `serieInput` recusa o tipo (`KINDS_DE_SERIE`), e por isso a
+  054 **não** mexe no CHECK de `service_activity_series`.
+
+### O que saiu do formulário
+
+- **Link da reunião.** A sala vem do Meet pela API do Google. O link **já gravado continua aparecendo** na visualização do evento e
+  não é tocado ao salvar — só não é mais oferecido como campo.
+- **Categoria.** Vem da contratação do cliente (`service_model`) e virou uma linha de descrição logo abaixo do Cliente, em texto. Os
+  filtros por categoria da tela continuam funcionando, porque cada atividade segue gravando o seu `category`. Editando, a linha mostra
+  a categoria que foi gravada na criação — ela não se troca por aqui. `advisory` (Assessoria) cai em `consultoria`: a lista do banco
+  não tem "assessoria" (item 10 de [ACOMPANHAMENTO-REDESENHO.md](ACOMPANHAMENTO-REDESENHO.md)).
+- **Local** deixou de ser digitado: é uma lista com o padrão de Configurações → Agenda, os locais já usados nas atividades carregadas
+  e o da atividade aberta, mais "Outro local…" como último caso, para nenhuma edição perder o que estava gravado. Acento e caixa não
+  criam duas opções.
+
+### Como a janela aparece
+
+Ao lado do X: três ícones — centralizado (o de sempre), popup no canto e lateral de altura cheia. Só CSS e classe no diálogo; o
+formulário é o mesmo. A escolha vale **da próxima abertura em diante** e fica neste navegador, como as demais preferências da agenda
+(`agenda-prefs.js`, chave `tzolkin-agenda-janela`). Abaixo de 700 px os três caem para o mesmo diálogo centralizado.
+
+### Migração 054 (**aplicada em 2026-10-07**)
+
+`db/migrations/054_acompanhamento_registro.sql` só troca o CHECK de `service_activities.kind` para aceitar `'registro'`, como a 048 fez
+com os tópicos de push. Nada é apagado nem reescrito.
+
+Aplicada, a aba Registro aparece. Em um banco sem ela, exatamente como na 047 e na 048: `GET /api/tracking` responde `agenda_registro: false`, a tela **não oferece** a aba Registro
+(e diz que ela espera a migração), e quem tentar gravar o tipo recebe **409** com texto claro em vez da violação do CHECK vinda do
+Postgres. Todo o resto das abas funciona sem ela. O detector é o `criarDetectorRegistro` de `agenda-recursos.mjs` (lê o CHECK em
+`pg_constraint`, cacheia o "sim" e repergunta o "não" a cada 60 s).
+
+### O que ficou para depois
+
+O pedido de 06/10 é maior que isto. Os outros itens — descrição `.md` com `/coment`, links para GitHub e ads, anexos e pasta no Core,
+relações entre tasks, vínculo com o produto, cronologia padronizada e o contrato na ficha do cliente — estão em
+[ACOMPANHAMENTO-REDESENHO.md](ACOMPANHAMENTO-REDESENHO.md), cada um com o que falta para existir.

@@ -176,8 +176,32 @@
 .tracking-editor-footer button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px; }
 .tracking-editor .form-error:empty { display: none; }
 .tracking-editor .form-error:not(:empty) { margin: 0; padding: 12px; border: 1px solid color-mix(in srgb, var(--badge-danger-dot) 35%, transparent); border-radius: 6px; background: var(--surface-muted); }
-#view-tracking dialog.tracking-editor { width: min(600px, calc(100% - 32px)); max-width: 600px; max-height: 90dvh; padding: 0; overflow: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--text); box-shadow: var(--shadow-pop); }
+#view-tracking dialog.tracking-editor { width: min(600px, calc(100% - 32px)); max-width: 600px; max-height: 90dvh; padding: 0; overflow: auto; border: 1px solid var(--line); background: var(--surface); color: var(--text); box-shadow: var(--shadow-pop); border-radius: 12px; }
 #view-tracking dialog::backdrop { background: var(--scrim); }
+
+/* Cabeçalho e abas do tipo ficam FORA do <form>, que é o painel que as abas comandam (role=tabpanel).
+   Por isso eles precisam do recuo que antes vinha do padding do formulário. O diálogo de atalhos tem o seu
+   cabeçalho direto no <dialog>, já com padding próprio: ali este recuo não se aplica. */
+.tracking-editor:not(.ag-atalhos) > .tracking-editor-heading { padding: 24px 24px 16px; }
+.tracking-editor-tools { display: flex; align-items: flex-start; gap: 4px; }
+.ag-janelas { display: flex; align-items: center; gap: 2px; }
+#view-tracking .ag-janelas button { width: 32px; height: 32px; min-height: 32px; padding: 0; border: 0; border-radius: 6px; background: transparent; }
+#view-tracking .ag-janelas button[aria-pressed="true"] { background: var(--surface-hover); color: var(--text); }
+.ag-abas { padding: 0 24px; }
+.ag-abas .tabs { margin: 0; gap: 24px; }
+.ag-abas > .detail { margin: 8px 0 0; }
+.tracking-editor:not(.ag-atalhos) > .tracking-editor-heading + .ag-abas + .tracking-form { padding-top: 20px; }
+.ag-categoria-vem { margin: -10px 0 0; }
+
+/* Os três ícones ao lado do X: o mesmo formulário, em janela centralizada (o padrão), popup num canto ou lateral de
+   altura cheia. Só tamanho e posição mudam — o diálogo segue modal, com o mesmo fundo do tema. */
+#view-tracking dialog.tracking-editor.ag-janela-popup { width: min(420px, calc(100% - 32px)); max-width: 420px; max-height: min(640px, 90dvh); margin: 24px 24px auto auto; }
+#view-tracking dialog.tracking-editor.ag-janela-lateral { width: min(480px, 100%); max-width: none; height: 100dvh; max-height: 100dvh; margin: 0 0 0 auto; border-radius: 12px 0 0 12px; }
+@media (max-width: 700px) {
+ #view-tracking dialog.tracking-editor:is(.ag-janela-popup, .ag-janela-lateral) { width: calc(100% - 32px); max-width: none; height: auto; max-height: 90dvh; margin: auto; border-radius: 12px; }
+ .tracking-editor:not(.ag-atalhos) > .tracking-editor-heading { padding: 20px 20px 16px; }
+ .ag-abas { padding: 0 20px; }
+}
 
 /* ---------- telas menores ---------- */
 @media (max-width: 1100px) {
