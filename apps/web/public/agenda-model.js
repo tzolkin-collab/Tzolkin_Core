@@ -9,11 +9,11 @@ const OFFSET = -3 * 3600000;
 export const DIA_MS = 86400000;
 const pad = n => String(n).padStart(2, '0');
 
-export const CATEGORIAS = ['mentoria', 'consultoria', 'software', 'educacional', 'outro'];
+export const CATEGORIAS = ['mentoria', 'consultoria', 'software', 'educacional', 'assessoria', 'outro'];
 // Cor = categoria, usando os tons de selo (que existem nos dois temas). Só o neutro fica para "outro".
-export const TOM_DA_CATEGORIA = Object.freeze({ mentoria: 'accent', consultoria: 'info', software: 'success', educacional: 'warning', outro: 'neutral' });
+export const TOM_DA_CATEGORIA = Object.freeze({ mentoria: 'accent', consultoria: 'info', software: 'success', educacional: 'warning', assessoria: 'primary', outro: 'neutral' });
 export const ROTULOS = Object.freeze({
- mentoria: 'Mentoria', consultoria: 'Consultoria', software: 'Software', educacional: 'Educacional', outro: 'Outro',
+ mentoria: 'Mentoria', consultoria: 'Consultoria', software: 'Software', educacional: 'Educacional', assessoria: 'Assessoria', outro: 'Outro',
  sessao: 'Sessão', entregavel: 'Entregável', feature: 'Feature', tarefa: 'Tarefa', registro: 'Registro',
  planned: 'Planejado', done: 'Concluído', cancelled: 'Cancelado',
 });
@@ -55,9 +55,8 @@ export function horarioDoRegistro(agora = Date.now(), passoMin = 15, duracaoMin 
 // passou a mostrar: uma linha de descrição abaixo do Cliente. Os filtros da tela continuam por `category`, que é o que
 // está gravado em cada atividade — tirar o campo não muda nem o dado nem a cor do evento.
 //
-// `advisory` (Assessoria) cai em 'consultoria' porque a lista de categorias do banco não tem 'assessoria'; abrir uma
-// categoria própria é migração, e está registrada em docs/ACOMPANHAMENTO-REDESENHO.md.
-export const CATEGORIA_DO_SERVICE_MODEL = Object.freeze({ education: 'mentoria', consulting: 'consultoria', advisory: 'consultoria', product: 'software', on_demand: 'outro', unclassified: 'outro' });
+// `advisory` (Assessoria) mapeia para 'assessoria' a partir da migração 055.
+export const CATEGORIA_DO_SERVICE_MODEL = Object.freeze({ education: 'mentoria', consulting: 'consultoria', advisory: 'assessoria', product: 'software', on_demand: 'outro', unclassified: 'outro' });
 /** Categoria herdada da contratação escolhida. Sem contratação (geral da empresa) não há o que herdar: 'outro'. */
 export const categoriaDaContratacao = contratacao => CATEGORIA_DO_SERVICE_MODEL[contratacao?.service_model] || 'outro';
 /** A linha que entrou no lugar do campo. `gravada` (edição) mostra a categoria da atividade, que não se troca sozinha. */

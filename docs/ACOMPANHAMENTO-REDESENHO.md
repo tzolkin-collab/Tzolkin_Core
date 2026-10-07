@@ -86,13 +86,13 @@ Registro não há Google para onde mandar.
 **Falta:** tabela de participantes da atividade (atividade, pessoa, papel), portanto migração. Foi deixado fora em vez de improvisar
 um campo de texto, como manda a regra de não inventar schema.
 
-### 10. Categoria "assessoria" própria
+### 10. Categoria "assessoria" própria ✅ (2026-10-07)
 
 A categoria agora vem da contratação (`service_model`), e `advisory` cai em `consultoria` porque a lista de categorias do banco
 (migração 004: `mentoria`, `consultoria`, `software`, `educacional`, `outro`) não tem "assessoria". Na tela o dono vê "Consultoria"
 onde contratou assessoria.
-**Falta:** migração trocando o CHECK de `service_activities.category` (mesma forma da 054) e um tom para ela em `TOM_DA_CATEGORIA`
-(`agenda-model.js`). Decisão do dono: vale abrir a categoria ou "Consultoria" basta?
+**Migração aplicada (2026-10-07):** `db/migrations/055_acompanhamento_assessoria.sql` abriu `'assessoria'` no CHECK de
+`service_activities.category` no banco compartilhado, após backup. `agenda-model.js` foi atualizado para mapear `advisory` para `'assessoria'` e usar a cor `primary`.
 
 ## Regra que vale para todos
 
