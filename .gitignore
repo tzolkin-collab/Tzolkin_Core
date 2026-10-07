@@ -11,3 +11,6 @@ node_modules/
 
 # Imagens dos testes de tela (UI_SCREENSHOTS=1)
 test/ui/artifacts/
+
+# Backups do banco (dados de produção: nunca versionar)
+backups/
