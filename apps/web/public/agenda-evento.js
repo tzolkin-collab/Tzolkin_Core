@@ -364,6 +364,17 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
     { rotulo: 'Lembrete', valor: `${M.textoDosLembretes(efetivo.minutos)}${efetivo.origem === 'padrao' && efetivo.minutos.length ? ' (padrão da agenda)' : ''}` },
    ] : []),
   ];
+  if (dados.agenda_vinculos && M.abaDoKind(e.kind) === 'task') {
+   const links = (dados.links || []).filter(l => l.activity_id === e.id);
+   const divLinks = el('div');
+   for (const l of links) {
+    const a = el('a', `${l.system} / ${l.external_id}`); a.href = l.url; a.target = '_blank'; a.rel = 'noopener';
+    const p = el('p', null, 'detail'); p.append(a); divLinks.append(p);
+   }
+   if (!links.length) divLinks.append(el('span', 'Nenhum vínculo', 'detail'));
+   // TODO: Botão "Adicionar vínculo..." que chama API.
+   linhas.push({ rotulo: 'Vínculos', valor: divLinks });
+  }
   painel.append(pares(linhas), el('p', 'Horário de Brasília.', 'ag-nota'), erroNo);
   return painel;
  }

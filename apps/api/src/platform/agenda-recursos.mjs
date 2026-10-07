@@ -57,3 +57,19 @@ export function criarDetectorRegistro({ relogio = Date.now, ttl = 60000 } = {}) 
   return ok;
  };
 }
+
+/**
+ * A migração 056 cria a tabela service_activity_links para guardar vínculos de atividades com
+ * sistemas externos (GitHub, Meta, etc).
+ */
+export function criarDetectorVinculos({ relogio = Date.now, ttl = 60000 } = {}) {
+ let ok = false, verificadoEm = -Infinity;
+ return async function vinculosDisponiveis(db) {
+  if (ok) return true;
+  if (relogio() - verificadoEm < ttl) return false;
+  verificadoEm = relogio();
+  const r = await db.query(`SELECT count(*)::int AS tabelas FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'service_activity_links'`);
+  ok = (r.rows[0]?.tabelas || 0) > 0;
+  return ok;
+ };
+}

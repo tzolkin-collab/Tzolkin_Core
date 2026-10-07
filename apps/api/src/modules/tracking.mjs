@@ -1,6 +1,6 @@
 import {json,input,isUuid,fail} from '../platform/http.mjs';
 import {activityInput,activityUpdateInput,timeInput,trackingRange,OPCIONAIS} from '../platform/tracking-model.mjs';
-import {criarDetector,criarDetectorRegistro,MENSAGEM_047,MENSAGEM_048,MENSAGEM_054} from '../platform/agenda-recursos.mjs';
+import {criarDetector,criarDetectorRegistro,criarDetectorVinculos,MENSAGEM_047,MENSAGEM_048,MENSAGEM_054} from '../platform/agenda-recursos.mjs';
 import {descrever} from '../platform/recorrencia.mjs';
 // Comparar o que veio no pedido com o que já está gravado (repetir um cadastro idêntico devolve o que existe). Lista (lembretes) compara por conteúdo.
 const diferente=(gravado,pedido)=>Array.isArray(pedido)?JSON.stringify(gravado)!==JSON.stringify(pedido):gravado!==pedido;
@@ -10,7 +10,7 @@ const diferente=(gravado,pedido)=>Array.isArray(pedido)?JSON.stringify(gravado)!
 // `detector` diz se as migrações 047 (descrição, local, link) e 048 (lembretes, séries) já estão no banco, e `registro` se a 054
 // (o tipo 'registro', da aba Registro) já está. Enquanto não estão, a tela esconde o recurso e a API recusa o uso com mensagem
 // clara, e o resto funciona como antes (ver platform/agenda-recursos.mjs).
-export function trackingRoutes(router,{detector=criarDetector(),registro=criarDetectorRegistro(),google=null}={}){
+export function trackingRoutes(router,{detector=criarDetector(),registro=criarDetectorRegistro(),vinculos=criarDetectorVinculos(),google=null}={}){
  // 'registro' (aba Registro) depende da migração 054. Mesma regra da 047/048: enquanto o banco não a tem, a tela não
  // oferece a aba e quem insistir recebe 409 com texto claro, nunca a violação do CHECK vinda do Postgres.
  const exigirRegistro=async(db,kind)=>{if(kind==='registro'&&!(await registro(db)))throw fail(409,MENSAGEM_054);};
@@ -38,7 +38,12 @@ export function trackingRoutes(router,{detector=criarDetector(),registro=criarDe
   // Google (Meet): só diz se a pessoa pode criar sala; o resto fica em /api/google/calendar/status.
   let meet=false;
   if(google&&operator&&await google.detector(pool).catch(()=>false))meet=Boolean((await pool.query('SELECT 1 FROM google_calendar_connections WHERE operator_subject=$1 AND revoked_at IS NULL',[operator.subject])).rows.length);
-  reply(200,{activities:activities.rows.slice(0,500),logs:logs.rows.slice(0,500),engagements:engagements.rows,truncated:activities.rows.length>500||logs.rows.length>500,time_zone:'America/Sao_Paulo',agenda_campos:rec.campos,agenda_lembretes:rec.lembretes,agenda_registro:await registro(pool),series,agenda_prefs:prefs,google_meet:meet});
+  const possuiVinculos=await vinculos(pool);
+  let links=[];
+  if(possuiVinculos&&activities.rows.length){
+   links=(await pool.query('SELECT * FROM service_activity_links WHERE activity_id=ANY($1)',[activities.rows.map(a=>a.id)])).rows;
+  }
+  reply(200,{activities:activities.rows.slice(0,500),logs:logs.rows.slice(0,500),engagements:engagements.rows,links,truncated:activities.rows.length>500||logs.rows.length>500,time_zone:'America/Sao_Paulo',agenda_campos:rec.campos,agenda_lembretes:rec.lembretes,agenda_registro:await registro(pool),agenda_vinculos:possuiVinculos,series,agenda_prefs:prefs,google_meet:meet});
  });
  async function transaction(pool,fn){const c=await pool.connect();try{await c.query('BEGIN');const result=await fn(c);await c.query('COMMIT');return result;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}
  const audit=(c,id,action,details,operator)=>c.query('INSERT INTO service_activity_audit(activity_id,action,actor,details) VALUES($1,$2,$3,$4)',[id,action,operator?.email||operator?.subject||'unknown',details]);
@@ -122,5 +127,25 @@ export function trackingRoutes(router,{detector=criarDetector(),registro=criarDe
    if(!existing||existing.activity_id!==params.id||Object.entries(b).some(([k,v])=>existing[k]!==v))throw fail(409,'Identificador já usado em outro apontamento.');
    return existing;
   });reply(200,{log:result});
+ });
+ router.post('/api/tracking/:id/links',async({pool,params,req,reply,operator})=>{
+  if(!isUuid(params.id))throw fail(400,'Atividade inválida.');
+  const b=await json(req);input(b,['system','external_id','url']);
+  if(!['github','meta','google','linkedin','other'].includes(b.system)||!b.external_id||!b.url)throw fail(400,'Dados do vínculo inválidos.');
+  const result=await transaction(pool,async c=>{
+   if(!(await vinculos(c)))throw fail(409,'A migração de vínculos ainda não foi aplicada.');
+   if(!(await c.query('SELECT id FROM service_activities WHERE id=$1',[params.id])).rows.length)throw fail(404,'Atividade não encontrada.');
+   const link_id=crypto.randomUUID();
+   const row=(await c.query('INSERT INTO service_activity_links(id,activity_id,system,external_id,url) VALUES($1,$2,$3,$4,$5) RETURNING *',[link_id,params.id,b.system,b.external_id,b.url])).rows[0];
+   await audit(c,params.id,'link_added',row,operator);return row;
+  });reply(200,{link:result});
+ });
+ router.delete('/api/tracking/:id/links/:link_id',async({pool,params,reply,operator})=>{
+  if(!isUuid(params.id)||!isUuid(params.link_id))throw fail(400,'Identificadores inválidos.');
+  await transaction(pool,async c=>{
+   if(!(await vinculos(c)))throw fail(409,'A migração de vínculos ainda não foi aplicada.');
+   const row=(await c.query('DELETE FROM service_activity_links WHERE id=$1 AND activity_id=$2 RETURNING *',[params.link_id,params.id])).rows[0];
+   if(row)await audit(c,params.id,'link_removed',row,operator);
+  });reply(200,{});
  });
 }
