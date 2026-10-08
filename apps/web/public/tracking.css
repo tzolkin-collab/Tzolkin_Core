@@ -388,11 +388,18 @@
   border-radius: 4px !important;
   width: 18px !important;
   height: 18px !important;
+  min-width: 18px !important;
+  min-height: 18px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   transition: background-color 0.15s ease, border-color 0.15s ease !important;
   box-sizing: border-box !important;
+  position: relative !important;
+  flex-shrink: 0 !important;
+}
+.cdx-checklist__item-checkbox-check::before {
+  display: none !important; /* Remove expanding blue circle animation */
 }
 .cdx-checklist__item-checkbox:hover .cdx-checklist__item-checkbox-check {
   border-color: var(--brand) !important;
@@ -403,11 +410,25 @@
   border-color: var(--brand) !important;
 }
 .cdx-checklist__item-checkbox-check svg {
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
   width: 12px !important;
   height: 12px !important;
+  min-width: 12px !important;
+  min-height: 12px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+  pointer-events: none !important;
+  flex-shrink: 0 !important;
 }
 .cdx-checklist__item-checkbox-check svg path {
   stroke: var(--on-brand) !important;
+  stroke-width: 2.2 !important;
+  pointer-events: none !important;
 }
 .cdx-checklist__item:not(.cdx-checklist__item--checked) .cdx-checklist__item-checkbox-check svg {
   display: none !important;
@@ -445,22 +466,51 @@
   padding: 2px 0 !important;
 }
 
-/* Tabela (Estilo Notion com bordas sutis e cabeçalho) */
+/* Tabela (Estilo Notion contida, com scroll horizontal limpo e sem estourar o layout) */
 .tc-editor {
   margin: 8px 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+.tc-wrap {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: thin !important;
+  margin: 4px 0 !important;
+  padding: 4px 2px 10px !important;
+  box-sizing: border-box !important;
 }
 .tc-table {
-  border-collapse: collapse !important;
+  min-width: 100% !important;
+  width: max-content !important;
   border: 1px solid var(--line) !important;
   border-radius: 6px !important;
+  background: var(--surface) !important;
   overflow: hidden !important;
 }
+.tc-row {
+  border-bottom: 1px solid var(--line) !important;
+}
+.tc-row:last-child {
+  border-bottom: none !important;
+}
 .tc-cell {
-  border: 1px solid var(--line) !important;
+  border-right: 1px solid var(--line) !important;
+  border-top: none !important;
+  border-left: none !important;
+  border-bottom: none !important;
   color: var(--text) !important;
   padding: 8px 12px !important;
   font-size: 14px !important;
   line-height: 1.5 !important;
+  min-width: 100px !important;
+  box-sizing: border-box !important;
+  outline: none !important;
+}
+.tc-row .tc-cell:last-child {
+  border-right: none !important;
 }
 .tc-row:first-child .tc-cell,
 .tc-cell--heading {
@@ -472,6 +522,7 @@
   background: transparent !important;
   border: 1px dashed var(--line) !important;
   color: var(--muted) !important;
+  border-radius: 4px !important;
   transition: background-color 0.15s ease, border-color 0.15s ease !important;
 }
 .tc-add-column:hover, .tc-add-row:hover {
@@ -706,7 +757,7 @@ code.inline-code,
 
 #view-tracking dialog.tracking-editor.ag-janela-cheia .tracking-editor-footer {
   padding: 12px max(44px, calc((100% - 860px) / 2)) !important;
-  margin: 20px calc(-1 * max(44px, calc((100% - 860px) / 2))) 0 !important;
+  margin: auto calc(-1 * max(44px, calc((100% - 860px) / 2))) 0 !important;
 }
 
 /* --- 3. MODO LATERAL (Sidebar / Side Peek) --- */
@@ -756,8 +807,8 @@ code.inline-code,
 }
 
 #view-tracking dialog.tracking-editor.ag-janela-lateral .tracking-editor-footer {
-  padding: 10px 20px !important;
-  margin: 16px -20px 0 !important;
+  padding: 12px 20px !important;
+  margin: auto -20px 0 !important;
 }
 
 /* Responsividade Mobile */
@@ -785,7 +836,7 @@ code.inline-code,
   }
   #view-tracking dialog.tracking-editor .tracking-editor-footer {
     padding: 10px 16px !important;
-    margin: 16px -16px 0 !important;
+    margin: auto -16px 0 !important;
   }
 }
 
@@ -1251,18 +1302,21 @@ code.inline-code,
   border: none !important;
   border-radius: 0 !important;
   background: transparent !important;
-  padding: 0 0 320px 54px !important;
+  padding: 0 16px 80px 54px !important;
   color: var(--text) !important;
   margin: 0 !important;
   box-shadow: none !important;
-  z-index: 25 !important;
+  z-index: 1 !important;
 }
 #editorjs-container:focus-within {
   border: none !important;
   box-shadow: none !important;
 }
 #view-tracking dialog.tracking-editor.ag-janela-lateral #editorjs-container {
-  padding: 0 0 320px 50px !important;
+  padding: 0 14px 80px 50px !important;
+}
+.codex-editor__redactor {
+  padding-bottom: 40px !important;
 }
 .ce-block__content, .ce-toolbar__content {
   max-width: 100% !important;
@@ -1500,16 +1554,18 @@ code.inline-code,
 .tracking-editor-footer {
   position: sticky !important;
   bottom: 0 !important;
-  z-index: 20 !important;
+  z-index: 100 !important;
   display: flex !important;
   justify-content: flex-end !important;
   align-items: center !important;
   gap: 8px !important;
-  padding: 10px 40px !important;
-  margin: 20px -40px 0 !important;
+  padding: 12px 40px !important;
+  margin: auto -40px 0 !important;
   background: var(--surface) !important;
-  border-top: 1px solid var(--line-soft) !important;
+  border-top: 1px solid var(--line) !important;
+  box-shadow: 0 -4px 14px var(--line-soft) !important;
   flex-shrink: 0 !important;
+  pointer-events: auto !important;
 }
 
 .tracking-editor-footer button {
@@ -1524,11 +1580,33 @@ code.inline-code,
   justify-content: center !important;
   cursor: pointer !important;
   transition: all 0.15s ease !important;
+  pointer-events: auto !important;
+}
+
+.tracking-editor-footer button * {
+  pointer-events: none !important;
+}
+
+.tracking-editor-footer button svg {
+  width: 14px !important;
+  height: 14px !important;
+  margin-right: 6px !important;
+  flex-shrink: 0 !important;
+}
+
+.tracking-editor-footer button.quiet {
+  background: transparent !important;
+  color: var(--muted) !important;
+  border: 1px solid transparent !important;
+}
+.tracking-editor-footer button.quiet:hover {
+  background: var(--surface-hover) !important;
+  color: var(--text) !important;
 }
 
 .tracking-editor-footer button.secondary {
   background: transparent !important;
-  color: var(--muted) !important;
+  color: var(--text) !important;
   border: 1px solid var(--line) !important;
 }
 .tracking-editor-footer button.secondary:hover {
