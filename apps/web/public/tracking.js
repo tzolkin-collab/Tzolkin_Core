@@ -124,7 +124,7 @@ export function setupTracking({ api, openTenant }) {
   } finally { salvando.delete(evento.id); }
   desenharPrincipal(); painel.atualizar(dados, eventos);
  }
- const abrirEvento = evento => editar(evento);
+ const abrirEvento = evento => painel.abrir(evento, dados);
 
  // ---------- topo ----------
  function desenharTopo() {

@@ -22,3 +22,25 @@ test('o botão Excluir confirma antes e manda a revisão para a rota de arquivar
   assert.match(app, /'\/api\/engagements\/'\+encodeURIComponent\(archivingEngagement\.id\)\+'\/archive','POST',\{revision:archivingEngagement\.revision\}/,
     'a chamada usa o id e a revisão da contratação');
 });
+
+test('permite desvincular (excluir) ou vincular item de contratação na tela sem arquivar a contratação', () => {
+  const app = fonte('app.js'), index = fonte('index.html');
+  assert.match(index, /<dialog id="item-engagement-dialog"/, 'o diálogo de vincular/alterar item existe');
+  assert.match(index, /id="item-engagement-form"/);
+  assert.match(index, /id="item-engagement-select"/);
+  assert.match(app, /openItemEngagementDialog\(engagement,\s*tenantId\)/, 'função para abrir diálogo de item de contratação existe');
+  assert.match(app, /Excluir item/, 'botão para desvincular item do portfólio existe');
+  assert.match(app, /salvarContratacao\(\{\s*product_id:\s*null\s*\}\)/, 'excluir item envia product_id null mantendo a contratação');
+});
+
+test('atualização de acompanhamentos sincroniza categoria e não ressuscita texto apagado', () => {
+  const agenda = fonte('agenda-evento.js');
+  assert.match(agenda, /M\.categoriaDaContratacao\(escolhida\)/, 'categoria da contratação escolhida é sincronizada');
+  assert.match(agenda, /Object\.assign\(evento,\s*atividade\)/, 'evento é atualizado com a atividade retornada para sincronizar revisão');
+});
+
+test('acompanhamento comercial valida e limpa loss_reason de acordo com o estágio', () => {
+  const commercial = fonte('commercial.js');
+  assert.match(commercial, /loss_reason:\s*stage\.input\.value\s*===\s*'lost'/, 'loss_reason é limpo com null quando não está perdido');
+});
+

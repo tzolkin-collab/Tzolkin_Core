@@ -1615,17 +1615,6 @@ dialog.tracking-editor {
   text-align: center !important;
 }
 
-/* Inline Toolbar (Notion Style) */
-.ce-inline-toolbar {
-  background: var(--surface) !important;
-  border: 1px solid var(--line) !important;
-  box-shadow: var(--shadow-pop) !important;
-  border-radius: 8px !important;
-  padding: 3px !important;
-  display: inline-flex !important;
-  gap: 2px !important;
-  z-index: 100 !important;
-}
 .ce-inline-toolbar__buttons {
   display: inline-flex !important;
   align-items: center !important;

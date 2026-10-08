@@ -208,7 +208,7 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   const contratacaoEscolhida = () => (dados.engagements || []).find(e => e.id === contratacao.value) || null;
   const mostrarCategoria = () => {
     const escolhida = contratacaoEscolhida();
-    const cat = evento?.category || (escolhida ? M.categoriaDaContratacao(escolhida) : null);
+    const cat = (escolhida ? M.categoriaDaContratacao(escolhida) : null) || (contratacao.value ? null : evento?.category);
     if (!cat || cat === 'outro') {
       linhaDaCategoria.hidden = true;
       linhaDaCategoria.style.display = 'none';
@@ -259,18 +259,52 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     }
 
     if (e.key === 'Escape') {
-      if (editorInstance?.toolbar) editorInstance.toolbar.close();
+      if (editorInstance?.toolbar) {
+        editorInstance.toolbar.close();
+        const blockEl = document.activeElement?.closest?.('.ce-block') || areaDescricao.querySelector('.ce-block--focused');
+        const editable = blockEl?.querySelector('[contenteditable]');
+        if (editable && editable.textContent.trim() === '/') {
+          editable.textContent = '';
+          editable.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
       return;
     }
 
-    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      setTimeout(() => {
-        if (editorInstance?.toolbar) {
-          editorInstance.toolbar.open();
-          editorInstance.toolbar.toggleToolbox(true);
+    // Se o menu de comandos / estiver aberto e o usuário apertar Backspace sem busca:
+    // fecha o popover imediatamente e apaga a barra / que abriu o comando
+    if (e.key === 'Backspace' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+      const pop = areaDescricao.querySelector('.ce-popover--opened');
+      if (pop) {
+        const searchInput = pop.querySelector('.cdx-search-field__input');
+        if (!searchInput || searchInput.value === '') {
+          e.preventDefault();
+          e.stopPropagation();
+          if (editorInstance?.toolbar) editorInstance.toolbar.close();
+          const blockEl = areaDescricao.querySelector('.ce-block--focused') || areaDescricao.querySelector('.ce-block--selected');
+          const editable = blockEl?.querySelector('[contenteditable]');
+          if (editable && editable.textContent.trim() === '/') {
+            editable.textContent = '';
+            editable.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          return;
         }
-      }, 50);
-      return;
+      }
+    }
+
+    // Atalho Slash / para abrir comandos: só quando a linha estiver vazia ou for o primeiro caractere
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const activeEl = document.activeElement;
+      const text = (activeEl?.textContent || '').trim();
+      if (text === '' || text === '/') {
+        setTimeout(() => {
+          if (editorInstance?.toolbar) {
+            editorInstance.toolbar.open();
+            editorInstance.toolbar.toggleToolbox(true);
+          }
+        }, 50);
+        return;
+      }
     }
 
     // Excluir bloco: Ctrl+Shift+Backspace / Cmd+Shift+Backspace ou Alt+Backspace
@@ -347,8 +381,19 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
         const idx = allBlocks.indexOf(blockEl);
         if (idx !== -1) {
           const block = editorInstance.blocks.getBlockByIndex(idx);
-          const isEmpty = block?.isEmpty || (block?.name === 'code' && !blockEl.querySelector('textarea')?.value.trim());
+          const rawText = (blockEl.querySelector('[contenteditable]')?.textContent || '').trim();
+          const isEmpty = block?.isEmpty || (block?.name === 'code' && !blockEl.querySelector('textarea')?.value.trim()) || rawText === '/';
           if (isEmpty) {
+            if (rawText === '/') {
+              const editable = blockEl.querySelector('[contenteditable]');
+              if (editable) {
+                e.preventDefault();
+                e.stopPropagation();
+                editable.textContent = '';
+                editable.dispatchEvent(new Event('input', { bubbles: true }));
+                return;
+              }
+            }
             if (block.name !== 'paragraph') {
               e.preventDefault();
               e.stopPropagation();
@@ -722,12 +767,14 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   try {
     let descValue = '';
     if (comCampos && editorInstance) {
+      if (editorInstance.isReady) await editorInstance.isReady;
       const descData = await editorInstance.save();
       const isEmpty = descData.blocks.length === 0 || (descData.blocks.length === 1 && descData.blocks[0].type === 'paragraph' && !descData.blocks[0].data.text.trim());
       if (!isEmpty) descValue = JSON.stringify(descData);
+    } else if (descricao.value) {
+      descValue = descricao.value.trim();
     }
-    if (!descValue && descricao.value) descValue = descricao.value.trim();
-   const extras = comCampos ? { description: descValue, location: valorDoLocal() } : {};
+   const extras = comCampos ? { description: descValue || null, location: valorDoLocal() || null } : {};
    const kind = M.kindDaAba(aba, evento?.kind);   // a aba É o tipo; editando, mantém 'entregavel'/'feature' como estavam
    let atividade;
    // Registro não se repete: o bloco está escondido na aba dele, e o que estiver escolhido ali não vale.
@@ -750,7 +797,7 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     if (kind !== evento.kind) campos.kind = kind;   // a categoria não está mais no formulário: ela vem da contratação e não se troca aqui
     if (M.hora(Date.parse(ini)) !== M.hora(evento.ini)) campos.start_time = M.hora(Date.parse(ini));
     if (Date.parse(term) - Date.parse(ini) !== evento.fim - evento.ini) campos.duration_minutes = Math.round((Date.parse(term) - Date.parse(ini)) / 60000);
-    for (const [k, v] of Object.entries(extras)) if (v !== (evento[k] || '')) campos[k] = v || null;
+    for (const [k, v] of Object.entries(extras)) if (v !== (evento[k] || null)) campos[k] = v;
     if (lembrete && JSON.stringify(lembrete.valor()) !== JSON.stringify(evento.reminders ?? null)) campos.reminders = lembrete.valor();
     if (!Object.keys(campos).length) { dialog.close(); return; }
     await api('/api/tracking/series/' + serie.id, 'PUT', { revision: serie.revision, ...campos });
@@ -768,13 +815,26 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     if (nome.value.trim() !== evento.title) campos.title = nome.value;
     if (kind !== evento.kind) campos.kind = kind;   // a categoria saiu do formulário: fica a que foi gravada na criação
     if (Date.parse(ini) !== evento.ini || Date.parse(term) !== evento.fim) { campos.starts_at = ini; campos.ends_at = term; }
-    for (const [k, v] of Object.entries(extras)) if (v !== (evento[k] || '')) campos[k] = v || null;   // vazio limpa o campo
+    for (const [k, v] of Object.entries(extras)) if (v !== (evento[k] || null)) campos[k] = v;
     if (lembrete && aba !== 'registro' && JSON.stringify(lembrete.valor()) !== JSON.stringify(evento.reminders ?? null)) campos.reminders = lembrete.valor();
+    const mudouContratacao = (contratacao.value || null) !== (evento.engagement_id || null);
+    if (mudouContratacao) {
+     const escolhida = contratacaoEscolhida();
+     const novaCat = escolhida ? M.categoriaDaContratacao(escolhida) : 'outro';
+     if (novaCat && novaCat !== evento.category) campos.category = novaCat;
+    }
     atividade = evento;
-    if (Object.keys(campos).length) atividade = (await api('/api/tracking/' + evento.id, 'PUT', { revision: evento.revision, ...campos })).activity;
+    if (Object.keys(campos).length) {
+     const res = await api('/api/tracking/' + evento.id, 'PUT', { revision: evento.revision, ...campos });
+     atividade = res.activity;
+     Object.assign(evento, atividade);
+    }
     // A contratação tem rota própria e exige a revisão que acabou de subir.
-    if ((contratacao.value || null) !== (evento.engagement_id || null))
-     atividade = (await api(`/api/tracking/${evento.id}/engagement`, 'PUT', { engagement_id: contratacao.value || null, revision: atividade.revision })).activity;
+    if (mudouContratacao) {
+     const res = await api(`/api/tracking/${evento.id}/engagement`, 'PUT', { engagement_id: contratacao.value || null, revision: evento.revision });
+     atividade = res.activity;
+     Object.assign(evento, atividade);
+    }
    }
    // Vínculos da tarefa: depois de a atividade estar gravada.
    let extra = null;
@@ -785,7 +845,7 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
    // Sala do Meet: depois de a atividade estar gravada. Se o Google falhar, a atividade fica e a pessoa é avisada (sem criar duas vezes).
    if (M.abaComMeet(aba) && meet?.value === 'meet') {
     try { atividade = (await api(`/api/tracking/${atividade.id}/meet`, 'POST', { convidados: convidados.value.trim() })).activity; }
-    catch (falha) { if (!extra) extra = {}; extra.aviso = (extra.aviso ? extra.aviso + ' ' : '') + `A sala do Meet não foi criada: ${falha.message}`; }
+    catch (falha) { if (!extra) extra = {}; extra.aviso = (extra.aviso ? extra.aviso + ' ' : '') + `A atividade foi salva, mas a sala do Meet não foi criada: ${falha.message}`; }
    }
    const emp = (dados.engagements || []).find(x => x.id === atividade.engagement_id);
    const empresa = tenants.find(t => t.id === atividade.tenant_id);
@@ -842,7 +902,7 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
    { rotulo: 'Local', valor: e.location || null },
    { rotulo: 'Link da reunião', valor: e.meeting_url ? linkExterno(e.meeting_url) : null },
    { rotulo: 'Google Agenda', valor: e.google_event_id ? 'Evento criado e sincronizado' : null },
-   { rotulo: M.abaDoKind(e.kind) === 'call' ? 'Transcrição' : 'Descrição', valor: renderDescricao(e.description, salvarDescricao) },
+   { rotulo: 'Descrição', valor: renderDescricao(e.description, salvarDescricao) },
    ...(dados.agenda_lembretes ? [
     { rotulo: 'Repete', valor: serie ? (serie.ended_at ? `${serie.descricao} (encerrada)` : serie.descricao) : null },
     { rotulo: 'Lembrete', valor: `${M.textoDosLembretes(efetivo.minutos)}${efetivo.origem === 'padrao' && efetivo.minutos.length ? ' (padrão da agenda)' : ''}` },

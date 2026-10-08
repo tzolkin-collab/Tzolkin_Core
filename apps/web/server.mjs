@@ -10,12 +10,14 @@ export function createWeb({ apiOrigin = 'http://127.0.0.1:3102' } = {}) {
  const server = http.createServer(async (req,res) => {
   res.setHeader('Cache-Control','no-store');
   res.setHeader('X-Content-Type-Options','nosniff');
-  res.setHeader('Content-Security-Policy',"default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self' https://esm.sh https://cdn.jsdelivr.net; frame-ancestors 'none'; form-action 'self'");
+  res.setHeader('Content-Security-Policy',"default-src 'self'; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self' https://esm.sh https://cdn.jsdelivr.net; connect-src 'self' https://esm.sh; frame-ancestors 'none'; form-action 'self'");
   res.setHeader('Referrer-Policy','no-referrer');
   const error = (status,message) => { if (!res.headersSent) { res.writeHead(status,{'Content-Type':'application/json; charset=utf-8'}); res.end(JSON.stringify({message})); } else res.destroy(); };
   try {
-   const host = `127.0.0.1:${server.address().port}`;
-   if (req.headers.host !== host || !req.url.startsWith('/') || req.url.startsWith('//')) return error(400,'Endereço inválido.');
+   const port = server.address().port;
+   const validHosts = [`127.0.0.1:${port}`, `localhost:${port}`];
+   if (!validHosts.includes(req.headers.host) || !req.url.startsWith('/') || req.url.startsWith('//')) return error(400,'Endereço inválido.');
+   const host = req.headers.host;
    const url = new URL(req.url,`http://${host}`);
    // /c/ é a página pública de checkout: existe só no processo da API (rota
    // com parâmetro, CSP própria por rota), não no mapa de estáticos daqui.
@@ -29,7 +31,7 @@ export function createWeb({ apiOrigin = 'http://127.0.0.1:3102' } = {}) {
    // product-resource-bindings) que o painel chama. Sem ele, dev respondia 405
    // aqui e o verbo parecia quebrado no servidor errado.
    if(!['GET','POST','PUT','DELETE'].includes(req.method)) return error(405,'Método não permitido.');
-   if(req.method !== 'GET' && req.headers.origin !== `http://${host}`) return error(403,'Origem não permitida.');
+   if(req.method !== 'GET' && !validHosts.map(h => `http://${h}`).includes(req.headers.origin)) return error(403,'Origem não permitida.');
    // Corpo pequeno por padrão: tudo no painel é JSON curto. A única exceção é o envio de foto,
    // que carrega a imagem inteira (até 8 MB, e a API reconfere o limite e o tipo). Sem a exceção,
    // o proxy de desenvolvimento devolvia 413 para qualquer foto acima de 16 KB.
