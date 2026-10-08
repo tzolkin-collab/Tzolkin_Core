@@ -995,6 +995,7 @@ dialog.tracking-editor {
   flex: 1 1 auto !important;
   overflow-y: auto !important;
   overflow-x: hidden !important;
+  scroll-padding-bottom: 90px !important;
 }
 
 /* Notion Page Icon */
@@ -1309,11 +1310,13 @@ dialog.tracking-editor {
 /* Notion Document Canvas (EditorJS) */
 #editorjs-container {
   position: relative !important;
-  min-height: 380px !important;
+  min-height: 220px !important;
+  flex-shrink: 0 !important;
+  flex-grow: 0 !important;
   border: none !important;
   border-radius: 0 !important;
   background: transparent !important;
-  padding: 0 16px 80px 54px !important;
+  padding: 0 16px 140px 54px !important;
   color: var(--text) !important;
   margin: 0 !important;
   box-shadow: none !important;
@@ -1324,10 +1327,10 @@ dialog.tracking-editor {
   box-shadow: none !important;
 }
 #view-tracking dialog.tracking-editor.ag-janela-lateral #editorjs-container {
-  padding: 0 14px 80px 50px !important;
+  padding: 0 14px 140px 50px !important;
 }
 .codex-editor__redactor {
-  padding-bottom: 40px !important;
+  padding-bottom: 60px !important;
 }
 .codex-editor--narrow .codex-editor__redactor {
   margin-right: 0 !important;

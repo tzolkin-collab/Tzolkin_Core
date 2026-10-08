@@ -34,18 +34,23 @@ class NotionChecklist extends Checklist {
     if (!checkbox) return;
     const text = this.getItemInput(item);
 
-    const isInside = checkbox.contains(event.target);
-    const rect = text?.getBoundingClientRect?.();
-    const isLeftGutter = rect && event.clientX < rect.left && event.clientX >= (rect.left - 52);
-
-    if (isInside || isLeftGutter) {
-      if (event.cancelable) event.preventDefault();
-      item.classList.toggle(this.CSS.itemChecked);
-      const isChecked = item.classList.contains(this.CSS.itemChecked);
-      checkbox.setAttribute('aria-checked', isChecked ? 'true' : 'false');
-      checkbox.classList.add(this.CSS.noHover);
-      checkbox.addEventListener('mouseleave', () => this.removeSpecialHoverBehavior(checkbox), { once: true });
+    // Se o clique foi no texto editável, só consideramos toggle se for na borda/calha esquerda
+    const isInsideText = text && text.contains(event.target);
+    if (isInsideText) {
+      const rect = text.getBoundingClientRect?.();
+      if (event.clientX && rect && event.clientX < rect.left) {
+        // Gutter click
+      } else {
+        return;
+      }
     }
+
+    if (event.cancelable) event.preventDefault();
+    item.classList.toggle(this.CSS.itemChecked);
+    const isChecked = item.classList.contains(this.CSS.itemChecked);
+    checkbox.setAttribute('aria-checked', isChecked ? 'true' : 'false');
+    checkbox.classList.add(this.CSS.noHover);
+    checkbox.addEventListener('mouseleave', () => this.removeSpecialHoverBehavior(checkbox), { once: true });
   }
 
   createChecklistItem(item = {}) {
@@ -782,13 +787,15 @@ function renderDescricao(raw, onToggle = null) {
         list.style.listStyle = 'none'; list.style.padding = '0'; list.style.margin = '6px 0';
         (b.data?.items || []).forEach(i => {
           const li = el('li');
-          li.style.display = 'flex'; li.style.alignItems = 'flex-start'; li.style.gap = '8px'; li.style.margin = '4px 0';
+          const lbl = el('label');
+          lbl.style.display = 'flex'; lbl.style.alignItems = 'flex-start'; lbl.style.gap = '8px'; lbl.style.margin = '4px 0';
+          if (onToggle) lbl.style.cursor = 'pointer';
           const chk = el('input'); chk.type = 'checkbox'; chk.checked = !!i.checked;
           chk.disabled = !onToggle;
           chk.style.marginTop = '3px';
+          if (onToggle) chk.style.cursor = 'pointer';
           const sp = el('span');
           if (onToggle) {
-            chk.style.cursor = 'pointer';
             chk.addEventListener('change', async () => {
               i.checked = chk.checked;
               if (i.checked) { sp.style.textDecoration = 'line-through'; sp.style.color = 'var(--muted)'; }
@@ -799,7 +806,8 @@ function renderDescricao(raw, onToggle = null) {
           if (i.checked) { sp.style.textDecoration = 'line-through'; sp.style.color = 'var(--muted)'; }
           const docSp = new DOMParser().parseFromString(i.text || '', "text/html");
           sp.append(...docSp.body.childNodes);
-          li.append(chk, sp);
+          lbl.append(chk, sp);
+          li.append(lbl);
           list.append(li);
         });
         container.append(list);
