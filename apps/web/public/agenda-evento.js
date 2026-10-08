@@ -26,6 +26,69 @@ import CodeTool from 'https://esm.sh/@editorjs/code@2.9.0';
 import Marker from 'https://esm.sh/@editorjs/marker@1.4.0';
 import Delimiter from 'https://esm.sh/@editorjs/delimiter@1.4.0';
 import Warning from 'https://esm.sh/@editorjs/warning@1.4.0';
+class NotionChecklist extends Checklist {
+  toggleCheckbox(event) {
+    const item = event.target?.closest?.(`.${this.CSS.item}`);
+    if (!item) return;
+    const checkbox = item.querySelector?.(`.${this.CSS.checkboxContainer}`);
+    if (!checkbox) return;
+    const text = this.getItemInput(item);
+
+    const isInside = checkbox.contains(event.target);
+    const rect = text?.getBoundingClientRect?.();
+    const isLeftGutter = rect && event.clientX < rect.left && event.clientX >= (rect.left - 52);
+
+    if (isInside || isLeftGutter) {
+      if (event.cancelable) event.preventDefault();
+      item.classList.toggle(this.CSS.itemChecked);
+      const isChecked = item.classList.contains(this.CSS.itemChecked);
+      checkbox.setAttribute('aria-checked', isChecked ? 'true' : 'false');
+      checkbox.classList.add(this.CSS.noHover);
+      checkbox.addEventListener('mouseleave', () => this.removeSpecialHoverBehavior(checkbox), { once: true });
+    }
+  }
+
+  createChecklistItem(item = {}) {
+    const el = super.createChecklistItem(item);
+    const checkbox = el.querySelector?.(`.${this.CSS.checkboxContainer}`);
+    if (checkbox) {
+      checkbox.setAttribute('role', 'checkbox');
+      checkbox.setAttribute('aria-checked', item.checked ? 'true' : 'false');
+      checkbox.setAttribute('tabindex', '0');
+      checkbox.addEventListener('keydown', e => {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          e.stopPropagation();
+          el.classList.toggle(this.CSS.itemChecked);
+          checkbox.setAttribute('aria-checked', el.classList.contains(this.CSS.itemChecked) ? 'true' : 'false');
+        }
+      });
+    }
+    return el;
+  }
+
+  render() {
+    const wrapper = super.render();
+    if (!this.readOnly) {
+      wrapper.addEventListener('keydown', event => {
+        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+          const item = document.activeElement?.closest?.(`.${this.CSS.item}`);
+          if (item) {
+            event.preventDefault();
+            event.stopPropagation();
+            item.classList.toggle(this.CSS.itemChecked);
+            const checkbox = item.querySelector?.(`.${this.CSS.checkboxContainer}`);
+            if (checkbox) {
+              checkbox.setAttribute('aria-checked', item.classList.contains(this.CSS.itemChecked) ? 'true' : 'false');
+            }
+          }
+        }
+      });
+    }
+    return wrapper;
+  }
+}
+
 if (typeof Document !== 'undefined' && !Document.prototype.closest) Document.prototype.closest = () => null;
 
 const TOM_DA_SITUACAO = { planned: 'info', done: 'success', cancelled: 'neutral' };
@@ -242,7 +305,7 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
       tools: {
         header: { class: Header, shortcut: 'CMD+SHIFT+H', toolbox: { title: 'Título' } },
         list: { class: List, inlineToolbar: true, shortcut: 'CMD+SHIFT+L', toolbox: { title: 'Lista com marcadores' } },
-        checklist: { class: Checklist, inlineToolbar: true, toolbox: { title: 'Lista de tarefas' } },
+        checklist: { class: NotionChecklist, inlineToolbar: true, toolbox: { title: 'Lista de tarefas' } },
         table: { class: Table, inlineToolbar: true, toolbox: { title: 'Tabela' } },
         quote: { class: Quote, inlineToolbar: true, shortcut: 'CMD+SHIFT+O', toolbox: { title: 'Citação' } },
         code: { class: CodeTool, shortcut: 'CMD+SHIFT+C', toolbox: { title: 'Código' } },
@@ -551,6 +614,16 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
   const painel = el('div');
   const serie = serieDe(e, dados);
   const efetivo = M.lembreteEfetivo(e, dados.agenda_prefs?.default_reminders);
+  const salvarDescricao = async novoJson => {
+   try {
+    const r = await api('/api/tracking/' + e.id, 'PUT', { revision: e.revision, description: novoJson });
+    e.description = novoJson;
+    if (r?.activity?.revision) e.revision = r.activity.revision;
+    await recarregar();
+   } catch (falha) {
+    erroNo.textContent = falha.message;
+   }
+  };
   const linhas = [
    { rotulo: 'Quando', valor: quandoTexto(e) },
    { rotulo: 'Cliente', valor: clienteLink(e) },
@@ -561,7 +634,7 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
    { rotulo: 'Local', valor: e.location || null },
    { rotulo: 'Link da reunião', valor: e.meeting_url ? linkExterno(e.meeting_url) : null },
    { rotulo: 'Google Agenda', valor: e.google_event_id ? 'Evento criado e sincronizado' : null },
-   { rotulo: M.abaDoKind(e.kind) === 'call' ? 'Transcrição' : 'Descrição', valor: renderDescricao(e.description) },
+   { rotulo: M.abaDoKind(e.kind) === 'call' ? 'Transcrição' : 'Descrição', valor: renderDescricao(e.description, salvarDescricao) },
    ...(dados.agenda_lembretes ? [
     { rotulo: 'Repete', valor: serie ? (serie.ended_at ? `${serie.descricao} (encerrada)` : serie.descricao) : null },
     { rotulo: 'Lembrete', valor: `${M.textoDosLembretes(efetivo.minutos)}${efetivo.origem === 'padrao' && efetivo.minutos.length ? ' (padrão da agenda)' : ''}` },
@@ -672,7 +745,7 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
 }
 
 
-function renderDescricao(raw) {
+function renderDescricao(raw, onToggle = null) {
   if (!raw) return null;
   const container = el('div', null, 'ag-descricao');
   try {
@@ -710,9 +783,19 @@ function renderDescricao(raw) {
         (b.data?.items || []).forEach(i => {
           const li = el('li');
           li.style.display = 'flex'; li.style.alignItems = 'flex-start'; li.style.gap = '8px'; li.style.margin = '4px 0';
-          const chk = el('input'); chk.type = 'checkbox'; chk.checked = !!i.checked; chk.disabled = true;
+          const chk = el('input'); chk.type = 'checkbox'; chk.checked = !!i.checked;
+          chk.disabled = !onToggle;
           chk.style.marginTop = '3px';
           const sp = el('span');
+          if (onToggle) {
+            chk.style.cursor = 'pointer';
+            chk.addEventListener('change', async () => {
+              i.checked = chk.checked;
+              if (i.checked) { sp.style.textDecoration = 'line-through'; sp.style.color = 'var(--muted)'; }
+              else { sp.style.textDecoration = 'none'; sp.style.color = ''; }
+              await onToggle(JSON.stringify(data));
+            });
+          }
           if (i.checked) { sp.style.textDecoration = 'line-through'; sp.style.color = 'var(--muted)'; }
           const docSp = new DOMParser().parseFromString(i.text || '', "text/html");
           sp.append(...docSp.body.childNodes);

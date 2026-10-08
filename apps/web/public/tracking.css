@@ -372,15 +372,25 @@
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  width: 22px !important;
-  height: 22px !important;
-  min-width: 22px !important;
+  width: 24px !important;
+  height: 24px !important;
+  min-width: 24px !important;
   margin-right: 8px !important;
-  margin-top: 2px !important;
+  margin-top: 1px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   cursor: pointer !important;
+  position: relative !important;
+  user-select: none !important;
+}
+/* Área de clique generosa (touch/mouse target de 36px) para evitar cliques perdidos */
+.cdx-checklist__item-checkbox::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: -6px -8px -6px -6px !important;
+  cursor: pointer !important;
+  z-index: 1 !important;
 }
 .cdx-checklist__item-checkbox-check {
   background: var(--surface) !important;
@@ -397,6 +407,7 @@
   box-sizing: border-box !important;
   position: relative !important;
   flex-shrink: 0 !important;
+  pointer-events: none !important;
 }
 .cdx-checklist__item-checkbox-check::before {
   display: none !important; /* Remove expanding blue circle animation */
@@ -709,8 +720,8 @@ code.inline-code,
 
 /* ==================== NOTION REDESIGN ==================== */
 
-/* --- 1. MODO CENTRO (Pop-up padrão / Center Peek) --- */
-#view-tracking dialog.tracking-editor {
+:is(#view-tracking, body) dialog.tracking-editor,
+dialog.tracking-editor {
   position: fixed !important;
   inset: 0 !important;
   margin: auto !important;
@@ -1317,6 +1328,9 @@ code.inline-code,
 }
 .codex-editor__redactor {
   padding-bottom: 40px !important;
+}
+.codex-editor--narrow .codex-editor__redactor {
+  margin-right: 0 !important;
 }
 .ce-block__content, .ce-toolbar__content {
   max-width: 100% !important;
