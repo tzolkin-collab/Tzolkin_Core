@@ -37,7 +37,7 @@ const textoDoTipo = kind => {
  const aba = M.abaDoKind(kind);
  return M.KINDS_DA_ABA[aba][0] === kind ? M.ROTULO_DA_ABA[aba] : `${M.ROTULO_DA_ABA[aba]} · ${M.ROTULOS[kind] || kind}`;
 };
-const contratacoesDe = (dados, tenantId, vazio) => [['', vazio], ...(dados.engagements || []).filter(e => e.tenant_id === tenantId).map(e => [e.id, e.label]), ['__novo', '+ Criar nova contratação...']];
+const contratacoesDe = (dados, tenantId, vazio) => [['', vazio], ...(dados.engagements || []).filter(e => e.tenant_id === tenantId).map(e => [e.id, e.label])];
 const GERAL = 'Geral da empresa (sem contratação)';
 // O que cada aba é, em uma linha, para a pessoa não ter de descobrir pela diferença dos campos.
 const EXPLICACAO_DA_ABA = Object.freeze({
@@ -59,7 +59,7 @@ const proximaHora = () => { const ms = Date.now(); return ms - (ms % 3600000) + 
  * `inicio`/`fim` (ms) pré-preenchem o horário, vindos de um clique ou arraste na grade.
  * `aoSalvar(atividade)` recebe a atividade já mesclada com o nome da empresa e da contratação.
  */
-export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = null, inicio = null, fim = null, eventoBaseParaClonar = null, tenantPadrao = '', aoSalvar }) {
+export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = null, inicio = null, fim = null, eventoBaseParaClonar = null, tenantPadrao = '', aoSalvar, aoAbrirPainel = null }) {
  const anterior = document.activeElement;
  const dialog = el('dialog', null, 'tracking-editor');
  // Prefixo único por diálogo: os ids das abas e do painel não podem colidir com nada que já esteja na página.
@@ -133,15 +133,7 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     }
   };
   cliente.addEventListener('change', () => { preencher(contratacao, contratacoesDe(dados, cliente.value, GERAL), ''); mostrarCategoria(); });
-  contratacao.addEventListener('change', () => {
-    if (contratacao.value === '__novo') {
-      const nomeNovo = prompt('Nome da nova contratação para ' + (cliente.options[cliente.selectedIndex] ? cliente.options[cliente.selectedIndex].text : ''));
-      if (nomeNovo) alert('A funcionalidade de criar contratação via API será implementada no backend. Nome digitado: ' + nomeNovo);
-      contratacao.value = '';
-      return;
-    }
-    mostrarCategoria();
-  });
+  contratacao.addEventListener('change', mostrarCategoria);
 
   const quando = el('fieldset', null, 'tracking-field-grid ag-notion-quando');
   const comeco = campo(quando, 'Início · Brasília', 'datetime-local'); comeco.parentElement.dataset.prop = 'inicio';
@@ -419,7 +411,27 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
  form.append(erro);
  const rodape = el('div', null, 'tracking-editor-footer');
  const salvar = el('button', evento ? 'Salvar alterações' : 'Criar atividade', 'primary'); salvar.type = 'submit';
- rodape.append(botao('Cancelar', null, () => dialog.close()), salvar);
+  // Atividade aberta: as ações de situação ficam aqui, no mesmo formulário (antes só existiam no painel lateral).
+  if (evento) {
+   const situacao = (rotulo, status, icone, classe) => {
+    const b = botao(rotulo, icone, async () => {
+     b.disabled = true; erro.textContent = '';
+     try { await api(`/api/tracking/${evento.id}/status`, 'PUT', { status, revision: evento.revision }); aoSalvar(null); dialog.close(); }
+     catch (falha) { erro.textContent = falha.message; erro.focus(); b.disabled = false; }
+    }, classe);
+    return b;
+   };
+   const acoesDaSituacao = evento.status === 'planned'
+    ? [situacao('Cancelar atividade', 'cancelled', 'close', 'quiet'), situacao('Concluir', 'done', 'check', 'secondary')]
+    : [situacao(evento.status === 'done' ? 'Reabrir' : 'Reativar', 'planned', 'clock', 'secondary')];
+   const maisAcoes = [];
+   if (aoAbrirPainel) {
+    maisAcoes.push(botao('Tempo', 'clock', () => { dialog.close(); aoAbrirPainel(evento, { aba: 'tempo' }); }, 'quiet'));
+    if (serie && !serie.ended_at) maisAcoes.push(botao('Encerrar repetição', 'close', () => { dialog.close(); aoAbrirPainel(evento, { encerrar: true }); }, 'quiet'));
+   }
+   rodape.append(...maisAcoes, ...acoesDaSituacao);
+  }
+ rodape.append(botao(evento ? 'Fechar' : 'Cancelar', null, () => dialog.close()), salvar);
  form.append(rodape);
 
  form.onsubmit = async e => {
@@ -644,7 +656,13 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
  }
 
  return {
-  abrir(evento, dados) { atual = evento.id; dadosAtuais = dados; ultimaAba = 'detalhes'; pk.abrir(); desenhar(evento, dados); },
+  abrir(evento, dados, { aba = 'detalhes', encerrar = false } = {}) {
+   atual = evento.id; dadosAtuais = dados; ultimaAba = aba; pk.abrir(); desenhar(evento, dados);
+   if (encerrar) {
+    const serie = serieDe(evento, dados || {});
+    if (serie) confirmarEncerrar(evento, serie, pk.corpo.querySelector('.form-error') || el('p'));
+   }
+  },
   /** Depois de recarregar a agenda: redesenha com a versão nova do evento (a revisão sobe a cada gravação). */
   atualizar(dados, normalizados) { dadosAtuais = dados; if (!atual) return; const novo = normalizados.find(a => a.id === atual); if (novo) desenhar(novo, dados); },
   fechar,
@@ -662,33 +680,92 @@ function renderDescricao(raw) {
     if (!data.blocks) throw new Error();
     for (const b of data.blocks) {
       if (b.type === 'paragraph') {
-         const p = el('p'); const doc = new DOMParser().parseFromString(b.data.text, "text/html"); p.append(...doc.body.childNodes);
-         container.append(p);
+        const p = el('p'); const doc = new DOMParser().parseFromString(b.data?.text || '', "text/html"); p.append(...doc.body.childNodes);
+        container.append(p);
       }
       else if (b.type === 'header') { 
-         const h = el('h'+b.data.level); const doc = new DOMParser().parseFromString(b.data.text, "text/html"); h.append(...doc.body.childNodes); 
-         h.style.margin='10px 0 5px'; 
-         container.append(h); 
+        const h = el('h' + Math.min(Math.max(Number(b.data?.level) || 3, 1), 6));
+        const doc = new DOMParser().parseFromString(b.data?.text || '', "text/html"); h.append(...doc.body.childNodes); 
+        h.style.margin = '12px 0 6px'; 
+        container.append(h); 
       }
       else if (b.type === 'list') {
-        const list = el(b.data.style === 'ordered' ? 'ol' : 'ul');
-        list.style.margin = '5px 0'; list.style.paddingLeft = '20px';
-        b.data.items.forEach(i => {
-           const li = el('li'); const doc = new DOMParser().parseFromString(i, "text/html"); li.append(...doc.body.childNodes);
-           list.append(li);
+        const renderLista = (items, estilo) => {
+          const list = el(estilo === 'ordered' ? 'ol' : 'ul');
+          list.style.margin = '6px 0'; list.style.paddingLeft = '20px';
+          (items || []).forEach(i => {
+            const li = el('li');
+            const texto = typeof i === 'string' ? i : (i?.content || '');
+            const doc = new DOMParser().parseFromString(texto, "text/html"); li.append(...doc.body.childNodes);
+            if (i?.items && i.items.length) li.append(renderLista(i.items, estilo));
+            list.append(li);
+          });
+          return list;
+        };
+        container.append(renderLista(b.data?.items, b.data?.style));
+      }
+      else if (b.type === 'checklist') {
+        const list = el('ul', null, 'ag-desc-checklist');
+        list.style.listStyle = 'none'; list.style.padding = '0'; list.style.margin = '6px 0';
+        (b.data?.items || []).forEach(i => {
+          const li = el('li');
+          li.style.display = 'flex'; li.style.alignItems = 'flex-start'; li.style.gap = '8px'; li.style.margin = '4px 0';
+          const chk = el('input'); chk.type = 'checkbox'; chk.checked = !!i.checked; chk.disabled = true;
+          chk.style.marginTop = '3px';
+          const sp = el('span');
+          if (i.checked) { sp.style.textDecoration = 'line-through'; sp.style.color = 'var(--muted)'; }
+          const docSp = new DOMParser().parseFromString(i.text || '', "text/html");
+          sp.append(...docSp.body.childNodes);
+          li.append(chk, sp);
+          list.append(li);
         });
         container.append(list);
       }
-      else if (b.type === 'checklist') {
-        const list = el('ul'); list.style.listStyle = 'none'; list.style.padding = '0';
-        b.data.items.forEach(i => {
-           const li = el('li');
-           const chk = el('input'); chk.type = 'checkbox'; chk.checked = i.checked; chk.disabled = true; chk.style.marginRight='8px';
-           const sp = el('span'); const docSp = new DOMParser().parseFromString(i.text, "text/html"); sp.append(...docSp.body.childNodes);
-           li.append(chk, sp);
-           list.append(li);
+      else if (b.type === 'quote') {
+        const q = el('blockquote');
+        q.style.borderLeft = '3px solid var(--primary)'; q.style.paddingLeft = '12px'; q.style.margin = '10px 0'; q.style.color = 'var(--text)';
+        const doc = new DOMParser().parseFromString(b.data?.text || '', "text/html"); q.append(...doc.body.childNodes);
+        if (b.data?.caption) {
+          const cap = el('cite', ' — ' + b.data.caption);
+          cap.style.display = 'block'; cap.style.fontSize = '12px'; cap.style.color = 'var(--muted)'; cap.style.fontStyle = 'normal';
+          q.append(cap);
+        }
+        container.append(q);
+      }
+      else if (b.type === 'code') {
+        const pre = el('pre');
+        pre.style.background = 'var(--surface-muted, rgba(128,128,128,0.1))'; pre.style.padding = '10px'; pre.style.borderRadius = '6px'; pre.style.overflowX = 'auto';
+        const code = el('code', b.data?.code || '');
+        code.style.fontFamily = 'var(--font-mono, monospace)'; code.style.fontSize = '13px';
+        pre.append(code);
+        container.append(pre);
+      }
+      else if (b.type === 'delimiter') {
+        const hr = el('hr'); hr.style.border = 'none'; hr.style.borderTop = '1px solid var(--line-soft)'; hr.style.margin = '14px 0';
+        container.append(hr);
+      }
+      else if (b.type === 'table') {
+        const table = el('table');
+        table.style.borderCollapse = 'collapse'; table.style.width = '100%'; table.style.margin = '8px 0';
+        (b.data?.content || []).forEach((row, rIdx) => {
+          const tr = el('tr');
+          (row || []).forEach(cell => {
+            const tag = (b.data?.withHeadings && rIdx === 0) ? 'th' : 'td';
+            const td = el(tag);
+            td.style.border = '1px solid var(--line)'; td.style.padding = '6px 8px'; td.style.fontSize = '13px';
+            const doc = new DOMParser().parseFromString(cell || '', "text/html"); td.append(...doc.body.childNodes);
+            tr.append(td);
+          });
+          table.append(tr);
         });
-        container.append(list);
+        container.append(table);
+      }
+      else if (b.type === 'warning') {
+        const w = el('div');
+        w.style.background = 'var(--badge-danger-bg)'; w.style.color = 'var(--badge-danger-fg)'; w.style.borderRadius = '6px'; w.style.padding = '10px 12px'; w.style.margin = '8px 0';
+        if (b.data?.title) { const t = el('strong', b.data.title); t.style.display = 'block'; t.style.marginBottom = '4px'; w.append(t); }
+        const doc = new DOMParser().parseFromString(b.data?.message || '', "text/html"); w.append(...doc.body.childNodes);
+        container.append(w);
       }
     }
   } catch {

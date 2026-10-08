@@ -358,19 +358,70 @@
 
 /* 6. ESTILOS ESPECÍFICOS DOS PLUGINS (Tabela, Checklist, Code, Quote) */
 
-/* Checklist */
-.cdx-checklist__item--checked .cdx-checklist__item-checkbox {
-  background: var(--primary) !important;
-  border-color: var(--primary) !important;
+/* Checklist (Notion Style) */
+.cdx-checklist {
+  margin: 6px 0 !important;
+}
+.cdx-checklist__item {
+  display: flex !important;
+  align-items: flex-start !important;
+  padding: 3px 0 !important;
+  box-sizing: border-box !important;
 }
 .cdx-checklist__item-checkbox {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  margin-right: 8px !important;
+  margin-top: 2px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+}
+.cdx-checklist__item-checkbox-check {
   background: var(--surface) !important;
-  border-color: var(--line) !important;
+  border: 1.5px solid var(--line-strong) !important;
   border-radius: 4px !important;
+  width: 18px !important;
+  height: 18px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease !important;
+  box-sizing: border-box !important;
+}
+.cdx-checklist__item-checkbox:hover .cdx-checklist__item-checkbox-check {
+  border-color: var(--brand) !important;
+  background: var(--surface-hover) !important;
+}
+.cdx-checklist__item--checked .cdx-checklist__item-checkbox-check {
+  background: var(--brand) !important;
+  border-color: var(--brand) !important;
+}
+.cdx-checklist__item-checkbox-check svg {
+  width: 12px !important;
+  height: 12px !important;
+}
+.cdx-checklist__item-checkbox-check svg path {
+  stroke: var(--on-brand) !important;
+}
+.cdx-checklist__item:not(.cdx-checklist__item--checked) .cdx-checklist__item-checkbox-check svg {
+  display: none !important;
 }
 .cdx-checklist__item-text {
-  font-size: 15px;
+  font-size: 15px !important;
+  line-height: 1.5 !important;
   color: var(--text) !important;
+  flex: 1 !important;
+  outline: none !important;
+}
+.cdx-checklist__item--checked .cdx-checklist__item-text {
+  text-decoration: line-through !important;
+  color: var(--muted) !important;
 }
 
 /* Tabela (Corrigindo os quadrados cinzas de adicionar linha/coluna) */

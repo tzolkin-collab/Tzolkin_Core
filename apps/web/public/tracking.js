@@ -93,7 +93,7 @@ export function setupTracking({ api, openTenant }) {
   abrirEditor({ host, api, dados, tenants, pessoas, inicio, fim, eventoBaseParaClonar: eventoParaClonar, tenantPadrao: estado.tenant, aoSalvar: depoisDeSalvar });
  }
  function editar(evento) {
-  abrirEditor({ host, api, dados, tenants, pessoas, evento, aoSalvar: depoisDeSalvar });
+  abrirEditor({ host, api, dados, tenants, pessoas, evento, aoSalvar: depoisDeSalvar, aoAbrirPainel: (ev, opts) => painel.abrir(ev, dados, opts) });
  }
  /** Grava só o horário (arrastar/esticar): mostra o resultado já, confirma com o servidor e desfaz se ele recusar. */
  // Depois de mover ou esticar, um aviso de 8 s oferece "Desfazer" (e Ctrl/Cmd+Z): grava de volta o horário anterior.
@@ -124,7 +124,7 @@ export function setupTracking({ api, openTenant }) {
   } finally { salvando.delete(evento.id); }
   desenharPrincipal(); painel.atualizar(dados, eventos);
  }
- const abrirEvento = evento => painel.abrir(evento, dados);
+ const abrirEvento = evento => editar(evento);
 
  // ---------- topo ----------
  function desenharTopo() {
@@ -135,7 +135,7 @@ export function setupTracking({ api, openTenant }) {
   const rotulos = { dia: ['Dia anterior', 'Próximo dia'], semana: ['Semana anterior', 'Próxima semana'], mes: ['Mês anterior', 'Próximo mês'], agenda: ['Período anterior', 'Próximo período'], periodo: ['Período anterior', 'Próximo período'] }[estado.visao];
   for (const [b, r] of [[anterior, rotulos[0]], [proximo, rotulos[1]]]) { b.setAttribute('aria-label', r); b.title = r; }
   const titulo = el('h2', maiuscula(M.titulo(estado.visao, estado.dia, estado.fim ?? estado.dia)), 'ag-titulo'); titulo.setAttribute('aria-live', 'polite');
-  nav.append(botao('Hoje', null, () => irPara({ dia: hoje(), visao: 'dia' }), 'secondary ag-hoje'), anterior, proximo, titulo);
+  nav.append(botao('Hoje', null, () => irPara({ dia: hoje() }), 'secondary ag-hoje'), anterior, proximo, titulo);
 
   const acoes = el('div', null, 'ag-acoes');
   const busca = el('label', null, 'ag-busca');
@@ -574,7 +574,7 @@ export function setupTracking({ api, openTenant }) {
   if (digitando || document.querySelector('dialog[open]') || painel.aberto()) return;
   const k = ev.key.toLowerCase();
   const visoes = { d: 'dia', w: 'semana', m: 'mes', a: 'agenda' };
-  if (k === 't') irPara({ dia: hoje(), visao: 'dia' });
+  if (k === 't') irPara({ dia: hoje() });
   else if (visoes[k]) irPara({ visao: visoes[k] });
   else if (k === 'arrowleft') irPara(andar(-1));
   else if (k === 'arrowright' || k === 'n' || k === 'j') irPara(andar(1));
