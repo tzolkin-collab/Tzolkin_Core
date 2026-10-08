@@ -20,8 +20,8 @@ test('criação: descrição, local e link são opcionais e só entram quando pr
 test('texto livre: sem caractere de controle, local e link em uma linha só',()=>{
  for(const lixo of ['a\u0000b','a\u0007b','a\u001bb','a\u007fb'])for(const campo of ['description','location'])falha(()=>opcional(campo,lixo));
  falha(()=>opcional('location','Sala\n2'));
- falha(()=>opcional('description','x'.repeat(2001)));
- assert.equal(opcional('description','x'.repeat(2000)).length,2000);
+ falha(()=>opcional('description','x'.repeat(20001)));
+ assert.equal(opcional('description','x'.repeat(20000)).length,20000);
  falha(()=>opcional('location','x'.repeat(201)));
  falha(()=>opcional('description',42));
 });

@@ -135,7 +135,7 @@ export function setupTracking({ api, openTenant }) {
   const rotulos = { dia: ['Dia anterior', 'Próximo dia'], semana: ['Semana anterior', 'Próxima semana'], mes: ['Mês anterior', 'Próximo mês'], agenda: ['Período anterior', 'Próximo período'], periodo: ['Período anterior', 'Próximo período'] }[estado.visao];
   for (const [b, r] of [[anterior, rotulos[0]], [proximo, rotulos[1]]]) { b.setAttribute('aria-label', r); b.title = r; }
   const titulo = el('h2', maiuscula(M.titulo(estado.visao, estado.dia, estado.fim ?? estado.dia)), 'ag-titulo'); titulo.setAttribute('aria-live', 'polite');
-  nav.append(botao('Hoje', null, () => irPara({ dia: hoje() }), 'secondary ag-hoje'), anterior, proximo, titulo);
+  nav.append(botao('Hoje', null, () => irPara({ dia: hoje(), visao: 'dia' }), 'secondary ag-hoje'), anterior, proximo, titulo);
 
   const acoes = el('div', null, 'ag-acoes');
   const busca = el('label', null, 'ag-busca');
@@ -189,7 +189,7 @@ export function setupTracking({ api, openTenant }) {
    if (d === estado.dia) b.setAttribute('aria-current', 'date');
    else if ((estado.visao === 'semana' || estado.visao === 'periodo') && janelaAtual.has(d)) b.dataset.semana = '';
    // clique = esse dia; Shift+clique = do dia atual até esse; arrastar de um dia a outro = esse intervalo (no toque também)
-   b.onclick = ev => { if (suprimirMini) { suprimirMini = false; return; } irPara(ev.shiftKey ? { visao: 'periodo', dia: estado.dia, fim: d } : { dia: d }); };
+   b.onclick = ev => { if (suprimirMini) { suprimirMini = false; return; } irPara(ev.shiftKey ? { visao: 'periodo', dia: estado.dia, fim: d } : { dia: d, visao: 'dia' }); };
    grade.append(b);
   }
   ligarIntervalo(grade);
@@ -574,7 +574,7 @@ export function setupTracking({ api, openTenant }) {
   if (digitando || document.querySelector('dialog[open]') || painel.aberto()) return;
   const k = ev.key.toLowerCase();
   const visoes = { d: 'dia', w: 'semana', m: 'mes', a: 'agenda' };
-  if (k === 't') irPara({ dia: hoje() });
+  if (k === 't') irPara({ dia: hoje(), visao: 'dia' });
   else if (visoes[k]) irPara({ visao: visoes[k] });
   else if (k === 'arrowleft') irPara(andar(-1));
   else if (k === 'arrowright' || k === 'n' || k === 'j') irPara(andar(1));

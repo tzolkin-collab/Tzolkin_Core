@@ -287,13 +287,16 @@
  #view-tracking .ag-categoria { height: 30px; min-height: 0; padding: 0; box-sizing: border-box; }
 }
 /* Atalhos: a janela não tem o <form> que dá respiro às outras; teclas numa coluna, descrição ao lado */
-#view-tracking dialog.tracking-editor.ag-atalhos { box-sizing: border-box; width: min(480px, calc(100vw - 32px)); max-width: none; padding: 22px 24px 24px; }
+#view-tracking dialog.tracking-editor.ag-atalhos { box-sizing: border-box; width: min(540px, calc(100vw - 32px)); max-width: none; padding: 44px 48px 48px; }
 .ag-atalhos .tracking-editor-heading { margin-bottom: 4px; padding-bottom: 14px; }
 .ag-atalhos-lista { margin-top: 18px; }
 .ag-atalhos-lista > div { display: grid; grid-template-columns: 150px minmax(0, 1fr); align-items: center; gap: 16px; padding: 8px 0; }
 .ag-atalhos-lista dd { text-align: left; color: var(--text); }
 .ag-atalhos-lista dt { flex-wrap: wrap; }
-@media (max-width: 480px) { .ag-atalhos-lista > div { grid-template-columns: 110px minmax(0, 1fr); gap: 10px; } }
+@media (max-width: 480px) {
+ #view-tracking dialog.tracking-editor.ag-atalhos { padding: 24px 20px; }
+ .ag-atalhos-lista > div { grid-template-columns: 110px minmax(0, 1fr); gap: 10px; }
+}
 
 /* Intervalo sendo arrastado no mini-calendário */
 .ag-mini-dia[data-escolha] { background: color-mix(in srgb, var(--focus-ring) 28%, transparent); }

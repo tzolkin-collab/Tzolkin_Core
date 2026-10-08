@@ -325,6 +325,7 @@ test('MCP: criação de atividades com Markdown .md estruturado, herança de cat
  };
 
  const markdownDesc = `## Pauta do Alinhamento
+
 - [x] Validação do escopo
 - [ ] Revisão de métricas
 
@@ -345,7 +346,11 @@ test('MCP: criação de atividades com Markdown .md estruturado, herança de cat
  assert.equal(resPayload.ok, true);
  assert.equal(resPayload.activity.title, 'Call de Alinhamento Semanal');
  assert.equal(resPayload.activity.category, 'mentoria', 'herdou mentoria da contratação education');
- assert.equal(resPayload.activity.description, markdownDesc);
+  // Gravado como JSON do Editor.js (formato que a tela de Acompanhamento le); devolvido ao bot em Markdown.
+  const gravado = JSON.parse(inseridos.at(-1).description);
+  assert.deepEqual(gravado.blocks.map(b => b.type), ['header', 'checklist', 'paragraph']);
+  assert.equal(gravado.blocks[1].data.items[0].checked, true);
+  assert.match(resPayload.activity.description, /^## Pauta do Alinhamento\n\n- \[x\] /);
 
  assert.equal(auditoria.length, 1);
  assert.equal(auditoria[0].acao, 'created_via_mcp');

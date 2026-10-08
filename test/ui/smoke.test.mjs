@@ -1138,6 +1138,7 @@ test('agenda: visões e navegação (botões, atalhos, mini-calendário) pedem a
  let ant = await conta();
  await pagina.avaliar(`(() => { const l = document.querySelector('#view-tracking .ag-lateral'); let b = l.querySelector('.ag-mini-dia[data-dia="${AM.segundaDe(hojeDia)}"]'); if (!b) { l.querySelectorAll('.ag-mini-cab button')[0].click(); b = l.querySelector('.ag-mini-dia[data-dia="${AM.segundaDe(hojeDia)}"]'); } b.click(); })()`);
  await esperarNova(ant);
+ await mudarVisao('agenda');
  const lista = await pagina.avaliar(`({ grupos: document.querySelectorAll('#view-tracking .ag-grupo').length, linhas: [...document.querySelectorAll('#view-tracking .ag-linha-hora')].map(h => h.textContent) })`);
  assert.ok(lista.grupos >= 5, 'dias com evento aparecem agrupados: ' + lista.grupos);
  assert.ok(lista.linhas.includes('Dia todo'), 'prazo de vários dias aparece como "Dia todo"');
@@ -1169,11 +1170,13 @@ test('agenda: visões e navegação (botões, atalhos, mini-calendário) pedem a
  antes = await conta();
  await pagina.avaliar(`(() => { const lateral = document.querySelector('#view-tracking .ag-lateral'); let b = lateral.querySelector('.ag-mini-dia[data-dia="${alvo}"]'); if (!b) { lateral.querySelectorAll('.ag-mini-cab button')[1].click(); b = lateral.querySelector('.ag-mini-dia[data-dia="${alvo}"]'); } b.click(); })()`);
  await esperarNova(antes);
- assert.equal((await ultimaJanela()).from, AM.segundaDe(alvo));
+ assert.equal((await ultimaJanela()).from, alvo);
  assert.equal(await pagina.avaliar(`document.querySelector('#view-tracking .ag-mini-dia[aria-current="date"]').dataset.dia`), alvo);
  antes = await conta();
  await pagina.avaliar(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 't', bubbles: true }))`);
  await esperarNova(antes);
+ assert.equal((await ultimaJanela()).from, hojeDia);
+ await mudarVisao('semana');
 
  // filtros do lado do cliente: categoria e busca não vão ao servidor
  await pagina.esperar(`document.querySelectorAll('#view-tracking .ag-evento').length >= 6`);

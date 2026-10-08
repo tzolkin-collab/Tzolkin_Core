@@ -5,6 +5,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import { json, fail, isUuid, text } from '../platform/http.mjs';
 import { digest } from '../platform/session.mjs';
 import { CATEGORIES, KINDS, activityInput, activityUpdateInput, opcional, lembretes } from '../platform/tracking-model.mjs';
+import { markdownParaEditorJs, editorJsParaMarkdown } from '../platform/markdown-editorjs.mjs';
 
 const MCP_PROTOCOL_VERSION = '2024-11-05';
 const SERVER_INFO = Object.freeze({ name: 'tzolkin-core', version: '1.0.0' });
@@ -164,6 +165,16 @@ const CATEGORIA_POR_MODELO = {
  on_demand: 'outro',
  unclassified: 'outro',
 };
+
+// A tela de Acompanhamento (Editor.js) grava e lê `description` como JSON de blocos; o bot trabalha em Markdown.
+// Na entrada o Markdown vira blocos (senão a tela mostraria "##" e "- [ ]" literais); na saída os blocos voltam a Markdown.
+const descricaoParaCore = valor => {
+ const t = opcional('description', valor);
+ if (t === null) return null;
+ try { if (Array.isArray(JSON.parse(t)?.blocks)) return t; } catch { /* Markdown comum */ }
+ return markdownParaEditorJs(t);
+};
+const atividadeParaBot = a => (a && typeof a === 'object' && 'description' in a ? { ...a, description: editorJsParaMarkdown(a.description) } : a);
 
 async function resolverAutenticacaoMcp({ pool, req, env = process.env, operator = null }) {
  if (operator) return { tipo: 'operador', ator: operator.email || operator.subject };
@@ -718,7 +729,7 @@ button:hover { background: #388bfd; }
     sql += ' ORDER BY a.starts_at LIMIT 200';
 
     const r = await pool.query(sql, params);
-    return r.rows;
+    return r.rows.map(atividadeParaBot);
    }
 
    case 'obter_atividade': {
@@ -736,7 +747,7 @@ button:hover { background: #388bfd; }
     const logs = await pool.query('SELECT * FROM service_time_logs WHERE activity_id = $1 ORDER BY worked_on DESC', [args.id]);
     const links = await pool.query('SELECT * FROM service_activity_links WHERE activity_id = $1', [args.id]).catch(() => ({ rows: [] }));
     return {
-     ...atividade,
+     ...atividadeParaBot(atividade),
      time_logs: logs.rows,
      links: links.rows,
     };
@@ -777,7 +788,7 @@ button:hover { background: #388bfd; }
      title: args.title,
      starts_at: startsAt,
      ends_at: endsAt,
-     description: opcional('description', args.description),
+     description: descricaoParaCore(args.description),
      location: opcional('location', args.location),
      reminders: args.reminders,
     });
@@ -800,7 +811,7 @@ button:hover { background: #388bfd; }
      return {
       ok: true,
       mensagem: `Atividade '${payload.title}' criada com sucesso no Acompanhamento.`,
-      activity: r.rows[0],
+      activity: atividadeParaBot(r.rows[0]),
      };
     } catch (e) {
      await client.query('ROLLBACK');
@@ -814,6 +825,7 @@ button:hover { background: #388bfd; }
     if (!args.id || !isUuid(args.id)) throw new Error('UUID da atividade inválido.');
     const existente = (await pool.query('SELECT * FROM service_activities WHERE id = $1', [args.id])).rows[0];
     if (!existente) throw new Error('Atividade não encontrada.');
+     if (existente.archived_at) throw new Error('Atividade arquivada: não pode ser editada.');
 
     const camposParaValidar = {
      revision: existente.revision,
@@ -821,7 +833,7 @@ button:hover { background: #388bfd; }
     if (args.title !== undefined) camposParaValidar.title = args.title;
     if (args.kind !== undefined) camposParaValidar.kind = args.kind;
     if (args.category !== undefined) camposParaValidar.category = args.category;
-    if (args.description !== undefined) camposParaValidar.description = opcional('description', args.description);
+    if (args.description !== undefined) camposParaValidar.description = descricaoParaCore(args.description);
     if (args.location !== undefined) camposParaValidar.location = opcional('location', args.location);
 
     if (args.starts_at !== undefined || args.ends_at !== undefined) {
@@ -838,7 +850,7 @@ button:hover { background: #388bfd; }
     }
 
     const nomes = Object.keys(campos);
-    if (!nomes.length) return { ok: true, mensagem: 'Nenhum campo para alterar.', activity: existente };
+    if (!nomes.length) return { ok: true, mensagem: 'Nenhum campo para alterar.', activity: atividadeParaBot(existente) };
 
     const client = await pool.connect();
     try {
@@ -854,7 +866,7 @@ button:hover { background: #388bfd; }
      return {
       ok: true,
       mensagem: `Atividade '${r.rows[0].title}' atualizada com sucesso.`,
-      activity: r.rows[0],
+      activity: atividadeParaBot(r.rows[0]),
      };
     } catch (e) {
      await client.query('ROLLBACK');

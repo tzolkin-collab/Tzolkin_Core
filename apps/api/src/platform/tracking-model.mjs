@@ -9,7 +9,7 @@ export const KINDS=['sessao','entregavel','feature','tarefa','registro'];
 export const KINDS_DE_SERIE=['sessao','entregavel','feature','tarefa'];
 // Campos de agenda (migração 047). Opcionais: sem eles o evento é o mesmo de antes, e o SQL só os toca quando vêm preenchidos.
 export const OPCIONAIS=['description','location','meeting_url'];
-const LIMITES={description:2000,location:200,meeting_url:500};
+const LIMITES={description:20000,location:200,meeting_url:500};
 const MAX_INTERVALO_MS=366*86400000, MAX_JANELA_DIAS=62;
 // Antecedências aceitas (minutos antes do início). A mesma lista é CHECK no banco (migração 048); a tela oferece um subconjunto.
 export const LEMBRETES_PERMITIDOS=Object.freeze([0,5,10,15,30,60,120,1440,2880,10080]);
@@ -29,7 +29,7 @@ export function opcional(campo,valor){
  if(valor==null)return null;
  if(typeof valor!=='string')throw fail(400,'Texto inválido.');
  const t=valor.trim();if(!t)return null;
- if(t.length>LIMITES[campo]||CONTROLE.test(t)||(campo!=='description'&&/[\r\n]/.test(t)))throw fail(400,campo==='description'?'Descrição inválida (até 2000 caracteres).':campo==='location'?'Local inválido (até 200 caracteres, em uma linha).':'Link inválido.');
+ if(t.length>LIMITES[campo]||CONTROLE.test(t)||(campo!=='description'&&/[\r\n]/.test(t)))throw fail(400,campo==='description'?'Descrição inválida (até 20000 caracteres).':campo==='location'?'Local inválido (até 200 caracteres, em uma linha).':'Link inválido.');
  if(campo==='meeting_url'){
   let url;try{url=new URL(t);}catch{throw fail(400,'Link da reunião inválido.');}
   // O link vira <a href> na tela: só https, sem credencial embutida.
