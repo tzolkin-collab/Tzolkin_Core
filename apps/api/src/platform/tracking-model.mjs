@@ -1,5 +1,5 @@
 import {input,text,isUuid,fail} from './http.mjs';
-export const CATEGORIES=['mentoria','consultoria','software','educacional','outro'];
+export const CATEGORIES=['mentoria','consultoria','software','educacional','assessoria','outro'];
 // O tipo da atividade virou aba na tela (Call · Task · Registro). Os valores são os mesmos de antes mais 'registro':
 // 'sessao' é Call; 'tarefa', 'entregavel' e 'feature' são Task (os dois últimos vêm de antes das abas e seguem válidos).
 // 'registro' depende da migração 054 no banco — a rota pergunta ao detector antes de gravar e recusa com MENSAGEM_054.

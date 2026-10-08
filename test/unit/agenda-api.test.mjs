@@ -73,7 +73,7 @@ test('janela da consulta: mês (como antes) ou intervalo livre de até 62 dias, 
 });
 
 // ---- rotas, com banco falso --------------------------------------------------------------------------------
-function rotas(){const r={};trackingRoutes({get(p,h){r['GET '+p]=h;},post(p,h){r['POST '+p]=h;},put(p,h){r['PUT '+p]=h;}});return r;}
+function rotas(opcoes={}){const r={};trackingRoutes({get(p,h){r['GET '+p]=h;},post(p,h){r['POST '+p]=h;},put(p,h){r['PUT '+p]=h;},delete(p,h){r['DELETE '+p]=h;}},{vinculos:async()=>false,...opcoes});return r;}
 const corpo=b=>({headers:{'content-type':'application/json'},async *[Symbol.asyncIterator](){yield Buffer.from(JSON.stringify(b));}});
 
 test('PUT /api/tracking/:id grava só os campos enviados, sobe a revisão e audita',async()=>{

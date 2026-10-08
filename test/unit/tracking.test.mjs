@@ -21,7 +21,7 @@ test('filtro valida tenant e virada do ano',()=>{
  for(const q of ['month=2026-13','month=2026-08&month=2026-09','month=2026-08&tenant_id=bad','month=2026-08&sql=x'])assert.throws(()=>trackingRange(new URLSearchParams(q)));
 });
 test('falha de auditoria reverte a transação e libera conexão',async()=>{
- const routes=new Map();trackingRoutes({get(){},put(){},post(path,handler){routes.set(path,handler);}});
+ const routes=new Map();trackingRoutes({get(){},put(){},delete(){},post(path,handler){routes.set(path,handler);}});
  const statements=[];let replied=false;
  const pool={async connect(){return{async query(sql){statements.push(sql);if(sql.startsWith('INSERT INTO service_activities'))return{rows:[activity]};if(sql.startsWith('INSERT INTO service_activity_audit'))throw Error('audit offline');return{rows:[]};},release(){statements.push('release');}};}};
  const req={headers:{'content-type':'application/json'},async *[Symbol.asyncIterator](){yield Buffer.from(JSON.stringify(activity));}};
@@ -29,13 +29,13 @@ test('falha de auditoria reverte a transação e libera conexão',async()=>{
  assert.equal(replied,false);assert.deepEqual(statements.slice(-2),['ROLLBACK','release']);assert.ok(!statements.includes('COMMIT'));
 });
 test('status concorrente falha sem confirmar gravação',async()=>{
- let handler;trackingRoutes({get(){},post(){},put(p,h){if(p.endsWith('/status'))handler=h;}});const statements=[];
+ let handler;trackingRoutes({get(){},post(){},delete(){},put(p,h){if(p.endsWith('/status'))handler=h;}});const statements=[];
  const pool={async connect(){return{async query(sql){statements.push(sql);return{rows:[]};},release(){}};}};
  const req={headers:{'content-type':'application/json'},async *[Symbol.asyncIterator](){yield Buffer.from(JSON.stringify({revision:1,status:'done'}));}};
  await assert.rejects(handler({pool,params:{id},req,reply(){assert.fail();}}),e=>e.status===409);assert.ok(statements.includes('ROLLBACK'));
 });
 test('repetir criação idêntica não duplica auditoria; payload diferente conflita',async()=>{
- let handler;trackingRoutes({get(){},put(){},post(p,h){if(p==='/api/tracking')handler=h;}});
+ let handler;trackingRoutes({get(){},put(){},delete(){},post(p,h){if(p==='/api/tracking')handler=h;}});
  let stored=null,audits=0,actors=[];
  const pool={async connect(){return {async query(sql,params=[]){if(sql.startsWith('INSERT INTO service_activities')){if(stored)return{rows:[]};stored=activityInput(activity);return{rows:[stored]};}if(sql.startsWith('SELECT * FROM service_activities'))return{rows:[stored]};if(sql.startsWith('INSERT INTO service_activity_audit')){audits++;actors.push(params[2]);return{rows:[]};}return{rows:[]};},release(){}};}};
  const invoke=b=>handler({pool,operator:{email:'operator@example.com'},reply(){},req:{headers:{'content-type':'application/json'},async *[Symbol.asyncIterator](){yield Buffer.from(JSON.stringify(b));}}});

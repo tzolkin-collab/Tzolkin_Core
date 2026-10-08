@@ -1780,7 +1780,7 @@ test('agenda: ao lado do X, os três modos de janela (centralizado, popup, later
  await ABRIR_NOVA();
  const ICONES = `[...document.querySelectorAll('dialog.tracking-editor .ag-janelas button')]`;
  assert.deepEqual(await pagina.avaliar(`${ICONES}.map(b => b.getAttribute('aria-label'))`),
-  ['Mostrar centralizado', 'Mostrar como popup no canto', 'Mostrar na lateral']);
+  ['Mostrar centralizado', 'Mostrar em tela inteira', 'Mostrar na lateral']);
  assert.deepEqual(await pagina.avaliar(`${ICONES}.map(b => b.getAttribute('aria-pressed'))`), ['true', 'false', 'false'], 'começa centralizado');
  await pagina.avaliar(`${ICONES}.find(b => b.getAttribute('aria-label') === 'Mostrar na lateral').click()`);
  assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor').classList.contains('ag-janela-lateral')`), true);

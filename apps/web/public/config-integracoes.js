@@ -16,7 +16,7 @@ const ESTADO = {
 };
 
 const LOGOS_INTEGRACOES = Object.freeze({
- 'google-login': 'google', stripe: 'stripe', asaas: 'asaas', pluggy: 'pluggy',
+ 'google-login': 'google', gemini: 'gemini', stripe: 'stripe', asaas: 'asaas', pluggy: 'pluggy',
  meta: 'meta', email: 'resend', vercel: 'vercel', github: 'github',
  easypanel: 'easypanel', hostinger: 'hostinger', push: 'push',
 });
@@ -269,11 +269,53 @@ function blocoDoGoogle(api, retorno) {
  return bloco;
 }
 
+/** Google Spark (Gemini): protocolo MCP nativo e OAuth 2.0 */
+function blocoDoSparkGoogle() {
+ const bloco = no('section', undefined, 'cfg-mcp-secao cfg-spark');
+ bloco.append(no('h3', 'Google Spark', 'config-sub'));
+ const linha = no('div', undefined, 'cfg-linha cfg-mcp-linha');
+ const t = no('div', undefined, 'cfg-linha-texto');
+ const topo = no('div', undefined, 'cfg-integracao-topo');
+ topo.append(logo('gemini', 'cfg-integracao-logo provider-logo'), no('strong', 'Google Spark'));
+
+ topo.append(selo('OAuth 2.0', 'success'));
+ t.append(topo);
+ t.append(no('small', 'Conecte o Google Spark (Gemini) ao Core. Permite criar, editar e excluir itens em Acompanhamento (calls, tarefas e registros em Markdown estruturado) e consultar clientes, pessoas e empresas no Diretório.'));
+
+ const urlMcp = `${location.origin}/api/mcp`;
+ const urlBox = no('div', undefined, 'cfg-mcp-single-url-box');
+ const codeEl = no('code', urlMcp, 'cfg-codigo cfg-mcp-url-code');
+ const btnCopiar = no('button', 'Copiar URL', 'primary');
+ btnCopiar.type = 'button';
+ btnCopiar.onclick = async () => {
+  try {
+   await navigator.clipboard.writeText(urlMcp);
+   btnCopiar.textContent = 'Copiado!';
+   setTimeout(() => { btnCopiar.textContent = 'Copiar URL'; }, 2000);
+  } catch {
+   prompt('Copie a URL do Google Spark:', urlMcp);
+  }
+ };
+ urlBox.append(codeEl, btnCopiar);
+ t.append(urlBox);
+
+ const nota = no('div', undefined, 'cfg-mcp-instrucoes-box');
+ nota.append(no('small', 'Basta colar esta URL no Google Spark ou no seu bot para autenticar e conectar automaticamente via OAuth 2.0.', 'cfg-faltando'));
+ t.append(nota);
+
+ linha.append(t);
+ bloco.append(linha);
+ return bloco;
+}
+
+
 export function montar(raiz, { api, abrirTela, retorno }) {
  const corpo = no('div', undefined, 'cfg-integracoes');
  raiz.append(corpo);
  const google = blocoDoGoogle(api, retorno);
  corpo.append(google);
+ const spark = blocoDoSparkGoogle(api);
+ corpo.append(spark);
  const lista = no('div', undefined, 'cfg-integracoes-lista');
  const aviso = no('p', '', 'config-aviso'); aviso.setAttribute('role', 'status');
  corpo.append(aviso, lista);

@@ -34,7 +34,7 @@ function banco({ recursos = COM_048, responder = () => null } = {}) {
 }
 const fim = (db, prefixo) => db.log.filter(q => q.sql.trim().startsWith(prefixo));
 function rotas(opcoes = {}) {
- const r = {}, roteador = { get(p, h) { r['GET ' + p] = h; }, post(p, h) { r['POST ' + p] = h; }, put(p, h) { r['PUT ' + p] = h; } };
+ const r = {}, roteador = { get(p, h) { r['GET ' + p] = h; }, post(p, h) { r['POST ' + p] = h; }, put(p, h) { r['PUT ' + p] = h; }, delete(p, h) { r['DELETE ' + p] = h; } };
  const detector = opcoes.detector ?? criarDetector();
  trackingRoutes(roteador, { detector }); agendaRoutes(roteador, { detector, relogio });
  return r;

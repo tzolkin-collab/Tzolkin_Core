@@ -61,7 +61,7 @@ test('a categoria vem da contratação do cliente e sempre é uma das do banco',
  for (const modelo of ['on_demand', 'education', 'consulting', 'advisory', 'product', 'unclassified'])
   assert.ok(M.CATEGORIAS.includes(M.categoriaDaContratacao({ service_model: modelo })), modelo);
  assert.equal(M.categoriaDaContratacao({ service_model: 'education' }), 'mentoria');
- assert.equal(M.categoriaDaContratacao({ service_model: 'advisory' }), 'consultoria', 'assessoria não tem categoria própria no banco');
+ assert.equal(M.categoriaDaContratacao({ service_model: 'advisory' }), 'assessoria', 'assessoria mapeia para assessoria a partir da migração 055');
  assert.equal(M.categoriaDaContratacao(null), 'outro', 'geral da empresa não herda nada');
  assert.equal(M.categoriaDaContratacao({ service_model: 'inventado' }), 'outro');
 });
@@ -93,17 +93,17 @@ test('a escolha de como mostrar a janela fica neste navegador e recusa valor est
  assert.equal(prefs.janelaDoEvento(), 'lateral');
  prefs.definirJanelaDoEvento('centro');
  assert.equal(deposito.has('tzolkin-agenda-janela'), false, 'o padrão apaga a chave em vez de gravá-lo');
- prefs.definirJanelaDoEvento('popup');
- assert.equal(prefs.janelaDoEvento(), 'popup');
+ prefs.definirJanelaDoEvento('cheia');
+ assert.equal(prefs.janelaDoEvento(), 'cheia');
  prefs.definirJanelaDoEvento('gaveta');
  assert.equal(prefs.janelaDoEvento(), 'centro', 'valor inválido não é gravado e a leitura cai no padrão');
  deposito.set('tzolkin-agenda-janela', 'lixo');
  assert.equal(prefs.janelaDoEvento(), 'centro', 'valor velho ou estranho no armazenamento cai no padrão');
- assert.deepEqual(prefs.JANELAS.map(([k]) => k), ['centro', 'popup', 'lateral']);
+ assert.deepEqual(prefs.JANELAS.map(([k]) => k), ['centro', 'cheia', 'lateral']);
  // Armazenamento bloqueado (navegação privada): lê o padrão e não quebra.
  globalThis.localStorage = { getItem() { throw new Error('bloqueado'); }, setItem() { throw new Error('bloqueado'); }, removeItem() { throw new Error('bloqueado'); } };
  assert.equal(prefs.janelaDoEvento(), 'centro');
- assert.doesNotThrow(() => prefs.definirJanelaDoEvento('popup'));
+ assert.doesNotThrow(() => prefs.definirJanelaDoEvento('cheia'));
  delete globalThis.localStorage;
 });
 
@@ -130,7 +130,7 @@ function banco({ registro = 0, responder = () => null } = {}) {
  };
  return { log, query: async (sql, p) => resp(sql, p), async connect() { return { query: async (sql, p) => resp(sql, p), release() {} }; } };
 }
-const rotas = () => { const r = {}; trackingRoutes({ get(p, h) { r['GET ' + p] = h; }, post(p, h) { r['POST ' + p] = h; }, put(p, h) { r['PUT ' + p] = h; } }, { detector: criarDetector(), registro: criarDetectorRegistro() }); return r; };
+const rotas = () => { const r = {}; trackingRoutes({ get(p, h) { r['GET ' + p] = h; }, post(p, h) { r['POST ' + p] = h; }, put(p, h) { r['PUT ' + p] = h; }, delete(p, h) { r['DELETE ' + p] = h; } }, { detector: criarDetector(), registro: criarDetectorRegistro() }); return r; };
 const corpo = b => ({ headers: { 'content-type': 'application/json' }, async *[Symbol.asyncIterator]() { yield Buffer.from(JSON.stringify(b)); } });
 const chamar = async (rota, extra) => { let resposta; await rota({ reply(s, b) { resposta = { status: s, body: b }; }, operator: { email: 'op@x.com', subject: 's1' }, ...extra }); return resposta; };
 const comeco = (db, prefixo) => db.log.filter(q => q.sql.trim().startsWith(prefixo));
@@ -222,14 +222,14 @@ test('as abas do tipo são acessíveis de teclado porque usam o componente de ab
  assert.match(fonte, /aria-labelledby/);
  // Os três ícones ao lado do X existem em icons.js (icons-registry confere nome por nome; aqui confere que são três).
  const icones = fonte.match(/const ICONE_DA_JANELA = Object\.freeze\(\{([^}]*)\}/)[1];
- assert.deepEqual([...icones.matchAll(/'([a-z-]+)'/g)].map(m => m[1]), ['window-center', 'window-popup', 'window-side']);
+ assert.deepEqual([...icones.matchAll(/'([a-z-]+)'/g)].map(m => m[1]), ['window-center', 'fullscreen', 'window-side']);
  const definidos = ler('icons.js');
- for (const nome of ['window-center', 'window-popup', 'window-side']) assert.ok(definidos.includes(`"${nome}":[[`), nome);
+ for (const nome of ['window-center', 'fullscreen', 'window-side']) assert.ok(definidos.includes(`"${nome}":[[`), nome);
 });
 
 test('cada modo de janela tem a classe que o CSS desenha', () => {
  const css = readFileSync(new URL('tracking.css', PUBLIC), 'utf8');
- for (const classe of ['ag-janela-popup', 'ag-janela-lateral']) assert.ok(css.includes('.' + classe), classe);
+ for (const classe of ['ag-janela-cheia', 'ag-janela-lateral']) assert.ok(css.includes('.' + classe), classe);
  assert.match(css, /\.ag-janelas button\[aria-pressed="true"\]/, 'o modo escolhido se vê no ícone');
  assert.match(css, /\.ag-abas/, 'a barra de abas do diálogo tem recuo próprio (ela fica fora do formulário)');
 });

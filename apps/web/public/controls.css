@@ -240,4 +240,12 @@ input:user-invalid:focus, select:user-invalid:focus, textarea:user-invalid:focus
 .cfg-conta-acoes button { min-height: 34px; padding: 0 12px; font-size: 13px; }
 .cfg-sem-permissao { margin: 0; color: var(--badge-warning-fg); }
 .cfg-registro .cfg-valor { white-space: nowrap; }
+.cfg-mcp-secao { display: grid; gap: 8px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.cfg-mcp-secao .config-sub { margin-bottom: 4px; }
+.cfg-mcp-linha { flex-wrap: wrap; }
+.cfg-mcp-single-url-box { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.cfg-mcp-url-code { font-size: 13px; padding: 8px 12px; border-radius: 6px; background: var(--surface-hover); border: 1px solid var(--line-soft); user-select: all; word-break: break-all; }
+.cfg-mcp-endpoint-wrapper { margin-top: 6px; }
+.cfg-mcp-instrucoes-box { margin-top: 8px; }
 @media (max-width: 700px) { .cfg-conta { flex-wrap: wrap; } }
+

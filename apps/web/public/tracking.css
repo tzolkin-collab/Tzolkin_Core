@@ -161,7 +161,7 @@
 .tracking-form { display: grid; gap: 16px; padding: 24px; }
 .tracking-form label { display: grid; gap: 6px; font-size: 13px; }
 .tracking-extra { display: contents; }
-.tracking-editor-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.tracking-editor-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 16px; }
 .tracking-editor-heading h2 { margin: 0 0 6px; font-size: 20px; }
 .tracking-editor-heading p { margin: 0; line-height: 1.5; font-size: 13px; color: var(--muted); }
 .tracking-editor-heading button { display: flex; align-items: center; gap: 4px; min-height: 32px; padding: 6px; border: 0; background: transparent; white-space: nowrap; font-size: 12px; }
@@ -172,7 +172,9 @@
 #view-tracking .tracking-editor :is(input, select) { width: 100%; min-width: 0; height: 44px; margin: 0; border-radius: 6px; font-size: 14px; }
 #view-tracking .tracking-editor input[type="checkbox"] { width: 18px; height: 18px; }
 #view-tracking .tracking-editor textarea { width: 100%; min-height: 84px; resize: vertical; font-size: 14px; }
-.tracking-editor-footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+.tracking-editor-footer { position: sticky; bottom: 0; z-index: 10; display: flex; justify-content: flex-end; gap: 8px; padding: 14px 24px; margin: 0 -24px -24px; background: var(--surface); border-top: 1px solid var(--line); }
+.ag-vinculos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.ag-vinculos legend, .ag-vinculos p.detail, .ag-vinculos label:has(input[type="url"]) { grid-column: 1 / -1; }
 .tracking-editor-footer button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 42px; }
 .tracking-editor .form-error:empty { display: none; }
 .tracking-editor .form-error:not(:empty) { margin: 0; padding: 12px; border: 1px solid color-mix(in srgb, var(--badge-danger-dot) 35%, transparent); border-radius: 6px; background: var(--surface-muted); }
@@ -191,14 +193,13 @@
 .ag-abas .tabs { margin: 0; gap: 24px; }
 .ag-abas > .detail { margin: 8px 0 0; }
 .tracking-editor:not(.ag-atalhos) > .tracking-editor-heading + .ag-abas + .tracking-form { padding-top: 20px; }
-.ag-categoria-vem { margin: -10px 0 0; }
 
 /* Os três ícones ao lado do X: o mesmo formulário, em janela centralizada (o padrão), popup num canto ou lateral de
    altura cheia. Só tamanho e posição mudam — o diálogo segue modal, com o mesmo fundo do tema. */
-#view-tracking dialog.tracking-editor.ag-janela-popup { width: min(420px, calc(100% - 32px)); max-width: 420px; max-height: min(640px, 90dvh); margin: 24px 24px auto auto; }
+#view-tracking dialog.tracking-editor.ag-janela-cheia { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; border: 0; }
 #view-tracking dialog.tracking-editor.ag-janela-lateral { width: min(480px, 100%); max-width: none; height: 100dvh; max-height: 100dvh; margin: 0 0 0 auto; border-radius: 12px 0 0 12px; }
 @media (max-width: 700px) {
- #view-tracking dialog.tracking-editor:is(.ag-janela-popup, .ag-janela-lateral) { width: calc(100% - 32px); max-width: none; height: auto; max-height: 90dvh; margin: auto; border-radius: 12px; }
+ #view-tracking dialog.tracking-editor:is(.ag-janela-cheia, .ag-janela-lateral) { width: 100vw; max-width: none; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; }
  .tracking-editor:not(.ag-atalhos) > .tracking-editor-heading { padding: 20px 20px 16px; }
  .ag-abas { padding: 0 20px; }
 }
@@ -229,6 +230,7 @@
  #view-tracking .ag-linha { grid-template-columns: 76px 10px minmax(0, 1fr); row-gap: 2px; }
  .ag-linha-empresa, .ag-linha-situacao { grid-column: 3; }
  .tracking-field-grid { grid-template-columns: 1fr; }
+ .tracking-editor-footer { margin: 0 -20px -20px; padding: 12px 20px; }
  .tracking-editor-footer button { flex: 1; }
  .tracking-form { padding: 20px; }
  .tracking-row { flex-direction: column; align-items: stretch; }
@@ -296,3 +298,1047 @@
 /* Intervalo sendo arrastado no mini-calendário */
 .ag-mini-dia[data-escolha] { background: color-mix(in srgb, var(--focus-ring) 28%, transparent); }
 .ag-mini-grade { touch-action: none; user-select: none; -webkit-user-select: none; }
+
+
+.tracking-descricao-bloco { grid-column: 1 / -1; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.tracking-descricao-bloco textarea { min-height: 150px; font-family: var(--font-mono); }
+
+
+.ag-evento.ag-selecionado, .ag-chip.ag-selecionado { outline: 2px solid var(--primary); outline-offset: 1px; box-shadow: 0 0 0 4px var(--focus); z-index: 100 !important; }
+
+
+
+
+
+
+
+
+
+/* ---------- Editor.js Final Theme ---------- */
+/* 1. CONTAINER (Com Borda e Padding Seguro para os Ícones) */
+#editorjs-container {
+  min-height: 150px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 8px !important;
+  padding: 16px 24px 16px 40px !important; /* 40px na esquerda para o + caber dentro da caixa */
+  background: var(--surface);
+  color: var(--text) !important;
+  margin-top: 16px;
+  font-family: var(--font-sans, inherit);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+#editorjs-container * {
+  color: var(--text);
+}
+
+#editorjs-container:focus-within {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px var(--primary-alpha-10, rgba(0, 120, 255, 0.1));
+  outline: none;
+}
+
+/* 2. LAYOUT DOS BLOCOS (Para não vazar a caixa) */
+.ce-block__content, .ce-toolbar__content {
+  max-width: 100% !important;
+  margin: 0 !important;
+}
+
+
+
+/* 5. FIX DE PLACEHOLDERS ESCUROS INVISÍVEIS */
+[data-placeholder]:empty::before {
+  color: var(--muted) !important;
+  opacity: 0.6 !important;
+  font-style: normal !important;
+}
+
+/* 6. ESTILOS ESPECÍFICOS DOS PLUGINS (Tabela, Checklist, Code, Quote) */
+
+/* Checklist */
+.cdx-checklist__item--checked .cdx-checklist__item-checkbox {
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+.cdx-checklist__item-checkbox {
+  background: var(--surface) !important;
+  border-color: var(--line) !important;
+  border-radius: 4px !important;
+}
+.cdx-checklist__item-text {
+  font-size: 15px;
+  color: var(--text) !important;
+}
+
+/* Tabela (Corrigindo os quadrados cinzas de adicionar linha/coluna) */
+.tc-table {
+  border-color: var(--line) !important;
+}
+.tc-cell {
+  border-color: var(--line) !important;
+  color: var(--text) !important;
+  padding: 8px !important;
+}
+.tc-add-column, .tc-add-row {
+  background: var(--surface-muted, transparent) !important;
+  border-color: var(--line) !important;
+  color: var(--text) !important;
+}
+.tc-add-column:hover, .tc-add-row:hover {
+  background: var(--surface-hover) !important;
+}
+.tc-add-column svg, .tc-add-row svg {
+  fill: var(--text) !important;
+}
+
+/* Quote (Citação) */
+.cdx-quote {
+  border-left: 3px solid var(--primary) !important;
+  padding-left: 12px !important;
+  margin: 12px 0 !important;
+}
+.cdx-quote__text {
+  font-size: 16px !important;
+  line-height: 1.5 !important;
+  font-style: normal !important;
+}
+
+/* Code */
+.ce-code__textarea {
+  background: var(--surface-muted, rgba(128,128,128,0.05)) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 6px !important;
+  font-family: var(--font-mono, monospace) !important;
+  font-size: 13px !important;
+  padding: 12px !important;
+}
+
+/* Warning */
+.cdx-warning {
+  background: var(--badge-danger-bg) !important;
+  color: var(--badge-danger-fg) !important;
+  border-radius: 8px !important;
+  padding: 16px !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+}
+.cdx-warning::before {
+  content: "⚠️" !important;
+  font-size: 18px !important;
+}
+
+/* Marker */
+.cdx-marker {
+  background: var(--badge-warning-bg) !important;
+  color: var(--badge-warning-fg) !important;
+  padding: 2px 4px !important;
+  border-radius: 4px !important;
+}
+
+/* Delimiter */
+.ce-delimiter::before {
+  color: var(--muted) !important;
+}
+
+/* Header */
+.ce-header {
+  font-weight: 700;
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
+  color: var(--text) !important;
+  padding: 0 !important;
+}
+
+/* ==================== NOTION REDESIGN ==================== */
+
+/* --- 1. MODO CENTRO (Pop-up padrão / Center Peek) --- */
+#view-tracking dialog.tracking-editor {
+  position: fixed !important;
+  inset: 0 !important;
+  margin: auto !important;
+  width: min(860px, calc(100vw - 32px)) !important;
+  max-width: 860px !important;
+  height: min(88dvh, 880px) !important;
+  max-height: 88dvh !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 1px solid var(--line) !important;
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  box-shadow: var(--shadow-pop) !important;
+  border-radius: 14px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  transition: width 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              height 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              max-width 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              border-radius 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* --- 2. MODO CHEIA (Página inteira / Full Page) --- */
+#view-tracking dialog.tracking-editor.ag-janela-cheia {
+  position: fixed !important;
+  inset: 0 !important;
+  margin: 0 !important;
+  width: 100vw !important;
+  max-width: 100vw !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+#view-tracking dialog.tracking-editor.ag-janela-cheia .ag-abas {
+  padding: 14px max(44px, calc((100% - 860px) / 2)) 0 !important;
+}
+
+#view-tracking dialog.tracking-editor.ag-janela-cheia .tracking-form {
+  padding: 10px max(44px, calc((100% - 860px) / 2)) 0 !important;
+}
+
+#view-tracking dialog.tracking-editor.ag-janela-cheia .tracking-editor-footer {
+  padding: 12px max(44px, calc((100% - 860px) / 2)) !important;
+  margin: 20px calc(-1 * max(44px, calc((100% - 860px) / 2))) 0 !important;
+}
+
+/* --- 3. MODO LATERAL (Sidebar / Side Peek) --- */
+#view-tracking dialog.tracking-editor.ag-janela-lateral {
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: auto !important;
+  margin: 0 0 0 auto !important;
+  width: min(540px, 100vw) !important;
+  max-width: 540px !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+  border: none !important;
+  border-left: 1px solid var(--line) !important;
+  border-radius: 14px 0 0 14px !important;
+  box-shadow: var(--shadow-pop) !important;
+}
+
+#view-tracking dialog.tracking-editor.ag-janela-lateral .tracking-editor-heading {
+  padding: 10px 20px !important;
+}
+
+#view-tracking dialog.tracking-editor.ag-janela-lateral .ag-abas {
+  padding: 10px 20px 0 !important;
+}
+
+#view-tracking dialog.tracking-editor.ag-janela-lateral .tracking-form {
+  padding: 8px 20px 0 !important;
+}
+
+#view-tracking dialog.tracking-editor.ag-janela-lateral .ag-notion-page-icon {
+  width: 32px !important;
+  height: 32px !important;
+  margin: 6px 0 4px !important;
+}
+
+#view-tracking dialog.tracking-editor.ag-janela-lateral .tracking-form .ag-notion-title-wrap input {
+  font-size: 24px !important;
+}
+
+#view-tracking dialog.tracking-editor.ag-janela-lateral .tracking-form > label:not(.ag-notion-title-wrap):not(.ag-notion-raw-desc),
+#view-tracking dialog.tracking-editor.ag-janela-lateral .tracking-form > fieldset.ag-notion-quando > label,
+#view-tracking dialog.tracking-editor.ag-janela-lateral .tracking-form > fieldset.ag-bloco > label {
+  grid-template-columns: 20px 165px minmax(0, 1fr) !important;
+}
+
+#view-tracking dialog.tracking-editor.ag-janela-lateral .tracking-editor-footer {
+  padding: 10px 20px !important;
+  margin: 16px -20px 0 !important;
+}
+
+/* Responsividade Mobile */
+@media (max-width: 700px) {
+  #view-tracking dialog.tracking-editor,
+  #view-tracking dialog.tracking-editor.ag-janela-cheia,
+  #view-tracking dialog.tracking-editor.ag-janela-lateral {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    inset: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+  }
+  #view-tracking dialog.tracking-editor .tracking-editor-heading {
+    padding: 10px 16px !important;
+  }
+  #view-tracking dialog.tracking-editor .ag-abas {
+    padding: 8px 16px 0 !important;
+  }
+  #view-tracking dialog.tracking-editor .tracking-form {
+    padding: 8px 16px 0 !important;
+  }
+  #view-tracking dialog.tracking-editor .tracking-editor-footer {
+    padding: 10px 16px !important;
+    margin: 16px -16px 0 !important;
+  }
+}
+
+/* Notion Header Bar (Breadcrumb) */
+.tracking-editor-heading {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 10px 28px !important;
+  border-bottom: 1px solid var(--line-soft) !important;
+  background: var(--surface) !important;
+  flex-shrink: 0 !important;
+  min-height: 44px !important;
+}
+.tracking-editor-heading h2 {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--muted) !important;
+  margin: 0 !important;
+  letter-spacing: 0.01em !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+.tracking-editor-heading h2::before {
+  content: "Acompanhamento /" !important;
+  color: var(--faint) !important;
+  font-weight: 400 !important;
+}
+.tracking-editor-heading .detail {
+  display: none !important;
+}
+
+/* Notion Window Mode Controls */
+.tracking-editor-tools {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.ag-janelas {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+  background: var(--surface-hover) !important;
+  padding: 2px !important;
+  border-radius: 6px !important;
+  border: 1px solid var(--line-soft) !important;
+}
+
+#view-tracking .ag-janelas button {
+  width: 26px !important;
+  height: 26px !important;
+  min-height: 26px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+#view-tracking .ag-janelas button:hover {
+  color: var(--text) !important;
+}
+
+#view-tracking .ag-janelas button[aria-pressed="true"] {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  box-shadow: 0 1px 2px var(--line-soft) !important;
+}
+
+.tracking-editor-tools > button {
+  width: 26px !important;
+  height: 26px !important;
+  min-height: 26px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  font-size: 0 !important;
+  transition: all 0.15s ease !important;
+}
+
+.tracking-editor-tools > button:hover {
+  background: var(--surface-hover) !important;
+  color: var(--text) !important;
+}
+
+.tracking-editor-tools > button svg {
+  width: 15px !important;
+  height: 15px !important;
+}
+
+/* Notion Segmented View Switcher (Tabs) */
+.ag-abas {
+  padding: 10px 40px 0 !important;
+  background: var(--surface) !important;
+  flex-shrink: 0 !important;
+}
+.ag-abas .tabs {
+  display: inline-flex !important;
+  background: var(--surface-hover) !important;
+  padding: 2px !important;
+  border-radius: 6px !important;
+  gap: 2px !important;
+  border: 1px solid var(--line-soft) !important;
+}
+.ag-abas .tabs button {
+  padding: 4px 14px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  border-radius: 4px !important;
+  border: none !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+.ag-abas .tabs button:hover {
+  color: var(--text) !important;
+}
+.ag-abas .tabs button[aria-selected="true"] {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  font-weight: 600 !important;
+  box-shadow: 0 1px 2px var(--line-soft) !important;
+}
+
+/* Notion Form Document Canvas */
+.tracking-form {
+  padding: 8px 40px 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* Notion Page Icon */
+.ag-notion-page-icon {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 8px !important;
+  background: var(--surface-hover) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--muted) !important;
+  margin: 6px 0 10px !important;
+  cursor: default !important;
+  user-select: none !important;
+  border: 1px solid var(--line-soft) !important;
+  transition: all 0.15s ease !important;
+}
+.ag-notion-page-icon:hover {
+  background: var(--surface-subtle) !important;
+  color: var(--text) !important;
+}
+.ag-notion-page-icon svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+/* Notion Page Title */
+.ag-notion-title-wrap {
+  display: block !important;
+  font-size: 0 !important;
+  margin: 4px 0 16px !important;
+  padding: 0 !important;
+  border: none !important;
+}
+.tracking-form .ag-notion-title-wrap input {
+  display: block !important;
+  width: 100% !important;
+  font-size: 30px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.025em !important;
+  color: var(--text) !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  padding: 2px 0 !important;
+  height: auto !important;
+  min-height: 38px !important;
+  box-shadow: none !important;
+  font-family: inherit !important;
+}
+.tracking-form .ag-notion-title-wrap input:hover,
+.tracking-form .ag-notion-title-wrap input:focus {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+.tracking-form .ag-notion-title-wrap input::placeholder {
+  color: var(--faint) !important;
+  font-weight: 600 !important;
+}
+
+/* Notion Properties Uniform Rows */
+.tracking-form > label:not(.ag-notion-title-wrap):not(.ag-notion-raw-desc),
+.tracking-form > fieldset.ag-notion-quando > label,
+.tracking-form > fieldset.ag-bloco > label {
+  display: grid !important;
+  grid-template-columns: 20px 160px minmax(0, 1fr) !important;
+  align-items: center !important;
+  min-height: 32px !important;
+  margin: 1px 0 !important;
+  padding: 2px 6px !important;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+  color: var(--muted) !important;
+  transition: background 0.1s ease !important;
+}
+
+.tracking-form > label:not(.ag-notion-title-wrap):not(.ag-notion-raw-desc):hover,
+.tracking-form > fieldset.ag-notion-quando > label:hover,
+.tracking-form > fieldset.ag-bloco > label:hover {
+  background: var(--surface-hover) !important;
+}
+
+/* Transparência para contêineres fieldset */
+.tracking-form > fieldset.ag-bloco,
+.tracking-form > fieldset.ag-notion-quando {
+  display: contents !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.tracking-form > fieldset.ag-bloco > legend,
+.tracking-form > fieldset.ag-notion-quando > legend,
+.tracking-form > fieldset.ag-bloco > p.detail {
+  display: none !important;
+}
+
+/* Notion Property Icons (SVG Masks via var(--muted)) */
+.tracking-form label[data-prop]::before,
+.tracking-form div[data-prop]::before {
+  content: "" !important;
+  display: inline-block !important;
+  width: 14px !important;
+  height: 14px !important;
+  background-color: var(--muted) !important;
+  mask-repeat: no-repeat !important;
+  mask-position: center !important;
+  mask-size: contain !important;
+  -webkit-mask-repeat: no-repeat !important;
+  -webkit-mask-position: center !important;
+  -webkit-mask-size: contain !important;
+  opacity: 0.7 !important;
+  grid-column: 1 !important;
+  justify-self: center !important;
+  transition: opacity 0.12s ease !important;
+}
+
+.tracking-form label[data-prop]:hover::before,
+.tracking-form div[data-prop]:hover::before {
+  opacity: 1 !important;
+}
+
+/* Ícones específicos por propriedade */
+.tracking-form [data-prop="cliente"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E") !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E") !important;
+}
+.tracking-form [data-prop="contratacao"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='20' height='14' x='2' y='7' rx='2'/%3E%3Cpath d='M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16'/%3E%3C/svg%3E") !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='20' height='14' x='2' y='7' rx='2'/%3E%3Cpath d='M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16'/%3E%3C/svg%3E") !important;
+}
+.tracking-form [data-prop="categoria"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z'/%3E%3Cpath d='M7 7h.01'/%3E%3C/svg%3E") !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z'/%3E%3Cpath d='M7 7h.01'/%3E%3C/svg%3E") !important;
+}
+.tracking-form [data-prop="inicio"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E") !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E") !important;
+}
+.tracking-form [data-prop="termino"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolyline points='12 6 12 12 16 14'/%3E%3C/svg%3E") !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolyline points='12 6 12 12 16 14'/%3E%3C/svg%3E") !important;
+}
+.tracking-form [data-prop="lembrete"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/%3E%3Cpath d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/%3E%3C/svg%3E") !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/%3E%3Cpath d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/%3E%3C/svg%3E") !important;
+}
+.tracking-form [data-prop="meet"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m22 8-6 4 6 4V8Z'/%3E%3Crect width='14' height='12' x='2' y='6' rx='2'/%3E%3C/svg%3E") !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m22 8-6 4 6 4V8Z'/%3E%3Crect width='14' height='12' x='2' y='6' rx='2'/%3E%3C/svg%3E") !important;
+}
+.tracking-form [data-prop="convidados"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='20' height='16' x='2' y='4' rx='2'/%3E%3Cpath d='m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7'/%3E%3C/svg%3E") !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='20' height='16' x='2' y='4' rx='2'/%3E%3Cpath d='m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7'/%3E%3C/svg%3E") !important;
+}
+.tracking-form [data-prop="local"]::before,
+.tracking-form [data-prop="local-livre"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z'/%3E%3Ccircle cx='12' cy='10' r='3'/%3E%3C/svg%3E") !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z'/%3E%3Ccircle cx='12' cy='10' r='3'/%3E%3C/svg%3E") !important;
+}
+.tracking-form [data-prop="repeticao"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m17 2 4 4-4 4'/%3E%3Cpath d='M3 11v-1a4 4 0 0 1 4-4h14'/%3E%3Cpath d='m7 22-4-4 4-4'/%3E%3Cpath d='M21 13v1a4 4 0 0 1-4 4H3'/%3E%3C/svg%3E") !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m17 2 4 4-4 4'/%3E%3Cpath d='M3 11v-1a4 4 0 0 1 4-4h14'/%3E%3Cpath d='m7 22-4-4 4-4'/%3E%3Cpath d='M21 13v1a4 4 0 0 1-4 4H3'/%3E%3C/svg%3E") !important;
+}
+.tracking-form [data-prop="sistema"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E") !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E") !important;
+}
+.tracking-form [data-prop="link-id"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='4' x2='20' y1='9' y2='9'/%3E%3Cline x1='4' x2='20' y1='15' y2='15'/%3E%3Cline x1='10' x2='8' y1='3' y2='21'/%3E%3Cline x1='16' x2='14' y1='3' y2='21'/%3E%3C/svg%3E") !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='4' x2='20' y1='9' y2='9'/%3E%3Cline x1='4' x2='20' y1='15' y2='15'/%3E%3Cline x1='10' x2='8' y1='3' y2='21'/%3E%3Cline x1='16' x2='14' y1='3' y2='21'/%3E%3C/svg%3E") !important;
+}
+.tracking-form [data-prop="link-url"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20'/%3E%3Cpath d='M2 12h20'/%3E%3C/svg%3E") !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20'/%3E%3Cpath d='M2 12h20'/%3E%3C/svg%3E") !important;
+}
+
+/* Notion Select Dropdowns */
+.tracking-form select {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='gray' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 6px center !important;
+  padding: 3px 22px 3px 6px !important;
+  height: 28px !important;
+  border-radius: 5px !important;
+  border: 1px solid transparent !important;
+  background-color: transparent !important;
+  color: var(--text) !important;
+  font-size: 13px !important;
+  font-family: inherit !important;
+  cursor: pointer !important;
+  width: fit-content !important;
+  max-width: 100% !important;
+  transition: background-color 0.12s ease, border-color 0.12s ease !important;
+}
+.tracking-form select:hover {
+  background-color: var(--surface-hover) !important;
+  border-color: var(--line) !important;
+}
+.tracking-form select:focus {
+  background-color: var(--surface) !important;
+  border-color: var(--primary) !important;
+  outline: none !important;
+}
+
+/* Notion Inputs */
+.tracking-form label:not(.ag-notion-title-wrap) input[type="text"],
+.tracking-form label:not(.ag-notion-title-wrap) input[type="url"],
+.tracking-form label:not(.ag-notion-title-wrap) input[type="number"] {
+  height: 28px !important;
+  padding: 3px 8px !important;
+  border-radius: 5px !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: var(--text) !important;
+  font-size: 13px !important;
+  font-family: inherit !important;
+  width: fit-content !important;
+  min-width: 200px !important;
+  max-width: 100% !important;
+  transition: background-color 0.12s ease, border-color 0.12s ease !important;
+}
+.tracking-form label:not(.ag-notion-title-wrap) input[type="text"]:hover,
+.tracking-form label:not(.ag-notion-title-wrap) input[type="url"]:hover,
+.tracking-form label:not(.ag-notion-title-wrap) input[type="number"]:hover {
+  background: var(--surface-hover) !important;
+  border-color: var(--line) !important;
+}
+.tracking-form label:not(.ag-notion-title-wrap) input[type="text"]:focus,
+.tracking-form label:not(.ag-notion-title-wrap) input[type="url"]:focus,
+.tracking-form label:not(.ag-notion-title-wrap) input[type="number"]:focus {
+  background: var(--surface) !important;
+  border-color: var(--primary) !important;
+  outline: none !important;
+}
+
+/* Notion Datetime Inputs (Compact & Aligned) */
+.tracking-form input[type="datetime-local"],
+.tracking-form input[type="date"] {
+  height: 28px !important;
+  padding: 3px 6px !important;
+  border-radius: 5px !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: var(--text) !important;
+  font-size: 13px !important;
+  font-family: inherit !important;
+  width: auto !important;
+  min-width: 175px !important;
+  max-width: 200px !important;
+  cursor: pointer !important;
+  transition: background-color 0.12s ease, border-color 0.12s ease !important;
+}
+.tracking-form input[type="datetime-local"]:hover,
+.tracking-form input[type="date"]:hover {
+  background: var(--surface-hover) !important;
+  border-color: var(--line) !important;
+}
+.tracking-form input[type="datetime-local"]:focus,
+.tracking-form input[type="date"]:focus {
+  background: var(--surface) !important;
+  border-color: var(--primary) !important;
+  outline: none !important;
+}
+
+/* Notion Descrição Automática da Categoria (Embaixo do Título) */
+.ag-notion-categoria-desc {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin: 0 0 12px !important;
+  padding: 0 !important;
+  min-height: 22px !important;
+  width: fit-content !important;
+}
+.ag-notion-categoria-desc[hidden] {
+  display: none !important;
+}
+.ag-notion-categoria-desc .badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 22px !important;
+  padding: 0 8px !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  border: none !important;
+  cursor: default !important;
+  user-select: none !important;
+  width: fit-content !important;
+}
+.ag-notion-categoria-desc .ag-notion-cat-detalhe {
+  font-size: 12px !important;
+  color: var(--muted) !important;
+  font-weight: 400 !important;
+}
+
+/* Notion Divider */
+.ag-notion-divider {
+  border: none !important;
+  border-top: 1px solid var(--line-soft) !important;
+  margin: 18px 0 16px !important;
+  width: 100% !important;
+}
+
+/* Notion Document Canvas (EditorJS) */
+#editorjs-container {
+  position: relative !important;
+  min-height: 380px !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0 0 320px 54px !important;
+  color: var(--text) !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  z-index: 25 !important;
+}
+#editorjs-container:focus-within {
+  border: none !important;
+  box-shadow: none !important;
+}
+#view-tracking dialog.tracking-editor.ag-janela-lateral #editorjs-container {
+  padding: 0 0 320px 50px !important;
+}
+.ce-block__content, .ce-toolbar__content {
+  max-width: 100% !important;
+  margin: 0 !important;
+}
+.ce-toolbar__actions {
+  left: -54px !important;
+  right: auto !important;
+}
+#view-tracking dialog.tracking-editor.ag-janela-lateral .ce-toolbar__actions {
+  left: -50px !important;
+}
+.ce-toolbar__plus,
+.ce-toolbar__settings-btn {
+  color: var(--muted) !important;
+  border-radius: 4px !important;
+  width: 24px !important;
+  height: 24px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: background 0.1s ease, color 0.1s ease !important;
+}
+.ce-toolbar__plus:hover,
+.ce-toolbar__settings-btn:hover {
+  background: var(--surface-hover) !important;
+  color: var(--text) !important;
+}
+
+/* Notion Slash Command Menu / Popover (Editor.js 2.30) */
+.ce-popover {
+  --width: 280px !important;
+  --max-height: 320px !important;
+  --border-radius: 8px !important;
+  --padding: 6px !important;
+  --color-border: var(--line) !important;
+  --color-background: var(--surface) !important;
+  --color-text-primary: var(--text) !important;
+  --color-text-secondary: var(--muted) !important;
+  --color-shadow: var(--line-soft) !important;
+  --color-background-item-hover: var(--surface-hover) !important;
+  --color-background-item-focus: var(--surface-hover) !important;
+  --color-background-icon-active: var(--surface-hover) !important;
+  --color-text-icon-active: var(--text) !important;
+  --color-border-icon: var(--line-soft) !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  width: 280px !important;
+  max-width: min(280px, calc(100vw - 40px)) !important;
+  z-index: 100 !important;
+}
+.ce-popover__container {
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: var(--shadow-pop) !important;
+  border-radius: 8px !important;
+  color: var(--text) !important;
+  padding: 6px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  z-index: 100 !important;
+}
+.ce-popover--opened > .ce-popover__container {
+  opacity: 1 !important;
+  max-height: 320px !important;
+  pointer-events: auto !important;
+}
+.cdx-search-field,
+.ce-popover__search {
+  background: var(--surface-hover) !important;
+  border: 1px solid var(--line-soft) !important;
+  border-radius: 6px !important;
+  margin: 2px 2px 6px 2px !important;
+  padding: 4px 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  box-shadow: none !important;
+  outline: none !important;
+  height: 32px !important;
+  box-sizing: border-box !important;
+}
+.cdx-search-field:focus-within,
+.ce-popover__search:focus-within {
+  border-color: var(--line-strong) !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+.cdx-search-field__icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: var(--muted) !important;
+  width: 16px !important;
+  height: 16px !important;
+  flex-shrink: 0 !important;
+}
+.cdx-search-field__icon svg {
+  width: 14px !important;
+  height: 14px !important;
+  stroke: var(--muted) !important;
+}
+.cdx-search-field__input {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: var(--text) !important;
+  font-size: 13px !important;
+  font-family: inherit !important;
+  line-height: 20px !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.cdx-search-field__input:focus,
+.cdx-search-field__input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+.cdx-search-field__input::placeholder {
+  color: var(--faint) !important;
+  font-size: 12px !important;
+}
+.ce-popover__items {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+  max-height: 240px !important;
+  overflow-y: auto !important;
+  scrollbar-width: thin !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.ce-popover-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 4px 8px !important;
+  min-height: 32px !important;
+  border-radius: 6px !important;
+  color: var(--text) !important;
+  font-size: 13px !important;
+  cursor: pointer !important;
+  transition: background 0.1s ease !important;
+  background: transparent !important;
+  border: none !important;
+  box-sizing: border-box !important;
+}
+.ce-popover-item:hover,
+.ce-popover-item--focused,
+.ce-popover-item--active {
+  background: var(--surface-hover) !important;
+  color: var(--text) !important;
+}
+.ce-popover-item__icon,
+.ce-popover-item__icon--tool {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: var(--surface-hover) !important;
+  border: 1px solid var(--line-soft) !important;
+  border-radius: 4px !important;
+  color: var(--text) !important;
+  flex-shrink: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.ce-popover-item__icon svg {
+  width: 13px !important;
+  height: 13px !important;
+  color: var(--text) !important;
+  stroke: var(--text) !important;
+}
+.ce-popover-item__title {
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--text) !important;
+  flex: 1 !important;
+  text-align: left !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.ce-popover-item__secondary-title {
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  color: var(--muted) !important;
+  background: var(--surface) !important;
+  border: 1px solid var(--line-soft) !important;
+  border-radius: 4px !important;
+  padding: 1px 5px !important;
+  margin-left: auto !important;
+  letter-spacing: 0.03em !important;
+  flex-shrink: 0 !important;
+}
+.ce-popover__nothing-found-message {
+  font-size: 12px !important;
+  color: var(--muted) !important;
+  padding: 12px !important;
+  text-align: center !important;
+}
+
+.ce-paragraph {
+  font-size: 15px !important;
+  line-height: 1.65 !important;
+  color: var(--text) !important;
+}
+.ce-paragraph[data-placeholder]:empty::before {
+  color: var(--faint) !important;
+  font-size: 15px !important;
+  font-weight: 400 !important;
+}
+.ce-header {
+  color: var(--text) !important;
+  font-weight: 700 !important;
+  margin-top: 16px !important;
+  margin-bottom: 8px !important;
+}
+
+.ag-notion-raw-desc {
+  display: none !important;
+}
+
+/* Notion Sticky Footer */
+.tracking-editor-footer {
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 20 !important;
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 10px 40px !important;
+  margin: 20px -40px 0 !important;
+  background: var(--surface) !important;
+  border-top: 1px solid var(--line-soft) !important;
+  flex-shrink: 0 !important;
+}
+
+.tracking-editor-footer button {
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 14px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  border-radius: 6px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+}
+
+.tracking-editor-footer button.secondary {
+  background: transparent !important;
+  color: var(--muted) !important;
+  border: 1px solid var(--line) !important;
+}
+.tracking-editor-footer button.secondary:hover {
+  background: var(--surface-hover) !important;
+  color: var(--text) !important;
+  border-color: var(--line-strong) !important;
+}
+
+.tracking-editor-footer button.primary {
+  background: var(--brand) !important;
+  color: var(--on-brand) !important;
+  border: none !important;
+  font-weight: 600 !important;
+}
+.tracking-editor-footer button.primary:hover {
+  filter: brightness(1.08) !important;
+}
+

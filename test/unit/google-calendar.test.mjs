@@ -201,7 +201,7 @@ test('a atividade avisa o Google ao editar e ao cancelar, e a resposta não espe
  const chamadas = [];
  const google = { detector: async () => true, sincronizar: (pool, row, acao) => { chamadas.push([row.id, acao]); return new Promise(() => {}); } };   // nunca resolve: a rota não pode esperar
  const rotas = {};
- trackingRoutes({ get: (p, h) => { rotas['GET ' + p] = h; }, post: (p, h) => { rotas['POST ' + p] = h; }, put: (p, h) => { rotas['PUT ' + p] = h; } }, { detector: criarDetector(), google });
+ trackingRoutes({ get: (p, h) => { rotas['GET ' + p] = h; }, post: (p, h) => { rotas['POST ' + p] = h; }, put: (p, h) => { rotas['PUT ' + p] = h; }, delete: (p, h) => { rotas['DELETE ' + p] = h; } }, { detector: criarDetector(), google });
  const linha = { id: ID, title: 'Novo título', status: 'planned', revision: 2, google_event_id: 'ev' };
  const pool = { query: async sql => (sql.includes('information_schema') ? { rows: [{ campos: 3, colunas: 5, tabelas: 4 }] } : { rows: [] }), async connect() { return { query: async sql => (sql.includes('information_schema') ? { rows: [{ campos: 3, colunas: 5, tabelas: 4 }] } : sql.startsWith('UPDATE service_activities') ? { rows: [linha] } : { rows: [] }), release() {} }; } };
  let saida;

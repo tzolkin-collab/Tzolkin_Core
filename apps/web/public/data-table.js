@@ -50,7 +50,7 @@ export const TOM_DO_ESTADO = Object.freeze({
  // etapa do lead
  open: 'info', qualified: 'accent', won: 'success', lost: 'neutral', archived: 'neutral',
 });
-export const TONS = Object.freeze(['neutral', 'success', 'warning', 'danger', 'info', 'accent']);
+export const TONS = Object.freeze(['neutral', 'success', 'warning', 'danger', 'info', 'accent', 'primary']);
 export const tomDoEstado = estado => TOM_DO_ESTADO[estado] || 'neutral';
 
 /** Selo no padrão do painel: `status` + o tom (neutral | success | warning | danger | info | accent). Os nomes antigos

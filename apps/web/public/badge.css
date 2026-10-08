@@ -17,6 +17,7 @@
   --badge-danger-bg:  #fce9ec; --badge-danger-fg:  #a11a31; --badge-danger-dot:  #d1364f;
   --badge-info-bg:    #e7effb; --badge-info-fg:    #1d4d96; --badge-info-dot:    #3a79d8;
   --badge-accent-bg:  #eeeafc; --badge-accent-fg:  #4e33ad; --badge-accent-dot:  #7656e8;
+  --badge-primary-bg: #e3f2fd; --badge-primary-fg: #0d47a1; --badge-primary-dot: #1976d2;
 }
 
 .status, .badge {
@@ -47,13 +48,14 @@
   border-radius: 50%;
   background: var(--b-dot);
 }
-:is(.status, .badge):is(.success, .active, .warning, .building, .danger, .failed, .info, .accent)::before { display: block; }
+:is(.status, .badge):is(.success, .active, .warning, .building, .danger, .failed, .info, .accent, .primary)::before { display: block; }
 
 :is(.status, .badge):is(.success, .active)  { --b-bg: var(--badge-success-bg); --b-fg: var(--badge-success-fg); --b-dot: var(--badge-success-dot); }
 :is(.status, .badge):is(.warning, .building) { --b-bg: var(--badge-warning-bg); --b-fg: var(--badge-warning-fg); --b-dot: var(--badge-warning-dot); }
 :is(.status, .badge):is(.danger, .failed)   { --b-bg: var(--badge-danger-bg);  --b-fg: var(--badge-danger-fg);  --b-dot: var(--badge-danger-dot); }
 :is(.status, .badge).info                   { --b-bg: var(--badge-info-bg);    --b-fg: var(--badge-info-fg);    --b-dot: var(--badge-info-dot); }
 :is(.status, .badge).accent                 { --b-bg: var(--badge-accent-bg);  --b-fg: var(--badge-accent-fg);  --b-dot: var(--badge-accent-dot); }
+:is(.status, .badge).primary                { --b-bg: var(--badge-primary-bg); --b-fg: var(--badge-primary-fg); --b-dot: var(--badge-primary-dot); }
 :is(.status, .badge).neutral                { --b-bg: var(--badge-neutral-bg); --b-fg: var(--badge-neutral-fg); --b-dot: transparent; }
 
 /* Etiqueta livre (tags digitadas, tipos do EasyPanel...): neutra, com fio, sem pontinho. Diferente de estado. */
@@ -98,4 +100,5 @@
   --badge-danger-bg:  #3d1820; --badge-danger-fg:  #ff9aa8; --badge-danger-dot:  #ec5a70;
   --badge-info-bg:    #14283f; --badge-info-fg:    #8fc2ff; --badge-info-dot:    #4a95f0;
   --badge-accent-bg:  #2a2147; --badge-accent-fg:  #b9a6ff; --badge-accent-dot:  #8c6cf5;
+  --badge-primary-bg: #112c52; --badge-primary-fg: #90caf9; --badge-primary-dot: #42a5f5;
 }

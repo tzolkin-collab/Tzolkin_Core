@@ -115,6 +115,7 @@ const FILES = {
  '/logos/vercel.svg': ['logos/vercel.svg', 'image/svg+xml'],
  '/logos/easypanel.svg': ['logos/easypanel.svg', 'image/svg+xml'],
  '/logos/google.svg': ['logos/google.svg', 'image/svg+xml'],
+ '/logos/gemini.svg': ['logos/gemini.svg', 'image/svg+xml'],
  '/logos/google-calendar.svg': ['logos/google-calendar.svg', 'image/svg+xml'],
  '/logos/meta.svg': ['logos/meta.svg', 'image/svg+xml'],
  '/logos/resend.svg': ['logos/resend.svg', 'image/svg+xml'],

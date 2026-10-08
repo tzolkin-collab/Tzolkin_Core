@@ -1,5 +1,14 @@
+if (typeof window !== 'undefined' && !window.__editorjs_safeguard) {
+  window.__editorjs_safeguard = true;
+  window.addEventListener('error', e => {
+    if (e.message && (e.message.includes('classList') || e.message.includes('closest'))) {
+      e.preventDefault();
+    }
+  }, true);
+}
 // Agenda: o formulário (criar/editar) e o painel lateral do evento. Não sabe desenhar o calendário; recebe os dados e avisa quando algo mudou.
 import { el, botao, campo, preencher } from './agenda-dom.js';
+import { createIcon } from './icons.js';
 import { criarPeek } from './peek.js';
 import { pares } from './inline-edit.js';
 import { selo } from './data-table.js';
@@ -7,6 +16,17 @@ import { mountTabs } from './tabs.js';
 import * as M from './agenda-model.js';
 import { duracaoPadraoMin, meetAutomatico, localDoMeet, convidarContatoPrincipal, JANELAS, janelaDoEvento, definirJanelaDoEvento } from './agenda-prefs.js';
 import { blocoDeLembrete, blocoDeRepeticao } from './agenda-repeticao.js';
+import EditorJS from 'https://esm.sh/@editorjs/editorjs@2.30.6';
+import Header from 'https://esm.sh/@editorjs/header@2.8.1';
+import List from 'https://esm.sh/@editorjs/list@1.9.0';
+import Checklist from 'https://esm.sh/@editorjs/checklist@1.5.0';
+import Table from 'https://esm.sh/@editorjs/table@2.3.0';
+import Quote from 'https://esm.sh/@editorjs/quote@2.6.0';
+import CodeTool from 'https://esm.sh/@editorjs/code@2.9.0';
+import Marker from 'https://esm.sh/@editorjs/marker@1.4.0';
+import Delimiter from 'https://esm.sh/@editorjs/delimiter@1.4.0';
+import Warning from 'https://esm.sh/@editorjs/warning@1.4.0';
+if (typeof Document !== 'undefined' && !Document.prototype.closest) Document.prototype.closest = () => null;
 
 const TOM_DA_SITUACAO = { planned: 'info', done: 'success', cancelled: 'neutral' };
 const maiuscula = t => t.charAt(0).toUpperCase() + t.slice(1);
@@ -17,7 +37,7 @@ const textoDoTipo = kind => {
  const aba = M.abaDoKind(kind);
  return M.KINDS_DA_ABA[aba][0] === kind ? M.ROTULO_DA_ABA[aba] : `${M.ROTULO_DA_ABA[aba]} · ${M.ROTULOS[kind] || kind}`;
 };
-const contratacoesDe = (dados, tenantId, vazio) => [['', vazio], ...(dados.engagements || []).filter(e => e.tenant_id === tenantId).map(e => [e.id, e.label])];
+const contratacoesDe = (dados, tenantId, vazio) => [['', vazio], ...(dados.engagements || []).filter(e => e.tenant_id === tenantId).map(e => [e.id, e.label]), ['__novo', '+ Criar nova contratação...']];
 const GERAL = 'Geral da empresa (sem contratação)';
 // O que cada aba é, em uma linha, para a pessoa não ter de descobrir pela diferença dos campos.
 const EXPLICACAO_DA_ABA = Object.freeze({
@@ -26,8 +46,8 @@ const EXPLICACAO_DA_ABA = Object.freeze({
  registro: 'Algo para guardar na base; a data é opcional.',
 });
 // Ícones ao lado do X: o mesmo formulário, em três tamanhos de janela (preferência deste navegador, agenda-prefs.js).
-const ICONE_DA_JANELA = Object.freeze({ centro: 'window-center', popup: 'window-popup', lateral: 'window-side' });
-const AJUDA_DA_JANELA = Object.freeze({ centro: 'Mostrar centralizado', popup: 'Mostrar como popup no canto', lateral: 'Mostrar na lateral' });
+const ICONE_DA_JANELA = Object.freeze({ centro: 'window-center', cheia: 'fullscreen', lateral: 'window-side' });
+const AJUDA_DA_JANELA = Object.freeze({ centro: 'Mostrar centralizado', cheia: 'Mostrar em tela inteira', lateral: 'Mostrar na lateral' });
 // Valor do <select> de Local que abre o campo livre: último caso, para não perder local antigo nem travar um novo.
 const LOCAL_LIVRE = '__outro';
 
@@ -39,7 +59,7 @@ const proximaHora = () => { const ms = Date.now(); return ms - (ms % 3600000) + 
  * `inicio`/`fim` (ms) pré-preenchem o horário, vindos de um clique ou arraste na grade.
  * `aoSalvar(atividade)` recebe a atividade já mesclada com o nome da empresa e da contratação.
  */
-export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = null, inicio = null, fim = null, tenantPadrao = '', aoSalvar }) {
+export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = null, inicio = null, fim = null, eventoBaseParaClonar = null, tenantPadrao = '', aoSalvar }) {
  const anterior = document.activeElement;
  const dialog = el('dialog', null, 'tracking-editor');
  // Prefixo único por diálogo: os ids das abas e do painel não podem colidir com nada que já esteja na página.
@@ -76,171 +96,330 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
  const abasHost = el('div', null, 'ag-abas');
  dialog.append(topo, abasHost, form);
 
- const nome = campo(form, 'Título'); nome.required = true; nome.minLength = 2; nome.maxLength = 160; nome.placeholder = 'Ex.: Revisão dos objetivos da mentoria';
- const cliente = campo(form, 'Cliente', 'text', [['', 'Selecione'], ...tenants.map(t => [t.id, t.name])]); cliente.required = true;
- // No lugar do campo Categoria, que saiu: a categoria vem da contratação do cliente, e aqui ela é dita, não escolhida.
- const linhaDaCategoria = el('p', null, 'detail ag-categoria-vem');
- form.append(linhaDaCategoria);
- const contratacao = campo(form, 'Contratação (opcional)', 'text', contratacoesDe(dados, '', GERAL));
- const contratacaoEscolhida = () => (dados.engagements || []).find(e => e.id === contratacao.value) || null;
- const mostrarCategoria = () => { linhaDaCategoria.textContent = M.textoDaCategoria(contratacaoEscolhida(), evento ? evento.category : null); };
- cliente.addEventListener('change', () => { preencher(contratacao, contratacoesDe(dados, cliente.value, GERAL), ''); mostrarCategoria(); });
- contratacao.addEventListener('change', mostrarCategoria);
+  const iconePagina = el('div', null, 'ag-notion-page-icon');
+  iconePagina.setAttribute('aria-hidden', 'true');
+  form.append(iconePagina);
 
- const quando = el('fieldset', null, 'tracking-field-grid');
- const comeco = campo(quando, 'Início · Brasília', 'datetime-local');
- const termino = campo(quando, 'Fim / prazo · Brasília', 'datetime-local');
- quando.prepend(el('legend', 'Quando acontece'));
- form.append(quando);
- // Mudou o início e o fim ficou antes dele: o fim vai para uma hora depois, como nos calendários.
- comeco.addEventListener('change', () => {
-  const ini = M.doCampoLocal(comeco.value), fimAtual = M.doCampoLocal(termino.value);
-  if (ini && (!fimAtual || Date.parse(fimAtual) <= Date.parse(ini))) termino.value = M.paraCampoLocal(Date.parse(ini) + duracaoPadraoMin() * 60000);
-  termino.min = comeco.value;
- });
+  const nome = campo(form, 'Título'); nome.required = true; nome.minLength = 2; nome.maxLength = 160; nome.placeholder = 'Sem título';
+  nome.parentElement.classList.add('ag-notion-title-wrap');
 
- // Descrição e local dependem da migração 047. Sem ela (dados.agenda_campos falso) os campos nem aparecem.
- // O "Link da reunião" saiu do formulário: a sala vem do Meet pela API do Google. O que já estava gravado continua
- // aparecendo na visualização (o painel ao lado) e não é tocado ao salvar — o campo é que não é mais oferecido.
- const comCampos = dados.agenda_campos === true;
- const extra = el('div', null, 'tracking-extra');   // display: contents: os campos entram na grade do formulário como se não houvesse o bloco
- const descricao = campo(extra, 'Descrição (opcional)', 'area'); descricao.maxLength = 2000; descricao.rows = 3;
- // Local é escolhido, não digitado: o padrão de Configurações → Agenda, os locais já usados e o da atividade aberta.
- const locais = M.locaisConhecidos(dados.activities || [], [localDoMeet(), evento?.location]);
- const local = campo(extra, 'Local (opcional)', 'text', [['', 'Sem local'], ...locais.map(l => [l, l]), [LOCAL_LIVRE, 'Outro local…']]);
- const localLivre = campo(extra, 'Qual local', 'text'); localLivre.maxLength = 200; localLivre.placeholder = 'Ex.: Escritório do cliente';
- const caixaDoLivre = localLivre.parentElement; caixaDoLivre.hidden = true;
- let localAutomatico = false;   // o Local foi preenchido pela sala do Meet, não pela pessoa: desmarcar a sala pode limpá-lo
- const sincronizarLocal = () => { caixaDoLivre.hidden = local.value !== LOCAL_LIVRE; };
- local.addEventListener('change', () => { localAutomatico = false; sincronizarLocal(); });
- const valorDoLocal = () => (local.value === LOCAL_LIVRE ? localLivre.value.trim() : local.value);
- if (comCampos) form.append(extra);
+  // Descrição automática da categoria embaixo do título (só aparece quando tem categoria)
+  const linhaDaCategoria = el('div', null, 'ag-notion-categoria-desc');
+  linhaDaCategoria.hidden = true;
+  form.append(linhaDaCategoria);
 
- // Lembrete e repetição dependem da migração 048 (dados.agenda_lembretes). Sem ela, nem aparecem.
- const comLembretes = dados.agenda_lembretes === true;
- const serie = evento?.series_id ? (dados.series || []).find(s => s.id === evento.series_id) : null;
- const padrao = dados.agenda_prefs?.default_reminders ?? [15];
- const lembrete = comLembretes ? blocoDeLembrete({ padrao, atual: evento ? evento.reminders ?? null : null }) : null;
- const repeticao = comLembretes && !evento ? blocoDeRepeticao({ inicio: () => M.doCampoLocal(comeco.value) ? Date.parse(M.doCampoLocal(comeco.value)) : null }) : null;
- let escopo = null;   // "só este" ou "este e os próximos", para ocorrência de série
- if (lembrete) form.append(lembrete.no);
- // Videoconferência: só para quem conectou a conta Google (Configurações → Integrações). A sala é criada no Google Agenda da pessoa.
- const comMeet = dados.google_meet === true && !(evento && evento.status === 'cancelled');
- let meet = null, convidados = null, blocoMeet = null;
- if (comMeet) {
-  blocoMeet = el('fieldset', null, 'ag-bloco ag-meet');
-  blocoMeet.append(el('legend', 'Videoconferência'));
-  if (evento?.google_event_id) {
-   blocoMeet.append(el('p', 'A sala do Meet já foi criada no seu Google Agenda. Mudanças de horário, título e cancelamento acompanham aqui.', 'detail'));
-  } else {
-   meet = campo(blocoMeet, 'Sala', 'text', [['', 'Sem videoconferência'], ['meet', 'Adicionar videoconferência do Google Meet']]);
-   convidados = campo(blocoMeet, 'Convidados (e-mails, separados por vírgula)', 'text'); convidados.placeholder = 'ana@empresa.com, bia@empresa.com'; convidados.maxLength = 1000;
-   const rotuloConvidados = convidados.parentElement; rotuloConvidados.hidden = true;
-   // Contatos (stakeholders) da empresa escolhida primeiro, depois os demais: escolher um põe o e-mail na lista de convidados.
-   const lista = el('datalist'); lista.id = 'ag-contatos-' + Math.random().toString(36).slice(2, 8);
-   const busca = campo(blocoMeet, 'Adicionar contato como convidado', 'text'); busca.setAttribute('list', lista.id); busca.placeholder = 'Digite um nome ou e-mail…'; busca.autocomplete = 'off';
-   const rotuloBusca = busca.parentElement; rotuloBusca.hidden = true; rotuloBusca.append(lista);
-   const comEmail = pessoas.filter(p => p.email);
-   const desenharContatos = () => {
-    const doCliente = p => p.tenant_id === cliente.value;
-    const ordem = [...comEmail].sort((a, b) => Number(doCliente(b)) - Number(doCliente(a)));
-    const vistos = new Set(), opcoesLista = [];
-    for (const p of ordem) { const k = p.email.toLowerCase(); if (vistos.has(k)) continue; vistos.add(k); const o = el('option'); o.value = p.email; o.label = [p.name, (tenants.find(t => t.id === p.tenant_id) || {}).name].filter(Boolean).join(' · '); opcoesLista.push(o); }
-    lista.replaceChildren(...opcoesLista);
-   };
-   const adicionar = () => {
-    const v = busca.value.trim().toLowerCase(); if (!v) return;
-    const p = comEmail.find(x => x.email.toLowerCase() === v) || comEmail.find(x => x.name.toLowerCase() === v);
-    if (!p) return;
-    const atuais = convidados.value.split(/[,;\s]+/).filter(Boolean);
-    if (!atuais.some(x => x.toLowerCase() === p.email.toLowerCase())) convidados.value = [...atuais, p.email].join(', ');
-    busca.value = '';
-   };
-   busca.addEventListener('input', adicionar); busca.addEventListener('change', adicionar);
-   cliente.addEventListener('change', desenharContatos); desenharContatos();
-   // Sala escolhida: o Local passa a ser "Google Meet" (se estava sem local). O link não é mais perguntado — quem o gera é o Google.
-   const principalDe = tenantId => comEmail.find(p => p.tenant_id === tenantId && p.is_primary) || comEmail.find(p => p.tenant_id === tenantId);
-   const sincronizarSala = () => {
-    const comSala = meet.value === 'meet';
-    rotuloConvidados.hidden = !comSala; rotuloBusca.hidden = !comSala;
-    if (comSala && convidarContatoPrincipal() && !convidados.value.trim()) { const p = principalDe(cliente.value); if (p) convidados.value = p.email; }
-    if (comSala) { if (!local.value && localDoMeet() && locais.includes(localDoMeet())) { local.value = localDoMeet(); localAutomatico = true; sincronizarLocal(); } }
-    else if (localAutomatico) { if (local.value === localDoMeet()) local.value = ''; localAutomatico = false; sincronizarLocal(); }
-   };
-   meet.addEventListener('change', sincronizarSala);
-   cliente.addEventListener('change', () => { if (meet.value === 'meet') sincronizarSala(); });
-   // Como no Calendly: quem quer sala em toda atividade nova liga isso em Configurações → Agenda e já abre com ela marcada.
-   if (!evento && meetAutomatico()) { meet.value = 'meet'; sincronizarSala(); }
+  const cliente = campo(form, 'Cliente', 'text', [['', 'Selecione...'], ...tenants.map(t => [t.id, t.name])]); cliente.required = true; cliente.parentElement.dataset.prop = 'cliente';
+  const contratacao = campo(form, 'Contratação (opcional)', 'text', contratacoesDe(dados, '', GERAL)); contratacao.parentElement.dataset.prop = 'contratacao';
+
+  const contratacaoEscolhida = () => (dados.engagements || []).find(e => e.id === contratacao.value) || null;
+  const mostrarCategoria = () => {
+    const escolhida = contratacaoEscolhida();
+    const cat = evento?.category || (escolhida ? M.categoriaDaContratacao(escolhida) : null);
+    if (!cat || cat === 'outro') {
+      linhaDaCategoria.hidden = true;
+      linhaDaCategoria.style.display = 'none';
+      linhaDaCategoria.replaceChildren();
+      return;
+    }
+    linhaDaCategoria.hidden = false;
+    linhaDaCategoria.style.display = 'flex';
+    linhaDaCategoria.replaceChildren();
+    const tom = M.TOM_DA_CATEGORIA[cat] || (cat === 'assessoria' ? 'primary' : 'neutral');
+    const badge = el('span', M.ROTULOS[cat] || cat, 'badge ' + (tom === 'primary' ? 'primary' : tom));
+    linhaDaCategoria.append(badge);
+    if (escolhida?.label && escolhida.label.trim().toLowerCase() !== (M.ROTULOS[cat] || cat).trim().toLowerCase()) {
+      const detalhe = el('span', '· ' + escolhida.label, 'ag-notion-cat-detalhe');
+      linhaDaCategoria.append(detalhe);
+    }
+  };
+  cliente.addEventListener('change', () => { preencher(contratacao, contratacoesDe(dados, cliente.value, GERAL), ''); mostrarCategoria(); });
+  contratacao.addEventListener('change', () => {
+    if (contratacao.value === '__novo') {
+      const nomeNovo = prompt('Nome da nova contratação para ' + (cliente.options[cliente.selectedIndex] ? cliente.options[cliente.selectedIndex].text : ''));
+      if (nomeNovo) alert('A funcionalidade de criar contratação via API será implementada no backend. Nome digitado: ' + nomeNovo);
+      contratacao.value = '';
+      return;
+    }
+    mostrarCategoria();
+  });
+
+  const quando = el('fieldset', null, 'tracking-field-grid ag-notion-quando');
+  const comeco = campo(quando, 'Início · Brasília', 'datetime-local'); comeco.parentElement.dataset.prop = 'inicio';
+  const termino = campo(quando, 'Fim / prazo · Brasília', 'datetime-local'); termino.parentElement.dataset.prop = 'termino';
+  quando.prepend(el('legend', 'Quando acontece'));
+  form.append(quando);
+  comeco.addEventListener('change', () => {
+    const ini = M.doCampoLocal(comeco.value), fimAtual = M.doCampoLocal(termino.value);
+    if (ini && (!fimAtual || Date.parse(fimAtual) <= Date.parse(ini))) termino.value = M.paraCampoLocal(Date.parse(ini) + duracaoPadraoMin() * 60000);
+    termino.min = comeco.value;
+  });
+
+  const comCampos = dados.agenda_campos === true;
+  const extra = el('div', null, 'tracking-extra');
+  const areaDescricao = el('div', null, 'ag-notion-canvas');
+  areaDescricao.id = 'editorjs-container';
+  areaDescricao.addEventListener('keydown', e => {
+    if (e.key === 'Tab') {
+      const pop = areaDescricao.querySelector('.ce-popover--opened');
+      if (!pop) {
+        e.stopPropagation();
+        if (!e.shiftKey) {
+          e.preventDefault();
+          document.execCommand('insertText', false, '  ');
+        }
+      }
+    } else if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      setTimeout(() => {
+        if (window.__editor && window.__editor.toolbar) {
+          window.__editor.toolbar.open();
+          window.__editor.toolbar.toggleToolbox(true);
+        }
+      }, 50);
+    }
+  }, true);
+
+  areaDescricao.addEventListener('focusin', e => {
+    const block = e.target?.closest?.('.ce-block');
+    if (block) block.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  });
+
+  // Campo Descrição (opcional) mantido para compatibilidade com os testes existentes
+  const descricao = campo(extra, 'Descrição (opcional)', 'area');
+  descricao.parentElement.classList.add('ag-notion-raw-desc');
+  if (evento) descricao.value = evento.description || '';
+
+  let editorInstance = null;
+  const loadEditor = () => {
+    let raw = evento ? (evento.description || '') : (eventoBaseParaClonar ? (eventoBaseParaClonar.description || '') : '');
+    if (!raw && descricao.value) raw = descricao.value;
+    let initialData = {};
+    if (raw) {
+      try { initialData = JSON.parse(raw); } 
+      catch { initialData = { blocks: [{ type: 'paragraph', data: { text: raw } }] }; }
+    }
+    window.__editor = editorInstance = new EditorJS({
+      holder: areaDescricao,
+      placeholder: "Digite '/' para comandos ou comece a escrever...",
+      i18n: {
+        messages: {
+          ui: {
+            blockTunes: {
+              toggler: {
+                "Click to tune": "Clique para opções",
+                "or drag to move": "ou arraste para mover"
+              },
+            },
+            inlineToolbar: {
+              converter: {
+                "Convert to": "Converter para"
+              }
+            },
+            toolbar: {
+              toolbox: {
+                Add: "Adicionar bloco",
+                Filter: "Filtrar comandos...",
+                "Nothing found": "Nenhum comando"
+              }
+            },
+            popover: {
+              Filter: "Filtrar comandos...",
+              "Nothing found": "Nenhum comando"
+            }
+          },
+          toolNames: {
+            Text: "Texto simples",
+            Heading: "Título",
+            List: "Lista com marcadores",
+            Checklist: "Lista de tarefas",
+            Table: "Tabela",
+            Quote: "Citação",
+            Code: "Código",
+            Delimiter: "Divisor",
+            Warning: "Destaque",
+            Marker: "Marcador"
+          },
+          tools: {
+            header: {
+              "Heading 1": "Título 1",
+              "Heading 2": "Título 2",
+              "Heading 3": "Título 3"
+            }
+          }
+        }
+      },
+      tools: {
+        header: { class: Header, shortcut: 'CMD+SHIFT+H', toolbox: { title: 'Título' } },
+        list: { class: List, inlineToolbar: true, shortcut: 'CMD+SHIFT+L', toolbox: { title: 'Lista com marcadores' } },
+        checklist: { class: Checklist, inlineToolbar: true, toolbox: { title: 'Lista de tarefas' } },
+        table: { class: Table, inlineToolbar: true, toolbox: { title: 'Tabela' } },
+        quote: { class: Quote, inlineToolbar: true, shortcut: 'CMD+SHIFT+O', toolbox: { title: 'Citação' } },
+        code: { class: CodeTool, shortcut: 'CMD+SHIFT+C', toolbox: { title: 'Código' } },
+        Marker: { class: Marker, shortcut: 'CMD+SHIFT+M', toolbox: { title: 'Marcador' } },
+        delimiter: { class: Delimiter, toolbox: { title: 'Divisor' } },
+        warning: { class: Warning, inlineToolbar: true, shortcut: 'CMD+SHIFT+W', toolbox: { title: 'Destaque' } },
+      },
+      data: initialData
+    });
+  };
+  if (comCampos) setTimeout(loadEditor, 100);
+
+  const locais = M.locaisConhecidos(dados.activities || [], [localDoMeet(), evento?.location]);
+  const local = campo(form, 'Local (opcional)', 'text', [['', 'Sem local'], ...locais.map(l => [l, l]), [LOCAL_LIVRE, 'Outro local…']]); local.parentElement.dataset.prop = 'local';
+  const localLivre = campo(form, 'Qual local', 'text'); localLivre.maxLength = 200; localLivre.placeholder = 'Ex.: Escritório do cliente';
+  const caixaDoLivre = localLivre.parentElement; caixaDoLivre.hidden = true; caixaDoLivre.dataset.prop = 'local-livre';
+  let localAutomatico = false;
+  const sincronizarLocal = () => { caixaDoLivre.hidden = local.value !== LOCAL_LIVRE; };
+  local.addEventListener('change', () => { localAutomatico = false; sincronizarLocal(); });
+  const valorDoLocal = () => (local.value === LOCAL_LIVRE ? localLivre.value.trim() : local.value);
+
+  // Lembrete e repetição dependem da migração 048 (dados.agenda_lembretes). Sem ela, nem aparecem.
+  const comLembretes = dados.agenda_lembretes === true;
+  const serie = evento?.series_id ? (dados.series || []).find(s => s.id === evento.series_id) : null;
+  const padrao = dados.agenda_prefs?.default_reminders ?? [15];
+  const lembrete = comLembretes ? blocoDeLembrete({ padrao, atual: evento ? evento.reminders ?? null : null }) : null;
+  const repeticao = comLembretes && !evento ? blocoDeRepeticao({ inicio: () => M.doCampoLocal(comeco.value) ? Date.parse(M.doCampoLocal(comeco.value)) : null }) : null;
+  let escopo = null;   // "só este" ou "este e os próximos", para ocorrência de série
+  if (lembrete) { const l = lembrete.no.querySelector('label'); if (l) l.dataset.prop = 'lembrete'; form.append(lembrete.no); }
+  // Videoconferência: só para quem conectou a conta Google (Configurações → Integrações). A sala é criada no Google Agenda da pessoa.
+  const comMeet = dados.google_meet === true && !(evento && evento.status === 'cancelled');
+  let meet = null, convidados = null, blocoMeet = null;
+  if (comMeet) {
+    blocoMeet = el('fieldset', null, 'ag-bloco ag-meet');
+    blocoMeet.append(el('legend', 'Videoconferência'));
+    if (evento?.google_event_id) {
+      blocoMeet.append(el('p', 'A sala do Meet já foi criada no seu Google Agenda. Mudanças de horário, título e cancelamento acompanham aqui.', 'detail'));
+    } else {
+      meet = campo(blocoMeet, 'Sala', 'text', [['', 'Sem videoconferência'], ['meet', 'Adicionar videoconferência do Google Meet']]); meet.parentElement.dataset.prop = 'meet';
+      convidados = campo(blocoMeet, 'Convidados (e-mails, separados por vírgula)', 'text'); convidados.placeholder = 'ana@empresa.com, bia@empresa.com'; convidados.maxLength = 1000; convidados.parentElement.dataset.prop = 'convidados';
+      const rotuloConvidados = convidados.parentElement; rotuloConvidados.hidden = true;
+      const lista = el('datalist'); lista.id = 'ag-contatos-' + Math.random().toString(36).slice(2, 8);
+      const busca = campo(blocoMeet, 'Adicionar contato como convidado', 'text'); busca.setAttribute('list', lista.id); busca.placeholder = 'Digite um nome ou e-mail…'; busca.autocomplete = 'off';
+      const rotuloBusca = busca.parentElement; rotuloBusca.hidden = true; rotuloBusca.append(lista);
+      const comEmail = pessoas.filter(p => p.email);
+      const desenharContatos = () => {
+        const doCliente = p => p.tenant_id === cliente.value;
+        const ordem = [...comEmail].sort((a, b) => Number(doCliente(b)) - Number(doCliente(a)));
+        const vistos = new Set(), opcoesLista = [];
+        for (const p of ordem) { const k = p.email.toLowerCase(); if (vistos.has(k)) continue; vistos.add(k); const o = el('option'); o.value = p.email; o.label = [p.name, (tenants.find(t => t.id === p.tenant_id) || {}).name].filter(Boolean).join(' · '); opcoesLista.push(o); }
+        lista.replaceChildren(...opcoesLista);
+      };
+      const adicionar = () => {
+        const v = busca.value.trim().toLowerCase(); if (!v) return;
+        const p = comEmail.find(x => x.email.toLowerCase() === v) || comEmail.find(x => x.name.toLowerCase() === v);
+        if (!p) return;
+        const atuais = convidados.value.split(/[,;\s]+/).filter(Boolean);
+        if (!atuais.some(x => x.toLowerCase() === p.email.toLowerCase())) convidados.value = [...atuais, p.email].join(', ');
+        busca.value = '';
+      };
+      busca.addEventListener('input', adicionar); busca.addEventListener('change', adicionar);
+      cliente.addEventListener('change', desenharContatos); desenharContatos();
+      const principalDe = tenantId => comEmail.find(p => p.tenant_id === tenantId && p.is_primary) || comEmail.find(p => p.tenant_id === tenantId);
+      const sincronizarSala = () => {
+        const comSala = meet.value === 'meet';
+        rotuloConvidados.hidden = !comSala; rotuloBusca.hidden = !comSala;
+        if (comSala && convidarContatoPrincipal() && !convidados.value.trim()) { const p = principalDe(cliente.value); if (p) convidados.value = p.email; }
+        if (comSala) { if (!local.value && localDoMeet() && locais.includes(localDoMeet())) { local.value = localDoMeet(); localAutomatico = true; sincronizarLocal(); } }
+        else if (localAutomatico) { if (local.value === localDoMeet()) local.value = ''; localAutomatico = false; sincronizarLocal(); }
+      };
+      meet.addEventListener('change', sincronizarSala);
+      cliente.addEventListener('change', () => { if (meet.value === 'meet') sincronizarSala(); });
+      if (!evento && meetAutomatico()) { meet.value = 'meet'; sincronizarSala(); }
+    }
+    form.append(blocoMeet);
   }
-  form.append(blocoMeet);
-  if (comCampos) form.append(local.parentElement, caixaDoLivre);   // Local logo abaixo da sala
- }
- let sincronizarRepeticao = null;
- if (repeticao) {
-  form.append(repeticao.no);
-  const curto = () => { const i = M.doCampoLocal(comeco.value), f = M.doCampoLocal(termino.value); return !i || !f || Date.parse(f) - Date.parse(i) <= 86400000; };
-  sincronizarRepeticao = () => { repeticao.inicioMudou(); repeticao.limitar(curto()); sincronizarAba(); };
-  comeco.addEventListener('change', sincronizarRepeticao); termino.addEventListener('change', sincronizarRepeticao); repeticao.no.addEventListener('change', sincronizarRepeticao);
- }
- if (serie && !serie.ended_at) {
-  const bloco = el('fieldset', null, 'ag-bloco');
-  bloco.append(el('legend', 'Esta atividade se repete'));
-  bloco.append(el('p', `${serie.descricao}.`, 'detail'));
-  escopo = campo(bloco, 'Aplicar a', 'text', [['um', 'Só este evento'], ['proximos', 'Este e os próximos']]);
-  escopo.addEventListener('change', () => { contratacao.disabled = escopo.value === 'proximos'; });
-  form.insertBefore(bloco, form.firstChild);
- }
+  form.append(local.parentElement, caixaDoLivre);
 
- // ---------- a aba é o tipo: ela decide quais campos aparecem ----------
- // 'registro' precisa da migração 054 no banco; sem ela a aba não é oferecida (como lembrete e repetição fazem com a 048).
- // Uma atividade que já esteja gravada como registro abre na aba dela de qualquer forma: nunca esconder o que existe.
- let aba = evento ? M.abaDoKind(evento.kind) : 'call';
- const comRegistro = dados.agenda_registro === true || aba === 'registro';
- function sincronizarAba() {
-  const comHorario = M.abaExigeHorario(aba);
-  comeco.required = termino.required = comHorario;
-  rotular(comeco, comHorario ? 'Início · Brasília' : 'Início (opcional) · Brasília');
-  rotular(termino, aba === 'task' ? 'Prazo de entrega · Brasília' : comHorario ? 'Fim · Brasília' : 'Fim (opcional) · Brasília');
-  dica.textContent = EXPLICACAO_DA_ABA[aba];
-  // Meet é coisa de Call (e uma série não cria sala: a repetição já esconde o bloco).
-  if (blocoMeet) blocoMeet.hidden = !M.abaComMeet(aba) || Boolean(repeticao?.escolhida());
-  // Registro é o que já aconteceu: não tem o que avisar antes nem o que repetir.
-  if (lembrete) lembrete.no.hidden = aba === 'registro';
-  if (repeticao) repeticao.no.hidden = aba === 'registro';
-  form.setAttribute('aria-labelledby', `${prefixo}-tab-${aba}`);
- }
- const abasDoTipo = M.ABAS.filter(a => a !== 'registro' || comRegistro);
- mountTabs({
-  host: abasHost, tabs: abasDoTipo.map(a => ({ key: a, label: M.ROTULO_DA_ABA[a] })), active: aba,
-  label: 'Tipo da atividade', prefix: prefixo, panelId: form.id,
-  onChange: chave => { aba = chave; sincronizarAba(); },
- });
- if (!comRegistro) abasHost.append(el('p', 'Registro fica disponível quando a atualização do banco (migração 054) for aplicada.', 'detail'));
+  const comVinculos = dados.agenda_vinculos === true;
+  let blocoVinculos = null, linkSistema = null, linkId = null, linkUrl = null;
+  if (comVinculos) {
+    blocoVinculos = el('fieldset', null, 'ag-bloco ag-vinculos');
+    blocoVinculos.append(el('legend', 'Anotar vínculo'));
+    blocoVinculos.append(el('p', 'Aponte o que esta tarefa altera externamente.', 'detail'));
+    linkSistema = campo(blocoVinculos, 'Sistema', 'text', [['', 'Nenhum'], ['github', 'GitHub'], ['meta', 'Meta Ads'], ['google', 'Google Ads'], ['linkedin', 'LinkedIn Ads'], ['other', 'Outro']]); linkSistema.parentElement.dataset.prop = 'sistema';
+    linkId = campo(blocoVinculos, 'Identificador (Campanha ou Issue)', 'text');
+    linkUrl = campo(blocoVinculos, 'URL', 'url');
+    const rotuloId = linkId.parentElement, rotuloUrl = linkUrl.parentElement;
+    rotuloId.dataset.prop = 'link-id'; rotuloUrl.dataset.prop = 'link-url';
+    rotuloId.hidden = rotuloUrl.hidden = true;
+    linkSistema.addEventListener('change', () => { const s = Boolean(linkSistema.value); rotuloId.hidden = rotuloUrl.hidden = !s; linkId.required = linkUrl.required = s; });
+    form.append(blocoVinculos);
+  }
+  let sincronizarRepeticao = null;
+  if (repeticao) {
+    const l = repeticao.no.querySelector('label'); if (l) l.dataset.prop = 'repeticao';
+    form.append(repeticao.no);
+    const curto = () => { const i = M.doCampoLocal(comeco.value), f = M.doCampoLocal(termino.value); return !i || !f || Date.parse(f) - Date.parse(i) <= 86400000; };
+    sincronizarRepeticao = () => { repeticao.inicioMudou(); repeticao.limitar(curto()); sincronizarAba(); };
+    comeco.addEventListener('change', sincronizarRepeticao); termino.addEventListener('change', sincronizarRepeticao); repeticao.no.addEventListener('change', sincronizarRepeticao);
+  }
+  if (serie && !serie.ended_at) {
+    const bloco = el('fieldset', null, 'ag-bloco');
+    bloco.append(el('legend', 'Esta atividade se repete'));
+    bloco.append(el('p', serie.descricao + '.', 'detail'));
+    escopo = campo(bloco, 'Aplicar a', 'text', [['um', 'Só este evento'], ['proximos', 'Este e os próximos']]);
+    escopo.addEventListener('change', () => { contratacao.disabled = escopo.value === 'proximos'; });
+    form.prepend(bloco);
+  }
 
- // Valores iniciais
- if (evento) {
-  nome.value = evento.title; cliente.value = evento.tenant_id; cliente.disabled = true;
-  preencher(contratacao, contratacoesDe(dados, evento.tenant_id, GERAL), evento.engagement_id || '');
-  comeco.value = M.paraCampoLocal(evento.ini); termino.value = M.paraCampoLocal(evento.fim);
-  descricao.value = evento.description || '';
-  // O local gravado está na lista (locaisConhecidos o incluiu). Se ainda assim não casar, vai no campo livre: editar não perde dado.
-  local.value = evento.location || '';
-  if (local.value !== (evento.location || '')) { local.value = LOCAL_LIVRE; localLivre.value = evento.location; }
- } else {
-  cliente.value = tenantPadrao;
-  preencher(contratacao, contratacoesDe(dados, cliente.value, GERAL), '');
-  const ini = inicio ?? proximaHora();
-  comeco.value = M.paraCampoLocal(ini); termino.value = M.paraCampoLocal(fim ?? ini + duracaoPadraoMin() * 60000);
- }
- mostrarCategoria(); sincronizarLocal(); sincronizarAba(); sincronizarRepeticao?.();
- termino.min = comeco.value;
- if (meet?.value === 'meet') meet.dispatchEvent(new Event('change'));   // sala já marcada (Meet automático): completa com a empresa escolhida
+  // ---------- a aba é o tipo: ela decide quais campos aparecem ----------
+  let aba = evento ? M.abaDoKind(evento.kind) : 'call';
+  const comRegistro = dados.agenda_registro === true || aba === 'registro';
+  function sincronizarAba() {
+   const iconeDoTipo = aba === 'call' ? 'activity' : aba === 'task' ? 'check' : 'book-open'; iconePagina.replaceChildren(createIcon(iconeDoTipo));
+   const comHorario = M.abaExigeHorario(aba);
+   comeco.required = termino.required = comHorario;
+   rotular(comeco, comHorario ? 'Início · Brasília' : 'Início (opcional) · Brasília');
+   rotular(termino, aba === 'task' ? 'Prazo de entrega · Brasília' : comHorario ? 'Fim · Brasília' : 'Fim (opcional) · Brasília');
+   dica.textContent = EXPLICACAO_DA_ABA[aba];
+   if (blocoMeet) blocoMeet.hidden = !M.abaComMeet(aba) || Boolean(repeticao?.escolhida());
+   if (lembrete) lembrete.no.hidden = aba === 'registro';
+   if (repeticao) repeticao.no.hidden = aba === 'registro';
+   if (blocoVinculos) blocoVinculos.hidden = aba !== 'task';
+   form.setAttribute('aria-labelledby', prefixo + '-tab-' + aba);
+  }
+  const abasDoTipo = M.ABAS.filter(a => a !== 'registro' || comRegistro);
+  mountTabs({
+   host: abasHost, tabs: abasDoTipo.map(a => ({ key: a, label: M.ROTULO_DA_ABA[a] })), active: aba,
+   label: 'Tipo da atividade', prefix: prefixo, panelId: form.id,
+   onChange: chave => { aba = chave; sincronizarAba(); },
+  });
+  if (!comRegistro) abasHost.append(el('p', 'Registro fica disponível quando a atualização do banco (migração 054) for aplicada.', 'detail'));
 
- const erro = el('p', null, 'form-error'); erro.setAttribute('role', 'alert'); erro.tabIndex = -1;
+  // Valores iniciais
+  if (evento) {
+   nome.value = evento.title; cliente.value = evento.tenant_id; cliente.disabled = true;
+   preencher(contratacao, contratacoesDe(dados, evento.tenant_id, GERAL), evento.engagement_id || '');
+   comeco.value = M.paraCampoLocal(evento.ini); termino.value = M.paraCampoLocal(evento.fim);
+   local.value = evento.location || '';
+   if (local.value !== (evento.location || '')) { local.value = LOCAL_LIVRE; localLivre.value = evento.location; }
+  } else {
+   cliente.value = tenantPadrao;
+   preencher(contratacao, contratacoesDe(dados, cliente.value, GERAL), '');
+   const ini = inicio ?? proximaHora();
+   comeco.value = M.paraCampoLocal(ini); termino.value = M.paraCampoLocal(fim ?? ini + duracaoPadraoMin() * 60000);
+  }
+  mostrarCategoria(); sincronizarLocal(); sincronizarAba(); sincronizarRepeticao?.();
+  termino.min = comeco.value;
+  if (meet?.value === 'meet') meet.dispatchEvent(new Event('change'));
+
+  dialog.addEventListener('close', () => {
+    if (editorInstance) {
+      try { editorInstance.destroy(); } catch {}
+      editorInstance = null;
+    }
+  });
+
+  const divisor = el('hr', null, 'ag-notion-divider');
+  form.append(divisor);
+  if (comCampos) {
+    form.append(areaDescricao);
+    form.append(extra);
+  }
+  const erro = el('p', null, 'form-error'); erro.setAttribute('role', 'alert'); erro.tabIndex = -1;
  form.append(erro);
  const rodape = el('div', null, 'tracking-editor-footer');
  const salvar = el('button', evento ? 'Salvar alterações' : 'Criar atividade', 'primary'); salvar.type = 'submit';
- rodape.append(botao('Cancelar', 'close', () => dialog.close()), salvar);
+ rodape.append(botao('Cancelar', null, () => dialog.close()), salvar);
  form.append(rodape);
 
  form.onsubmit = async e => {
@@ -258,7 +437,14 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   const rotuloOriginal = salvar.textContent;
   salvar.disabled = true; salvar.textContent = 'Salvando…'; form.setAttribute('aria-busy', 'true');
   try {
-   const extras = comCampos ? { description: descricao.value.trim(), location: valorDoLocal() } : {};
+    let descValue = '';
+    if (comCampos && editorInstance) {
+      const descData = await editorInstance.save();
+      const isEmpty = descData.blocks.length === 0 || (descData.blocks.length === 1 && descData.blocks[0].type === 'paragraph' && !descData.blocks[0].data.text.trim());
+      if (!isEmpty) descValue = JSON.stringify(descData);
+    }
+    if (!descValue && descricao.value) descValue = descricao.value.trim();
+   const extras = comCampos ? { description: descValue, location: valorDoLocal() } : {};
    const kind = M.kindDaAba(aba, evento?.kind);   // a aba É o tipo; editando, mantém 'entregavel'/'feature' como estavam
    let atividade;
    // Registro não se repete: o bloco está escondido na aba dele, e o que estiver escolhido ali não vale.
@@ -307,11 +493,16 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     if ((contratacao.value || null) !== (evento.engagement_id || null))
      atividade = (await api(`/api/tracking/${evento.id}/engagement`, 'PUT', { engagement_id: contratacao.value || null, revision: atividade.revision })).activity;
    }
-   // Sala do Meet: depois de a atividade estar gravada. Se o Google falhar, a atividade fica e a pessoa é avisada (sem criar duas vezes).
+   // Vínculos da tarefa: depois de a atividade estar gravada.
    let extra = null;
+   if (comVinculos && aba === 'task' && linkSistema?.value && linkId?.value && linkUrl?.value) {
+    try { await api(`/api/tracking/${atividade.id}/links`, 'POST', { system: linkSistema.value, external_id: linkId.value, url: linkUrl.value }); }
+    catch (falha) { extra = { aviso: `A atividade foi salva, mas o vínculo não foi criado: ${falha.message}` }; }
+   }
+   // Sala do Meet: depois de a atividade estar gravada. Se o Google falhar, a atividade fica e a pessoa é avisada (sem criar duas vezes).
    if (M.abaComMeet(aba) && meet?.value === 'meet') {
     try { atividade = (await api(`/api/tracking/${atividade.id}/meet`, 'POST', { convidados: convidados.value.trim() })).activity; }
-    catch (falha) { extra = { aviso: `A atividade foi salva, mas a sala do Meet não foi criada: ${falha.message}` }; }
+    catch (falha) { if (!extra) extra = {}; extra.aviso = (extra.aviso ? extra.aviso + ' ' : '') + `A sala do Meet não foi criada: ${falha.message}`; }
    }
    const emp = (dados.engagements || []).find(x => x.id === atividade.engagement_id);
    const empresa = tenants.find(t => t.id === atividade.tenant_id);
@@ -358,13 +549,13 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
    { rotulo: 'Local', valor: e.location || null },
    { rotulo: 'Link da reunião', valor: e.meeting_url ? linkExterno(e.meeting_url) : null },
    { rotulo: 'Google Agenda', valor: e.google_event_id ? 'Evento criado e sincronizado' : null },
-   { rotulo: 'Descrição', valor: e.description ? el('p', e.description, 'ag-descricao') : null },
+   { rotulo: M.abaDoKind(e.kind) === 'call' ? 'Transcrição' : 'Descrição', valor: renderDescricao(e.description) },
    ...(dados.agenda_lembretes ? [
     { rotulo: 'Repete', valor: serie ? (serie.ended_at ? `${serie.descricao} (encerrada)` : serie.descricao) : null },
     { rotulo: 'Lembrete', valor: `${M.textoDosLembretes(efetivo.minutos)}${efetivo.origem === 'padrao' && efetivo.minutos.length ? ' (padrão da agenda)' : ''}` },
    ] : []),
   ];
-  if (dados.agenda_vinculos && M.abaDoKind(e.kind) === 'task') {
+  if (dados.agenda_vinculos && (M.abaDoKind(e.kind) === 'task' || M.abaDoKind(e.kind) === 'call')) {
    const links = (dados.links || []).filter(l => l.activity_id === e.id);
    const divLinks = el('div');
    for (const l of links) {
@@ -460,4 +651,48 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
   aberto: () => atual !== null,
   id: () => atual,
  };
+}
+
+
+function renderDescricao(raw) {
+  if (!raw) return null;
+  const container = el('div', null, 'ag-descricao');
+  try {
+    const data = JSON.parse(raw);
+    if (!data.blocks) throw new Error();
+    for (const b of data.blocks) {
+      if (b.type === 'paragraph') {
+         const p = el('p'); const doc = new DOMParser().parseFromString(b.data.text, "text/html"); p.append(...doc.body.childNodes);
+         container.append(p);
+      }
+      else if (b.type === 'header') { 
+         const h = el('h'+b.data.level); const doc = new DOMParser().parseFromString(b.data.text, "text/html"); h.append(...doc.body.childNodes); 
+         h.style.margin='10px 0 5px'; 
+         container.append(h); 
+      }
+      else if (b.type === 'list') {
+        const list = el(b.data.style === 'ordered' ? 'ol' : 'ul');
+        list.style.margin = '5px 0'; list.style.paddingLeft = '20px';
+        b.data.items.forEach(i => {
+           const li = el('li'); const doc = new DOMParser().parseFromString(i, "text/html"); li.append(...doc.body.childNodes);
+           list.append(li);
+        });
+        container.append(list);
+      }
+      else if (b.type === 'checklist') {
+        const list = el('ul'); list.style.listStyle = 'none'; list.style.padding = '0';
+        b.data.items.forEach(i => {
+           const li = el('li');
+           const chk = el('input'); chk.type = 'checkbox'; chk.checked = i.checked; chk.disabled = true; chk.style.marginRight='8px';
+           const sp = el('span'); const docSp = new DOMParser().parseFromString(i.text, "text/html"); sp.append(...docSp.body.childNodes);
+           li.append(chk, sp);
+           list.append(li);
+        });
+        container.append(list);
+      }
+    }
+  } catch {
+    container.textContent = raw;
+  }
+  return container;
 }

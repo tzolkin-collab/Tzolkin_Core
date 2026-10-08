@@ -32,6 +32,7 @@ Object.assign(icons,{
 // de relance; ficam neste arquivo porque é de onde createIcon lê, e o teste icons-registry confere nome por nome.
 Object.assign(icons,{
  "window-center":[['rect',{x:2,y:3,width:20,height:18,rx:2}],['rect',{x:7,y:8,width:10,height:8,rx:1}]]
+ ,"fullscreen":[['rect',{x:2,y:3,width:20,height:18,rx:2}]]
  ,"window-popup":[['rect',{x:2,y:3,width:20,height:18,rx:2}],['rect',{x:11,y:11,width:9,height:7,rx:1}]]
  ,"window-side":[['rect',{x:2,y:3,width:20,height:18,rx:2}],['path',{d:'M14 3v18'}]]
 });

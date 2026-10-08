@@ -33,6 +33,10 @@ export function setupTracking({ api, openTenant }) {
  const compacta = window.matchMedia('(max-width:1100px)');   // abaixo disso a lateral some e os filtros viram um bloco recolhível
  const salvando = new Set();
  const partes = { topo: null, lateral: null, principal: null, horas: null, entrada: null };
+ let hoveredEventId = null;
+ let selecionados = new Set(), ultimaSelecaoId = null;
+ function atualizarSelecaoVisual() { document.querySelectorAll('.ag-evento, .ag-chip').forEach(el => el.classList.toggle('ag-selecionado', selecionados.has(el.dataset.id))); }
+ function selecionarFaixa(id1, id2) { const o = [...eventos].sort((a, b) => a.ini - b.ini); const i1 = o.findIndex(x => x.id === id1), i2 = o.findIndex(x => x.id === id2); if (i1 >= 0 && i2 >= 0) { const ini = Math.min(i1, i2), fim = Math.max(i1, i2); for (let i = ini; i <= fim; i++) selecionados.add(o[i].id); ultimaSelecaoId = id2; atualizarSelecaoVisual(); } }
 
  compacta.addEventListener('change', () => { if (dados && partes.lateral?.isConnected) desenharLateral(); });
  const painel = criarPainel({
@@ -85,8 +89,8 @@ export function setupTracking({ api, openTenant }) {
  // ---------- edição ----------
  // `extra.aviso`: algo que deu errado DEPOIS de salvar (a sala do Meet, por exemplo): a atividade existe, e a pessoa precisa saber do resto.
  function depoisDeSalvar(_atividade, extra) { if (extra?.aviso) aviso = extra.aviso; carregar({ silencioso: true }); }
- function novo(inicio = null, fim = null) {
-  abrirEditor({ host, api, dados, tenants, pessoas, inicio, fim, tenantPadrao: estado.tenant, aoSalvar: depoisDeSalvar });
+ function novo(inicio = null, fim = null, eventoParaClonar = null) {
+  abrirEditor({ host, api, dados, tenants, pessoas, inicio, fim, eventoBaseParaClonar: eventoParaClonar, tenantPadrao: estado.tenant, aoSalvar: depoisDeSalvar });
  }
  function editar(evento) {
   abrirEditor({ host, api, dados, tenants, pessoas, evento, aoSalvar: depoisDeSalvar });
@@ -269,11 +273,17 @@ export function setupTracking({ api, openTenant }) {
   estilo(b, { top: r.topo + 'px', height: Math.max(r.altura - 2, 14) + 'px', left: `calc(${r.esquerda}% + 1px)`, width: `calc(${r.largura}% - 3px)`, 'z-index': String(r.z) });
   // Só o pedaço que termina neste dia tem a alça de esticar (evento que atravessa a meia-noite estica no último dia).
   if (M.diaDe(e.fim - 1) === dia) { const alca = el('span', null, 'ag-alca'); alca.setAttribute('aria-hidden', 'true'); b.append(alca); }
-  b.onclick = () => { if (suprimirClique) { suprimirClique = false; return; } abrirEvento(e); };
+  b.onclick = (ev) => {
+    if (suprimirClique) { suprimirClique = false; return; }
+    if (ev.ctrlKey || ev.metaKey) { ev.preventDefault(); ev.stopPropagation(); if (selecionados.has(e.id)) selecionados.delete(e.id); else { selecionados.add(e.id); ultimaSelecaoId = e.id; } atualizarSelecaoVisual(); return; }
+    if (ev.shiftKey && ultimaSelecaoId) { ev.preventDefault(); ev.stopPropagation(); selecionarFaixa(ultimaSelecaoId, e.id); return; }
+    if (selecionados.size > 0) { selecionados.clear(); ultimaSelecaoId = null; atualizarSelecaoVisual(); }
+    abrirEvento(e);
+  };
   return b;
  }
 
- function desenharGrade(dias, lista) {
+ function desenharGrade(dias, lista) { setTimeout(atualizarSelecaoVisual, 0);
   const raiz = el('div', null, 'ag-grade'); raiz.setAttribute('role', 'region'); raiz.setAttribute('aria-label', dias.length === 1 ? 'Calendário do dia' : dias.length === 7 ? 'Calendário da semana' : `Calendário de ${dias.length} dias`);
   estilo(raiz, { '--ag-colunas': String(dias.length), '--ag-hora': ALTURA_HORA + 'px' });
   const hojeDia = hoje();
@@ -434,10 +444,16 @@ export function setupTracking({ api, openTenant }) {
   if (!inteiro && !M.diaInteiro(e)) b.append(el('span', M.hora(e.ini), 'ag-chip-hora'));
   if (e.series_id) b.append(marca(e));
   b.append(el('span', e.title, 'ag-chip-titulo'));
-  b.onclick = ev => { ev.stopPropagation(); abrirEvento(e); };
+  b.onclick = (ev) => {
+    ev.stopPropagation();
+    if (ev.ctrlKey || ev.metaKey) { ev.preventDefault(); if (selecionados.has(e.id)) selecionados.delete(e.id); else { selecionados.add(e.id); ultimaSelecaoId = e.id; } atualizarSelecaoVisual(); return; }
+    if (ev.shiftKey && ultimaSelecaoId) { ev.preventDefault(); selecionarFaixa(ultimaSelecaoId, e.id); return; }
+    if (selecionados.size > 0) { selecionados.clear(); ultimaSelecaoId = null; atualizarSelecaoVisual(); }
+    abrirEvento(e);
+  };
   return b;
  }
- function desenharMes(lista) {
+ function desenharMes(lista) { setTimeout(atualizarSelecaoVisual, 0);
   const raiz = el('div', null, 'ag-mes'); raiz.setAttribute('role', 'region'); raiz.setAttribute('aria-label', 'Calendário do mês');
   const sem = el('div', null, 'ag-mes-sem');
   for (const d of M.semanaDe('2026-10-05')) sem.append(el('span', maiuscula(M.nomeDoDia(d)), 'ag-mes-nome'));
@@ -469,7 +485,7 @@ export function setupTracking({ api, openTenant }) {
  }
 
  // ---------- visão Agenda (lista) ----------
- function desenharAgenda(lista) {
+ function desenharAgenda(lista) { setTimeout(atualizarSelecaoVisual, 0);
   const j = estado.visao === 'periodo' ? M.janela('periodo', estado.dia, estado.fim) : M.janela('agenda', estado.dia);
   const grupos = M.agruparPorDia(lista, j.from, j.to);
   const raiz = el('div', null, 'ag-lista'); raiz.setAttribute('role', 'region'); raiz.setAttribute('aria-label', 'Agenda em lista');
@@ -575,7 +591,7 @@ export function setupTracking({ api, openTenant }) {
   host.replaceChildren();
   dados = null; eventos = []; tenants = []; aviso = ''; rolagem = null;
   Object.assign(estado, { tenant: '', texto: '', categorias: new Set(), status: '', dia: hoje(), miniMes: hoje() });
-  for (const k of Object.keys(partes)) partes[k] = null;
+  for (const k of Object.keys(partes)) partes[k] = null; selecionados.clear(); ultimaSelecaoId = null; hoveredEventId = null;
  };
  // Chegada pela ficha da empresa: semana corrente, filtrada por ela, sem busca nem situação herdadas.
  const focar = tenantId => { Object.assign(estado, { tenant: tenantId || '', dia: hoje(), miniMes: hoje(), texto: '', status: '', categorias: new Set() }); };

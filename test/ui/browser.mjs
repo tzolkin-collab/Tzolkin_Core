@@ -106,6 +106,12 @@ export async function abrirNavegador() {
    async esquema(cor) {
     await chamar('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: cor }] });
    },
+   async digitar(texto) {
+    for (const char of texto) {
+     await chamar('Input.dispatchKeyEvent', { type: 'keyDown', text: char, unmodifiedText: char });
+     await chamar('Input.dispatchKeyEvent', { type: 'keyUp' });
+    }
+   },
    async imagem(arquivo) {
     const { data } = await chamar('Page.captureScreenshot', { format: 'png' });
     mkdirSync(dirname(arquivo), { recursive: true });

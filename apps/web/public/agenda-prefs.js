@@ -51,7 +51,7 @@ export const definirConvidarContatoPrincipal = ligado => gravar(CHAVE_CONVIDAR, 
  * ou lateral de altura cheia. Fica neste navegador como as demais preferências da agenda, e vale da próxima abertura
  * em diante (trocar no meio do preenchimento só muda o tamanho; nada do formulário se perde).
  */
-export const JANELAS = Object.freeze([['centro', 'Centralizado'], ['popup', 'Popup'], ['lateral', 'Lateral']]);
+export const JANELAS = Object.freeze([['centro', 'Centralizado'], ['cheia', 'Tela inteira'], ['lateral', 'Lateral']]);
 export const JANELA_PADRAO = 'centro';
 export function janelaDoEvento() {
  const v = ler(CHAVE_JANELA);
