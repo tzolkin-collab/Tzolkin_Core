@@ -15,7 +15,16 @@ export function createDeliveryOptions({ env = vivo.env, fetchImpl = fetch, clock
   pending ??= (async () => {
    const [github, vercel, easypanel] = await Promise.all([
     read(Boolean(env.GITHUB_TOKEN || env.GITHUB_USE_CLI === 'true'), async () => {
-     const result = await createGithubAdapter({ token: env.GITHUB_TOKEN, fetchImpl: !env.GITHUB_TOKEN && env.GITHUB_USE_CLI === 'true' ? githubCliFetch : fetchImpl }).listRepositories();
+     let result;
+     try {
+      result = await createGithubAdapter({ token: env.GITHUB_TOKEN, fetchImpl: !env.GITHUB_TOKEN && env.GITHUB_USE_CLI === 'true' ? githubCliFetch : fetchImpl }).listRepositories();
+     } catch (err) {
+      if (env.GITHUB_USE_CLI === 'true') {
+       result = await createGithubAdapter({ token: null, fetchImpl: githubCliFetch }).listRepositories();
+      } else {
+       throw err;
+      }
+     }
      return { items: result.repositories, truncated: result.truncated };
     }),
     read(Boolean(env.VERCEL_TOKEN), async () => {

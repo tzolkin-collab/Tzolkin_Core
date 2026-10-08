@@ -8,7 +8,10 @@ const exec = promisify(execFile);
 export async function githubCliFetch(url) {
  const endpoint = new URL(url);
  if (endpoint.origin !== 'https://api.github.com' || endpoint.pathname !== '/user/repos') throw Error('Endpoint não permitido.');
- const { stdout } = await exec('gh', ['api', '--method', 'GET', endpoint.pathname + endpoint.search], { timeout: 8000, maxBuffer: 4 * 1024 * 1024, windowsHide: true });
+ const childEnv = { ...process.env };
+ delete childEnv.GITHUB_TOKEN;
+ delete childEnv.GH_TOKEN;
+ const { stdout } = await exec('gh', ['api', '--method', 'GET', endpoint.pathname + endpoint.search], { timeout: 8000, maxBuffer: 4 * 1024 * 1024, windowsHide: true, env: childEnv });
  const items = JSON.parse(stdout);
  return Response.json(items, { headers: { link: Array.isArray(items) && items.length === 100 ? '<next>; rel="next"' : '' } });
 }

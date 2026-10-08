@@ -307,21 +307,76 @@ export function mcpRoutes(router, { pool, clock = Date.now, env = process.env } 
   reply(200, { ok: true, mensagem: 'Cliente OAuth revogado.' });
  });
 
- // 1.2 OAuth 2.0 Discovery
+ // 1.2 OAuth 2.0 Discovery (RFC 8414 & OpenID Connect)
  const responderDiscovery = async ({ reply, url }) => {
   const origin = url.origin;
   reply(200, {
    issuer: origin,
    authorization_endpoint: `${origin}/api/mcp/oauth/authorize`,
    token_endpoint: `${origin}/api/mcp/oauth/token`,
+   registration_endpoint: `${origin}/api/mcp/oauth/register`,
    response_types_supported: ['code'],
    grant_types_supported: ['authorization_code', 'client_credentials'],
-   token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic'],
+   code_challenge_methods_supported: ['S256', 'plain'],
+   token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic', 'none'],
    scopes_supported: ['mcp', 'tracking', 'directory'],
   });
  };
  router.get('/api/mcp/.well-known/oauth-authorization-server', responderDiscovery, { webhook: true, auth: 'public' });
  router.get('/.well-known/oauth-authorization-server', responderDiscovery, { webhook: true, auth: 'public' });
+ router.get('/api/mcp/.well-known/openid-configuration', responderDiscovery, { webhook: true, auth: 'public' });
+ router.get('/.well-known/openid-configuration', responderDiscovery, { webhook: true, auth: 'public' });
+
+ // 1.2b Dynamic Client Registration (RFC 7591)
+ router.post(
+  '/api/mcp/oauth/register',
+  async ({ pool, req, reply }) => {
+   let body = {};
+   try {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const rawBody = Buffer.concat(chunks).toString('utf8');
+    if (rawBody.trim()) body = JSON.parse(rawBody);
+   } catch {
+    throw fail(400, 'JSON inválido para Dynamic Client Registration.');
+   }
+
+   const clientName = (body.client_name ? String(body.client_name).trim() : 'Google Spark').slice(0, 100);
+   const clientId = 'mcp_client_' + randomBytes(16).toString('hex');
+   const clientSecret = 'mcp_sec_' + randomBytes(32).toString('base64url');
+   const secretPrefix = clientSecret.slice(0, 14) + '...';
+   const secretHash = digest(clientSecret);
+   const redirectUris = Array.isArray(body.redirect_uris)
+    ? body.redirect_uris.map(u => String(u).trim()).filter(Boolean)
+    : (body.redirect_uri ? [String(body.redirect_uri).trim()] : []);
+
+   try {
+    await pool.query(
+     `INSERT INTO mcp_oauth_clients(client_id, client_secret_hash, client_secret_prefix, label, redirect_uris, created_by)
+      VALUES($1, $2, $3, $4, $5, $6)`,
+     [clientId, secretHash, secretPrefix, clientName, redirectUris, 'dynamic_registration']
+    );
+   } catch {
+    throw fail(500, 'Não foi possível registrar o cliente OAuth dinamicamente.');
+   }
+
+   const tokenAuthMethod = body.token_endpoint_auth_method || 'client_secret_post';
+
+   reply(201, {
+    client_id: clientId,
+    client_secret: clientSecret,
+    client_id_issued_at: Math.floor(Date.now() / 1000),
+    client_secret_expires_at: 0,
+    client_name: clientName,
+    redirect_uris: redirectUris,
+    grant_types: ['authorization_code'],
+    response_types: ['code'],
+    token_endpoint_auth_method: tokenAuthMethod,
+    scope: 'mcp tracking directory',
+   });
+  },
+  { webhook: true, auth: 'public' }
+ );
 
  // 1.3 OAuth 2.0 Authorize Endpoint
  router.get(
@@ -444,6 +499,31 @@ button:hover { background: #388bfd; }
     );
     if (!cr.rows.length) throw fail(400, 'Código de autorização inválido ou expirado.');
     const codeRow = cr.rows[0];
+
+    if (codeRow.code_challenge) {
+     const verifier = body.code_verifier;
+     if (!verifier) throw fail(400, 'code_verifier obrigatório para PKCE.');
+     let valid = false;
+     if (codeRow.code_challenge_method === 'S256') {
+      const calculated = createHash('sha256').update(verifier).digest('base64url');
+      valid = calculated === codeRow.code_challenge;
+     } else {
+      valid = verifier === codeRow.code_challenge;
+     }
+     if (!valid) throw fail(400, 'code_verifier inválido para PKCE.');
+    }
+
+    if (codeRow.client_id && clientId && codeRow.client_id !== clientId && codeRow.client_id !== 'default_spark') {
+     throw fail(400, 'client_id não corresponde ao código de autorização.');
+    }
+    if (clientSecret && (clientId || codeRow.client_id)) {
+     const secretHash = digest(clientSecret);
+     const cl = await pool.query(
+      'SELECT id FROM mcp_oauth_clients WHERE client_id = $1 AND client_secret_hash = $2 AND revoked_at IS NULL',
+      [clientId || codeRow.client_id, secretHash]
+     );
+     if (!cl.rows.length) throw fail(401, 'client_secret inválido.');
+    }
 
     await pool.query('UPDATE mcp_oauth_codes SET used_at = now() WHERE code = $1', [code]);
 

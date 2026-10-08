@@ -604,7 +604,24 @@ test('MCP: OAuth 2.0 Discovery e Gestão de Clientes OAuth', async () => {
  assert.equal(resDisc.dados.issuer, 'http://127.0.0.1:3102');
  assert.equal(resDisc.dados.authorization_endpoint, 'http://127.0.0.1:3102/api/mcp/oauth/authorize');
  assert.equal(resDisc.dados.token_endpoint, 'http://127.0.0.1:3102/api/mcp/oauth/token');
+ assert.equal(resDisc.dados.registration_endpoint, 'http://127.0.0.1:3102/api/mcp/oauth/register');
  assert.deepEqual(resDisc.dados.grant_types_supported, ['authorization_code', 'client_credentials']);
+
+ // 1b. Dynamic Client Registration (RFC 7591)
+ let resDynReg = null;
+ await rotas.get('POST /api/mcp/oauth/register')({
+  pool,
+  req: corpoReq({
+   client_name: 'Google Spark (Automático)',
+   redirect_uris: ['https://spark.google.com/oauth/cb'],
+   token_endpoint_auth_method: 'client_secret_post',
+  }),
+  reply: (st, dados) => { resDynReg = { st, dados }; },
+ });
+ assert.equal(resDynReg.st, 201);
+ assert.equal(resDynReg.dados.client_name, 'Google Spark (Automático)');
+ assert.match(resDynReg.dados.client_id, /^mcp_client_[a-f0-9]{32}/);
+ assert.match(resDynReg.dados.client_secret, /^mcp_sec_[A-Za-z0-9_-]{32}/);
 
  // 2. Criar Cliente OAuth (POST /api/mcp/oauth/clients)
  let resCriar = null;
@@ -627,7 +644,7 @@ test('MCP: OAuth 2.0 Discovery e Gestão de Clientes OAuth', async () => {
   operator: OPERADOR,
  });
  assert.equal(resListar.st, 200);
- assert.equal(resListar.dados.clients.length, 1);
+ assert.equal(resListar.dados.clients.length, 2);
  assert.ok(!('client_secret' in resListar.dados.clients[0]), 'o client_secret nunca é retornado na listagem');
 
  // 4. Revogar Cliente OAuth (DELETE /api/mcp/oauth/clients/:id)
