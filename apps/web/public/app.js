@@ -641,20 +641,38 @@ async function loadClientSummary(id){
 
 function clientEngagement(engagement,summary){
  const block=node('article',undefined,'client-engagement'),head=node('header'),copy=node('div');
-// PUT /api/engagements/:id pede a contratação inteira e a revisão (outra pessoa pode ter mudado antes): vai o que
+ // PUT /api/engagements/:id pede a contratação inteira e a revisão (outra pessoa pode ter mudado antes): vai o que
  // a tela já tem, com o campo novo por cima, e a revisão devolvida substitui a antiga.
  const salvarContratacao=async campos=>{
-  const res=await api('/api/engagements/'+engagement.id,'PUT',{product_id:engagement.product?.id??null,service_model:engagement.service_model,status:engagement.status,label:engagement.label,revision:engagement.revision,...campos});
+  const payload={
+   product_id:('product_id' in campos)?campos.product_id:(engagement.product?.id??engagement.product_id??null),
+   service_model:campos.service_model||engagement.service_model,
+   status:campos.status||engagement.status,
+   label:campos.label||engagement.label,
+   revision:engagement.revision,
+   ...campos
+  };
+  const res=await api('/api/engagements/'+engagement.id,'PUT',payload);
   Object.assign(engagement,campos);
   if('product_id' in campos){
    if(!campos.product_id){
     engagement.product=null;
+    engagement.product_id=null;
    }else{
     const todosOsProdutos=state.overview?.products||engagementItems||[];
     engagement.product=todosOsProdutos.find(p=>p.id===campos.product_id)||engagement.product;
+    engagement.product_id=campos.product_id;
    }
   }
-  if(res?.revision!==undefined)engagement.revision=res.revision;
+  const newRev=res?.body?.revision??res?.revision;
+  if(newRev!==undefined)engagement.revision=newRev;
+  if(state.overview?.engagements){
+   const ovEng=state.overview.engagements.find(e=>e.id===engagement.id);
+   if(ovEng){
+    Object.assign(ovEng,campos);
+    if(newRev!==undefined)ovEng.revision=newRev;
+   }
+  }
   state.clientSummary=null;
  };
  const nomeContratacao=campoInline({valor:engagement.label,rotulo:'Nome da contratação',obrigatorio:true,validar:v=>v.length<2?'Use ao menos 2 caracteres.':v.length>120?'Use no máximo 120 caracteres.':null,salvar:async v=>{await salvarContratacao({label:v});return v;}});
@@ -673,15 +691,19 @@ function clientEngagement(engagement,summary){
   const delItem=node('button',undefined,'table-action danger-action');delItem.type='button';delItem.title='Remover item desta contratação';
   delItem.append(createIcon('close'),document.createTextNode('Excluir item'));
   delItem.onclick=async()=>{
+   let novoModelo=engagement.service_model;
    if(engagement.service_model==='product'){
-    alert('Contratações do tipo produto exigem um item do portfólio. Altere o tipo antes ou vincule outro item.');
-    return;
+    if(!confirm(`Contratações do tipo produto exigem um item do portfólio. Ao excluir o item “${item.name}”, o tipo da contratação será alterado para “Não classificado”. Deseja continuar?`))return;
+    novoModelo='unclassified';
+   }else{
+    if(!confirm(`Excluir o item “${item.name}” desta contratação?`))return;
    }
-   if(!confirm(`Excluir o item “${item.name}” desta contratação?`))return;
    delItem.disabled=true;
    try{
-    await salvarContratacao({product_id:null});
-    if(state.selectedTenant===(summary.tenant?.id||engagement.tenant_id)){clientPending=null;await loadClientSummary(summary.tenant?.id||engagement.tenant_id);}
+    if(novoModelo!=='product'&&novoModelo!==engagement.service_model)await salvarContratacao({service_model:novoModelo});
+    await salvarContratacao({ product_id: null });
+    const tenantId=summary.tenant?.id||engagement.tenant_id||state.selectedTenant;
+    if(state.selectedTenant===tenantId){clientPending=null;await loadClientSummary(tenantId);}
     $('notice').textContent='Item removido da contratação.';
    }catch(err){reportError(err);delItem.disabled=false;}
   };
@@ -701,7 +723,7 @@ function clientEngagement(engagement,summary){
  const ads=node('button',undefined,'table-action');ads.type='button';ads.append(createIcon('chart'),document.createTextNode(mine.length?`Campanhas · ${mine.length}`:'Campanhas'));
  ads.onclick=()=>{switchView('serviceCampaigns');campaigns.loadService(engagement.id,engagement.label).catch(reportError);};links.append(ads);
  if(mine.length){const spend=new Map();for(const c of mine)spend.set(c.currency||'BRL',(spend.get(c.currency||'BRL')||0)+Number(c.spend_cents||0));links.append(node('span','Investido no mês: '+[...spend].map(([currency,cents])=>minorAmount(cents,currency)).join(' + '),'detail'));}
- const del=node('button',undefined,'table-action danger-action');del.type='button';
+ const del=node('button',undefined,'table-action danger-action engagement-delete');del.type='button';
  del.append(createIcon('close'),document.createTextNode('Excluir'));
  del.onclick=()=>openArchiveEngagementDialog(engagement,summary.tenant?.id||engagement.tenant_id);
  links.append(del);
@@ -891,7 +913,7 @@ let archivingEngagement=null,archivingTenantId=null;
 function openArchiveEngagementDialog(engagement,tenantId){
  const dialog=$('archive-engagement-dialog');
  if(!dialog)return;
- archivingEngagement=engagement;archivingTenantId=tenantId;
+ archivingEngagement=engagement;archivingTenantId=tenantId||engagement.tenant_id||state.selectedTenant;
  $('archive-engagement-label').textContent=engagement.label||'Contratação';
  dialog.querySelector('.dialog-error').textContent='';
  dialog.showModal();
@@ -900,16 +922,16 @@ let editingItemEngagement=null,editingItemTenantId=null;
 function openItemEngagementDialog(engagement,tenantId){
  const dialog=$('item-engagement-dialog');
  if(!dialog)return;
- editingItemEngagement=engagement;editingItemTenantId=tenantId;
+ editingItemEngagement=engagement;editingItemTenantId=tenantId||engagement.tenant_id||state.selectedTenant;
  const form=$('item-engagement-form'),select=form.elements.product_id;
  const capability=engagement.service_model==='product'?'product_engagement':'commercial';
  const items=(state.overview?.products||engagementItems||[]).filter(p=>p.lifecycle_status==='active'&&hasCapability(p,capability));
  select.replaceChildren(
-  option('',engagement.service_model==='product'?'Selecione o produto':'Sem item do portfólio (remover item)'),
+  option('','Sem item do portfólio (remover item)'),
   ...items.map(p=>option(p.id,`${p.name} · ${kindLabelOf(p.portfolio_kind)}`))
  );
  select.value=engagement.product?.id||engagement.product_id||'';
- select.required=engagement.service_model==='product';
+ select.required=false;
  dialog.querySelector('.dialog-error').textContent='';
  dialog.showModal();
 }
@@ -1811,6 +1833,7 @@ $('archive-engagement-form')?.addEventListener('submit',async event=>{
  const form=event.currentTarget,dialog=form.closest('dialog'),button=form.querySelector('button.primary'),error=dialog.querySelector('.dialog-error');
  if(!archivingEngagement||!archivingTenantId)return;
  error.textContent='';button.disabled=true;
+ archivingEngagement.revision??=state.overview?.engagements?.find(e=>e.id===archivingEngagement.id)?.revision??1;
  try{
   await api('/api/engagements/'+encodeURIComponent(archivingEngagement.id)+'/archive','POST',{revision:archivingEngagement.revision});
   if(state.overview?.engagements){
@@ -1820,7 +1843,10 @@ $('archive-engagement-form')?.addEventListener('submit',async event=>{
   state.clientSummary=null;
   if(state.selectedTenant===archivingTenantId){clientPending=null;await loadClientSummary(archivingTenantId);}
   $('notice').textContent='Contratação excluída.';
- }catch(reason){error.textContent=reason.message;}
+ }catch(reason){
+  error.textContent=reason.message;
+  if(state.selectedTenant===archivingTenantId){clientPending=null;loadClientSummary(archivingTenantId).catch(()=>{});}
+ }
  finally{button.disabled=false;}
 });
 $('item-engagement-form')?.addEventListener('submit',async event=>{
@@ -1829,18 +1855,32 @@ $('item-engagement-form')?.addEventListener('submit',async event=>{
  if(!editingItemEngagement)return;
  error.textContent='';button.disabled=true;
  const newProductId=form.elements.product_id.value||null;
+ let newServiceModel=editingItemEngagement.service_model;
+ if(!newProductId && editingItemEngagement.service_model==='product'){
+  newServiceModel='unclassified';
+ }
  try{
   const res=await api('/api/engagements/'+editingItemEngagement.id,'PUT',{
    product_id:newProductId,
-   service_model:editingItemEngagement.service_model,
+   service_model:newServiceModel,
    status:editingItemEngagement.status,
    label:editingItemEngagement.label,
    revision:editingItemEngagement.revision,
   });
   editingItemEngagement.product_id=newProductId;
-  if(res?.revision!==undefined)editingItemEngagement.revision=res.revision;
+  editingItemEngagement.service_model=newServiceModel;
+  const newRev=res?.body?.revision??res?.revision;
+  if(newRev!==undefined)editingItemEngagement.revision=newRev;
   const todosOsProdutos=state.overview?.products||engagementItems||[];
   editingItemEngagement.product=newProductId?todosOsProdutos.find(p=>p.id===newProductId)||null:null;
+  if(state.overview?.engagements){
+   const ovEng=state.overview.engagements.find(e=>e.id===editingItemEngagement.id);
+   if(ovEng){
+    ovEng.product_id=newProductId;
+    ovEng.service_model=newServiceModel;
+    if(newRev!==undefined)ovEng.revision=newRev;
+   }
+  }
   dialog.close();
   state.clientSummary=null;
   if(state.selectedTenant===editingItemTenantId){clientPending=null;await loadClientSummary(editingItemTenantId);}

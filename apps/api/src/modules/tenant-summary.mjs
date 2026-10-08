@@ -63,7 +63,7 @@ const SQL = {
 
  // Todos os service_model, educação e produto inclusive. Arquivada saiu da
  // operação corrente e fica fora, como nas demais listas de trabalho.
- contratacoes: `SELECT e.id,e.label,e.service_model,e.status,e.revision,e.created_at,e.updated_at,
+ contratacoes: `SELECT e.id,e.tenant_id,e.label,e.service_model,e.status,e.revision,e.created_at,e.updated_at,
                        e.product_id,p.name AS product_name,p.portfolio_kind,p.lifecycle_status AS product_lifecycle_status
                   FROM client_engagements e LEFT JOIN products p ON p.id=e.product_id
                  WHERE e.tenant_id=$1 AND e.archived_at IS NULL
@@ -164,6 +164,7 @@ export function tenantSummaryRoutes(router, { clock = Date.now } = {}) {
   const engagements = await secao(async () => ({
    items: (await pool.query(SQL.contratacoes, [id])).rows.map(({ product_id, product_name, portfolio_kind, product_lifecycle_status, ...e }) => ({
     ...e,
+    product_id,
     product: product_id ? { id: product_id, name: product_name, portfolio_kind, lifecycle_status: product_lifecycle_status } : null,
    })),
   }));
