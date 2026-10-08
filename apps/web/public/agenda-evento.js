@@ -94,6 +94,32 @@ class NotionChecklist extends Checklist {
   }
 }
 
+class DuplicateTune {
+  static get isTune() {
+    return true;
+  }
+  constructor({ api, data, config, block }) {
+    this.api = api;
+    this.block = block;
+  }
+  render() {
+    return {
+      icon: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
+      label: 'Duplicar bloco',
+      name: 'duplicate',
+      closeOnActivate: true,
+      onActivate: async () => {
+        const index = this.api.blocks.getBlockIndex(this.block.id);
+        const data = await this.block.save();
+        if (data) {
+          await this.api.blocks.insert(data.tool, data.data, undefined, index + 1, true);
+          this.api.caret.setToBlock(index + 1, 'end');
+        }
+      }
+    };
+  }
+}
+
 if (typeof Document !== 'undefined' && !Document.prototype.closest) Document.prototype.closest = () => null;
 
 const TOM_DA_SITUACAO = { planned: 'info', done: 'success', cancelled: 'neutral' };
@@ -218,7 +244,8 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   const extra = el('div', null, 'tracking-extra');
   const areaDescricao = el('div', null, 'ag-notion-canvas');
   areaDescricao.id = 'editorjs-container';
-  areaDescricao.addEventListener('keydown', e => {
+  let editorInstance = null;
+  areaDescricao.addEventListener('keydown', async e => {
     if (e.key === 'Tab') {
       const pop = areaDescricao.querySelector('.ce-popover--opened');
       if (!pop) {
@@ -228,15 +255,165 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
           document.execCommand('insertText', false, '  ');
         }
       }
-    } else if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      if (editorInstance?.toolbar) editorInstance.toolbar.close();
+      return;
+    }
+
+    if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
       setTimeout(() => {
-        if (window.__editor && window.__editor.toolbar) {
-          window.__editor.toolbar.open();
-          window.__editor.toolbar.toggleToolbox(true);
+        if (editorInstance?.toolbar) {
+          editorInstance.toolbar.open();
+          editorInstance.toolbar.toggleToolbox(true);
         }
       }, 50);
+      return;
+    }
+
+    // Excluir bloco: Ctrl+Shift+Backspace / Cmd+Shift+Backspace ou Alt+Backspace
+    if (((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'Backspace' || e.key === 'Delete')) ||
+        (e.altKey && (e.key === 'Backspace' || e.key === 'Delete'))) {
+      const blockEl = document.activeElement?.closest?.('.ce-block');
+      if (blockEl && editorInstance) {
+        e.preventDefault();
+        e.stopPropagation();
+        const allBlocks = [...areaDescricao.querySelectorAll('.ce-block')];
+        const idx = allBlocks.indexOf(blockEl);
+        if (idx !== -1) {
+          if (allBlocks.length > 1) {
+            await editorInstance.blocks.delete(idx);
+            const targetIdx = Math.max(0, idx - 1);
+            editorInstance.caret.setToBlock(targetIdx, 'end');
+          } else {
+            await editorInstance.blocks.insert('paragraph', { text: '' }, undefined, 0, true, true);
+          }
+        }
+        return;
+      }
+    }
+
+    // Duplicar bloco: Ctrl+Shift+D ou Cmd+Shift+D
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+      const blockEl = document.activeElement?.closest?.('.ce-block');
+      if (blockEl && editorInstance) {
+        e.preventDefault();
+        e.stopPropagation();
+        const allBlocks = [...areaDescricao.querySelectorAll('.ce-block')];
+        const idx = allBlocks.indexOf(blockEl);
+        if (idx !== -1) {
+          const block = editorInstance.blocks.getBlockByIndex(idx);
+          const data = await block?.save();
+          if (data) {
+            await editorInstance.blocks.insert(data.tool, data.data, undefined, idx + 1, true);
+            editorInstance.caret.setToBlock(idx + 1, 'end');
+          }
+        }
+        return;
+      }
+    }
+
+    // Mover bloco para cima / baixo: Alt+SetaAcima / Alt+SetaAbaixo
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      const blockEl = document.activeElement?.closest?.('.ce-block');
+      if (blockEl && editorInstance) {
+        const allBlocks = [...areaDescricao.querySelectorAll('.ce-block')];
+        const idx = allBlocks.indexOf(blockEl);
+        if (idx !== -1) {
+          if (e.key === 'ArrowUp' && idx > 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            await editorInstance.blocks.move(idx - 1, idx);
+            editorInstance.caret.setToBlock(idx - 1, 'end');
+            return;
+          } else if (e.key === 'ArrowDown' && idx < allBlocks.length - 1) {
+            e.preventDefault();
+            e.stopPropagation();
+            await editorInstance.blocks.move(idx + 1, idx);
+            editorInstance.caret.setToBlock(idx + 1, 'end');
+            return;
+          }
+        }
+      }
+    }
+
+    // Backspace em bloco vazio: reverte especial para parágrafo ou apaga parágrafo vazio extra
+    if (e.key === 'Backspace' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+      const blockEl = document.activeElement?.closest?.('.ce-block');
+      if (blockEl && editorInstance) {
+        const allBlocks = [...areaDescricao.querySelectorAll('.ce-block')];
+        const idx = allBlocks.indexOf(blockEl);
+        if (idx !== -1) {
+          const block = editorInstance.blocks.getBlockByIndex(idx);
+          const isEmpty = block?.isEmpty || (block?.name === 'code' && !blockEl.querySelector('textarea')?.value.trim());
+          if (isEmpty) {
+            if (block.name !== 'paragraph') {
+              e.preventDefault();
+              e.stopPropagation();
+              await editorInstance.blocks.insert('paragraph', { text: '' }, undefined, idx, true, true);
+              return;
+            } else if (allBlocks.length > 1) {
+              e.preventDefault();
+              e.stopPropagation();
+              await editorInstance.blocks.delete(idx);
+              const targetIdx = Math.max(0, idx - 1);
+              editorInstance.caret.setToBlock(targetIdx, 'end');
+              return;
+            }
+          }
+        }
+      }
     }
   }, true);
+
+  // Auto-conversão de atalhos markdown ao digitar (# , ## , ### , - , * , 1. , [] , > , crases, ---)
+  areaDescricao.addEventListener('input', async e => {
+    if (!editorInstance) return;
+    const target = e.target;
+    if (!target || !target.classList.contains('ce-paragraph')) return;
+    const text = (target.textContent || '').replace(/\u00a0/g, ' ');
+
+    let match;
+    let newTool = null;
+    let newData = null;
+
+    if ((match = text.match(/^(#{1,3})\s+(.*)$/))) {
+      newTool = 'header';
+      newData = { text: match[2], level: match[1].length };
+    } else if ((match = text.match(/^[-*]\s+(.*)$/))) {
+      newTool = 'list';
+      newData = { style: 'unordered', items: [match[1]] };
+    } else if ((match = text.match(/^1\.\s+(.*)$/))) {
+      newTool = 'list';
+      newData = { style: 'ordered', items: [match[1]] };
+    } else if ((match = text.match(/^(?:\[\]|\[ \])\s+(.*)$/))) {
+      newTool = 'checklist';
+      newData = { items: [{ text: match[1], checked: false }] };
+    } else if ((match = text.match(/^>\s+(.*)$/))) {
+      newTool = 'quote';
+      newData = { text: match[1], caption: '' };
+    } else if (text === '\x60\x60\x60' || text.startsWith('\x60\x60\x60')) {
+      newTool = 'code';
+      newData = { code: text.replace(/^\x60{3}/, '') };
+    } else if (text === '---') {
+      newTool = 'delimiter';
+      newData = {};
+    }
+
+    if (newTool) {
+      const blockEl = target.closest('.ce-block');
+      const allBlocks = [...areaDescricao.querySelectorAll('.ce-block')];
+      const currentIdx = allBlocks.indexOf(blockEl);
+      if (currentIdx !== -1) {
+        await editorInstance.blocks.insert(newTool, newData, undefined, currentIdx, true, true);
+        if (newTool === 'delimiter') {
+          await editorInstance.blocks.insert('paragraph', { text: '' }, undefined, currentIdx + 1, true);
+        }
+      }
+    }
+  });
 
   areaDescricao.addEventListener('focusin', e => {
     const block = e.target?.closest?.('.ce-block');
@@ -248,7 +425,6 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   descricao.parentElement.classList.add('ag-notion-raw-desc');
   if (evento) descricao.value = evento.description || '';
 
-  let editorInstance = null;
   const loadEditor = () => {
     let raw = evento ? (evento.description || '') : (eventoBaseParaClonar ? (eventoBaseParaClonar.description || '') : '');
     if (!raw && descricao.value) raw = descricao.value;
@@ -260,8 +436,30 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     window.__editor = editorInstance = new EditorJS({
       holder: areaDescricao,
       placeholder: "Digite '/' para comandos ou comece a escrever...",
+      tunes: ['duplicate'],
       i18n: {
         messages: {
+          blockTunes: {
+            "delete": {
+              "Delete": "Excluir bloco",
+              "Click to delete": "Confirmar exclusão"
+            },
+            "moveUp": {
+              "Move up": "Mover para cima"
+            },
+            "moveDown": {
+              "Move down": "Mover para baixo"
+            },
+            "duplicate": {
+              "Duplicate": "Duplicar bloco"
+            },
+            "convert-to": {
+              "Convert to": "Converter para"
+            },
+            "convertTo": {
+              "Convert to": "Converter para"
+            }
+          },
           ui: {
             blockTunes: {
               toggler: {
@@ -283,7 +481,8 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
             },
             popover: {
               Filter: "Filtrar comandos...",
-              "Nothing found": "Nenhum comando"
+              "Nothing found": "Nenhum comando",
+              "Convert to": "Converter para"
             }
           },
           toolNames: {
@@ -302,16 +501,20 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
             header: {
               "Heading 1": "Título 1",
               "Heading 2": "Título 2",
-              "Heading 3": "Título 3"
+              "Heading 3": "Título 3",
+              "Heading 4": "Título 4",
+              "Heading 5": "Título 5",
+              "Heading 6": "Título 6"
             }
           }
         }
       },
       tools: {
+        duplicate: DuplicateTune,
         header: { class: Header, shortcut: 'CMD+SHIFT+H', toolbox: { title: 'Título' } },
         list: { class: List, inlineToolbar: true, shortcut: 'CMD+SHIFT+L', toolbox: { title: 'Lista com marcadores' } },
-        checklist: { class: NotionChecklist, inlineToolbar: true, toolbox: { title: 'Lista de tarefas' } },
-        table: { class: Table, inlineToolbar: true, toolbox: { title: 'Tabela' } },
+        checklist: { class: NotionChecklist, inlineToolbar: true, shortcut: 'CMD+SHIFT+X', toolbox: { title: 'Lista de tarefas' } },
+        table: { class: Table, inlineToolbar: true, shortcut: 'CMD+SHIFT+T', toolbox: { title: 'Tabela' } },
         quote: { class: Quote, inlineToolbar: true, shortcut: 'CMD+SHIFT+O', toolbox: { title: 'Citação' } },
         code: { class: CodeTool, shortcut: 'CMD+SHIFT+C', toolbox: { title: 'Código' } },
         Marker: { class: Marker, shortcut: 'CMD+SHIFT+M', toolbox: { title: 'Marcador' } },
@@ -324,8 +527,8 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   if (comCampos) setTimeout(loadEditor, 100);
 
   const locais = M.locaisConhecidos(dados.activities || [], [localDoMeet(), evento?.location]);
-  const local = campo(form, 'Local (opcional)', 'text', [['', 'Sem local'], ...locais.map(l => [l, l]), [LOCAL_LIVRE, 'Outro local…']]); local.parentElement.dataset.prop = 'local';
-  const localLivre = campo(form, 'Qual local', 'text'); localLivre.maxLength = 200; localLivre.placeholder = 'Ex.: Escritório do cliente';
+  const local = campo(extra, 'Local (opcional)', 'text', [['', 'Sem local'], ...locais.map(l => [l, l]), [LOCAL_LIVRE, 'Outro local…']]); local.parentElement.dataset.prop = 'local';
+  const localLivre = campo(extra, 'Qual local', 'text'); localLivre.maxLength = 200; localLivre.placeholder = 'Ex.: Escritório do cliente';
   const caixaDoLivre = localLivre.parentElement; caixaDoLivre.hidden = true; caixaDoLivre.dataset.prop = 'local-livre';
   let localAutomatico = false;
   const sincronizarLocal = () => { caixaDoLivre.hidden = local.value !== LOCAL_LIVRE; };
@@ -387,7 +590,7 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     }
     form.append(blocoMeet);
   }
-  form.append(local.parentElement, caixaDoLivre);
+  if (comMeet && comCampos) form.append(local.parentElement, caixaDoLivre);
 
   const comVinculos = dados.agenda_vinculos === true;
   let blocoVinculos = null, linkSistema = null, linkId = null, linkUrl = null;

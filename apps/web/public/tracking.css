@@ -336,8 +336,8 @@
 }
 
 #editorjs-container:focus-within {
-  border-color: var(--primary) !important;
-  box-shadow: 0 0 0 3px var(--primary-alpha-10, rgba(0, 120, 255, 0.1));
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 15%, transparent) !important;
   outline: none;
 }
 
@@ -365,8 +365,13 @@
 .cdx-checklist__item {
   display: flex !important;
   align-items: flex-start !important;
-  padding: 3px 0 !important;
+  padding: 4px 6px !important;
+  border-radius: 6px !important;
   box-sizing: border-box !important;
+  transition: background-color 0.12s ease !important;
+}
+.cdx-checklist__item:hover {
+  background: color-mix(in srgb, var(--surface-hover) 65%, transparent) !important;
 }
 .cdx-checklist__item-checkbox {
   background: transparent !important;
@@ -403,7 +408,7 @@
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  transition: background-color 0.15s ease, border-color 0.15s ease !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease !important;
   box-sizing: border-box !important;
   position: relative !important;
   flex-shrink: 0 !important;
@@ -415,6 +420,14 @@
 .cdx-checklist__item-checkbox:hover .cdx-checklist__item-checkbox-check {
   border-color: var(--brand) !important;
   background: var(--surface-hover) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 18%, transparent) !important;
+}
+.cdx-checklist__item-checkbox:focus-visible {
+  outline: none !important;
+}
+.cdx-checklist__item-checkbox:focus-visible .cdx-checklist__item-checkbox-check {
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent) !important;
 }
 .cdx-checklist__item--checked .cdx-checklist__item-checkbox-check {
   background: var(--brand) !important;
@@ -549,9 +562,15 @@
 
 /* Quote (Citação Notion com borda lateral) */
 .cdx-quote {
-  border-left: 3px solid var(--line-strong) !important;
-  padding: 4px 0 4px 14px !important;
+  border-left: 3px solid var(--brand) !important;
+  background: color-mix(in srgb, var(--surface-hover) 65%, transparent) !important;
+  border-radius: 0 6px 6px 0 !important;
+  padding: 8px 14px !important;
   margin: 10px 0 !important;
+  transition: border-color 0.15s ease, background-color 0.15s ease !important;
+}
+.cdx-quote:hover {
+  background: var(--surface-hover) !important;
 }
 .cdx-quote .cdx-input {
   border: none !important;
@@ -585,15 +604,20 @@
   border: 1px solid var(--line) !important;
   border-radius: 6px !important;
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace) !important;
-  font-size: 13px !important;
-  line-height: 1.5 !important;
+  font-size: 13.5px !important;
+  line-height: 1.55 !important;
   tab-size: 2 !important;
   padding: 12px 16px !important;
   min-height: 54px !important;
   box-sizing: border-box !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+.ce-code__textarea:hover {
+  border-color: var(--line-strong) !important;
 }
 .ce-code__textarea:focus {
-  border-color: var(--line-strong) !important;
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 15%, transparent) !important;
   outline: none !important;
 }
 
@@ -651,14 +675,14 @@
 
 /* Marker (Marcador de texto) */
 :root {
-  --cdx-marker-bg: rgba(255, 215, 0, 0.35);
+  --cdx-marker-bg: color-mix(in srgb, var(--warning) 30%, transparent);
 }
 :root[data-theme="dark"] {
-  --cdx-marker-bg: rgba(235, 180, 0, 0.22);
+  --cdx-marker-bg: color-mix(in srgb, var(--warning) 22%, transparent);
 }
 .cdx-marker {
   background: var(--cdx-marker-bg) !important;
-  color: var(--warning, #f5d061) !important;
+  color: var(--warning) !important;
   padding: 1px 4px !important;
   border-radius: 3px !important;
 }
@@ -1339,6 +1363,16 @@ dialog.tracking-editor {
   max-width: 100% !important;
   margin: 0 !important;
 }
+.ce-block--selected .ce-block__content {
+  background: color-mix(in srgb, var(--brand) 10%, transparent) !important;
+  border-radius: 4px !important;
+}
+:root[data-theme="dark"] .ce-block--selected .ce-block__content {
+  background: color-mix(in srgb, var(--brand) 20%, transparent) !important;
+}
+#editorjs-container ::selection {
+  background: color-mix(in srgb, var(--brand) 25%, transparent) !important;
+}
 .ce-toolbar__actions {
   left: -54px !important;
   right: auto !important;
@@ -1349,19 +1383,28 @@ dialog.tracking-editor {
 .ce-toolbar__plus,
 .ce-toolbar__settings-btn {
   color: var(--muted) !important;
-  border-radius: 4px !important;
-  width: 24px !important;
-  height: 24px !important;
+  border: 1px solid transparent !important;
+  border-radius: 6px !important;
+  width: 26px !important;
+  height: 26px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   cursor: pointer !important;
-  transition: background 0.1s ease, color 0.1s ease !important;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease, transform 0.1s ease !important;
 }
 .ce-toolbar__plus:hover,
 .ce-toolbar__settings-btn:hover {
   background: var(--surface-hover) !important;
-  color: var(--text) !important;
+  border-color: var(--line-soft) !important;
+  color: var(--text-strong) !important;
+  transform: scale(1.05) !important;
+  box-shadow: 0 1px 3px var(--line-soft) !important;
+}
+.ce-toolbar__plus:active,
+.ce-toolbar__settings-btn:active {
+  background: var(--surface-hover) !important;
+  transform: scale(0.96) !important;
 }
 
 /* Notion Slash Command Menu / Popover (Editor.js 2.30) */
@@ -1422,9 +1465,9 @@ dialog.tracking-editor {
 }
 .cdx-search-field:focus-within,
 .ce-popover__search:focus-within {
-  border-color: var(--line-strong) !important;
+  border-color: var(--brand) !important;
   outline: none !important;
-  box-shadow: none !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 18%, transparent) !important;
 }
 .cdx-search-field__icon {
   display: inline-flex !important;
@@ -1477,13 +1520,13 @@ dialog.tracking-editor {
   display: flex !important;
   align-items: center !important;
   gap: 8px !important;
-  padding: 4px 8px !important;
+  padding: 5px 8px !important;
   min-height: 32px !important;
   border-radius: 6px !important;
   color: var(--text) !important;
   font-size: 13px !important;
   cursor: pointer !important;
-  transition: background 0.1s ease !important;
+  transition: background-color 0.12s ease, color 0.12s ease !important;
   background: transparent !important;
   border: none !important;
   box-sizing: border-box !important;
@@ -1492,7 +1535,33 @@ dialog.tracking-editor {
 .ce-popover-item--focused,
 .ce-popover-item--active {
   background: var(--surface-hover) !important;
-  color: var(--text) !important;
+  color: var(--text-strong) !important;
+}
+/* Delete block tune: visual de perigo refinado */
+.ce-popover-item[data-item-name="delete"] {
+  color: var(--danger) !important;
+}
+.ce-popover-item[data-item-name="delete"] .ce-popover-item__icon {
+  color: var(--danger) !important;
+  border-color: color-mix(in srgb, var(--danger) 30%, transparent) !important;
+  background: color-mix(in srgb, var(--danger) 8%, transparent) !important;
+}
+.ce-popover-item[data-item-name="delete"] .ce-popover-item__icon svg {
+  stroke: var(--danger) !important;
+  color: var(--danger) !important;
+}
+.ce-popover-item[data-item-name="delete"]:hover,
+.ce-popover-item[data-item-name="delete"].ce-popover-item--focused {
+  background: color-mix(in srgb, var(--danger) 14%, transparent) !important;
+  color: var(--danger) !important;
+}
+.ce-popover-item--confirm {
+  background: var(--danger) !important;
+  color: var(--surface) !important;
+}
+.ce-popover-item--confirm .ce-popover-item__title {
+  color: var(--surface) !important;
+  font-weight: 600 !important;
 }
 .ce-popover-item__icon,
 .ce-popover-item__icon--tool {
@@ -1544,6 +1613,53 @@ dialog.tracking-editor {
   color: var(--muted) !important;
   padding: 12px !important;
   text-align: center !important;
+}
+
+/* Inline Toolbar (Notion Style) */
+.ce-inline-toolbar {
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: var(--shadow-pop) !important;
+  border-radius: 8px !important;
+  padding: 3px !important;
+  display: inline-flex !important;
+  gap: 2px !important;
+  z-index: 100 !important;
+}
+.ce-inline-toolbar__buttons {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+}
+.ce-inline-tool {
+  color: var(--text) !important;
+  border-radius: 5px !important;
+  width: 28px !important;
+  height: 28px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background-color 0.12s ease, color 0.12s ease !important;
+}
+.ce-inline-tool:hover {
+  background: var(--surface-hover) !important;
+  color: var(--text-strong) !important;
+}
+.ce-inline-tool--active {
+  background: color-mix(in srgb, var(--brand) 15%, transparent) !important;
+  color: var(--brand) !important;
+}
+.ce-inline-toolbar__dropdown {
+  border-radius: 5px !important;
+  color: var(--text) !important;
+  padding: 0 8px !important;
+  height: 28px !important;
+  font-size: 13px !important;
+  transition: background-color 0.12s ease, color 0.12s ease !important;
+}
+.ce-inline-toolbar__dropdown:hover {
+  background: var(--surface-hover) !important;
+  color: var(--text-strong) !important;
 }
 
 .ce-paragraph {
