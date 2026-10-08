@@ -424,85 +424,236 @@
   color: var(--muted) !important;
 }
 
-/* Tabela (Corrigindo os quadrados cinzas de adicionar linha/coluna) */
+/* Parágrafo */
+.ce-paragraph {
+  font-size: 15px !important;
+  line-height: 1.6 !important;
+  color: var(--text) !important;
+  padding: 3px 0 !important;
+  margin: 0 !important;
+}
+
+/* Lista (com marcadores e numerada) */
+.cdx-list {
+  margin: 4px 0 !important;
+  padding-left: 24px !important;
+}
+.cdx-list__item {
+  font-size: 15px !important;
+  line-height: 1.55 !important;
+  color: var(--text) !important;
+  padding: 2px 0 !important;
+}
+
+/* Tabela (Estilo Notion com bordas sutis e cabeçalho) */
+.tc-editor {
+  margin: 8px 0 !important;
+}
 .tc-table {
-  border-color: var(--line) !important;
+  border-collapse: collapse !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 6px !important;
+  overflow: hidden !important;
 }
 .tc-cell {
-  border-color: var(--line) !important;
+  border: 1px solid var(--line) !important;
   color: var(--text) !important;
-  padding: 8px !important;
+  padding: 8px 12px !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+}
+.tc-row:first-child .tc-cell,
+.tc-cell--heading {
+  background: var(--surface-hover) !important;
+  font-weight: 600 !important;
+  color: var(--text-strong) !important;
 }
 .tc-add-column, .tc-add-row {
-  background: var(--surface-muted, transparent) !important;
-  border-color: var(--line) !important;
-  color: var(--text) !important;
+  background: transparent !important;
+  border: 1px dashed var(--line) !important;
+  color: var(--muted) !important;
+  transition: background-color 0.15s ease, border-color 0.15s ease !important;
 }
 .tc-add-column:hover, .tc-add-row:hover {
   background: var(--surface-hover) !important;
+  border-color: var(--line-strong) !important;
 }
 .tc-add-column svg, .tc-add-row svg {
+  fill: var(--muted) !important;
+}
+.tc-add-column:hover svg, .tc-add-row:hover svg {
   fill: var(--text) !important;
 }
 
-/* Quote (Citação) */
+/* Quote (Citação Notion com borda lateral) */
 .cdx-quote {
-  border-left: 3px solid var(--primary) !important;
-  padding-left: 12px !important;
-  margin: 12px 0 !important;
+  border-left: 3px solid var(--line-strong) !important;
+  padding: 4px 0 4px 14px !important;
+  margin: 10px 0 !important;
+}
+.cdx-quote .cdx-input {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
 }
 .cdx-quote__text {
-  font-size: 16px !important;
-  line-height: 1.5 !important;
+  font-size: 15.5px !important;
+  line-height: 1.55 !important;
   font-style: normal !important;
+  color: var(--text) !important;
+}
+.cdx-quote__caption {
+  font-size: 13px !important;
+  line-height: 1.4 !important;
+  color: var(--muted) !important;
+  margin-top: 6px !important;
+  font-style: italic !important;
 }
 
-/* Code */
+/* Code (Bloco de código Notion) */
+.ce-code {
+  margin: 8px 0 !important;
+}
 .ce-code__textarea {
-  background: var(--surface-muted, rgba(128,128,128,0.05)) !important;
+  background: var(--surface-hover) !important;
+  color: var(--text-strong) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 6px !important;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace) !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+  tab-size: 2 !important;
+  padding: 12px 16px !important;
+  min-height: 54px !important;
+  box-sizing: border-box !important;
+}
+.ce-code__textarea:focus {
+  border-color: var(--line-strong) !important;
+  outline: none !important;
+}
+
+/* Warning / Destaque (Callout sutil no padrão Notion) */
+.cdx-warning {
+  background: var(--surface-hover) !important;
   color: var(--text) !important;
   border: 1px solid var(--line) !important;
   border-radius: 6px !important;
-  font-family: var(--font-mono, monospace) !important;
-  font-size: 13px !important;
-  padding: 12px !important;
-}
-
-/* Warning */
-.cdx-warning {
-  background: var(--badge-danger-bg) !important;
-  color: var(--badge-danger-fg) !important;
-  border-radius: 8px !important;
-  padding: 16px !important;
-  display: flex !important;
-  align-items: flex-start !important;
-  gap: 12px !important;
+  padding: 12px 16px !important;
+  margin: 10px 0 !important;
+  display: grid !important;
+  grid-template-columns: auto 1fr !important;
+  column-gap: 12px !important;
+  row-gap: 4px !important;
+  box-sizing: border-box !important;
 }
 .cdx-warning::before {
-  content: "⚠️" !important;
+  position: static !important;
+  content: "💡" !important;
+  grid-column: 1 !important;
+  grid-row: 1 / span 2 !important;
   font-size: 18px !important;
+  line-height: 1.4 !important;
+  align-self: start !important;
+  width: 24px !important;
+  min-width: 24px !important;
+  height: auto !important;
+  background: none !important;
+  display: inline-block !important;
 }
-
-/* Marker */
-.cdx-marker {
-  background: var(--badge-warning-bg) !important;
-  color: var(--badge-warning-fg) !important;
-  padding: 2px 4px !important;
-  border-radius: 4px !important;
-}
-
-/* Delimiter */
-.ce-delimiter::before {
-  color: var(--muted) !important;
-}
-
-/* Header */
-.ce-header {
-  font-weight: 700;
-  margin-top: 1.2em;
-  margin-bottom: 0.5em;
-  color: var(--text) !important;
+.cdx-warning .cdx-input {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
   padding: 0 !important;
+  margin: 0 !important;
+}
+.cdx-warning__title {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  font-size: 14.5px !important;
+  font-weight: 600 !important;
+  color: var(--text-strong) !important;
+  line-height: 1.4 !important;
+}
+.cdx-warning__message {
+  grid-column: 2 !important;
+  grid-row: 2 !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  color: var(--text) !important;
+}
+
+/* Marker (Marcador de texto) */
+:root {
+  --cdx-marker-bg: rgba(255, 215, 0, 0.35);
+}
+:root[data-theme="dark"] {
+  --cdx-marker-bg: rgba(235, 180, 0, 0.22);
+}
+.cdx-marker {
+  background: var(--cdx-marker-bg) !important;
+  color: var(--warning, #f5d061) !important;
+  padding: 1px 4px !important;
+  border-radius: 3px !important;
+}
+:root[data-theme="light"] .cdx-marker {
+  color: inherit !important;
+}
+
+/* Delimiter (Linha divisora suave) */
+.ce-delimiter {
+  line-height: 1.6em;
+  text-align: center;
+  margin: 20px 0 !important;
+  padding: 6px 0 !important;
+}
+.ce-delimiter::before {
+  content: "" !important;
+  display: block !important;
+  width: 100% !important;
+  height: 1px !important;
+  background: var(--line) !important;
+}
+
+/* Header (Hierarquia Notion: H1, H2, H3) */
+.ce-header {
+  color: var(--text-strong) !important;
+  padding: 0 !important;
+  line-height: 1.3 !important;
+}
+h1.ce-header {
+  font-size: 26px !important;
+  font-weight: 700 !important;
+  margin-top: 1.4em !important;
+  margin-bottom: 0.3em !important;
+}
+h2.ce-header {
+  font-size: 21px !important;
+  font-weight: 600 !important;
+  margin-top: 1.2em !important;
+  margin-bottom: 0.3em !important;
+}
+h3.ce-header {
+  font-size: 17px !important;
+  font-weight: 600 !important;
+  margin-top: 1.0em !important;
+  margin-bottom: 0.25em !important;
+}
+
+/* Código Inline */
+code.inline-code,
+.cdx-inline-code {
+  background: var(--surface-hover) !important;
+  border: 1px solid var(--line-soft) !important;
+  border-radius: 4px !important;
+  padding: 1.5px 5px !important;
+  font-family: var(--font-mono, monospace) !important;
+  font-size: 85% !important;
+  color: var(--text-strong) !important;
 }
 
 /* ==================== NOTION REDESIGN ==================== */

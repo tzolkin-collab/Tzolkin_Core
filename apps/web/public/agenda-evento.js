@@ -723,36 +723,42 @@ function renderDescricao(raw) {
       }
       else if (b.type === 'quote') {
         const q = el('blockquote');
-        q.style.borderLeft = '3px solid var(--primary)'; q.style.paddingLeft = '12px'; q.style.margin = '10px 0'; q.style.color = 'var(--text)';
+        q.style.borderLeft = '3px solid var(--line-strong)'; q.style.padding = '4px 0 4px 14px'; q.style.margin = '10px 0'; q.style.color = 'var(--text)';
         const doc = new DOMParser().parseFromString(b.data?.text || '', "text/html"); q.append(...doc.body.childNodes);
         if (b.data?.caption) {
           const cap = el('cite', ' — ' + b.data.caption);
-          cap.style.display = 'block'; cap.style.fontSize = '12px'; cap.style.color = 'var(--muted)'; cap.style.fontStyle = 'normal';
+          cap.style.display = 'block'; cap.style.fontSize = '13px'; cap.style.marginTop = '6px'; cap.style.color = 'var(--muted)'; cap.style.fontStyle = 'italic';
           q.append(cap);
         }
         container.append(q);
       }
       else if (b.type === 'code') {
         const pre = el('pre');
-        pre.style.background = 'var(--surface-muted, rgba(128,128,128,0.1))'; pre.style.padding = '10px'; pre.style.borderRadius = '6px'; pre.style.overflowX = 'auto';
+        pre.style.background = 'var(--surface-hover)'; pre.style.border = '1px solid var(--line)'; pre.style.padding = '12px 16px'; pre.style.borderRadius = '6px'; pre.style.overflowX = 'auto';
         const code = el('code', b.data?.code || '');
-        code.style.fontFamily = 'var(--font-mono, monospace)'; code.style.fontSize = '13px';
+        code.style.fontFamily = 'var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace)'; code.style.fontSize = '13px'; code.style.color = 'var(--text-strong)';
         pre.append(code);
         container.append(pre);
       }
       else if (b.type === 'delimiter') {
-        const hr = el('hr'); hr.style.border = 'none'; hr.style.borderTop = '1px solid var(--line-soft)'; hr.style.margin = '14px 0';
+        const hr = el('hr'); hr.style.border = 'none'; hr.style.borderTop = '1px solid var(--line)'; hr.style.margin = '18px 0';
         container.append(hr);
       }
       else if (b.type === 'table') {
         const table = el('table');
-        table.style.borderCollapse = 'collapse'; table.style.width = '100%'; table.style.margin = '8px 0';
+        table.style.borderCollapse = 'collapse'; table.style.width = '100%'; table.style.margin = '10px 0'; table.style.borderRadius = '6px'; table.style.overflow = 'hidden';
         (b.data?.content || []).forEach((row, rIdx) => {
           const tr = el('tr');
           (row || []).forEach(cell => {
-            const tag = (b.data?.withHeadings && rIdx === 0) ? 'th' : 'td';
+            const isHeading = b.data?.withHeadings && rIdx === 0;
+            const tag = isHeading ? 'th' : 'td';
             const td = el(tag);
-            td.style.border = '1px solid var(--line)'; td.style.padding = '6px 8px'; td.style.fontSize = '13px';
+            td.style.border = '1px solid var(--line)'; td.style.padding = '8px 12px'; td.style.fontSize = '14px'; td.style.lineHeight = '1.5';
+            if (isHeading) {
+              td.style.background = 'var(--surface-hover)'; td.style.fontWeight = '600'; td.style.color = 'var(--text-strong)';
+            } else {
+              td.style.color = 'var(--text)';
+            }
             const doc = new DOMParser().parseFromString(cell || '', "text/html"); td.append(...doc.body.childNodes);
             tr.append(td);
           });
@@ -761,10 +767,17 @@ function renderDescricao(raw) {
         container.append(table);
       }
       else if (b.type === 'warning') {
-        const w = el('div');
-        w.style.background = 'var(--badge-danger-bg)'; w.style.color = 'var(--badge-danger-fg)'; w.style.borderRadius = '6px'; w.style.padding = '10px 12px'; w.style.margin = '8px 0';
-        if (b.data?.title) { const t = el('strong', b.data.title); t.style.display = 'block'; t.style.marginBottom = '4px'; w.append(t); }
-        const doc = new DOMParser().parseFromString(b.data?.message || '', "text/html"); w.append(...doc.body.childNodes);
+        const w = el('div', null, 'ag-desc-callout');
+        w.style.background = 'var(--surface-hover)'; w.style.border = '1px solid var(--line)'; w.style.color = 'var(--text)'; w.style.borderRadius = '6px'; w.style.padding = '12px 16px'; w.style.margin = '10px 0'; w.style.display = 'grid'; w.style.gridTemplateColumns = 'auto 1fr'; w.style.gap = '4px 12px';
+        const icone = el('span', '💡'); icone.style.gridRow = '1 / span 2'; icone.style.fontSize = '18px'; icone.style.lineHeight = '1.4';
+        w.append(icone);
+        if (b.data?.title) {
+          const t = el('strong', b.data.title); t.style.gridColumn = '2'; t.style.fontWeight = '600'; t.style.color = 'var(--text-strong)'; t.style.fontSize = '14.5px';
+          w.append(t);
+        }
+        const msg = el('div'); msg.style.gridColumn = '2'; msg.style.fontSize = '14px'; msg.style.lineHeight = '1.5';
+        const doc = new DOMParser().parseFromString(b.data?.message || '', "text/html"); msg.append(...doc.body.childNodes);
+        w.append(msg);
         container.append(w);
       }
     }
