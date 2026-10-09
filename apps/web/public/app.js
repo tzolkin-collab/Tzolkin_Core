@@ -83,7 +83,7 @@ const CONTEXTS = {
    // PORTFÓLIO — o que a TZOLKIN tem para vender.
    products: { title: 'Portfólio', desc: "O que a TZOLKIN vende e opera.", section: 'view-products', action: ['Novo espaço', 'space-dialog'], metrics:false },
    // ENTREGA — o trabalho contratado e o andamento dele.
-   services: { title: 'Serviços', desc: "Contratações de mentoria, consultoria, assessoria e sob demanda.", section: 'view-services', metrics:false },
+   services: { title: 'Contratações', desc: "Contratações de mentoria, consultoria, assessoria e sob demanda.", section: 'view-services', metrics:false },
    // A atividade e as horas pertencem a uma contratação (migração 041).
    tracking: { title: 'Acompanhamento', section: 'view-tracking', metrics:false },
    serviceCampaigns: { title: 'Campanhas do serviço', section: 'view-service-campaigns', metrics: false, hidden:true },

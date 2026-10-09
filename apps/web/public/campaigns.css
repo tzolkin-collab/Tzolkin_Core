@@ -1,92 +1,143 @@
-/* Campanhas. Mesma paleta e mesmas medidas do restante do painel branco:
-   nada aqui inventa um sistema visual paralelo.
-
-   A única ênfase deliberada é o cartão "SEM DONO" — gasto não atribuído é a
-   pendência que esta tela existe para cobrar, e precisa saltar aos olhos. */
+/* Campanhas & Rastreamento — Interface Utmify.
+   Padrão visual integrado ao design system do Tzolkin Core. */
 
 .campaign-hero{margin-bottom: 20px}
-.campaign-hero h2{margin: 4px 0 6px;font-size: 24px;letter-spacing: -.5px}
-.campaign-hero p{margin: 0;color: var(--muted, var(--muted));font-size: 13px;max-width: 66ch}
+.campaign-hero h2{margin: 4px 0 6px;font-size: 22px;letter-spacing: -.5px}
+.campaign-hero p{margin: 0;color: var(--muted);font-size: 13px;max-width: 66ch}
 
-/* --- credencial --- */
-.campaign-credential{border: 1px solid var(--line, var(--line));border-radius: 10px;background: var(--surface);padding: 18px;margin-bottom: 22px}
+/* --- Utmify Header & Controles --- */
+.utmify-header{margin-bottom: 20px;display: flex;flex-direction: column;gap: 14px}
+.utmify-header-top{display: flex;justify-content: space-between;align-items: flex-start;flex-wrap: wrap;gap: 12px}
+.utmify-titles{display: flex;flex-direction: column;gap: 4px}
+.utmify-titles h2{margin: 0;font-size: 24px;letter-spacing: -.5px;display: flex;align-items: center;gap: 10px;flex-wrap: wrap}
+.utmify-top-actions{display: flex;gap: 8px;align-items: center}
+
+/* Toolbar com Períodos e Seletores */
+.utmify-toolbar{display: flex;align-items: center;justify-content: space-between;flex-wrap: wrap;gap: 12px;background: var(--surface);border: 1px solid var(--line);border-radius: 10px;padding: 10px 14px}
+.utmify-period-group{display: flex;gap: 4px;flex-wrap: wrap;align-items: center}
+.utmify-period-btn{border: 1px solid var(--line);background: var(--surface);color: var(--muted);border-radius: 6px;padding: 5px 11px;font-size: 12px;font-weight: 500;cursor: pointer;transition: all .15s ease}
+.utmify-period-btn:hover{background: var(--surface-muted);color: var(--text)}
+.utmify-period-btn.active{background: var(--text);color: var(--surface);border-color: var(--text);font-weight: 600}
+
+.utmify-custom-dates{display: flex;align-items: center;gap: 8px;font-size: 12px}
+.utmify-date-input{border: 1px solid var(--line);background: var(--surface);border-radius: 6px;padding: 4px 8px;font-size: 12px;font-family: inherit}
+
+.utmify-account-wrap{display: flex;align-items: center;gap: 8px}
+.utmify-select{border: 1px solid var(--line);border-radius: 6px;background: var(--surface);padding: 5px 10px;font-size: 12px;color: var(--text);cursor: pointer;min-width: 180px}
+.utmify-select-mini{border: 1px solid var(--line);border-radius: 6px;background: var(--surface);padding: 5px 10px;font-size: 12px;color: var(--text);cursor: pointer}
+
+/* Sub-navegação (Campanhas / UTMs / Conexão) */
+.utmify-subnav{display: flex;gap: 8px;border-bottom: 1px solid var(--line);padding-bottom: 4px;margin-top: 4px}
+.utmify-subnav-btn{display: inline-flex;align-items: center;gap: 7px;border: 0;background: none;padding: 8px 14px;border-radius: 7px;font-size: 13px;font-weight: 500;color: var(--muted);cursor: pointer;transition: all .15s ease}
+.utmify-subnav-btn:hover{background: var(--surface-muted);color: var(--text)}
+.utmify-subnav-btn.active{background: var(--surface-muted);color: var(--text);font-weight: 600}
+.utmify-subnav-btn svg{width: 16px;height: 16px}
+.utmify-tab-warn{display: inline-flex;align-items: center;justify-content: center;width: 16px;height: 16px;border-radius: 50%;background: #ef4444;color: #fff;font-size: 10px;font-weight: 700}
+
+/* --- Cartões KPI Executivos --- */
+.utmify-kpi-grid{display: grid;grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));gap: 12px;margin-bottom: 20px}
+.utmify-kpi-card{border: 1px solid var(--line);border-radius: 10px;background: var(--surface);padding: 14px 16px;display: flex;flex-direction: column;gap: 4px}
+.utmify-kpi-card .overview-kicker{font-size: 11px;letter-spacing: .05em;color: var(--faint)}
+.utmify-kpi-num{font-size: 22px;font-weight: 700;letter-spacing: -.5px;margin: 2px 0}
+.utmify-kpi-sub{font-size: 12px;color: var(--faint);line-height: 1.4}
+.utmify-kpi-card.highlight-success{border-color: color-mix(in srgb, #22c55e 35%, transparent)}
+.utmify-kpi-card.warn{border-color: color-mix(in srgb, #f59e0b 35%, transparent);background: var(--surface-muted)}
+
+.utmify-kpi-head-row{display: flex;justify-content: space-between;align-items: center;gap: 6px}
+
+/* ROAS Badges */
+.roas-badge{display: inline-block;border-radius: 4px;padding: 2px 6px;font-size: 10px;font-weight: 600;text-transform: uppercase}
+.roas-badge.high{background: #dcfce7;color: #15803d}
+.roas-badge.mid{background: #fef3c7;color: #b45309}
+.roas-badge.low{background: #fee2e2;color: #b91c1c}
+.roas-badge.none{background: var(--surface-muted);color: var(--faint)}
+
+.roas-badge-pill{display: inline-block;border-radius: 5px;padding: 2px 7px;font-size: 12px;font-weight: 600}
+.roas-badge-pill.high{background: #dcfce7;color: #15803d}
+.roas-badge-pill.mid{background: #fef3c7;color: #b45309}
+.roas-badge-pill.low{background: #fee2e2;color: #b91c1c}
+.roas-badge-pill.none{background: var(--surface-muted);color: var(--faint)}
+
+.text-success{color: #16a34a !important}
+.text-warning{color: #d97706 !important}
+.font-medium{font-weight: 500}
+.font-bold{font-weight: 700}
+
+/* Info de Sincronização */
+.utmify-sync-info{margin: 0 0 14px;font-size: 12px;color: var(--faint)}
+
+/* --- Tabela de Campanhas --- */
+.utmify-table-container{display: flex;flex-direction: column;gap: 10px;margin-bottom: 24px}
+.utmify-table-filter-bar{display: flex;justify-content: space-between;align-items: center;gap: 12px;flex-wrap: wrap}
+.utmify-search-input{flex: 1;min-width: 240px;border: 1px solid var(--line);border-radius: 7px;background: var(--surface);padding: 7px 12px;font-size: 12px;color: var(--text)}
+.utmify-search-input:focus{outline: 2px solid var(--text)}
+
+.utmify-table-scroll{max-height: 600px;overflow-y: auto;border: 1px solid var(--line);border-radius: 10px;background: var(--surface)}
+.utmify-table{width: 100%;border-collapse: collapse;font-size: 12px}
+.utmify-table thead th{position: sticky;top: 0;background: var(--surface);z-index: 2;border-bottom: 1px solid var(--line);padding: 10px 12px;font-size: 11px;text-transform: uppercase;letter-spacing: .04em;color: var(--faint);font-weight: 600}
+.utmify-table tbody td{padding: 11px 12px;border-bottom: 1px solid var(--line-soft, var(--line));vertical-align: middle}
+.utmify-table tbody tr:hover{background: var(--surface-muted)}
+.utmify-table tfoot td{position: sticky;bottom: 0;background: var(--surface);z-index: 2;border-top: 2px solid var(--line);padding: 11px 12px;font-size: 12px}
+
+.utmify-table .col-status{width: 90px}
+.utmify-table .col-name{min-width: 260px}
+.utmify-table .col-actions{width: 80px;text-align: right}
+.utmify-table .table-empty{text-align: center;padding: 30px;color: var(--faint);font-size: 13px}
+
+.utmify-campaign-title{font-size: 13px;font-weight: 600;color: var(--text);line-height: 1.35;word-break: break-word}
+.utmify-campaign-sub{display: block;margin-top: 3px;color: var(--faint);font-size: 11px}
+
+.utmify-bind-container{margin-top: 5px}
+.utmify-bind-tag{display: inline-flex;align-items: center;gap: 5px;border-radius: 4px;padding: 2px 7px;font-size: 11px;font-weight: 500}
+.utmify-bind-tag svg{width: 12px;height: 12px}
+.utmify-bind-tag.assigned{background: #eff6ff;color: #1d4ed8;border: 1px solid #bfdbfe}
+.utmify-bind-tag.unassigned{background: #fef2f2;color: #b91c1c;border: 1px dashed #fecaca}
+
+/* --- Aba de Análise de UTMs --- */
+.utmify-utms-section{display: flex;flex-direction: column;gap: 14px}
+.utmify-utms-head{display: flex;align-items: center;justify-content: space-between;flex-wrap: wrap;gap: 10px}
+.utmify-dim-group{display: flex;gap: 6px;flex-wrap: wrap}
+.utmify-dim-btn{border: 1px solid var(--line);background: var(--surface);color: var(--muted);border-radius: 6px;padding: 6px 12px;font-size: 12px;font-weight: 500;cursor: pointer;transition: all .15s ease}
+.utmify-dim-btn:hover{background: var(--surface-muted);color: var(--text)}
+.utmify-dim-btn.active{background: var(--text);color: var(--surface);border-color: var(--text);font-weight: 600}
+
+.utmify-untracked-banner{display: flex;gap: 12px;align-items: flex-start;background: #fffbeb;border: 1px solid #fef3c7;border-radius: 9px;padding: 12px 14px;color: #92400e}
+.utmify-untracked-banner svg{width: 18px;height: 18px;flex: 0 0 auto;margin-top: 2px;color: #d97706}
+.utmify-untracked-banner strong{display: block;font-size: 13px;margin-bottom: 3px}
+.utmify-untracked-banner p{margin: 0;font-size: 12px;line-height: 1.45}
+
+.utmify-untracked-tag{display: inline-block;padding: 2px 6px;border-radius: 4px;background: #fef2f2;color: #b91c1c;font-size: 11px;font-style: italic;font-weight: 600;border: 1px dashed #fecaca}
+
+/* --- Credencial e Alertas Legados / Compatibilidade --- */
+.campaign-credential{border: 1px solid var(--line);border-radius: 10px;background: var(--surface);padding: 18px;margin-bottom: 22px}
 .campaign-credential.empty{display: flex;gap: 14px;align-items: flex-start;background: var(--surface-muted);border-style: dashed}
 .campaign-credential.empty svg{width: 20px;flex: 0 0 auto;color: var(--badge-info-fg);margin-top: 2px}
 .campaign-credential.empty h3{margin: 0 0 6px;font-size: 15px}
-.campaign-credential.empty p{margin: 0 0 10px;color: var(--muted, var(--muted));font-size: 13px;line-height: 1.6}
-.campaign-credential.empty small{display: block;margin-top: 8px;color: var(--faint, var(--muted));font-size: 12px}
-.campaign-cmd{display: inline-block;border: 1px solid var(--line, var(--line));border-radius: 6px;background: var(--surface-muted);
- padding: 7px 10px;font-family: ui-monospace,SFMono-Regular,Menlo,monospace;font-size: 12px;color: #44444f}
+.campaign-credential.empty p{margin: 0 0 10px;color: var(--muted);font-size: 13px;line-height: 1.6}
+.campaign-credential.empty small{display: block;margin-top: 8px;color: var(--faint);font-size: 12px}
+.campaign-cmd{display: inline-block;border: 1px solid var(--line);border-radius: 6px;background: var(--surface-muted);padding: 7px 10px;font-family: ui-monospace,SFMono-Regular,Menlo,monospace;font-size: 12px;color: #44444f}
 .campaign-credential-head{display: flex;gap: 10px;align-items: center;flex-wrap: wrap;margin-bottom: 14px}
 .campaign-credential-head strong{font-size: 15px}
 .campaign-facts{display: grid;grid-template-columns: repeat(auto-fit,minmax(180px,1fr));gap: 12px 20px;margin: 0 0 14px}
-.campaign-facts dt{font-size: 12px;text-transform: uppercase;letter-spacing: .04em;color: var(--faint, var(--muted));margin-bottom: 3px}
+.campaign-facts dt{font-size: 12px;text-transform: uppercase;letter-spacing: .04em;color: var(--faint);margin-bottom: 3px}
 .campaign-facts dd{margin: 0;font-size: 13px;color: var(--text);overflow-wrap: anywhere}
 .campaign-actions{display: flex;gap: 8px;flex-wrap: wrap}
-/* Saída para a expiração no modo clássico: informação, não alarme. */
-.campaign-login-hint{margin: 0 0 12px;color: var(--muted, var(--muted));font-size: 12px;line-height: 1.55;max-width: 74ch}
+.campaign-login-hint{margin: 0 0 12px;color: var(--muted);font-size: 12px;line-height: 1.55;max-width: 74ch}
 
-/* --- resumo --- */
-.campaign-summary{display: grid;grid-template-columns: repeat(auto-fit,minmax(160px,1fr));gap: 12px;margin-bottom: 22px}
-.campaign-kpi{border: 1px solid var(--line, var(--line));border-radius: 10px;background: var(--surface);padding: 14px 16px}
-.campaign-kpi strong{display: block;font-size: 22px;letter-spacing: -.5px;margin: 6px 0 2px}
-.campaign-kpi small{display: block;color: var(--faint, var(--muted));font-size: 12px;line-height: 1.5}
-/* Gasto sem dono não pode passar despercebido. */
-.campaign-kpi.warn{border-color: color-mix(in srgb, var(--badge-warning-dot) 35%, transparent);background: var(--surface-muted)}
-.campaign-kpi.warn strong{color: var(--badge-warning-fg)}
-
-/* --- lista --- */
-.campaign-group{margin-bottom: 26px}
-.campaign-group h3{margin: 0;font-size: 15px}
-.campaign-group>p.detail{margin: 0 0 12px;color: var(--faint, var(--muted));font-size: 12px}
-.campaign-row{border: 1px solid var(--line, var(--line));border-radius: 10px;background: var(--surface);padding: 14px 16px;margin-bottom: 8px}
-.campaign-row-head{display: flex;gap: 10px;align-items: center;justify-content: space-between;margin-bottom: 10px}
-.campaign-row-head strong{font-size: 14px;overflow-wrap: anywhere}
-.campaign-metrics{display: grid;grid-template-columns: repeat(auto-fit,minmax(110px,1fr));gap: 10px;
- padding-bottom: 12px;border-bottom: 1px solid var(--line-soft, var(--line))}
-.campaign-metrics .detail{display: block;font-size: 12px;text-transform: uppercase;letter-spacing: .04em;color: var(--faint, var(--muted))}
-.campaign-metrics strong{font-size: 14px}
-.campaign-row-foot{display: flex;gap: 10px;align-items: center;justify-content: space-between;flex-wrap: wrap;padding-top: 11px}
-.campaign-binding{display: inline-flex;gap: 6px;align-items: center;font-size: 12px;color: var(--badge-info-fg)}
-.campaign-binding svg{width: 15px}
 .link-button{border: 0;background: none;color: var(--badge-info-fg);font: inherit;font-size: 12px;padding: 0;cursor: pointer;text-decoration: underline}
-
-/* Sugestão fica visualmente distinta do vínculo confirmado: é palpite. */
-.campaign-suggestion{display: flex;gap: 8px;align-items: center;flex-wrap: wrap;
- border: 1px dashed color-mix(in srgb, var(--badge-info-dot) 35%, transparent);border-radius: 7px;background: var(--surface-muted);
- padding: 9px 11px;margin: 0 0 4px;color: var(--badge-info-fg);font-size: 12px;line-height: 1.55}
-
-.service-card-actions{display: flex;gap: 8px;flex-wrap: wrap}
-
-@media(max-width:700px){
- .campaign-hero h2{font-size: 21px}
- .campaign-row-head{flex-direction: column;align-items: flex-start;gap: 6px}
- .campaign-row-foot{flex-direction: column;align-items: stretch}
-}
-
-/* Chave de cifragem ausente: bloqueia a conexão, então precisa ser explícito. */
-.campaign-key-missing{border: 1px solid color-mix(in srgb, var(--badge-warning-dot) 35%, transparent);border-radius: 8px;background: var(--surface-muted);
- padding: 11px 13px;margin: 10px 0}
+.campaign-suggestion{display: flex;gap: 8px;align-items: center;flex-wrap: wrap;border: 1px dashed color-mix(in srgb, var(--badge-info-dot) 35%, transparent);border-radius: 7px;background: var(--surface-muted);padding: 9px 11px;margin: 0 0 4px;color: var(--badge-info-fg);font-size: 12px;line-height: 1.55}
+.campaign-key-missing{border: 1px solid color-mix(in srgb, var(--badge-warning-dot) 35%, transparent);border-radius: 8px;background: var(--surface-muted);padding: 11px 13px;margin: 10px 0}
 .campaign-key-missing strong{display: block;font-size: 13px;color: var(--badge-warning-fg);margin-bottom: 4px}
 .campaign-key-missing p{margin: 0 0 8px;font-size: 12px;color: var(--badge-warning-fg);line-height: 1.55}
-#marketing-credential-form details{border: 1px solid var(--line, var(--line));border-radius: 7px;padding: 10px 12px}
-#marketing-credential-form details summary{font-size: 12px;cursor: pointer;color: var(--muted, var(--muted))}
-#marketing-credential-form details small{display: block;margin: 8px 0;color: var(--faint, var(--muted));font-size: 12px;line-height: 1.55}
-#marketing-credential-form code{font-family: ui-monospace,SFMono-Regular,Menlo,monospace;font-size: 12px}
 
-/* Cabecalho de grupo: o subtotal a direita e o que permite comparar produtos. */
-.campaign-group-head{display: flex;justify-content: space-between;align-items: flex-start;gap: 16px;margin-bottom: 10px}
-.campaign-group-head .overview-kicker{display: block;margin-bottom: 3px}
-.campaign-group-total{text-align: right;flex: 0 0 auto}
-.campaign-group-total strong{display: block;font-size: 17px;letter-spacing: -.3px}
-.campaign-group-total small{display: block;color: var(--faint, var(--muted));font-size: 12px;margin-top: 2px}
-/* Grupo sem dono: pendencia, nao resultado. */
-.campaign-group.pendente{border-left: 3px solid color-mix(in srgb, var(--badge-warning-dot) 35%, transparent);padding-left: 13px}
-.campaign-group.pendente .campaign-group-total strong{color: var(--badge-warning-fg)}
-@media(max-width:700px){.campaign-group-head{flex-direction: column}.campaign-group-total{text-align: left}}
-
-/* Retorno do OAuth: aparece uma vez, no topo. */
 .campaign-flash{border: 1px solid;border-radius: 8px;padding: 10px 13px;margin: 0 0 16px;font-size: 13px;line-height: 1.55}
 .campaign-flash.ok{border-color: color-mix(in srgb, var(--badge-success-dot) 35%, transparent);background: var(--surface-muted);color: var(--badge-success-fg)}
 .campaign-flash.warn{border-color: color-mix(in srgb, var(--badge-warning-dot) 35%, transparent);background: var(--surface-muted);color: var(--badge-warning-fg)}
 .campaign-flash.error{border-color: color-mix(in srgb, var(--badge-danger-dot) 35%, transparent);background: var(--surface-muted);color: var(--badge-danger-fg)}
+
+@media(max-width:850px){
+ .utmify-toolbar{flex-direction: column;align-items: stretch}
+ .utmify-table-filter-bar{flex-direction: column;align-items: stretch}
+ .utmify-account-wrap{width: 100%}
+ .utmify-select{width: 100%}
+}

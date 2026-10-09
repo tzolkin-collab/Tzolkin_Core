@@ -88,3 +88,29 @@
 .dbx-binding-row{display: flex;gap: 16px;justify-content: space-between;padding: 10px 0;border-top: 1px solid var(--dbx-border);font-size: 12px}
 @media(max-width:1000px){.dbx-workspace{grid-template-columns: 210px minmax(0,1fr)}.dbx-editor-head{display: block}.dbx-tabs{gap: 18px}}
 @media(max-width:650px){.dbx-workspace{grid-template-columns: minmax(0,1fr);grid-template-rows: auto minmax(0,1fr) 26px;min-height: 0}.dbx-navigator{grid-template-rows: auto auto;max-height: 230px;border-right: 0;border-bottom: 1px solid var(--dbx-border)}.dbx-nav-head,.dbx-nav-footer{display: none}.dbx-selectors{grid-template-columns: 1fr 1fr;padding: 10px;gap: 6px}.dbx-connection{display: block}.dbx-engine{display: none}.dbx-selectors input{grid-column: 1/-1}.dbx-workspace select,.dbx-workspace input{font-size: 16px;height: 40px;min-height: 40px}.dbx-table-list{display: flex;gap: 4px;overflow-x: auto;padding: 0 10px 8px;min-height: 42px}.dbx-table-item{width: auto;flex-shrink: 0;max-width: 240px;grid-template-columns: 16px minmax(0,1fr)}.dbx-table-item small{display: none}.dbx-editor-head{padding: 10px 12px 0}.dbx-tabs{gap: 18px;overflow: auto}.dbx-identity strong{font-size: 14px}.dbx-toolbar{padding: 8px 12px;gap: 8px}.dbx-grid td,.dbx-grid th{padding: 10px 12px}.dbx-filter select{width: 140px}.dbx-filter input{width: 140px;min-width: 100px}.dbx-bindings{padding: 18px}.dbx-pager{padding: 8px 12px;flex-wrap: wrap}.dbx-status{font-size: 12px}.dbx-grid{min-width: 480px}}
+
+/* Schema-level views & navigation */
+.dbx-schema-item{display: flex;align-items: center;gap: 4px;width: 100%;padding: 3px 6px;border-radius: 6px;background: transparent}
+.dbx-schema-item:hover{background: var(--surface-hover)}
+.dbx-schema-item.selected{background: var(--brand-soft)}
+.dbx-tree-chevron-btn{background: transparent;border: 0;color: var(--muted);padding: 2px 5px;font-size: 13px;cursor: pointer;border-radius: 4px;width: 22px;display: inline-flex;align-items: center;justify-content: center}
+.dbx-tree-chevron-btn:hover{background: var(--surface-hover);color: var(--text)}
+.dbx-schema-name-btn{display: flex;align-items: center;gap: 6px;flex: 1;min-width: 0;background: transparent;border: 0;padding: 3px 4px;text-align: left;color: inherit;cursor: pointer}
+.dbx-schema-name-btn strong{font-size: 12px;font-weight: 600}
+.dbx-schema-name-btn small{margin-left: auto;color: var(--muted);font-size: 11px}
+.dbx-schema-all-btn{display: flex;align-items: center;gap: 6px;width: 100%;padding: 6px 10px;margin: 3px 0 6px;background: var(--surface-hover);border: 1px dashed var(--line);border-radius: 5px;color: var(--focus-ring, var(--brand));font-size: 11px!important;font-weight: 600;text-align: left;cursor: pointer}
+.dbx-schema-all-btn:hover,.dbx-schema-all-btn.active{background: var(--brand-soft);border-color: var(--focus-ring);color: var(--text)}
+.dbx-path-btn{background: transparent;border: 0;padding: 0;color: var(--focus-ring);font: inherit;font-size: 12px;cursor: pointer;text-decoration: underline}
+.dbx-path-btn:hover{color: var(--text)}
+.dbx-diagram-toolbar{gap: 12px}
+.dbx-diagram-filter input{height: 30px;min-height: 30px;padding: 4px 8px;font-size: 12px;width: 190px}
+.dbx-toggle-connected{font-size: 11px!important}
+.dbx-toggle-connected.active{background: var(--brand-soft);border-color: var(--focus-ring);color: var(--focus-ring)}
+.dbx-entity-more{display: block;width: 100%;padding: 4px 10px;background: transparent;border: 0;border-top: 1px dashed var(--line);color: var(--muted);font-size: 11px!important;text-align: left;cursor: pointer}
+.dbx-entity-more:hover{background: var(--surface-hover);color: var(--text)}
+.dbx-relation-table-btn{background: transparent;border: 0;padding: 0;font: inherit;font-size: 12px;font-weight: 600;color: var(--focus-ring);cursor: pointer;text-align: left}
+.dbx-relation-table-btn:hover{text-decoration: underline}
+.dbx-arrow-cell{color: var(--muted);font-weight: 700;text-align: center;width: 24px}
+.dbx-rel-actions{display: flex;gap: 6px;align-items: center}
+.dbx-button-sm{padding: 3px 8px;min-height: 24px;font-size: 11px!important}
+

@@ -18,7 +18,7 @@ import * as AM from '../../apps/web/public/agenda-model.js';
 const PULAR = acharNavegador() ? false : 'Chrome/Edge não encontrado (defina CHROME_PATH)';
 const ARTEFATOS = fileURLToPath(new URL('./artifacts/', import.meta.url));
 
-const MENU_ESPERADO = ['Visão geral', 'Financeiro', 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'E-mails', 'Portfólio', 'Serviços', 'Acompanhamento', 'Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS', 'Banco de dados'];
+const MENU_ESPERADO = ['Visão geral', 'Financeiro', 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'E-mails', 'Portfólio', 'Contratações', 'Acompanhamento', 'Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS', 'Banco de dados'];
 const SECAO = `[...document.querySelectorAll('main section')].find(s => !s.hidden && s.offsetParent)`;
 /**
  * Lê, de dentro da página, os defeitos de uma tela: título, estouro de largura, texto com valor
@@ -2847,7 +2847,7 @@ test('capturas: modo escuro nos formulários e diálogos', { skip: PULAR || !pro
  await pagina.esquema('dark');
  await pagina.esperar(`document.documentElement.dataset.theme === 'dark'`);
  await pagina.tela(1280, 900);
- for (const [tela, arquivo] of [['Portfólio', '977-Escuro-Portfolio.png'], ['Serviços', '978-Escuro-Servicos.png'], ['Acompanhamento', '979-Escuro-Acompanhamento.png'], ['Conexões', '980-Escuro-Conexoes.png'], ['Vercel', '981-Escuro-Vercel.png'], ['DNS', '982-Escuro-DNS.png'], ['Banco de dados', '983-Escuro-Banco.png'], ['Inbound', '984-Escuro-Inbound.png']]) {
+ for (const [tela, arquivo] of [['Portfólio', '977-Escuro-Portfolio.png'], ['Contratações', '978-Escuro-Servicos.png'], ['Acompanhamento', '979-Escuro-Acompanhamento.png'], ['Conexões', '980-Escuro-Conexoes.png'], ['Vercel', '981-Escuro-Vercel.png'], ['DNS', '982-Escuro-DNS.png'], ['Banco de dados', '983-Escuro-Banco.png'], ['Inbound', '984-Escuro-Inbound.png']]) {
   await pagina.avaliar(CLICAR_NO_MENU(tela));
   await new Promise(r => setTimeout(r, 500));
   await pagina.imagem(join(ARTEFATOS, arquivo));

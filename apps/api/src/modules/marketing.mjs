@@ -124,7 +124,7 @@ export function sugerirVinculo(nomeCampanha, produtos, contratacoes) {
  return candidatos.length === 1 ? candidatos[0] : null;
 }
 
-// Consulta única de campanhas com gasto somado no período e o vínculo atual.
+// Consulta única de campanhas com gasto somado no período, atribuição real do Core e o vínculo atual.
 const SQL_CAMPANHAS = `
  SELECT c.provider, c.external_id, c.name, c.objective, c.status, c.effective_status,
         c.daily_budget_cents, c.lifetime_budget_cents, c.start_time, c.stop_time, c.collected_at,
@@ -138,6 +138,9 @@ const SQL_CAMPANHAS = `
         COALESCE(i.clicks,0)::bigint AS clicks,
         COALESCE(i.leads,0)::bigint AS leads,
         COALESCE(i.purchases,0)::bigint AS purchases,
+        COALESCE(core.core_leads,0)::bigint AS core_leads,
+        COALESCE(core.core_won,0)::bigint AS core_won,
+        COALESCE(core.core_revenue_cents,0)::bigint AS core_revenue_cents,
         i.dias
    FROM marketing_campaigns c
    JOIN marketing_accounts a ON a.provider=c.provider AND a.external_id=c.account_external_id
@@ -153,6 +156,16 @@ const SQL_CAMPANHAS = `
       WHERE s.provider=c.provider AND s.campaign_external_id=c.external_id
         AND s.date_start BETWEEN $1 AND $2
    ) i ON true
+   LEFT JOIN LATERAL (
+     SELECT COUNT(DISTINCT l.id)::bigint AS core_leads,
+            COUNT(DISTINCT CASE WHEN l.status='won' THEN l.id END)::bigint AS core_won,
+            COALESCE(SUM(CASE WHEN ct.status IN ('active','completed') THEN ct.amount_minor ELSE 0 END), 0)::bigint AS core_revenue_cents
+       FROM commercial_attributions ca
+       JOIN commercial_leads l ON l.id = ca.lead_id
+       LEFT JOIN commercial_contracts ct ON ct.lead_id = l.id
+      WHERE (ca.meta_campaign_id = c.external_id OR (ca.meta_campaign_id IS NULL AND ca.utm_campaign = c.name))
+        AND l.created_at >= $1::date AND l.created_at < ($2::date + INTERVAL '1 day')
+   ) core ON true
   WHERE c.provider=$3`;
 
 export function marketingRoutes(router, { env = vivo.env, clock = Date.now, adapter = null } = {}) {
@@ -173,14 +186,39 @@ export function marketingRoutes(router, { env = vivo.env, clock = Date.now, adap
   };
  };
 
+ const mapearMetricas = l => {
+  const spend = Number(l.spend_cents || 0);
+  const clicks = Number(l.clicks || 0);
+  const impressions = Number(l.impressions || 0);
+  const metaLeads = Number(l.leads || 0);
+  const coreLeads = Number(l.core_leads || 0);
+  const coreWon = Number(l.core_won || 0);
+  const coreRev = Number(l.core_revenue_cents || 0);
+  const ctr = impressions > 0 ? Number(((clicks / impressions) * 100).toFixed(2)) : 0;
+  const cpcCents = clicks > 0 ? Math.round(spend / clicks) : null;
+  const cplMetaCents = metaLeads > 0 ? Math.round(spend / metaLeads) : null;
+  const cplCoreCents = coreLeads > 0 ? Math.round(spend / coreLeads) : null;
+  const roasReal = spend > 0 ? Number((coreRev / spend).toFixed(2)) : (coreRev > 0 ? 999 : 0);
+  return {
+   ...l,
+   ctr,
+   cpc_cents: cpcCents,
+   cpl_meta_cents: cplMetaCents,
+   cpl_core_cents: cplCoreCents,
+   roas_real: roasReal,
+  };
+ };
+
  // ---------------------------------------------------------------------------
- // Visão geral: é a tela "Campanhas" do Core
+ // Visão geral: é a tela "Campanhas" do Core (estilo Utmify com atribuição real)
  // ---------------------------------------------------------------------------
  router.get('/api/marketing/overview', async ({ url, pool, reply }) => {
-  onlyParams(url.searchParams, ['since', 'until']);
+  onlyParams(url.searchParams, ['since', 'until', 'account']);
   const since = url.searchParams.get('since') || diasAtras(JANELA_PADRAO_DIAS, clock);
   const until = url.searchParams.get('until') || hoje(clock);
+  const account = url.searchParams.get('account') || null;
   if (!ehData(since) || !ehData(until) || since > until) throw fail(400, 'Período inválido.');
+  if (account && !/^act_\d{5,25}$/.test(account)) throw fail(400, 'Conta de anúncios inválida.');
 
   const cred = await pool.query(
    'SELECT * FROM marketing_credentials WHERE provider=$1 AND active', [PROVIDER]);
@@ -192,35 +230,154 @@ export function marketingRoutes(router, { env = vivo.env, clock = Date.now, adap
    last_sync: null, unassigned: 0, window: { since, until },
   });
 
+  const params = [since, until, PROVIDER];
+  let sqlCampanhas = SQL_CAMPANHAS;
+  if (account) {
+   params.push(account);
+   sqlCampanhas += ` AND c.account_external_id=$${params.length}`;
+  }
+  sqlCampanhas += ' ORDER BY COALESCE(i.spend_cents,0) DESC, c.name';
+
   const [contas, campanhas, ultimaColeta] = await Promise.all([
    pool.query('SELECT * FROM marketing_accounts WHERE provider=$1 ORDER BY name', [PROVIDER]),
-   pool.query(SQL_CAMPANHAS + ' ORDER BY COALESCE(i.spend_cents,0) DESC, c.name', [since, until, PROVIDER]),
+   pool.query(sqlCampanhas, params),
    pool.query('SELECT * FROM marketing_sync_runs WHERE provider=$1 ORDER BY started_at DESC LIMIT 1', [PROVIDER]),
   ]);
 
-  const linhas = campanhas.rows;
+  const linhas = campanhas.rows.map(mapearMetricas);
   const soma = campo => linhas.reduce((t, l) => t + Number(l[campo] || 0), 0);
   const semVinculo = linhas.filter(l => !l.product_id && !l.engagement_id);
+
+  const totalSpend = soma('spend_cents');
+  const totalClicks = soma('clicks');
+  const totalImpressions = soma('impressions');
+  const totalLeads = soma('leads');
+  const totalPurchases = soma('purchases');
+  const totalCoreLeads = soma('core_leads');
+  const totalCoreWon = soma('core_won');
+  const totalCoreRevenue = soma('core_revenue_cents');
+  const totalRoas = totalSpend > 0 ? Number((totalCoreRevenue / totalSpend).toFixed(2)) : (totalCoreRevenue > 0 ? 999 : 0);
+  const totalCplCore = totalCoreLeads > 0 ? Math.round(totalSpend / totalCoreLeads) : null;
+  const totalCplMeta = totalLeads > 0 ? Math.round(totalSpend / totalLeads) : null;
+  const totalCpc = totalClicks > 0 ? Math.round(totalSpend / totalClicks) : null;
+  const totalCtr = totalImpressions > 0 ? Number(((totalClicks / totalImpressions) * 100).toFixed(2)) : 0;
 
   return reply(200, {
    ...credencialPublica(cred.rows[0], clock),
    ...capacidades(env),
    window: { since, until },
+   selected_account: account,
    accounts: contas.rows,
    campaigns: linhas,
    summary: {
     campaigns: linhas.length,
-    // Gasto do período, em centavos inteiros. A moeda vem da conta.
-    spend_cents: soma('spend_cents'),
-    impressions: soma('impressions'),
-    clicks: soma('clicks'),
-    leads: soma('leads'),
-    purchases: soma('purchases'),
-    // Quanto do gasto ainda não tem dono: é a pendência que a tela cobra.
+    spend_cents: totalSpend,
+    impressions: totalImpressions,
+    clicks: totalClicks,
+    leads: totalLeads,
+    purchases: totalPurchases,
+    core_leads: totalCoreLeads,
+    core_won: totalCoreWon,
+    core_revenue_cents: totalCoreRevenue,
+    roas_real: totalRoas,
+    cpl_core_cents: totalCplCore,
+    cpl_meta_cents: totalCplMeta,
+    cpc_cents: totalCpc,
+    ctr: totalCtr,
     unassigned_spend_cents: semVinculo.reduce((t, l) => t + Number(l.spend_cents || 0), 0),
    },
    unassigned: semVinculo.length,
    last_sync: ultimaColeta.rows[0] || null,
+  });
+ }, { body: false });
+
+ // ---------------------------------------------------------------------------
+ // Análise de UTMs (Visão estilo Utmify: dimensão, leads, conversão, faturamento e ROAS)
+ // ---------------------------------------------------------------------------
+ router.get('/api/marketing/utms', async ({ url, pool, reply }) => {
+  onlyParams(url.searchParams, ['since', 'until', 'dimension', 'account']);
+  const since = url.searchParams.get('since') || diasAtras(JANELA_PADRAO_DIAS, clock);
+  const until = url.searchParams.get('until') || hoje(clock);
+  const dimension = url.searchParams.get('dimension') || 'source';
+  const account = url.searchParams.get('account') || null;
+  if (!ehData(since) || !ehData(until) || since > until) throw fail(400, 'Período inválido.');
+  if (account && !/^act_\d{5,25}$/.test(account)) throw fail(400, 'Conta de anúncios inválida.');
+
+  const colunasPermitidas = {
+   source: 'utm_source',
+   medium: 'utm_medium',
+   campaign: 'utm_campaign',
+   content: 'utm_content',
+   term: 'utm_term',
+   tzolkin: 'utm_tzolkin',
+  };
+  const coluna = colunasPermitidas[dimension];
+  if (!coluna) throw fail(400, 'Dimensão inválida. Escolha source, medium, campaign, content, term ou tzolkin.');
+
+  const params = [since, until];
+  let filtroConta = '';
+  if (account) {
+   params.push(account);
+   filtroConta = `AND EXISTS (
+     SELECT 1 FROM marketing_campaigns mc
+      WHERE (mc.external_id = ca.meta_campaign_id OR (ca.meta_campaign_id IS NULL AND mc.name = ca.utm_campaign))
+        AND mc.account_external_id = $${params.length}
+   )`;
+  }
+
+  const sql = `
+   SELECT COALESCE(NULLIF(TRIM(ca.${coluna}), ''), '(sem rastreamento)') AS value,
+          COUNT(DISTINCT l.id)::bigint AS leads,
+          COUNT(DISTINCT CASE WHEN l.status='won' THEN l.id END)::bigint AS won,
+          COALESCE(SUM(CASE WHEN ct.status IN ('active','completed') THEN ct.amount_minor ELSE 0 END), 0)::bigint AS revenue_cents
+     FROM commercial_leads l
+     LEFT JOIN commercial_attributions ca ON ca.lead_id = l.id
+     LEFT JOIN commercial_contracts ct ON ct.lead_id = l.id
+    WHERE l.created_at >= $1::date AND l.created_at < ($2::date + INTERVAL '1 day')
+      ${filtroConta}
+    GROUP BY 1
+    ORDER BY revenue_cents DESC, leads DESC
+  `;
+
+  const r = await pool.query(sql, params);
+  const rows = r.rows.map(row => {
+   const leads = Number(row.leads || 0);
+   const won = Number(row.won || 0);
+   const rev = Number(row.revenue_cents || 0);
+   const convRate = leads > 0 ? Number(((won / leads) * 100).toFixed(1)) : 0;
+   const ticketMedio = won > 0 ? Math.round(rev / won) : 0;
+   return {
+    value: row.value,
+    is_untracked: row.value === '(sem rastreamento)',
+    leads,
+    won,
+    conversion_rate: convRate,
+    revenue_cents: rev,
+    ticket_medio_cents: ticketMedio,
+   };
+  });
+
+  const totalLeads = rows.reduce((t, x) => t + x.leads, 0);
+  const totalWon = rows.reduce((t, x) => t + x.won, 0);
+  const totalRev = rows.reduce((t, x) => t + x.revenue_cents, 0);
+  const untracked = rows.find(x => x.is_untracked) || null;
+
+  return reply(200, {
+   window: { since, until },
+   dimension,
+   selected_account: account,
+   items: rows,
+   summary: {
+    dimension,
+    total_items: rows.length,
+    leads: totalLeads,
+    won: totalWon,
+    conversion_rate: totalLeads > 0 ? Number(((totalWon / totalLeads) * 100).toFixed(1)) : 0,
+    revenue_cents: totalRev,
+    ticket_medio_cents: totalWon > 0 ? Math.round(totalRev / totalWon) : 0,
+    untracked_leads: untracked ? untracked.leads : 0,
+    untracked_revenue_cents: untracked ? untracked.revenue_cents : 0,
+   },
   });
  }, { body: false });
 
@@ -236,14 +393,21 @@ export function marketingRoutes(router, { env = vivo.env, clock = Date.now, adap
   const r = await pool.query(
    `${SQL_CAMPANHAS} AND b.${filtro}=$4 ORDER BY COALESCE(i.spend_cents,0) DESC, c.name`,
    [since, until, PROVIDER, valor]);
-  const soma = campo => r.rows.reduce((t, l) => t + Number(l[campo] || 0), 0);
+  const linhas = r.rows.map(mapearMetricas);
+  const soma = campo => linhas.reduce((t, l) => t + Number(l[campo] || 0), 0);
   return reply(200, {
    window: { since, until },
-   campaigns: r.rows,
+   campaigns: linhas,
    summary: {
-    campaigns: r.rows.length, spend_cents: soma('spend_cents'),
-    impressions: soma('impressions'), clicks: soma('clicks'),
-    leads: soma('leads'), purchases: soma('purchases'),
+    campaigns: linhas.length,
+    spend_cents: soma('spend_cents'),
+    impressions: soma('impressions'),
+    clicks: soma('clicks'),
+    leads: soma('leads'),
+    purchases: soma('purchases'),
+    core_leads: soma('core_leads'),
+    core_won: soma('core_won'),
+    core_revenue_cents: soma('core_revenue_cents'),
    },
   });
  };
