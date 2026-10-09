@@ -734,6 +734,27 @@ function clientEngagement(engagement,summary){
   const row=node('div',undefined,'client-engagement-deploy');row.append(providerLogo(binding.provider),node('strong',binding.external_project_name),node('span',[PROVIDER_LABELS[binding.provider]||binding.provider,ENVIRONMENT_LABELS[binding.environment]||binding.environment,latest?.state_label||latest?.state||'sem deploy observado'].join(' · '),'detail'));
   if(project?.project_id)row.append(resourceButton('Ver projeto',binding.provider,project.project_id,binding.environment));
   if(latest?.url)row.append(catalogLink('Abrir ↗',latest.url,'product-live-link'));
+  const delProject=node('button',undefined,'table-action danger-action');delProject.type='button';delProject.title=`Desvincular o projeto “${binding.external_project_name}” desta contratação`;
+  delProject.append(createIcon('close'),document.createTextNode('Desvincular'));
+  delProject.onclick=async()=>{
+   if(!confirm(`Desvincular o projeto “${binding.external_project_name}” desta contratação?`))return;
+   delProject.disabled=true;
+   try{
+    const bindingId=binding.id||state.resourceBindings.find(b=>b.engagement_id===engagement.id&&(b.display_name===binding.external_project_name||b.external_id===binding.external_project_id))?.id;
+    const rev=binding.revision??state.resourceBindings.find(b=>b.id===bindingId)?.revision;
+    if(!bindingId)throw new Error('Conexão do projeto não encontrada.');
+    await api('/api/product-resource-bindings/'+encodeURIComponent(bindingId),'DELETE',{
+     reason:`Desvinculado da contratação “${engagement.label}” pela ficha da empresa.`,
+     ...(Number.isInteger(rev)?{revision:rev}:{})
+    });
+    if(state.resourceBindings){const b=state.resourceBindings.find(x=>x.id===bindingId);if(b)b.active=false;}
+    const tenantId=summary.tenant?.id||engagement.tenant_id||state.selectedTenant;
+    if(tenantId){clientPending=null;await loadClientSummary(tenantId);}
+    if(state.view==='services')renderServices();
+    $('notice').textContent=`Projeto “${binding.external_project_name}” desvinculado da contratação.`;
+   }catch(err){reportError(err);delProject.disabled=false;}
+  };
+  row.append(delProject);
   block.append(row);
  }
  return block;
@@ -1067,13 +1088,31 @@ function renderServices(){
  }
  if(!engagements.length){root.replaceChildren(node('p',todos.length?'Nenhuma contratação deste tipo.':'Nenhum serviço contratado foi cadastrado.','empty-list'));return;}
  const projetosDe=engagement=>{
-  const bindings=state.resourceBindings.filter(b=>b.engagement_id===engagement.id);
+  const bindings=state.resourceBindings.filter(b=>b.engagement_id===engagement.id&&b.active!==false);
   if(!bindings.length)return '';
   const caixa=node('div',undefined,'tbl-stack');
   for(const binding of bindings){
    const project=state.deploys.find(p=>casaConexao(binding,recursoDoDeploy(p)));const latest=project?.deployments?.[0];
    const linha=node('div');linha.append(node('strong',binding.display_name,'tbl-name-plain'),node('small',`${PROVIDER_LABELS[binding.provider]||binding.provider} · ${latest?.state_label||latest?.state||'sem deploy observado'}`));
    if(latest?.url)linha.append(catalogLink('Abrir ↗',latest.url,'product-live-link'));
+   const bUnlink=node('button','Desvincular','table-action danger-action tbl-unlink-project-btn');
+   bUnlink.type='button';bUnlink.title=`Desvincular o projeto “${binding.display_name}” deste serviço`;
+   bUnlink.onclick=async ev=>{
+    ev.stopPropagation();
+    if(!confirm(`Desvincular o projeto “${binding.display_name}” deste serviço?`))return;
+    bUnlink.disabled=true;
+    try{
+     await api('/api/product-resource-bindings/'+encodeURIComponent(binding.id),'DELETE',{
+      reason:`Desvinculado de “${engagement.label}” na lista de serviços.`,
+      ...(Number.isInteger(binding.revision)?{revision:binding.revision}:{})
+     });
+     binding.active=false;
+     if(state.selectedTenant===engagement.tenant_id){clientPending=null;loadClientSummary(engagement.tenant_id).catch(()=>{});}
+     renderServices();
+     $('notice').textContent=`Projeto “${binding.display_name}” desvinculado do serviço / contratação.`;
+    }catch(err){reportError(err);bUnlink.disabled=false;}
+   };
+   linha.append(bUnlink);
    caixa.append(linha);
   }
   return caixa;
@@ -1744,7 +1783,10 @@ async function load() {
  // própria. Listar só 'deploys' aqui fazia o salvar não repintar a lista de quem
  // estava justamente na tela de projetos: o projeto nascia e a tela continuava
  // dizendo "seu primeiro projeto começa acima".
- if(contextKind()==='general'&&['connections','github','vercel','easypanel'].includes(state.view)) await delivery.load();
+ if(contextKind()==='general'&&['connections','github','vercel','easypanel'].includes(state.view)) {
+  await delivery.load();
+  if(state.view==='connections') await loadConnections();
+ }
 }
 
 // A lista de organizações só é buscada quando o operador abre um formulário que precisa dela.

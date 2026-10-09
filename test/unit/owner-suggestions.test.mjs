@@ -163,3 +163,49 @@ test('o item chamado "core" é encontrado pelo nome, embora "core" seja palavra 
  // Um nome comum sem o nome do item continua sem sugestão, e o Core não vira coringa.
  assert.equal(sugerirDono({ provider: 'github', id: '8', name: 'tzolkin-collab/site-tzolkin' }, { itens, conexoes: [], donos: comCore, casa }), null);
 });
+
+test('desempate por especificidade: candidato com mais termos em comum vence sem ambiguidade', () => {
+ const doisKalidash = {
+  ...donos,
+  engagements: [
+   { id: 'e-lp', tenant_id: 't-kali', label: 'Landing Page: Projeto Claude para Empresas.', service_model: 'on_demand', status: 'active', archived_at: null },
+   { id: 'e-pwa', tenant_id: 't-kali', label: 'PWA Institucional + CRM Admin', service_model: 'on_demand', status: 'active', archived_at: null },
+  ],
+ };
+ const recursoAdmin = { provider: 'vercel', id: 'v-adm', name: 'kalidash-site-admin', repository: null };
+ const sugestao = sugerirDono(recursoAdmin, { itens: [...itens, recursoAdmin], conexoes: [], donos: doisKalidash, casa });
+ assert.equal(sugestao.dono.engagement_id, 'e-pwa');
+ assert.match(sugestao.motivo, /admin/);
+});
+
+test('desempate por situação: contratação ativa vence contratação concluída do mesmo cliente', () => {
+ const doisKalidash = {
+  ...donos,
+  engagements: [
+   { id: 'e-lp', tenant_id: 't-kali', label: 'Landing Page: Projeto Claude para Empresas.', service_model: 'on_demand', status: 'completed', archived_at: null },
+   { id: 'e-pwa', tenant_id: 't-kali', label: 'PWA Institucional + CRM Admin', service_model: 'on_demand', status: 'active', archived_at: null },
+  ],
+ };
+ const recursoSite = { provider: 'vercel', id: 'v-site', name: 'kalidash-site', repository: null };
+ const sugestao = sugerirDono(recursoSite, { itens: [...itens, recursoSite], conexoes: [], donos: doisKalidash, casa });
+ assert.equal(sugestao.dono.engagement_id, 'e-pwa');
+ assert.equal(sugestao.evidencia, 'nome');
+});
+
+test('irmão do repositório resolve ambiguidade em agruparSugestoes', () => {
+ const doisKalidash = {
+  ...donos,
+  engagements: [
+   { id: 'e-lp', tenant_id: 't-kali', label: 'Landing Page: Projeto Claude para Empresas.', service_model: 'on_demand', status: 'active', archived_at: null },
+   { id: 'e-pwa', tenant_id: 't-kali', label: 'PWA Institucional + CRM Admin', service_model: 'on_demand', status: 'active', archived_at: null },
+  ],
+ };
+ const repoItem = { provider: 'github', id: 'r-kali', name: 'tzolkin-collab/Kalidash_Repo', repository: null };
+ const adminItem = { provider: 'vercel', id: 'v-adm', name: 'kalidash-admin', repository: 'tzolkin-collab/Kalidash_Repo' };
+ const { grupos, ambiguos } = agruparSugestoes([repoItem, adminItem], { itens: [repoItem, adminItem], conexoes: [], donos: doisKalidash, casa });
+ const grupoPwa = grupos.find(g => g.dono.engagement_id === 'e-pwa');
+ assert.ok(grupoPwa, 'deve ter grupo PWA');
+ assert.equal(grupoPwa.recursos.length, 2, 'deve conter o admin e o repositório irmão');
+ assert.equal(ambiguos.length, 0, 'não deve sobrar ambiguidade');
+});
+

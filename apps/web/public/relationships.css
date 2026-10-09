@@ -348,6 +348,10 @@
   min-width: 0;
 }
 
+.client-engagement-deploy .table-action.danger-action { margin-left: auto; color: var(--danger); font-size: 11px!important; padding: 0 6px; height: 26px; }
+.client-engagement-deploy .table-action.danger-action:hover { background: var(--surface-hover); color: var(--badge-danger-fg, var(--danger)); }
+.tbl-unlink-project-btn { font-size: 11px!important; color: var(--danger); padding: 1px 5px; height: auto; min-height: 20px; margin-left: 6px; }
+.tbl-unlink-project-btn:hover { background: var(--surface-hover); color: var(--badge-danger-fg, var(--danger)); }
 .client-engagement-deploy img,
 .client-engagement-deploy svg {
   width: 17px;

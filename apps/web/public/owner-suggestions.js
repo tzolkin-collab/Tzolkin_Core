@@ -90,12 +90,13 @@ export const candidatos = donos => {
     dono: { product_id: null, engagement_id: item.id },
     rotulo: nomeDoDono({ label: item.label, cliente: cliente?.name, modelo: item.service_model }),
     modelo: item.service_model || null,
+    status: item.status || 'active',
     termos: termos(`${item.label} ${cliente?.name || ''}`),
    };
   }),
   ...(donos.products || []).map(item => ({
    dono: { product_id: item.id, engagement_id: null },
-   rotulo: item.name, modelo: null, termos: termos(`${item.name} ${item.id}`),
+   rotulo: item.name, modelo: null, status: 'active', termos: termos(`${item.name} ${item.id}`),
    // O id e o nome do item, mesmo quando são palavras comuns ("core", "sites"): um
    // item se reconhece pelo próprio nome. Vale só para item, nunca para contratação.
    exatos: brutos(`${item.name} ${item.id}`).filter(termo => !PALAVRAS_DA_CASA.has(termo)),
@@ -162,12 +163,23 @@ export function sugerirDono(recurso, { itens, conexoes, donos, casa }) {
   comuns: [...candidato.termos.filter(termo => meus.includes(termo)), ...(candidato.exatos || []).filter(termo => crus.includes(termo) && !meus.includes(termo))],
  })).filter(item => item.comuns.length);
  if (!achados.length) return null;
- // Uma empresa com duas contratações combina duas vezes com o mesmo termo: isso é
- // ambiguidade de verdade, e a sugestão errada custa mais do que nenhuma.
- if (achados.length > 1) return { ambiguo: achados.map(item => item.candidato.rotulo) };
- const [{ candidato, comuns }] = achados;
- return { dono: candidato.dono, rotulo: candidato.rotulo, modelo: candidato.modelo, evidencia: 'nome', etiqueta: `nome «${comuns[0]}»`,
-  motivo: `o nome tem «${comuns[0]}», que também está no nome deste dono` };
+
+ // Desempate 1: especificidade (mais termos distintivos em comum vence)
+ const maxComuns = Math.max(...achados.map(item => item.comuns.length));
+ let melhores = achados.filter(item => item.comuns.length === maxComuns);
+
+ // Desempate 2: contratações ativas/planejadas têm precedência sobre encerradas/concluídas
+ if (melhores.length > 1) {
+  const ENCERRADOS = new Set(['completed', 'discontinued']);
+  const ativos = melhores.filter(item => !ENCERRADOS.has(item.candidato.status));
+  if (ativos.length > 0 && ativos.length < melhores.length) melhores = ativos;
+ }
+
+ // Se ainda restar mais de um dono com o mesmo peso, é ambiguidade e o operador decide.
+ if (melhores.length > 1) return { ambiguo: melhores.map(item => item.candidato.rotulo) };
+ const [{ candidato, comuns }] = melhores;
+ return { dono: candidato.dono, rotulo: candidato.rotulo, modelo: candidato.modelo, evidencia: 'nome', etiqueta: `nome «${comuns.join('», «')}»`,
+  motivo: `o nome tem «${comuns.join('» e «')}», que também está no nome deste dono` };
 }
 
 /**
@@ -194,7 +206,11 @@ export function agruparSugestoes(semDono, contexto) {
  for (const grupo of grupos.values()) {
   for (const { recurso } of [...grupo.recursos]) {
    for (const irmao of irmaosDoRepositorio(recurso, contexto)) {
-    if (usados.has(id(irmao))) continue;
+    if (grupo.recursos.some(r => id(r.recurso) === id(irmao))) continue;
+    const outroGrupo = [...grupos.values()].find(g => g !== grupo && g.recursos.some(r => id(r.recurso) === id(irmao)));
+    if (outroGrupo) continue;
+    const ambIdx = ambiguos.findIndex(a => id(a.recurso) === id(irmao));
+    if (ambIdx !== -1) ambiguos.splice(ambIdx, 1);
     grupo.recursos.push({ recurso: irmao, motivo: `sai do mesmo repositório que «${recurso.name}»`, evidencia: 'repositorio', etiqueta: 'mesmo repositório' });
     usados.add(id(irmao));
    }

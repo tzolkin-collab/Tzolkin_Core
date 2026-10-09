@@ -76,7 +76,7 @@ const SQL = {
  // external_id_kind vai junto porque a ficha casa estas linhas com o inventário dos
  // provedores, e sem ele a tela teria de adivinhar de novo quando o nome vale — que
  // é a adivinhação que a 034 acabou.
- deploys: `SELECT r.engagement_id,r.provider,r.external_id AS external_project_id,
+ deploys: `SELECT r.id,r.revision,r.engagement_id,r.provider,r.external_id AS external_project_id,
                   r.display_name AS external_project_name,r.external_id_kind,r.environment,r.updated_at
              FROM product_resource_bindings r JOIN client_engagements e ON e.id=r.engagement_id
             WHERE e.tenant_id=$1 AND e.archived_at IS NULL AND r.active
