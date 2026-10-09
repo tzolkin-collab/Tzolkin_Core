@@ -649,7 +649,7 @@ function clientEngagement(engagement,summary){
    service_model:campos.service_model||engagement.service_model,
    status:campos.status||engagement.status,
    label:campos.label||engagement.label,
-   revision:engagement.revision,
+   revision:engagement.revision??state.overview?.engagements?.find(e=>e.id===engagement.id)?.revision??1,
    ...campos
   };
   const res=await api('/api/engagements/'+engagement.id,'PUT',payload);
@@ -693,18 +693,19 @@ function clientEngagement(engagement,summary){
   delItem.onclick=async()=>{
    let novoModelo=engagement.service_model;
    if(engagement.service_model==='product'){
-    if(!confirm(`Contratações do tipo produto exigem um item do portfólio. Ao excluir o item “${item.name}”, o tipo da contratação será alterado para “Não classificado”. Deseja continuar?`))return;
+    if(!confirm(`Contratações do tipo produto exigem um item do portfólio. Ao excluir o item “${item.name||''}”, o tipo do serviço / contratação será alterado para “Não classificado”. Deseja continuar?`))return;
     novoModelo='unclassified';
    }else{
-    if(!confirm(`Excluir o item “${item.name}” desta contratação?`))return;
+    if(!confirm(`Excluir o item “${item.name||''}” deste serviço / contratação?`))return;
    }
    delItem.disabled=true;
    try{
     if(novoModelo!=='product'&&novoModelo!==engagement.service_model)await salvarContratacao({service_model:novoModelo});
     await salvarContratacao({ product_id: null });
     const tenantId=summary.tenant?.id||engagement.tenant_id||state.selectedTenant;
-    if(state.selectedTenant===tenantId){clientPending=null;await loadClientSummary(tenantId);}
-    $('notice').textContent='Item removido da contratação.';
+    if(tenantId){clientPending=null;await loadClientSummary(tenantId);}
+    if(state.view==='services')renderServices();
+    $('notice').textContent='Item removido da contratação / serviço.';
    }catch(err){reportError(err);delItem.disabled=false;}
   };
   links.append(delItem);
@@ -914,7 +915,7 @@ function openArchiveEngagementDialog(engagement,tenantId){
  const dialog=$('archive-engagement-dialog');
  if(!dialog)return;
  archivingEngagement=engagement;archivingTenantId=tenantId||engagement.tenant_id||state.selectedTenant;
- $('archive-engagement-label').textContent=engagement.label||'Contratação';
+ $('archive-engagement-label').textContent=engagement.label||'Contratação / Serviço';
  dialog.querySelector('.dialog-error').textContent='';
  dialog.showModal();
 }
@@ -925,13 +926,19 @@ function openItemEngagementDialog(engagement,tenantId){
  editingItemEngagement=engagement;editingItemTenantId=tenantId||engagement.tenant_id||state.selectedTenant;
  const form=$('item-engagement-form'),select=form.elements.product_id;
  const capability=engagement.service_model==='product'?'product_engagement':'commercial';
- const items=(state.overview?.products||engagementItems||[]).filter(p=>p.lifecycle_status==='active'&&hasCapability(p,capability));
- select.replaceChildren(
-  option('','Sem item do portfólio (remover item)'),
-  ...items.map(p=>option(p.id,`${p.name} · ${kindLabelOf(p.portfolio_kind)}`))
- );
- select.value=engagement.product?.id||engagement.product_id||'';
- select.required=false;
+ const preencher=()=>{
+  const items=(state.overview?.products||engagementItems||[]).filter(p=>p.lifecycle_status==='active'&&hasCapability(p,capability));
+  select.replaceChildren(
+   option('','Sem item do portfólio (remover item)'),
+   ...items.map(p=>option(p.id,`${p.name} · ${kindLabelOf(p.portfolio_kind)}`))
+  );
+  select.value=engagement.product?.id||engagement.product_id||'';
+  select.required=false;
+ };
+ preencher();
+ if(!state.overview?.products&&!engagementItems){
+  api('/api/portfolio').then(p=>{engagementItems=p.items||[];preencher();}).catch(err=>{dialog.querySelector('.dialog-error').textContent=err.message;});
+ }
  dialog.querySelector('.dialog-error').textContent='';
  dialog.showModal();
 }
@@ -1071,11 +1078,72 @@ function renderServices(){
   }
   return caixa;
  };
- root.replaceChildren(tabela({legenda:'Serviços contratados',linhas:engagements,aoAbrir:e=>openClient(e.tenant_id),colunas:[
-  {titulo:'Serviço',celula:e=>celulaNome({inicial:e.label,nome:e.label,apoio:`${names.get(e.tenant_id)||'Cliente'} · ${clientLabel(e.service_model)}`,aoAbrir:()=>openClient(e.tenant_id),rotulo:`Abrir ${names.get(e.tenant_id)||'cliente'}`})},
+ const abrirServico=e=>{
+  state.empresaAba='contratacoes';
+  openClient(e.tenant_id);
+ };
+ root.replaceChildren(tabela({legenda:'Serviços contratados',linhas:engagements,aoAbrir:abrirServico,colunas:[
+  {titulo:'Serviço',celula:e=>{
+   const prod=e.product_id?(state.overview?.products||[]).find(p=>p.id===e.product_id):null;
+   const apoio=[names.get(e.tenant_id)||'Cliente',clientLabel(e.service_model),prod?.name].filter(Boolean).join(' · ');
+   return celulaNome({inicial:e.label,nome:e.label,apoio,aoAbrir:()=>abrirServico(e),rotulo:`Abrir ${e.label} em ${names.get(e.tenant_id)||'cliente'}`});
+  }},
   {titulo:'Situação',celula:e=>selo(clientLabel(e.status),tomDoEstado(e.status))},
   {titulo:'Projetos conectados',celula:projetosDe},
-  {titulo:'',num:true,celula:e=>{const botao=node('button','Campanhas','table-action');botao.type='button';botao.onclick=()=>{switchView('serviceCampaigns');campaigns.loadService(e.id,e.label).catch(reportError);};return botao;}}
+  {titulo:'',classe:'tbl-actions',celula:e=>{
+   const acoes=node('div',undefined,'tbl-actions-row');
+   const botaoCampanhas=node('button','Campanhas','table-action');
+   botaoCampanhas.type='button';
+   botaoCampanhas.onclick=ev=>{ev.stopPropagation();switchView('serviceCampaigns');campaigns.loadService(e.id,e.label).catch(reportError);};
+   acoes.append(botaoCampanhas);
+   if(e.product_id){
+    const bDelItem=node('button','Excluir item','table-action danger-action');
+    bDelItem.type='button';
+    bDelItem.title='Remover item do portfólio deste serviço';
+    bDelItem.onclick=async ev=>{
+     ev.stopPropagation();
+     const prod=(state.overview?.products||[]).find(p=>p.id===e.product_id);
+     let novoModelo=e.service_model;
+     if(e.service_model==='product'){
+      if(!confirm(`Contratações do tipo produto exigem um item do portfólio. Ao excluir o item “${prod?.name||''}”, o tipo do serviço será alterado para “Não classificado”. Deseja continuar?`))return;
+      novoModelo='unclassified';
+     }else{
+      if(!confirm(`Excluir o item “${prod?.name||''}” deste serviço?`))return;
+     }
+     bDelItem.disabled=true;
+     try{
+      const rev=e.revision??state.overview?.engagements?.find(x=>x.id===e.id)?.revision??1;
+      const res=await api('/api/engagements/'+e.id,'PUT',{
+       product_id:null,
+       service_model:novoModelo,
+       status:e.status,
+       label:e.label,
+       revision:rev,
+      });
+      e.product_id=null;
+      e.service_model=novoModelo;
+      const newRev=res?.body?.revision??res?.revision??(rev+1);
+      e.revision=newRev;
+      if(state.selectedTenant===e.tenant_id){
+       clientPending=null;
+       loadClientSummary(e.tenant_id).catch(()=>{});
+      }
+      renderServices();
+      $('notice').textContent='Item removido do serviço / contratação.';
+     }catch(err){
+      reportError(err);
+      bDelItem.disabled=false;
+     }
+    };
+    acoes.append(bDelItem);
+   }
+   const botaoExcluir=node('button','Excluir','table-action danger-action');
+   botaoExcluir.type='button';
+   botaoExcluir.title='Excluir este serviço contratado';
+   botaoExcluir.onclick=ev=>{ev.stopPropagation();openArchiveEngagementDialog(e,e.tenant_id);};
+   acoes.append(botaoExcluir);
+   return acoes;
+  }}
  ]}));
 }
 
@@ -1842,7 +1910,8 @@ $('archive-engagement-form')?.addEventListener('submit',async event=>{
   dialog.close();
   state.clientSummary=null;
   if(state.selectedTenant===archivingTenantId){clientPending=null;await loadClientSummary(archivingTenantId);}
-  $('notice').textContent='Contratação excluída.';
+  if(state.view==='services')renderServices();
+  $('notice').textContent='Contratação / serviço excluído(a).';
  }catch(reason){
   error.textContent=reason.message;
   if(state.selectedTenant===archivingTenantId){clientPending=null;loadClientSummary(archivingTenantId).catch(()=>{});}
@@ -1865,7 +1934,7 @@ $('item-engagement-form')?.addEventListener('submit',async event=>{
    service_model:newServiceModel,
    status:editingItemEngagement.status,
    label:editingItemEngagement.label,
-   revision:editingItemEngagement.revision,
+   revision:editingItemEngagement.revision??state.overview?.engagements?.find(e=>e.id===editingItemEngagement.id)?.revision??1,
   });
   editingItemEngagement.product_id=newProductId;
   editingItemEngagement.service_model=newServiceModel;
@@ -1884,7 +1953,8 @@ $('item-engagement-form')?.addEventListener('submit',async event=>{
   dialog.close();
   state.clientSummary=null;
   if(state.selectedTenant===editingItemTenantId){clientPending=null;await loadClientSummary(editingItemTenantId);}
-  $('notice').textContent=newProductId?'Item vinculado à contratação.':'Item removido da contratação.';
+  if(state.view==='services')renderServices();
+  $('notice').textContent=newProductId?'Item vinculado à contratação / serviço.':'Item removido da contratação / serviço.';
  }catch(reason){error.textContent=reason.message;}
  finally{button.disabled=false;}
 });

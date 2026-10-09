@@ -660,6 +660,8 @@
 .tbl .tbl-stack small { display: block; margin-top: 1px; }
 .tbl .table-action { padding: 6px 10px; border: 1px solid var(--line-strong, var(--line-strong)); border-radius: 6px; background: var(--surface, var(--surface)); color: var(--text); font-size: 13px; }
 .tbl .table-action:hover { background: var(--surface-hover, var(--surface-muted)); }
+.tbl .table-action.danger-action { color: var(--danger); }
+.tbl .table-action.danger-action:hover { background: var(--surface-hover); color: var(--badge-danger-fg, var(--danger)); }
 .tbl td:empty::after, .tbl th:empty::after { content: ""; }
 .tbl-summary { margin: 0; color: var(--muted, var(--muted)); font-size: 13px; line-height: 1.5; }
 .tbl-summary strong { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
