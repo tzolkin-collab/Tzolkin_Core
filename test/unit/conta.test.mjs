@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { papelDoOperador, podeAdministrar, accountRoutes } from '../../apps/api/src/modules/accounts.mjs';
+import { commercialPermission } from '../../apps/api/src/modules/commercial-keys.mjs';
 import { contaRoutes } from '../../apps/api/src/modules/conta.mjs';
 import { integrationsCredentialsRoutes } from '../../apps/api/src/modules/integrations-credentials.mjs';
 import { criarEnvVivo } from '../../apps/api/src/platform/env-vivo.mjs';
@@ -46,6 +47,47 @@ test('gerenciar contas segue exigindo administrador (a regra de antes, agora pel
  const r = await rotas['/api/accounts']({ client: db, body: { email: 'novo@exemplo.test', role: 'member' }, operator: dono });
  assert.equal(r.type, 'operator_account.saved');
  await rotas['/api/accounts']({ client: db, body: { email: 'novo2@exemplo.test' }, operator: LOCAL });
+});
+
+test('suspender conta revoga imediatamente as sessões ativas daquele e-mail se não estiver no ambiente', async () => {
+ const rotas = {};
+ accountRoutes({ get: () => {}, put: (p, h) => { rotas[p] = h; } }, { env: { CORE_ALLOWED_EMAILS: 'dono@exemplo.test' } });
+ const db = banco({
+  "role='owner' AND status='active'": () => ({ rows: [{ email: 'dono@exemplo.test' }, { email: 'outro-dono@exemplo.test' }], rowCount: 2 }),
+  "SELECT role,status,name FROM operator_accounts": () => ({ rows: [{ role: 'member', status: 'active', name: 'Lucas' }] }),
+  "UPDATE operator_sessions SET revoked_at": () => ({ rowCount: 1, rows: [{}] }),
+ });
+ const r = await rotas['/api/accounts']({ client: db, body: { email: 'membro@exemplo.test', role: 'member', status: 'suspended' }, operator: dono });
+ assert.equal(r.type, 'operator_account.saved');
+ const rev = db.log.find(q => q.sql.includes('UPDATE operator_sessions SET revoked_at'));
+ assert.ok(rev, 'sessões ativas da conta suspensa foram revogadas');
+ assert.deepEqual(rev.p, ['membro@exemplo.test']);
+
+ // Conta que está no ambiente: suspender no cadastro NÃO revoga suas sessões
+ db.log.length = 0;
+ await rotas['/api/accounts']({ client: db, body: { email: 'dono@exemplo.test', role: 'owner', status: 'suspended' }, operator: LOCAL });
+ assert.ok(!db.log.some(q => q.sql.includes('UPDATE operator_sessions')), 'conta do ambiente não tem sessões revogadas pelo cadastro');
+});
+
+test('RBAC estrito: operador sem cadastro ativo não vira owner se CORE_ALLOWED_EMAILS estiver definido e não o contiver', async () => {
+ const env = { CORE_ALLOWED_EMAILS: 'dono@exemplo.test' };
+ const db = banco();
+ const intruso = { subject: 'g-9', email: 'intruso@exemplo.test' };
+ const p = await papelDoOperador(db, intruso, env);
+ assert.equal(p.administra, false);
+ assert.equal(p.papel, 'viewer');
+
+ // commercialPermission recusa intruso ou operador com conta suspensa
+ await assert.rejects(commercialPermission(db, intruso, false, false, env), e => e.status === 403);
+ await assert.rejects(commercialPermission(db, intruso, true, false, env), e => e.status === 403);
+ await assert.rejects(commercialPermission(db, intruso, true, true, env), e => e.status === 403);
+
+ // Usuário do ambiente continua como owner mesmo sem linha ativa em operator_accounts
+ const donoEnv = { subject: 'g-10', email: 'dono@exemplo.test' };
+ const pEnv = await papelDoOperador(db, donoEnv, env);
+ assert.equal(pEnv.administra, true);
+ assert.equal(pEnv.papel, 'owner');
+ await commercialPermission(db, donoEnv, true, true, env);
 });
 
 function montarConta({ modo = 'google-oidc', db = banco(), agora = Date.parse('2026-10-05T12:00:00Z') } = {}) {

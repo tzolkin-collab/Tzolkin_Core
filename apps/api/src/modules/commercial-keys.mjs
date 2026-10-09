@@ -2,14 +2,21 @@ import { randomBytes } from 'node:crypto';
 import { digest } from '../platform/session.mjs';
 import { fail, input, isProductId, isUuid, onlyParams, text } from '../platform/http.mjs';
 import { requireProductFor } from './catalog.mjs';
+import { allowedEmails } from './accounts.mjs';
 
-export async function commercialPermission(client, operator, write = false, ownerOnly = false) {
+export async function commercialPermission(client, operator, write = false, ownerOnly = false, env = process.env) {
  if (operator?.subject === 'local-bootstrap') return;
  if (!operator?.email) throw fail(403, 'Operador não autorizado.');
- const r = await client.query("SELECT role FROM operator_accounts WHERE email=$1 AND status='active'", [operator.email.toLowerCase()]);
- const role = r.rows[0]?.role;
- // Authenticated env-only operators bootstrap the owner registry, as in accounts.mjs.
- if (role && ((ownerOnly && role !== 'owner') || (write && role === 'viewer'))) throw fail(403, 'Sem permissão para esta operação.');
+ const email = operator.email.toLowerCase();
+ const r = await client.query("SELECT role FROM operator_accounts WHERE email=$1 AND status='active'", [email]);
+ const role = r.rows?.[0]?.role;
+ if (role) {
+  if ((ownerOnly && role !== 'owner') || (write && role === 'viewer')) throw fail(403, 'Sem permissão para esta operação.');
+  return;
+ }
+ const permitidos = allowedEmails(env);
+ const temListaEnv = Boolean(env.CORE_ALLOWED_EMAILS);
+ if (temListaEnv && !permitidos.includes(email)) throw fail(403, 'Operador não autorizado.');
 }
 export const KEY_SCOPES = ['context:read','commercial:intake','commercial:read'];
 // Cada escopo exige uma capacidade do tipo do item (catalog.mjs): chave de

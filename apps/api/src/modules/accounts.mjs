@@ -44,15 +44,19 @@ async function exigirOwner(client, operator) {
  *   ambiente  entrou por CORE_ALLOWED_EMAILS e não tem conta ativa: conta como owner, senão o primeiro acesso não conseguiria cadastrar ninguém
  * Sem e-mail e fora do modo local não administra.
  */
-export async function papelDoOperador(db, operator) {
+export async function papelDoOperador(db, operator, env = process.env) {
  if (operator?.subject === 'local-bootstrap') return { papel: 'owner', nome: null, origem: 'local', administra: true };
  const email = operator?.email?.toLowerCase();
  if (!email) return { papel: 'member', nome: null, origem: 'ambiente', administra: false };
  const r = await db.query("SELECT role,name FROM operator_accounts WHERE email=$1 AND status='active'", [email]);
- if (r.rowCount) return { papel: r.rows[0].role, nome: r.rows[0].name ?? null, origem: 'cadastro', administra: r.rows[0].role === 'owner' };
- return { papel: 'owner', nome: null, origem: 'ambiente', administra: true };
+ const row = r.rows?.[0];
+ if (row) return { papel: row.role, nome: row.name ?? null, origem: 'cadastro', administra: row.role === 'owner' };
+ const permitidos = allowedEmails(env);
+ const temListaEnv = Boolean(env.CORE_ALLOWED_EMAILS);
+ if (!temListaEnv || permitidos.includes(email)) return { papel: 'owner', nome: null, origem: 'ambiente', administra: true };
+ return { papel: 'viewer', nome: null, origem: 'cadastro', administra: false };
 }
-export const podeAdministrar = async (db, operator) => (await papelDoOperador(db, operator)).administra;
+export const podeAdministrar = async (db, operator, env = process.env) => (await papelDoOperador(db, operator, env)).administra;
 
 const PAPEL_CONTA = ['owner', 'member', 'viewer'];
 const PAPEL_TIME = ['lead', 'member'];
@@ -118,6 +122,20 @@ export function accountRoutes(router, { env = process.env } = {}) {
     ON CONFLICT(email) DO UPDATE SET name=EXCLUDED.name, role=EXCLUDED.role,
       status=EXCLUDED.status, updated_at=now()`,
    [email, nome, role, status]);
+
+  // Se a conta foi suspensa, encerra na hora todas as sessões ativas dela
+  // (a menos que seja endereço do ambiente, que nunca é revogado pelo cadastro).
+  const permitidos = allowedEmails(env);
+  if (status === 'suspended' && !permitidos.includes(email)) {
+   try {
+    await client.query(
+     'UPDATE operator_sessions SET revoked_at=now() WHERE lower(email)=$1 AND revoked_at IS NULL',
+     [email]);
+   } catch (e) {
+    if (e?.code !== '42P01') throw e;
+   }
+  }
+
   // Rastro (Configurações → Auditoria): só quando algo mudou, com o antes e o depois do cadastro.
   const depois = { role, status, name: nome };
   const resumo = resumirConta(antes, depois);
