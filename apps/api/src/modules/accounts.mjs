@@ -68,7 +68,7 @@ export function accountRoutes(router, { env = process.env } = {}) {
   const [contas, times, membros] = await Promise.all([
    pool.query('SELECT id,email,name,role,status,source,created_at FROM operator_accounts ORDER BY email'),
    pool.query('SELECT id,slug,name,description,created_at FROM teams ORDER BY name'),
-   pool.query(`SELECT tm.team_id, tm.role, a.id AS account_id, a.email, a.name
+   pool.query(`SELECT tm.team_id, tm.role, a.id AS account_id, a.email, a.name, a.status
                  FROM team_members tm JOIN operator_accounts a ON a.id = tm.account_id
                 ORDER BY a.email`),
   ]);
@@ -123,13 +123,27 @@ export function accountRoutes(router, { env = process.env } = {}) {
       status=EXCLUDED.status, updated_at=now()`,
    [email, nome, role, status]);
 
-  // Se a conta foi suspensa, encerra na hora todas as sessões ativas dela
+  // Se a conta foi suspensa, encerra na hora todas as sessões e vínculos ativos dela
   // (a menos que seja endereço do ambiente, que nunca é revogado pelo cadastro).
   const permitidos = allowedEmails(env);
   if (status === 'suspended' && !permitidos.includes(email)) {
    try {
     await client.query(
      'UPDATE operator_sessions SET revoked_at=now() WHERE lower(email)=$1 AND revoked_at IS NULL',
+     [email]);
+   } catch (e) {
+    if (e?.code !== '42P01') throw e;
+   }
+   try {
+    await client.query(
+     'UPDATE push_subscriptions SET revoked_at=now(), updated_at=now() WHERE lower(operator_email)=$1 AND revoked_at IS NULL',
+     [email]);
+   } catch (e) {
+    if (e?.code !== '42P01') throw e;
+   }
+   try {
+    await client.query(
+     'UPDATE google_calendar_connections SET revoked_at=now(), updated_at=now() WHERE lower(email)=$1 AND revoked_at IS NULL',
      [email]);
    } catch (e) {
     if (e?.code !== '42P01') throw e;

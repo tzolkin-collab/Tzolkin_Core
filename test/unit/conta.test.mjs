@@ -62,6 +62,10 @@ test('suspender conta revoga imediatamente as sessões ativas daquele e-mail se 
  const rev = db.log.find(q => q.sql.includes('UPDATE operator_sessions SET revoked_at'));
  assert.ok(rev, 'sessões ativas da conta suspensa foram revogadas');
  assert.deepEqual(rev.p, ['membro@exemplo.test']);
+ const pushRev = db.log.find(q => q.sql.includes('UPDATE push_subscriptions SET revoked_at'));
+ assert.ok(pushRev, 'push de aparelhos da conta suspensa foi revogado');
+ const calRev = db.log.find(q => q.sql.includes('UPDATE google_calendar_connections SET revoked_at'));
+ assert.ok(calRev, 'conexão Google Agenda da conta suspensa foi revogada');
 
  // Conta que está no ambiente: suspender no cadastro NÃO revoga suas sessões
  db.log.length = 0;
