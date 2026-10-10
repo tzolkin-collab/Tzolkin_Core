@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const PUBLIC = new URL('../../apps/web/public/', import.meta.url);
-const fonte = nome => readFileSync(new URL(nome, PUBLIC), 'utf8');
+const fonte = nome => readFileSync(new URL(nome, PUBLIC), 'utf8') + (nome === 'app.js' ? '\n' + readFileSync(new URL('router.js', PUBLIC), 'utf8') : '');
 
 // A navegação do contexto geral, como foi decidida: grupo e, dentro dele, ordem.
 const NAVEGACAO = [
@@ -50,7 +50,7 @@ function bloco(texto, abre) {
 
 const depoisDe = (texto, marca) => {
  const posicao = texto.indexOf(marca);
- assert.notEqual(posicao, -1, `não encontrei "${marca}" em app.js`);
+ assert.notEqual(posicao, -1, `não encontrei "${marca}" em router.js`);
  return posicao + marca.length - 1;
 };
 
@@ -79,7 +79,7 @@ function grupos(app) {
 
 test('a barra do contexto geral tem os grupos e as telas combinados, nesta ordem', () => {
  const app = fonte('app.js');
- const views = telas(app, 'general'), mapa = grupos(app);
+ const views = telas(fonte('router.js'), 'general'), mapa = grupos(fonte('app.js'));
  // Guardas do próprio teste: sem elas, um regex que parasse de casar deixaria o
  // teste verde afirmando coisa nenhuma.
  assert.ok(views.length >= 18, `poucas telas lidas de CONTEXTS (${views.length})`);
@@ -106,7 +106,7 @@ test('a barra do contexto geral tem os grupos e as telas combinados, nesta ordem
 
 test('as telas ocultas ficam no grupo delas, para não partirem a barra quando forem reveladas', () => {
  const app = fonte('app.js');
- const views = telas(app, 'general'), mapa = grupos(app);
+ const views = telas(fonte('router.js'), 'general'), mapa = grupos(fonte('app.js'));
  const sequencia = views.map(v => mapa[v.chave]);
  // Mesma conferência, agora com as ocultas no meio: se uma delas estiver alojada
  // no grupo errado, revelá-la parte o grupo em dois — e quem revelar não vai
@@ -117,8 +117,8 @@ test('as telas ocultas ficam no grupo delas, para não partirem a barra quando f
 
 test('toda tela aponta para uma seção que existe no index.html e é apagada ao trocar de contexto', () => {
  const app = fonte('app.js'), html = fonte('index.html');
- const lista = /const SECTIONS = \[([^\]]*)\]/.exec(app);
- assert.ok(lista, 'SECTIONS não encontrado em app.js');
+ const lista = /const SECTIONS = \[([^\]]*)\]/.exec(fonte('router.js'));
+ assert.ok(lista, 'SECTIONS não encontrado em router.js');
  // A lista é montada em dois passos no fonte (o literal e um SECTIONS.push logo
  // abaixo). Ler só o literal deixaria duas telas de fora e o teste passaria por
  // ignorá-las, que é o contrário do que ele serve para fazer.
@@ -126,7 +126,7 @@ test('toda tela aponta para uma seção que existe no index.html e é apagada ao
  const secoes = new Set([...`${lista[1]},${empurradas}`.matchAll(/'([^']+)'/g)].map(m => m[1]));
  assert.ok(secoes.size >= 25, `poucas seções em SECTIONS (${secoes.size})`);
  for (const contexto of ['general', 'product'])
-  for (const view of telas(app, contexto)) {
+  for (const view of telas(fonte('router.js'), contexto)) {
    assert.ok(view.secao, `${contexto}.${view.chave} não declara seção`);
    // Sem isto, a tela abre em branco: switchView esconde tudo o que está em
    // SECTIONS e mostra a seção da tela ativa — que precisa existir nas duas listas.
@@ -137,11 +137,11 @@ test('toda tela aponta para uma seção que existe no index.html e é apagada ao
 
 test('no contexto do produto, "Clientes" chama-se Acessos', () => {
  const app = fonte('app.js');
- const produto = telas(app, 'product');
+ const produto = telas(fonte('router.js'), 'product');
  const orgs = produto.find(v => v.chave === 'product-orgs');
  assert.ok(orgs, 'a tela product-orgs sumiu do contexto do produto');
  // Duas telas com o mesmo nome e conteúdos diferentes — a carteira no geral, quem
  // tem acesso ao item no produto — ensinam errado sobre o que o Core registra.
  assert.equal(orgs.titulo, 'Acessos');
- assert.equal(telas(app, 'general').find(v => v.chave === 'clients').titulo, 'Clientes');
+ assert.equal(telas(fonte('router.js'), 'general').find(v => v.chave === 'clients').titulo, 'Clientes');
 });

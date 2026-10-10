@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 
 // Contratos entre os módulos do painel que só quebram no navegador: um método
-// removido de um setupX continua sendo chamado em app.js, uma ação da barra aponta
+// removido de um setupX continua sendo chamado em router.js, uma ação da barra aponta
 // para um elemento que não é <dialog>. Nada disso aparece no servidor nem em teste
 // de API — a tela abre e lança TypeError. Os fontes são lidos como texto: sem DOM.
 const PUBLIC = new URL('../../apps/web/public/', import.meta.url);
-const fonte = nome => readFileSync(new URL(nome, PUBLIC), 'utf8');
+const fonte = nome => readFileSync(new URL(nome, PUBLIC), 'utf8') + (nome === 'app.js' ? '\n' + readFileSync(new URL('router.js', PUBLIC), 'utf8') : '');
 
 // Troca por espaço o conteúdo de comentários, strings, regex e o texto dos template
 // literals, preservando posições e quebras de linha. Sobram só os parênteses e as
@@ -162,7 +162,7 @@ test('todo x.metodo usado sobre a instância de um setupY existe no objeto que s
 test('toda ação da barra abre um <dialog> com <form> ou é tratada explicitamente pelo #new-record', () => {
  const texto = fonte('app.js'), codigo = mascarar(texto), html = fonte('index.html');
  const inicio = /\bconst\s+CONTEXTS\s*=\s*\{/.exec(codigo);
- assert.ok(inicio, 'CONTEXTS não encontrado em app.js');
+ assert.ok(inicio, 'CONTEXTS não encontrado em router.js');
  const bloco = texto.slice(inicio.index, fechamento(codigo, inicio.index + inicio[0].length - 1) + 1);
  const acoes = [...bloco.matchAll(/(?:'([\w-]+)'|([\w$]+))\s*:\s*\{[^{}]*?\baction\s*:\s*\[\s*'([^']*)'\s*,\s*'([^']*)'\s*\]/g)].map(m => ({ view: m[1] || m[2], rotulo: m[3], alvo: m[4] }));
  assert.equal(acoes.length, [...bloco.matchAll(/\baction\s*:/g)].length, 'alguma action de CONTEXTS fora do formato [rótulo, id]');

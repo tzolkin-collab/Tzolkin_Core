@@ -14,6 +14,8 @@ const marcas = nomes => Object.fromEntries(nomes.map(nome => {
 }));
 
 const FILES = {
+ '/router.js':['router.js','text/javascript'],
+ '/store.js':['store.js','text/javascript'],
  '/commercial.js':['commercial.js','text/javascript'],
  '/commercial.css':['commercial.css','text/css'],
  '/media.js':['media.js','text/javascript'],

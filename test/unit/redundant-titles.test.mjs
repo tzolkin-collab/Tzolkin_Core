@@ -2,7 +2,7 @@
 //
 // O topo da página já diz "Clientes"; um <h2>Clientes</h2> logo abaixo, e um card
 // "Clientes 5" ao lado, dizem a mesma palavra três vezes. Esta guarda lê o título de
-// cada tela (CONTEXTS, em app.js) e os cabeçalhos da seção dela (index.html) e recusa
+// cada tela (CONTEXTS, em router.js) e os cabeçalhos da seção dela (index.html) e recusa
 // o cabeçalho que repete o título ou o contém. A frase que explica a tela é um
 // parágrafo, não um cabeçalho.
 import test from 'node:test';
@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 
 const PUBLIC = new URL('../../apps/web/public/', import.meta.url);
 const html = readFileSync(new URL('index.html', PUBLIC), 'utf8');
-const app = readFileSync(new URL('app.js', PUBLIC), 'utf8');
+const app = readFileSync(new URL('app.js', PUBLIC), 'utf8') + '\n' + readFileSync(new URL('router.js', PUBLIC), 'utf8');
 
 const norm = texto => texto.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 
