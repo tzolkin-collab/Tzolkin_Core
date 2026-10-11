@@ -65,24 +65,8 @@ let loadGeneration = 0;
 // ela parte o grupo dela em dois cabeçalhos iguais. As telas ocultas ficam junto do
 // grupo a que pertencem pelo mesmo motivo — o dia em que uma delas for revelada, a
 // sequência continua certa. test/unit/web-nav.test.mjs afirma a sequência inteira.
-import { CONTEXTS, SECTIONS } from './router.js';
+import { setupShell, switchView, closeNavigation, openNavigation, contextKind, views, contextKindLabel, viewAllowed, productName, renderNav, hasCapability, contextProduct, kindLabelOf, CONTEXTS, SECTIONS, VIEW_CAPABILITIES } from './router.js';
   const DATA_NODES = ['tenants', 'leads', 'companies', 'client-detail', 'stakeholder-directory', 'members', 'contracts', 'product-catalog', 'services-list', 'services-summary', 'management-schema', 'management-dns', 'management-redis', 'overview-kpis', 'overview-alerts', 'overview-integrations', 'overview-product-list', 'overview-actions', 'product-orgs', 'product-engagements', 'product-record', 'product-rights', 'metrics', 'deploys-list', 'deploys-status'];
-const contextKind = () => (state.context ? 'product' : 'general');
-const views = () => CONTEXTS[contextKind()].views;
-
-// Telas de contexto que dependem de uma capacidade do tipo do item. A regra é do
-// servidor (catalog.mjs, ADR 0007); a tela só lê as capacidades que ele devolve.
-const VIEW_CAPABILITIES = {'product-inbound':['commercial','operate'],'product-keys':['access','commercial'],'product-orgs':['access'],'product-engagements':['commercial'],'product-payments':['checkout'],'product-receivables':['contract_billing']};
-const contextProduct = () => state.product?.product || state.overview?.products?.find(product => product.id === state.context) || null;
-const hasCapability = (product, capability) => Boolean(product?.capabilities?.includes(capability));
-const contextKindLabel = () => kindLabelOf(contextProduct()?.portfolio_kind);
-// Enquanto as capacidades não chegam, só aparecem as telas que não dependem de nenhuma.
-const viewAllowed = key => {
- if (contextKind() !== 'product' || !VIEW_CAPABILITIES[key]) return true;
- const product = contextProduct();
- return VIEW_CAPABILITIES[key].some(capability => hasCapability(product, capability));
-};
-const productName = () => state.product?.product?.name || state.context;
 const productKey=product=>String(product?.id||product?.name||'').toLowerCase().replace(/^tzolkin[ -]/,'').replace(/\s+/g,'-');
 // Um projeto do inventário, na forma que casaConexao entende. O id do provedor é o
 // que manda; o nome vai junto porque o vínculo legado (id nominal) precisa dele.
@@ -172,10 +156,6 @@ function signedOut() {
  $('show-password').textContent = 'Mostrar'; $('show-password').setAttribute('aria-pressed', 'false');
 }
 
-function closeNavigation(){document.body.classList.remove('nav-open');$('nav-toggle').setAttribute('aria-expanded','false');$('nav-backdrop').hidden=true;}
-function openNavigation(){document.body.classList.add('nav-open');$('nav-toggle').setAttribute('aria-expanded','true');$('nav-backdrop').hidden=false;requestAnimationFrame(()=>$('sidebar').focus?.());}
-$('nav-toggle').onclick=()=>document.body.classList.contains('nav-open')?closeNavigation():openNavigation();
-$('nav-backdrop').onclick=closeNavigation;
 $('mobile-refresh').onclick=()=>$('refresh').click();
 addEventListener('keydown',event=>{if(event.key==='Escape')closeNavigation();});
 addEventListener('resize',()=>{if(innerWidth>900)closeNavigation();});
@@ -198,86 +178,37 @@ async function api(path, method = 'GET', body) {
 
 /* ---------- navegação e contexto ---------- */
 
-function renderNav() {
- const context = CONTEXTS[contextKind()];
- $('nav-label').textContent = contextKind() === 'product' ? `GESTÃO · ${contextKindLabel().toUpperCase()}` : context.label;
- // O grupo de cada tela. Segue, chave por chave, a ordem de CONTEXTS.general.views:
- // é o mesmo desenho escrito duas vezes, e a discordância entre os dois é o que o
- // teste de navegação pega antes de virar dois cabeçalhos "Tecnologia" na tela.
- const groups=contextKind()==='general'?{
-  overview:'Hoje',finance:'Hoje',
-  companies:'Relacionamentos',people:'Relacionamentos',clients:'Relacionamentos',leads:'Relacionamentos',emails:'Relacionamentos',client:'Relacionamentos',
-  products:'Portfólio',
-  services:'Entrega',tracking:'Entrega',serviceCampaigns:'Entrega',
-  connections:'Tecnologia',vercel:'Tecnologia',github:'Tecnologia',easypanel:'Tecnologia',dns:'Tecnologia',resource:'Tecnologia',serverMetrics:'Tecnologia',
-  database:'Bases de dados',redis:'Bases de dados',
-  access:'Administração',settings:'Administração',security:'Administração',
- }:Object.fromEntries(Object.keys(context.views).map(key=>[key,contextKindLabel()]));
- const items=[];let previous,section;
- for(const [key,view]of Object.entries(context.views).filter(([key,view])=>!view.hidden&&viewAllowed(key))){
-  if(groups[key]!==previous){section=node('section',undefined,'nav-section');const label=node('h2',groups[key],'nav-group');section.append(label);items.push(section);previous=groups[key];}
-  const atual = state.view === 'client' ? state.clientBack : state.view;
-  const button = node('button', undefined, 'nav-item' + (key === atual ? ' active' : ''));
-  button.type = 'button'; button.dataset.view = key;
-  const icon = createIcon(({overview:'layers',clients:'building',companies:'building',people:'people',tracking:'calendar',finance:'wallet',metrics:'chart',leads:'user-plus',emails:'mail',products:'package',services:'briefcase',connections:'branch',vercel:'cloud',github:'repo',easypanel:'server',dns:'globe',access:'shield',database:'database',redis:'cache',settings:'sliders',security:'lock',serverMetrics:'activity',product:'package','product-inbound':'user-plus','product-keys':'lock','product-orgs':'people','product-engagements':'briefcase','product-payments':'wallet','product-receivables':'calendar','product-emails':'mail',campaigns:'chart','product-campaigns':'chart'})[key]);
-  icon.classList.add('nav-icon'); button.append(icon, document.createTextNode(view.title));
-  if (key === atual) button.setAttribute('aria-current', 'page');
-  button.onclick = () => {switchView(key);closeNavigation();};
-  section.append(button);
- }
- $('nav').replaceChildren(...items);
-}
 
-function switchView(view) {
- if (!views()[view] || !viewAllowed(view)) view = Object.keys(views())[0];
- if(view !== 'resource' && state.view === 'resource') { resource.clear(); history.replaceState(null,'',location.pathname+location.search); }
- if(state.view!==view) commercial.clear();
- state.view = view;
- peekPessoa?.fechar();
- document.body.dataset.view = view;
- const active = views()[view];
- // Uma tela, uma seção. Cada provedor (Vercel, GitHub, EasyPanel, DNS) tem a sua;
- // o cadastro técnico dos projetos mora em Conexões, junto de quem é o dono.
-// A ficha da empresa é um painel lateral: a tela de onde ela foi aberta continua visível por baixo,
- // com o título, o botão e a lista que estavam lá. Qualquer outra tela fecha o painel.
- const fundo = view === 'client' ? views()[state.clientBack]?.section : null;
- SECTIONS.forEach(id => { $(id).hidden = id !== active.section && id !== fundo; });
- if (view !== 'client') {
-  peekEmpresa?.fechar();
-  $('breadcrumb').textContent = $('page-title').textContent = active.title;
-  $('mobile-page-title').textContent=active.title;
-  $('page-desc').textContent = active.desc || '';
-  $('page-desc').hidden = !active.desc;
-  $('new-record').hidden = !active.action;
-  $('page-title').closest('.page-heading').hidden = view === 'database';
-  // Métrica de carteira não diz nada numa tela de ecossistema ou de deploy.
-  $('metrics').hidden = active.metrics === false || !$('metrics').children.length;
-  if (active.action) $('new-record-label').textContent = active.action[0];
- }
- $('notice').textContent = '';
- renderNav();
- if (view === 'settings') {const retorno=state.configRetorno;state.configRetorno='';montarConfiguracoes($('settings-body'),{api,secao:state.configSecao,retorno,aoMudar:id=>{state.configSecao=id;},abrirTela:v=>{switchView(v);closeNavigation();}});};
- if (view === 'tracking') tracking.load().catch(reportError);
- if (view === 'finance') finance.load().catch(reportError);
- if (view === 'emails') emails.load().catch(reportError);
- if (view === 'people') renderPeople();
- if (view === 'clients') renderTenants();
- if (view === 'leads' || view === 'product-inbound') montarInbound();
- if(view==='product-keys') commercial.keys(state.context).catch(reportError);
- if (view === 'companies') renderCompanies();
- if (view === 'products') renderGeneral();
- if (view === 'services') renderServices();
- if (['dns','database','redis'].includes(view)) renderManagement();
- if (['database','redis'].includes(view) && !state.management) api('/api/management/schema').then(data=>{state.management=data;renderManagement();}).catch(error=>{$('management-schema').replaceChildren(node('p',error.message,'notice-inline'));});
- if (view === 'dns' && !state.dns) api('/api/dns/hostinger').then(data=>{state.dns=data;renderManagement();}).catch(error=>{$('management-dns').replaceChildren(node('p',error.message,'notice-inline'));});
- if (view === 'client') renderClientDetail();
- if (view === 'product-payments'&&state.product) productPayments.load(state.product.product).catch(reportError);
- if (view === 'product-receivables'&&state.product) serviceReceivables.load(state.product.product).catch(reportError);
- if (view === 'product-emails'&&state.product) productEmails.load({...state.product.product,deploy_url:publishedDeployUrl(state.product.product),favicon_url:productFaviconUrl(state.product.product)}).catch(reportError);
- // Conexões (projetos técnicos) e GitHub (repositórios) leem o mesmo cadastro.
- if (['connections','github','vercel','easypanel'].includes(view)) delivery.load().catch(reportError);
- if (view === 'connections') loadConnections();
-}
+
+store.subscribe('viewChanging', ({ oldView, newView }) => {
+  if (oldView === 'resource' && newView !== 'resource') { resource.clear(); history.replaceState(null,'',location.pathname+location.search); }
+  if (oldView !== newView) commercial.clear();
+  if (typeof peekPessoa !== 'undefined' && peekPessoa) peekPessoa?.fechar?.();
+  if (newView !== 'client' && typeof peekEmpresa !== 'undefined' && peekEmpresa) peekEmpresa?.fechar?.();
+});
+
+store.subscribe('view', (view) => {
+  if (view === 'settings') {const retorno=state.configRetorno;state.configRetorno='';montarConfiguracoes($('settings-body'),{api,secao:state.configSecao,retorno,aoMudar:id=>{state.configSecao=id;},abrirTela:v=>{switchView(v);closeNavigation();}});};
+  if (view === 'tracking') tracking.load().catch(reportError);
+  if (view === 'finance') finance.load().catch(reportError);
+  if (view === 'emails') emails.load().catch(reportError);
+  if (view === 'people') renderPeople();
+  if (view === 'clients') renderTenants();
+  if (view === 'leads' || view === 'product-inbound') montarInbound();
+  if (view === 'product-keys') commercial.keys(state.context).catch(reportError);
+  if (view === 'companies') renderCompanies();
+  if (view === 'products') renderGeneral();
+  if (view === 'services') renderServices();
+  if (['dns','database','redis'].includes(view)) renderManagement();
+  if (['database','redis'].includes(view) && !state.management) api('/api/management/schema').then(data=>{state.management=data;renderManagement();}).catch(error=>{$('management-schema').replaceChildren(node('p',error.message,'notice-inline'));});
+  if (view === 'dns' && !state.dns) api('/api/dns/hostinger').then(data=>{state.dns=data;renderManagement();}).catch(error=>{$('management-dns').replaceChildren(node('p',error.message,'notice-inline'));});
+  if (view === 'client') renderClientDetail();
+  if (view === 'product-payments'&&state.product) productPayments.load(state.product.product).catch(reportError);
+  if (view === 'product-receivables'&&state.product) serviceReceivables.load(state.product.product).catch(reportError);
+  if (view === 'product-emails'&&state.product) productEmails.load({...state.product.product,deploy_url:publishedDeployUrl(state.product.product),favicon_url:productFaviconUrl(state.product.product)}).catch(reportError);
+  if (['connections','github','vercel','easypanel'].includes(view)) delivery.load().catch(reportError);
+  if (view === 'connections') loadConnections();
+});
 
 // Inbound: uma tela, dois tópicos (Leads e Campanhas), como abas. No contexto de um
 // item, Leads só existe onde o item tem a capacidade comercial; Campanhas existe em
@@ -403,7 +334,6 @@ const clientLabel=value=>CLIENT_LABELS[value]||value||'A classificar';
 const kindRegistry=()=>state.overview?.portfolio_kinds||[];
 const canonKind=kind=>state.overview?.kind_aliases?.[kind]||kind;
 const kindInfo=kind=>kindRegistry().find(item=>item.kind===canonKind(kind))||null;
-const kindLabelOf=kind=>kindInfo(kind)?.label||'Item';
 
 // O cartão é o alvo do clique: sem um "Abrir X →" repetido em cada linha. Botões e
 // links dentro do cartão continuam com a ação própria.
@@ -1978,18 +1908,19 @@ const delivery = setupDelivery({ api,openResource:resource.open,onSaved:()=>load
 // Volta de fluxo externo — OAuth da Meta, clique em notificação: `?view=`
 // escolhe a tela inicial e `?meta=` traz o resultado da conexão. Os dois saem
 // da barra de endereço em seguida, para um recarregar não repetir o aviso.
+let inicial = 'overview';
 {
  const params = new URLSearchParams(location.search);
  const pedida = params.get('view');
- if (pedida && Object.hasOwn(CONTEXTS.general.views, pedida) && !CONTEXTS.general.views[pedida].hidden) state.view = pedida;
+ if (pedida && Object.hasOwn(CONTEXTS.general.views, pedida) && !CONTEXTS.general.views[pedida].hidden) inicial = pedida;
  // Campanhas deixou de ser tela: o endereço antigo abre a aba dentro de Inbound.
- if (pedida === 'campaigns') { state.view = 'leads'; state.inboundTab = 'campaigns'; }
+ if (pedida === 'campaigns') { inicial = 'leads'; state.inboundTab = 'campaigns'; }
  const secao = params.get('secao');
- if (secao && /^[a-z]{2,20}$/.test(secao)) { state.configSecao = secao; if (!pedida) state.view = 'settings'; }
+ if (secao && /^[a-z]{2,20}$/.test(secao)) { state.configSecao = secao; if (!pedida) inicial = 'settings'; }
  const google = params.get('google');   // volta do OAuth do Google: código curto, mostrado em Configurações → Integrações
- if (google && /^[a-z]{2,12}$/.test(google)) { state.configRetorno = google; if (!pedida) state.view = 'settings'; }
+ if (google && /^[a-z]{2,12}$/.test(google)) { state.configRetorno = google; if (!pedida) inicial = 'settings'; }
  const meta = params.get('meta');
- if (meta && /^[a-z]{2,12}$/.test(meta)) { campaigns.flash(meta); state.view = 'leads'; state.inboundTab = 'campaigns'; }
+ if (meta && /^[a-z]{2,12}$/.test(meta)) { campaigns.flash(meta); inicial = 'leads'; state.inboundTab = 'campaigns'; }
  if (params.has('view') || params.has('meta') || params.has('secao') || params.has('google')) {
   params.delete('view'); params.delete('meta'); params.delete('secao'); params.delete('google');
   const resto = params.toString();
@@ -1997,7 +1928,8 @@ const delivery = setupDelivery({ api,openResource:resource.open,onSaved:()=>load
  }
 }
 renderNav();
-switchView(state.view);
+setupShell();
+switchView(inicial);
 renderContextChrome();
 load().catch(error => { if (error.message !== 'Entre para continuar.') $('login-notice').textContent = error.message; });
 

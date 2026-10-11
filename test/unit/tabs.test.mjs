@@ -92,7 +92,7 @@ test('contagem opcional aparece na aba', () => {
 
 // --- Inbound: Campanhas é uma aba, não uma tela ---------------------------------
 const PUBLIC = new URL('../../apps/web/public/', import.meta.url);
-const fonte = nome => readFileSync(new URL(nome, PUBLIC), 'utf8');
+const fonte = nome => readFileSync(new URL(nome, PUBLIC), 'utf8') + (nome === 'app.js' ? '\n' + readFileSync(new URL('router.js', PUBLIC), 'utf8') : '');
 
 test('Inbound tem os dois painéis que o componente aponta, e Campanhas deixou de ser tela', () => {
  const html = fonte('index.html'), app = fonte('app.js');

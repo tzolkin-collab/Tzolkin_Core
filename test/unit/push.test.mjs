@@ -98,7 +98,7 @@ test('a notificação de lead novo usa os campos do sw.js e leva só nome, nunca
 });
 
 test('a tela que a notificação abre existe no painel', () => {
- const app = readFileSync(new URL('../../apps/web/public/app.js', import.meta.url), 'utf8');
+ const app = (readFileSync(new URL('../../apps/web/public/app.js', import.meta.url), 'utf8') + '\n' + readFileSync(new URL('../../apps/web/public/router.js', import.meta.url), 'utf8'));
  assert.match(app, /\bleads: \{ title: 'Inbound'/);
  assert.equal(payloadLeadNovo({ leadId: 'x' }).view, 'leads');
 });

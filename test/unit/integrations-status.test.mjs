@@ -59,7 +59,7 @@ test('toda tela citada existe no menu do Core e todo grupo é um dos que a tela 
  const { GRUPOS_DE_INTEGRACAO } = await import('../../apps/web/public/config-integracoes.js').catch(() => ({ GRUPOS_DE_INTEGRACAO: null }));
  // o módulo web usa DOM só ao montar; importar não toca no document
  if (GRUPOS_DE_INTEGRACAO) for (const i of INTEGRACOES) assert.ok(GRUPOS_DE_INTEGRACAO.includes(i.grupo), `${i.id}: grupo ${i.grupo} não é desenhado`);
- const app = (await import('node:fs')).readFileSync(new URL('../../apps/web/public/app.js', import.meta.url), 'utf8');
+ const app = (await import('node:fs')).readFileSync(new URL('../../apps/web/public/app.js', import.meta.url), 'utf8') + '\n' + (await import('node:fs')).readFileSync(new URL('../../apps/web/public/router.js', import.meta.url), 'utf8');
  for (const i of INTEGRACOES.filter(x => x.tela)) assert.ok(app.includes(` ${i.tela}: { title`), `${i.id}: tela ${i.tela} não existe em app.js`);
 });
 

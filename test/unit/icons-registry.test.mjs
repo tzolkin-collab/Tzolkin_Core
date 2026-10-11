@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 
 const PUBLIC = new URL('../../apps/web/public/', import.meta.url);
-const ler = nome => readFileSync(new URL(nome, PUBLIC), 'utf8');
+const ler = nome => readFileSync(new URL(nome, PUBLIC), 'utf8') + (nome === 'app.js' ? '\n' + readFileSync(new URL('router.js', PUBLIC), 'utf8') : '');
 
 const icons = ler('icons.js');
 const definidos = new Set();
