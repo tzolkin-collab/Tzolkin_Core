@@ -48,8 +48,9 @@ export const definirConvidarContatoPrincipal = ligado => gravar(CHAVE_CONVIDAR, 
 
 /**
  * Como a janela da atividade aparece, escolhido nos ícones ao lado do X: centralizada (a de sempre), popup no canto
- * ou lateral de altura cheia. Fica neste navegador como as demais preferências da agenda, e vale da próxima abertura
- * em diante (trocar no meio do preenchimento só muda o tamanho; nada do formulário se perde).
+ * ou lateral de altura cheia. O clique vale na hora, na janela aberta (trocar no meio do preenchimento só muda o
+ * tamanho; nada do formulário se perde), e fica neste navegador para as próximas aberturas, como as demais
+ * preferências da agenda.
  */
 export const JANELAS = Object.freeze([['centro', 'Centralizado'], ['cheia', 'Tela inteira'], ['lateral', 'Lateral']]);
 export const JANELA_PADRAO = 'centro';

@@ -59,6 +59,19 @@ export function horarioDoRegistro(agora = Date.now(), passoMin = 15, duracaoMin 
 export const CATEGORIA_DO_SERVICE_MODEL = Object.freeze({ education: 'mentoria', consulting: 'consultoria', advisory: 'assessoria', product: 'software', on_demand: 'outro', unclassified: 'outro' });
 /** Categoria herdada da contratação escolhida. Sem contratação (geral da empresa) não há o que herdar: 'outro'. */
 export const categoriaDaContratacao = contratacao => CATEGORIA_DO_SERVICE_MODEL[contratacao?.service_model] || 'outro';
+/**
+ * Categoria de uma atividade NOVA que é geral da empresa (sem contratação). Com o campo Categoria fora do formulário,
+ * cair sempre em 'outro' tiraria da pessoa o que ela escolhia à mão — e 'outro' é o tom neutro, que apaga a cor e some
+ * do filtro por categoria. Quando a empresa tem UMA só contratação em curso, ela diz sem ambiguidade de que tipo é o
+ * trabalho, e a categoria se herda dela. Com duas ou mais (ou nenhuma) não há o que deduzir e fica 'outro', como antes.
+ * Não serve para editar: ali vale o que já está gravado, que é memória da escolha de alguém.
+ * `contratacoes` é a lista que /api/tracking manda (só as não arquivadas).
+ */
+export function categoriaDoCliente(contratacoes = [], tenantId = '') {
+ if (!tenantId) return 'outro';
+ const emCurso = (contratacoes || []).filter(e => e?.tenant_id === tenantId && e.status === 'active');
+ return emCurso.length === 1 ? categoriaDaContratacao(emCurso[0]) : 'outro';
+}
 /** A linha que entrou no lugar do campo. `gravada` (edição) mostra a categoria da atividade, que não se troca sozinha. */
 export function textoDaCategoria(contratacao, gravada = null) {
  if (gravada) return `Categoria ${ROTULOS[gravada] || ROTULOS.outro}, escolhida quando a atividade foi criada.`;

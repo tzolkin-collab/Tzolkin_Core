@@ -206,9 +206,15 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   const contratacao = campo(form, 'Contratação (opcional)', 'text', contratacoesDe(dados, '', GERAL)); contratacao.parentElement.dataset.prop = 'contratacao';
 
   const contratacaoEscolhida = () => (dados.engagements || []).find(e => e.id === contratacao.value) || null;
+  /**
+   * Categoria que uma atividade NOVA vai gravar: a da contratação escolhida ou, no geral da empresa, a herdada do
+   * cliente (ver M.categoriaDoCliente). Editando não se usa: ali a categoria gravada é que vale.
+   */
+  const categoriaNova = () => { const e = contratacaoEscolhida(); return e ? M.categoriaDaContratacao(e) : M.categoriaDoCliente(dados.engagements, cliente.value); };
   const mostrarCategoria = () => {
     const escolhida = contratacaoEscolhida();
-    const cat = (escolhida ? M.categoriaDaContratacao(escolhida) : null) || (contratacao.value ? null : evento?.category);
+    // A linha mostra o que vai ser gravado: no geral da empresa, a herdada do cliente; editando, a que já está lá.
+    const cat = (escolhida ? M.categoriaDaContratacao(escolhida) : null) || (contratacao.value ? null : evento?.category || categoriaNova());
     if (!cat || cat === 'outro') {
       linhaDaCategoria.hidden = true;
       linhaDaCategoria.style.display = 'none';
@@ -586,7 +592,7 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   const padrao = dados.agenda_prefs?.default_reminders ?? [15];
   const lembrete = comLembretes ? blocoDeLembrete({ padrao, atual: evento ? evento.reminders ?? null : null }) : null;
   const repeticao = comLembretes && !evento ? blocoDeRepeticao({ inicio: () => M.doCampoLocal(comeco.value) ? Date.parse(M.doCampoLocal(comeco.value)) : null }) : null;
-  let escopo = null;   // "só este" ou "este e os próximos", para ocorrência de série
+  let escopo = null, blocoSerie = null;   // "só este" ou "este e os próximos", para ocorrência de série
   if (lembrete) { const l = lembrete.no.querySelector('label'); if (l) l.dataset.prop = 'lembrete'; form.append(lembrete.no); }
   // Videoconferência: só para quem conectou a conta Google (Configurações → Integrações). A sala é criada no Google Agenda da pessoa.
   const comMeet = dados.google_meet === true && !(evento && evento.status === 'cancelled');
@@ -653,20 +659,23 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     form.append(blocoVinculos);
   }
   let sincronizarRepeticao = null;
+  // Repetição só vale para evento de até 24 h — a regra é de `limitar` (agenda-repeticao.js), mas a conta mora aqui fora
+  // porque sincronizarAba também escreve `repeticao.no.hidden`: quem escreve por último tem de somar TODAS as razões de
+  // esconder o bloco, senão desfaz a do outro. É a mesma soma que o Meet já faz entre aba e série.
+  const eventoCurto = () => { const i = M.doCampoLocal(comeco.value), f = M.doCampoLocal(termino.value); return !i || !f || Date.parse(f) - Date.parse(i) <= 86400000; };
   if (repeticao) {
     const l = repeticao.no.querySelector('label'); if (l) l.dataset.prop = 'repeticao';
     form.append(repeticao.no);
-    const curto = () => { const i = M.doCampoLocal(comeco.value), f = M.doCampoLocal(termino.value); return !i || !f || Date.parse(f) - Date.parse(i) <= 86400000; };
-    sincronizarRepeticao = () => { repeticao.inicioMudou(); repeticao.limitar(curto()); sincronizarAba(); };
+    sincronizarRepeticao = () => { repeticao.inicioMudou(); repeticao.limitar(eventoCurto()); sincronizarAba(); };
     comeco.addEventListener('change', sincronizarRepeticao); termino.addEventListener('change', sincronizarRepeticao); repeticao.no.addEventListener('change', sincronizarRepeticao);
   }
   if (serie && !serie.ended_at) {
-    const bloco = el('fieldset', null, 'ag-bloco');
-    bloco.append(el('legend', 'Esta atividade se repete'));
-    bloco.append(el('p', serie.descricao + '.', 'detail'));
-    escopo = campo(bloco, 'Aplicar a', 'text', [['um', 'Só este evento'], ['proximos', 'Este e os próximos']]);
+    blocoSerie = el('fieldset', null, 'ag-bloco');
+    blocoSerie.append(el('legend', 'Esta atividade se repete'));
+    blocoSerie.append(el('p', serie.descricao + '.', 'detail'));
+    escopo = campo(blocoSerie, 'Aplicar a', 'text', [['um', 'Só este evento'], ['proximos', 'Este e os próximos']]);
     escopo.addEventListener('change', () => { contratacao.disabled = escopo.value === 'proximos'; });
-    form.prepend(bloco);
+    form.prepend(blocoSerie);
   }
 
   // ---------- a aba é o tipo: ela decide quais campos aparecem ----------
@@ -679,9 +688,18 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
    rotular(comeco, comHorario ? 'Início · Brasília' : 'Início (opcional) · Brasília');
    rotular(termino, aba === 'task' ? 'Prazo de entrega · Brasília' : comHorario ? 'Fim · Brasília' : 'Fim (opcional) · Brasília');
    dica.textContent = EXPLICACAO_DA_ABA[aba];
-   if (blocoMeet) blocoMeet.hidden = !M.abaComMeet(aba) || Boolean(repeticao?.escolhida());
+   // Sala já criada é aviso, não oferta: esconder o bloco apagaria da tela a única menção a algo que existe no Google
+   // Agenda da pessoa. Só o bloco que OFERECE sala nova (`meet`) sai de cena fora de Call ou quando a atividade repete.
+   if (blocoMeet) blocoMeet.hidden = Boolean(meet) && (!M.abaComMeet(aba) || Boolean(repeticao?.escolhida()));
    if (lembrete) lembrete.no.hidden = aba === 'registro';
-   if (repeticao) repeticao.no.hidden = aba === 'registro';
+   if (repeticao) repeticao.no.hidden = aba === 'registro' || !eventoCurto();
+   // "Este e os próximos" não existe em Registro: a série recusa esse tipo (KINDS_DE_SERIE, em tracking-model.mjs) e o
+   // pedido voltaria com "Opção inválida". Então a aba fecha o bloco e devolve o escopo a só este evento, em vez de
+   // deixar a pessoa escolher o que a rota vai recusar.
+   if (blocoSerie) {
+    blocoSerie.hidden = aba === 'registro';
+    if (aba === 'registro' && escopo.value !== 'um') { escopo.value = 'um'; contratacao.disabled = false; }
+   }
    if (blocoVinculos) blocoVinculos.hidden = aba !== 'task';
    form.setAttribute('aria-labelledby', prefixo + '-tab-' + aba);
   }
@@ -781,7 +799,7 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
    const regra = repeticao && aba !== 'registro' ? repeticao.valor(Date.parse(ini), Date.parse(term)) : null;   // lança com a mensagem certa se a repetição está incompleta
    if (!evento && regra) {
     // Atividade que se repete é uma série: o servidor cria a regra e já gera as ocorrências.
-    const corpo = { id: crypto.randomUUID(), tenant_id: cliente.value, engagement_id: contratacao.value || null, category: M.categoriaDaContratacao(contratacaoEscolhida()), kind, title: nome.value, ...regra };
+    const corpo = { id: crypto.randomUUID(), tenant_id: cliente.value, engagement_id: contratacao.value || null, category: categoriaNova(), kind, title: nome.value, ...regra };
     for (const [k, v] of Object.entries(extras)) if (v) corpo[k] = v;
     const rem = lembrete.valor(); if (rem !== null) corpo.reminders = rem;
     await api('/api/tracking/series', 'POST', corpo);
@@ -806,9 +824,12 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     return;
    }
    if (!evento) {
-    const corpo = { id: crypto.randomUUID(), tenant_id: cliente.value, engagement_id: contratacao.value || null, category: M.categoriaDaContratacao(contratacaoEscolhida()), kind, title: nome.value, starts_at: ini, ends_at: term };
+    const corpo = { id: crypto.randomUUID(), tenant_id: cliente.value, engagement_id: contratacao.value || null, category: categoriaNova(), kind, title: nome.value, starts_at: ini, ends_at: term };
     for (const [k, v] of Object.entries(extras)) if (v) corpo[k] = v;
-    if (lembrete && aba !== 'registro') { const rem = lembrete.valor(); if (rem !== null) corpo.reminders = rem; }   // padrão = não manda: a atividade segue o padrão da agenda
+    // Padrão da agenda = não manda nada (NULL). Registro é o contrário: NULL não é "não avisar", é "herda o padrão"
+    // (agenda-jobs.mjs faz COALESCE(a.reminders, padrão)), e um registro datado na hora em que foi escrito dispararia
+    // push de lembrete. Lista vazia é o "não avisar" explícito que a coluna entende.
+    if (lembrete) { const rem = aba === 'registro' ? [] : lembrete.valor(); if (rem !== null) corpo.reminders = rem; }
     atividade = (await api('/api/tracking', 'POST', corpo)).activity;
    } else {
     const campos = {};
@@ -816,11 +837,15 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     if (kind !== evento.kind) campos.kind = kind;   // a categoria saiu do formulário: fica a que foi gravada na criação
     if (Date.parse(ini) !== evento.ini || Date.parse(term) !== evento.fim) { campos.starts_at = ini; campos.ends_at = term; }
     for (const [k, v] of Object.entries(extras)) if (v !== (evento[k] || null)) campos[k] = v;
-    if (lembrete && aba !== 'registro' && JSON.stringify(lembrete.valor()) !== JSON.stringify(evento.reminders ?? null)) campos.reminders = lembrete.valor();
+    // Virar Registro grava a lista vazia: deixar como estava (ou em NULL) faria a atividade seguir avisando pelo padrão da agenda.
+    if (lembrete) { const rem = aba === 'registro' ? [] : lembrete.valor(); if (JSON.stringify(rem) !== JSON.stringify(evento.reminders ?? null)) campos.reminders = rem; }
     const mudouContratacao = (contratacao.value || null) !== (evento.engagement_id || null);
     if (mudouContratacao) {
      const escolhida = contratacaoEscolhida();
-     const novaCat = escolhida ? M.categoriaDaContratacao(escolhida) : 'outro';
+     // Tirar a contratação NÃO rebaixa a categoria para 'outro': sem o campo Categoria no formulário, o que está gravado
+     // é a única memória do que a pessoa escolheu, e perdê-la trocaria a cor e o filtro da atividade sem ninguém pedir.
+     // Só uma contratação nova, que diz a categoria dela, troca o valor.
+     const novaCat = escolhida ? M.categoriaDaContratacao(escolhida) : evento.category;
      if (novaCat && novaCat !== evento.category) campos.category = novaCat;
     }
     atividade = evento;

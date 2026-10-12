@@ -73,6 +73,31 @@ test('a linha que substituiu o campo Categoria diz de onde ela vem', () => {
  for (const texto of [M.textoDaCategoria(null), M.textoDaCategoria({ service_model: 'product', label: 'X' })]) assert.doesNotMatch(texto, /undefined/);
 });
 
+test('atividade geral da empresa herda a categoria quando o cliente só tem uma contratação em curso', () => {
+ const outra = '00000000-0000-4000-8000-0000000000bb';
+ const uma = [{ tenant_id: empresa, status: 'active', service_model: 'advisory' }];
+ assert.equal(M.categoriaDoCliente(uma, empresa), 'assessoria', 'uma contratação em curso diz de que tipo é o trabalho');
+ assert.equal(M.categoriaDoCliente(uma, outra), 'outro', 'contratação de outra empresa não vale');
+ const duas = [...uma, { tenant_id: empresa, status: 'active', service_model: 'product' }];
+ assert.equal(M.categoriaDoCliente(duas, empresa), 'outro', 'com duas em curso não há o que deduzir');
+ const encerrada = [...uma, { tenant_id: empresa, status: 'completed', service_model: 'product' }];
+ assert.equal(M.categoriaDoCliente(encerrada, empresa), 'assessoria', 'só as em curso contam');
+ assert.equal(M.categoriaDoCliente([{ tenant_id: empresa, status: 'paused', service_model: 'advisory' }], empresa), 'outro');
+ assert.equal(M.categoriaDoCliente([], empresa), 'outro');
+ assert.equal(M.categoriaDoCliente(undefined, empresa), 'outro', 'tela sem dados carregados não quebra');
+ assert.equal(M.categoriaDoCliente(uma, ''), 'outro', 'sem cliente escolhido não se herda nada');
+ assert.ok(M.CATEGORIAS.includes(M.categoriaDoCliente(uma, empresa)));
+});
+
+test('lista vazia é "não avisar"; nulo é "herda o padrão da agenda" — por isso Registro grava []', () => {
+ assert.deepEqual(M.lembreteEfetivo({ reminders: null }, [15]), { origem: 'padrao', minutos: [15] });
+ assert.deepEqual(M.lembreteEfetivo({}, [15]), { origem: 'padrao', minutos: [15] }, 'coluna NULL vira o padrão, não o silêncio');
+ assert.deepEqual(M.lembreteEfetivo({ reminders: [] }, [15]), { origem: 'proprio', minutos: [] });
+ assert.equal(M.textoDosLembretes([]), 'Não avisar');
+ assert.deepEqual(activityInput({ ...base, kind: 'registro', reminders: [] }).reminders, [], 'a API aceita a lista vazia');
+ assert.deepEqual(activityUpdateInput({ revision: 1, reminders: [] }).campos.reminders, []);
+});
+
 // ============================== local escolhido, não digitado ==============================
 test('os locais da lista são os que o Core conhece, sem repetir e em ordem', () => {
  const atividades = [{ location: 'Sala 2' }, { location: 'sala 2' }, { location: '  ' }, { location: null }, { location: 'Café da esquina' }, {}];
@@ -225,6 +250,40 @@ test('as abas do tipo são acessíveis de teclado porque usam o componente de ab
  assert.deepEqual([...icones.matchAll(/'([a-z-]+)'/g)].map(m => m[1]), ['window-center', 'fullscreen', 'window-side']);
  const definidos = ler('icons.js');
  for (const nome of ['window-center', 'fullscreen', 'window-side']) assert.ok(definidos.includes(`"${nome}":[[`), nome);
+});
+
+test('o formulário manda "não avisar" no Registro em vez de deixar a coluna em NULL', () => {
+ const fonte = ler('agenda-evento.js');
+ // Criar e editar: as duas gravações passam pela mesma conta, e nenhuma delas pode simplesmente omitir `reminders`.
+ const linhas = [...fonte.matchAll(/const rem = aba === 'registro' \? \[\] : lembrete\.valor\(\);/g)];
+ assert.equal(linhas.length, 2, 'o POST e o PUT da atividade mandam a lista vazia no Registro');
+ assert.ok(!/aba !== 'registro' && JSON\.stringify\(lembrete\.valor\(\)\)/.test(fonte), 'editar não volta a pular o campo');
+ assert.match(fonte, /COALESCE\(a\.reminders, padrão\)/, 'o comentário diz por que NULL não serve');
+});
+
+test('a aba soma as razões de esconder cada bloco, em vez de desfazer a do bloco vizinho', () => {
+ const fonte = ler('agenda-evento.js');
+ const corpo = fonte.match(/function sincronizarAba\(\) \{([\s\S]*?)\n  \}/)[1];
+ // Repetição: a aba Registro e a regra das 24 h (agenda-repeticao.js `limitar`) valem as duas.
+ assert.match(corpo, /repeticao\.no\.hidden = aba === 'registro' \|\| !eventoCurto\(\)/);
+ assert.match(fonte, /const eventoCurto = \(\) =>/, 'a conta das 24 h fica fora do if para a aba também usá-la');
+ assert.match(fonte, /repeticao\.limitar\(eventoCurto\(\)\)/, 'o bloco e a aba usam a mesma conta');
+ // Série: "Este e os próximos" não existe em Registro, que a série recusa (KINDS_DE_SERIE).
+ assert.match(corpo, /blocoSerie\.hidden = aba === 'registro'/);
+ assert.match(corpo, /escopo\.value = 'um'/, 'escondido, o escopo volta a só este evento');
+ assert.ok(!KINDS_DE_SERIE.includes('registro'), 'é por isso que o escopo não pode ficar em "próximos"');
+ // Meet: a sala já criada é aviso, não oferta — só o que oferece sala nova se esconde.
+ assert.match(corpo, /blocoMeet\.hidden = Boolean\(meet\) &&/, 'sem o <select> de sala, o bloco é informativo e fica');
+});
+
+test('tirar a contratação não rebaixa a categoria gravada para "outro"', () => {
+ const fonte = ler('agenda-evento.js');
+ assert.match(fonte, /const novaCat = escolhida \? M\.categoriaDaContratacao\(escolhida\) : evento\.category;/,
+  'sem contratação nova, fica a categoria que já estava gravada');
+ assert.ok(!/M\.categoriaDaContratacao\(escolhida\) : 'outro'/.test(fonte), 'o rebaixamento para o tom neutro saiu');
+ // Criar sem contratação herda do cliente (o campo Categoria não voltou ao formulário).
+ assert.match(fonte, /M\.categoriaDoCliente\(dados\.engagements, cliente\.value\)/);
+ assert.equal([...fonte.matchAll(/category: categoriaNova\(\)/g)].length, 2, 'a série e a atividade avulsa gravam a mesma categoria');
 });
 
 test('cada modo de janela tem a classe que o CSS desenha', () => {

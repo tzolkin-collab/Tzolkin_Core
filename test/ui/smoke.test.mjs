@@ -1777,7 +1777,7 @@ test('agenda: o tipo da atividade é a aba, e cada aba mostra só o que faz sent
  semExcecoes();
 });
 
-test('agenda: ao lado do X, os três modos de janela (centralizado, popup, lateral) valem na próxima abertura', { skip: PULAR }, async () => {
+test('agenda: ao lado do X, os três modos de janela (centralizado, popup, lateral) valem na hora e ficam para a próxima abertura', { skip: PULAR }, async () => {
  await SEMANA_DE_HOJE();
  await pagina.avaliar(`try { localStorage.removeItem('tzolkin-agenda-janela'); } catch {}`);
  await ABRIR_NOVA();
@@ -1789,7 +1789,7 @@ test('agenda: ao lado do X, os três modos de janela (centralizado, popup, later
  assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor').classList.contains('ag-janela-lateral')`), true);
  assert.equal(await pagina.avaliar(`localStorage.getItem('tzolkin-agenda-janela')`), 'lateral');
  await FECHAR_TUDO();
- // Vale da próxima abertura em diante, como as outras preferências da agenda.
+ // A classe já entrou na janela aberta (asserção acima); aqui se confere a outra metade: a escolha fica para a próxima abertura.
  await ABRIR_NOVA();
  assert.equal(await pagina.avaliar(`document.querySelector('dialog.tracking-editor').classList.contains('ag-janela-lateral')`), true, 'a escolha sobrevive ao fechar');
  await pagina.avaliar(`${ICONES}.find(b => b.getAttribute('aria-label') === 'Mostrar centralizado').click()`);

@@ -139,7 +139,8 @@ atividade: é o que decide quais campos fazem sentido. A aba escolhida **é** o 
 ### Como a janela aparece
 
 Ao lado do X: três ícones — centralizado (o de sempre), popup no canto e lateral de altura cheia. Só CSS e classe no diálogo; o
-formulário é o mesmo. A escolha vale **da próxima abertura em diante** e fica neste navegador, como as demais preferências da agenda
+formulário é o mesmo. A escolha vale **na hora**, na janela que está aberta (trocar no meio do preenchimento só muda o tamanho; nada
+do formulário se perde), e **fica para as próximas aberturas** neste navegador, como as demais preferências da agenda
 (`agenda-prefs.js`, chave `tzolkin-agenda-janela`). Abaixo de 700 px os três caem para o mesmo diálogo centralizado.
 
 ### Migração 054 (**aplicada em 2026-10-07**)
