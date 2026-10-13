@@ -1984,6 +1984,54 @@ test('agenda: o painel do evento mostra os detalhes, conclui, edita só o que mu
  semExcecoes();
 });
 
+// O que se via quebrado na tela de 390px, medido em vez de olhado: o título da data cortado, o "?" de atalho sozinho numa
+// linha, o título da página repetido, o mês ilegível, o horário cortado na Agenda e, no formulário, rótulos que ENCOLHIAM
+// (o campo vazava por cima do próximo), campo passando da borda, abas minúsculas e ícones de modo de janela sem sentido.
+test('agenda no celular: título e controles cabem, mês vira pontos, e o formulário empilha sem sobrepor nem estourar', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ await pagina.tela(390, 844);
+ await new Promise(r => setTimeout(r, 400));
+ const estilo = (seletor, prop) => pagina.avaliar(`getComputedStyle(${seletor})[${JSON.stringify(prop)}]`);
+ // O cabeçalho do aplicativo já diz "Acompanhamento": o título grande de baixo não se repete, e o atalho de teclado não existe.
+ assert.equal(await estilo(`document.getElementById('page-title').closest('.page-heading')`, 'display'), 'none', 'título da página repetido');
+ assert.equal(await estilo(`document.querySelector('#view-tracking .ag-ajuda-botao')`, 'display'), 'none', 'botão "?" de atalho de teclado no celular');
+ // "Nova atividade" é botão flutuante e está inteiro dentro da tela.
+ const fab = await pagina.avaliar(`(() => { const b = document.querySelector('#view-tracking .ag-acoes .primary'); const r = b.getBoundingClientRect();
+  return { pos: getComputedStyle(b).position, dentro: r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight, alto: r.height }; })()`);
+ assert.equal(fab.pos, 'fixed'); assert.ok(fab.dentro, 'o botão flutuante cabe na tela'); assert.ok(fab.alto >= 44, 'alvo de toque de pelo menos 44px');
+ // O título da data quebra em duas linhas em vez de virar reticências.
+ assert.ok(await pagina.avaliar(`(() => { const t = document.querySelector('#view-tracking .ag-titulo'); return t.scrollWidth <= t.clientWidth + 1; })()`), 'título da data cortado');
+
+ // Mês: cada evento é um ponto, não três letras de um título.
+ await pagina.avaliar(`${BOTAO_VISAO('mes')}.click()`);
+ await pagina.esperar(`${VISOES_ESPERAM('mes')} && !document.querySelector('#view-tracking [aria-busy]')`);
+ const pontos = await pagina.avaliar(`[...document.querySelectorAll('#view-tracking .ag-celula .ag-chip')].map(c => Math.round(c.getBoundingClientRect().width))`);
+ assert.ok(pontos.length > 0 && pontos.every(w => w <= 10), `eventos do mês viram pontos, e não "Ent…": ${pontos.slice(0, 5)}`);
+ // Agenda: o horário inteiro ("14:00 – 15:30"), sem reticências.
+ await pagina.avaliar(`${BOTAO_VISAO('agenda')}.click()`);
+ await pagina.esperar(`${VISOES_ESPERAM('agenda')} && !document.querySelector('#view-tracking [aria-busy]')`);
+ assert.ok(await pagina.avaliar(`[...document.querySelectorAll('#view-tracking .ag-linha-hora')].every(h => h.scrollWidth <= h.clientWidth + 1)`), 'horário cortado na Agenda');
+
+ // Formulário.
+ await ABRIR_NOVA();
+ assert.equal(await estilo(`document.querySelector('dialog.tracking-editor .ag-janelas')`, 'display'), 'none', 'ícones de modo de janela no celular');
+ assert.ok(await pagina.avaliar(`${ABAS_DO_FORM}.every(t => t.getBoundingClientRect().width >= 100)`), 'abas minúsculas, coladas à esquerda');
+ const linhas = await pagina.avaliar(`[...document.querySelectorAll('dialog.tracking-editor .tracking-form label[data-prop]')]
+  .filter(l => l.offsetParent && l.querySelector('select,input:not([type=checkbox]):not([type=radio])'))
+  .map(l => { const c = l.querySelector('select,input:not([type=checkbox]):not([type=radio])'); const rl = l.getBoundingClientRect(), rc = c.getBoundingClientRect();
+   return { prop: l.dataset.prop, rotuloAlt: Math.round(rl.height), campoAlt: Math.round(rc.height), campoDireita: Math.round(rc.right), campoLarg: Math.round(rc.width), tela: innerWidth }; })`);
+ assert.ok(linhas.length >= 4, 'o formulário tem os campos esperados');
+ for (const l of linhas) {
+  // O rótulo encolhia até a altura do texto e o campo (44px) vazava por cima do próximo.
+  assert.ok(l.rotuloAlt >= l.campoAlt, `${l.prop}: o rótulo (${l.rotuloAlt}px) encolheu abaixo do campo (${l.campoAlt}px) e eles se sobrepõem`);
+  assert.ok(l.campoDireita <= l.tela, `${l.prop}: o campo passa da borda direita (${l.campoDireita} > ${l.tela})`);
+  assert.ok(l.campoLarg >= 300, `${l.prop}: campo espremido em ${l.campoLarg}px`);
+ }
+ await FECHAR_TUDO();
+ await pagina.tela(1280, 900);
+ semExcecoes();
+});
+
 test('agenda: legível no claro e no escuro em todas as visões, sem estouro de largura no celular', { skip: PULAR }, async () => {
  const LER = `(() => {
   const canais = c => c.match(/[\\d.]+/g).slice(0, 3).map(Number);

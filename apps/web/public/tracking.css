@@ -1747,3 +1747,66 @@ dialog.tracking-editor {
   filter: brightness(1.08) !important;
 }
 
+
+/* ======================================================================================================================
+   CELULAR (até 700px) — bloco final, de propósito depois de tudo: as regras de cima foram escritas em camadas (barra do
+   Notion, janelas, !important) e remendar no meio só criava o próximo erro. Cada regra abaixo corrige algo que se via na
+   tela de 390px: título da data cortado, "?" sozinho numa linha, título da página repetido, controles empurrando o
+   calendário para a metade de baixo, mês ilegível, horário cortado na Agenda e, no formulário, ícones de modo de janela
+   sem sentido, abas minúsculas, rótulo de 160px espremendo o campo e data estourando a borda.
+   ====================================================================================================================== */
+@media (max-width: 700px) {
+ /* O cabeçalho do aplicativo já diz "Acompanhamento": o título grande de baixo é o mesmo texto e custa 60px. */
+ body[data-view="tracking"] .page-heading { display: none; }
+ /* Atalho de teclado não existe no celular. */
+ #view-tracking .ag-ajuda-botao { display: none; }
+ /* O título da data quebra em duas linhas em vez de virar "13 de outubr…": é a única coisa que diz em que dia se está. */
+ #view-tracking .ag-titulo { white-space: normal; overflow: visible; text-overflow: clip; font-size: 16px; line-height: 1.25; }
+ #view-tracking .ag-nav { flex-wrap: nowrap; align-items: center; }
+ /* "Nova atividade" sai da pilha de controles e vira botão flutuante: a ação principal fica ao alcance do polegar e o
+    calendário sobe uns 60px. */
+ #view-tracking .ag-acoes .primary { position: fixed; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 40;
+  flex: none; width: auto; height: 48px; padding: 0 20px; border-radius: 24px; box-shadow: var(--shadow-pop); }
+ /* O botão flutuante não cobre o último item da lista: sobra espaço do tamanho dele no fim da tela. */
+ #view-tracking { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+ /* Com a barra comprimida, sobra altura para o calendário. */
+ .ag-rolagem { height: clamp(380px, calc(100dvh - 270px), 900px); }
+
+ /* Mês: três letras de um título ("Ent…") não dizem nada. Vira um ponto colorido por evento, na cor da categoria. */
+ #view-tracking .ag-celula { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 4px; min-height: 64px; }
+ #view-tracking .ag-celula > .ag-celula-num { flex: 0 0 100%; justify-self: auto; }
+ #view-tracking .ag-celula .ag-chip { width: 8px; height: 8px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: var(--ev-borda); font-size: 0; flex: none; overflow: hidden; }
+ #view-tracking .ag-celula .ag-chip > * { display: none; }
+
+ /* Agenda: "14:00 – 15:30" precisa de uns 100px; com 76 virava "14:00 – 1…". */
+ #view-tracking .ag-linha { grid-template-columns: 102px 10px minmax(0, 1fr); }
+ #view-tracking .ag-linha-hora { overflow: visible; text-overflow: clip; }
+
+ /* ---- formulário ---- */
+ /* Os três ícones de modo de janela (centralizado, popup, lateral) não têm o que mudar quando o diálogo já é a tela inteira. */
+ dialog.tracking-editor .ag-janelas { display: none !important; }
+ /* "Acompanhamento / Nova atividade" quebrava em duas linhas; o cabeçalho do aplicativo já diz onde se está. */
+ .tracking-editor-heading h2::before { display: none !important; }
+ /* Abas na largura toda, com alvo de toque de 44px. */
+ dialog.tracking-editor .ag-abas .tabs { display: flex; width: 100%; gap: 0; }
+ dialog.tracking-editor .ag-abas .tabs [role="tab"] { flex: 1 1 0; justify-content: center; min-height: 44px; }
+ /* Rótulo em cima e campo embaixo, na largura toda: a coluna fixa de 160px deixava ~150px para o campo e a data estourava. */
+ .tracking-form > label:not(.ag-notion-title-wrap):not(.ag-notion-raw-desc),
+ .tracking-form > fieldset.ag-notion-quando > label,
+ .tracking-form > fieldset.ag-bloco > label,
+ .tracking-form > .tracking-extra > label {   /* .tracking-extra é display: contents: Local e Descrição moram aqui dentro */
+  /* flex: none: o formulário é uma coluna de altura limitada e o rótulo ENCOLHIA para caber (com min-height 0 ele ficava só com a
+     linha do texto e o campo vazava por cima do próximo). Agora ele tem a altura do que contém e a coluna rola. */
+  display: flex !important; flex: none !important; flex-wrap: wrap; align-items: center; gap: 4px 8px !important; padding: 8px 4px !important; min-height: 32px !important;
+ }
+ .tracking-form > label:not(.ag-notion-title-wrap):not(.ag-notion-raw-desc) > :is(input, select, textarea, small),
+ .tracking-form > fieldset.ag-notion-quando > label > :is(input, select, textarea, small),
+ .tracking-form > fieldset.ag-bloco > label > :is(input, select, textarea, small),
+ .tracking-form > .tracking-extra > label > :is(input, select, textarea, small) {
+  flex: 1 1 100%; min-width: 0; max-width: 100%; box-sizing: border-box;
+ }
+ .tracking-form > label :is(input, select):not([type="checkbox"]):not([type="radio"]) { min-height: 44px; }
+ /* Data e hora: o seletor nativo do celular é largo; sem isto o ícone passava da borda direita. */
+ .tracking-form input[type="datetime-local"], .tracking-form input[type="date"], .tracking-form input[type="time"] {
+  flex: 1 1 100% !important; min-width: 0 !important; width: 100% !important; max-width: 100% !important; text-align: left; }
+}
