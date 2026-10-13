@@ -54,7 +54,16 @@ export function googleCalendarRoutes(router, { env = process.env, fetcher = fetc
  async function acessoDe(db, subject) {
   const c = await conexao(db, subject);
   if (!c) throw fail(409, 'Conecte sua conta Google em Configurações → Integrações para usar o Meet.');
-  const refreshToken = open({ ciphertext: c.token_ciphertext, iv: c.token_iv, tag: c.token_tag }, readKey(env, nomeDaChave(env)));
+  // Token cifrado com uma chave que o servidor já não usa (CORE_SECRETS_KEY passou a valer antes de META_MARKETING_KEY):
+  // antes isto subia como "Credencial ilegível" (500) e a pessoa não tinha como saber o que fazer. Agora vira o mesmo
+  // pedido de reconexão do token vencido, e a conexão volta ao estado "não conectada" para a tela oferecer Conectar.
+  let refreshToken;
+  try {
+   refreshToken = open({ ciphertext: c.token_ciphertext, iv: c.token_iv, tag: c.token_tag }, readKey(env, nomeDaChave(env)));
+  } catch {
+   await db.query('UPDATE google_calendar_connections SET revoked_at=now(), last_error=$2, updated_at=now() WHERE operator_subject=$1', [subject, 'A chave de cifragem do servidor não abre o token guardado.']).catch(() => {});
+   throw new G.ErroGoogle('A conexão com o Google foi guardada com outra chave de cifragem e o Core não consegue abri-la. Desconecte e conecte de novo em Configurações → Integrações.', { status: 409, reconectar: true });
+  }
   try {
    return await G.tokenDeAcesso({ clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET, refreshToken, fetcher });
   } catch (e) {
@@ -131,7 +140,8 @@ export function googleCalendarRoutes(router, { env = process.env, fetcher = fetc
   if (a.status === 'cancelled') throw fail(409, 'Atividade cancelada não ganha sala do Meet.');
   const acesso = await acessoDe(pool, operator.subject);
   // `requestId` estável por atividade: se o pedido se repetir, o Google devolve a mesma sala em vez de criar outra.
-  const criado = await G.criarEventoComMeet({ acesso, requestId: 'tzk-' + a.id, fetcher, evento: { titulo: a.title, descricao: editorJsParaMarkdown(a.description), local: a.location, inicio: a.starts_at, fim: a.ends_at, convidados } });
+  const registrarFalha = e => pool.query('UPDATE google_calendar_connections SET last_error=$2, updated_at=now() WHERE operator_subject=$1', [operator.subject, String(e?.message ?? 'falha ao criar a sala').slice(0, 300)]).catch(() => {});
+  const criado = await G.criarEventoComMeet({ acesso, requestId: 'tzk-' + a.id, fetcher, evento: { titulo: a.title, descricao: editorJsParaMarkdown(a.description), local: a.location, inicio: a.starts_at, fim: a.ends_at, convidados } }).catch(async e => { await registrarFalha(e); throw e; });
   const r = (await pool.query(
    `UPDATE service_activities SET meeting_url=$2, google_event_id=$3, google_owner_subject=$4, revision=revision+1, updated_at=now()
      WHERE id=$1 AND google_event_id IS NULL RETURNING *`, [params.id, criado.link, criado.id, operator.subject])).rows[0];

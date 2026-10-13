@@ -65,13 +65,31 @@ export async function revogar({ token, fetcher = fetch }) {
 
 const cabecalho = acesso => ({ authorization: `Bearer ${acesso}`, 'content-type': 'application/json' });
 
+/**
+ * O 403 do Google tem três causas que pedem três consertos diferentes, e a mensagem única de antes
+ * ("permissão ou limite") escondia qual era: API desligada no projeto do Cloud (conserto: ativar),
+ * limite de uso (conserto: esperar) e permissão que a pessoa não concedeu (conserto: reconectar).
+ * O motivo vem em error.errors[0].reason; error.status e a mensagem cobrem o formato novo da API.
+ */
+export function erroDe403(d) {
+ const motivo = String(d?.error?.errors?.[0]?.reason ?? d?.error?.details?.[0]?.reason ?? d?.error?.status ?? '');
+ const texto = String(d?.error?.message ?? '');
+ if (/accessNotConfigured|SERVICE_DISABLED/i.test(motivo) || /has not been used in project|is disabled/i.test(texto))
+  return new ErroGoogle('A API do Google Agenda está desligada no projeto do Google Cloud do Core. Ative a "Google Calendar API" nesse projeto e tente de novo.', { status: 502 });
+ if (/rateLimit|quotaExceeded|userRateLimit/i.test(motivo))
+  return new ErroGoogle('O Google limitou o uso da agenda por agora. Tente de novo em alguns minutos.', { status: 502 });
+ if (/insufficientPermissions|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(motivo) || /insufficient.*scope/i.test(texto))
+  return new ErroGoogle('A conta conectada não deu a permissão de criar eventos. Desconecte e conecte de novo, marcando a permissão da agenda.', { status: 409, reconectar: true });
+ return new ErroGoogle('O Google não permitiu criar o evento nesta conta (permissão ou limite).', { status: 502 });
+}
+
 async function chamar(url, opcoes, fetcher) {
  const r = await fetcher(url, { ...opcoes, redirect: 'error', signal: AbortSignal.timeout(15000) });
  if (r.status === 204) return {};
  const d = await json(r);
  if (!r.ok) {
   if (r.status === 401) throw new ErroGoogle('A conexão com o Google expirou. Conecte de novo em Configurações → Integrações.', { status: 409, reconectar: true });
-  if (r.status === 403) throw new ErroGoogle('O Google não permitiu criar o evento nesta conta (permissão ou limite).', { status: 502 });
+  if (r.status === 403) throw erroDe403(d);
   if (r.status === 404 || r.status === 410) throw new ErroGoogle('O evento não existe mais no Google Agenda.', { status: 404 });
   throw new ErroGoogle('O Google Agenda não respondeu como esperado. Tente de novo.');
  }

@@ -56,11 +56,33 @@ test('criar evento com Meet: pede a sala, avisa convidados só se houver, e espe
  await assert.rejects(G.criarEventoComMeet({ acesso: 'A', requestId: 'r', fetcher: async () => resposta({ id: 'ev3' }), esperar: esperarJa, evento: { titulo: 'x', inicio: '2026-10-05T13:00:00Z', fim: '2026-10-05T14:00:00Z' } }), /ainda não devolveu o link/);
 });
 
+test('token cifrado com outra chave: pede reconexão em vez de "credencial ilegível" e desliga a conexão', async () => {
+ // A conexão foi cifrada com CHAVE; o servidor passa a usar outra (CORE_SECRETS_KEY nova): o token deixa de abrir.
+ const s = seal('REFRESH-1', CHAVE);
+ const m = montar({ env: { ...ENV, CORE_SECRETS_KEY: Buffer.alloc(32, 7).toString('base64') }, fetcher: async () => resposta({ access_token: 'AT' }), linhas: {
+  'FROM google_calendar_connections': () => ({ rows: [{ operator_subject: 'op-1', email: 'eu@exemplo.test', token_ciphertext: s.ciphertext, token_iv: s.iv, token_tag: s.tag }] }),
+  'SELECT * FROM service_activities': () => ({ rows: [{ ...ATIVIDADE }] }),
+ } });
+ await assert.rejects(chamar(m.rotas['POST /api/tracking/:id/meet'], { pool: m.db, params: { id: ID }, req: corpo({}), operator: OPERADOR }),
+  e => e.reconectar && e.status === 409 && /outra chave de cifragem/.test(e.message) && !/ilegível/.test(e.message));
+ assert.ok(m.log.some(q => q.sql.includes('UPDATE google_calendar_connections SET revoked_at=now()')), 'a conexão volta a "não conectada" para a tela oferecer Conectar');
+});
+
 test('erros do Google viram mensagens claras; apagar evento que já não existe não é erro', async () => {
  await assert.rejects(G.criarEventoComMeet({ acesso: 'A', requestId: 'r', fetcher: async () => resposta({}, 401), evento: { titulo: 'x', inicio: '2026-10-05T13:00:00Z', fim: '2026-10-05T14:00:00Z' } }), e => e.reconectar && /Conecte de novo/.test(e.message));
  await assert.rejects(G.atualizarEvento({ acesso: 'A', id: 'e', fetcher: async () => resposta({}, 404), evento: { titulo: 'x', inicio: '2026-10-05T13:00:00Z', fim: '2026-10-05T14:00:00Z' } }), e => e.status === 404);
  await G.removerEvento({ acesso: 'A', id: 'e', fetcher: async () => resposta({}, 410) });
  await assert.rejects(G.removerEvento({ acesso: 'A', id: 'e', fetcher: async () => resposta({}, 500) }), /não respondeu/);
+});
+
+test('403 do Google: API desligada, limite e permissão são três mensagens diferentes', async () => {
+ const corpo403 = (reason, message = '') => ({ error: { code: 403, message, errors: [{ reason }] } });
+ const evento = { titulo: 'x', inicio: '2026-10-05T13:00:00Z', fim: '2026-10-05T14:00:00Z' };
+ const criar = d => G.criarEventoComMeet({ acesso: 'A', requestId: 'r', fetcher: async () => resposta(d, 403), evento });
+ await assert.rejects(criar(corpo403('accessNotConfigured', 'Google Calendar API has not been used in project 123 before or it is disabled.')), e => /desligada no projeto/.test(e.message) && !e.reconectar);
+ await assert.rejects(criar(corpo403('rateLimitExceeded')), e => /limitou o uso/.test(e.message) && !e.reconectar);
+ await assert.rejects(criar(corpo403('insufficientPermissions')), e => e.reconectar && e.status === 409 && /Desconecte e conecte de novo/.test(e.message));
+ await assert.rejects(criar(corpo403('forbidden')), e => /permissão ou limite/.test(e.message), 'motivo desconhecido mantém a mensagem de antes');
 });
 
 // ---------- rotas ----------
