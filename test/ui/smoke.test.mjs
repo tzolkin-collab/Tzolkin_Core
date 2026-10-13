@@ -14,6 +14,7 @@ import { serveAsset } from '../../apps/web/assets.mjs';
 import { abrirNavegador, acharNavegador } from './browser.mjs';
 import { SENHA, EMPRESA, PESSOA_FISICA, ANA, PNG_1X1, bancoFalso, r2Falso } from './fixtures.mjs';
 import * as AM from '../../apps/web/public/agenda-model.js';
+import { BLOCOS } from '../../apps/api/src/platform/markdown-editorjs.mjs';
 
 const PULAR = acharNavegador() ? false : 'Chrome/Edge não encontrado (defina CHROME_PATH)';
 const ARTEFATOS = fileURLToPath(new URL('./artifacts/', import.meta.url));
@@ -1504,6 +1505,67 @@ test('agenda: repetir toda semana ou todo mês cria uma série com a regra certa
  const m = await pagina.avaliar(`${NO_AGENDA}.seriesPosts[1]`);
  assert.equal(m.frequency, 'monthly'); assert.equal(m.month_day, dm); assert.ok(!('weekdays' in m)); assert.equal(m.ends_on, fim); assert.deepEqual(m.reminders, []);
  await pagina.esperar(`!document.querySelector('dialog.tracking-editor[open]')`);
+ semExcecoes();
+});
+
+// A descrição é montada a partir dos exemplos de `BLOCOS` — a mesma fonte que o guarda de
+// test/unit/descricao-blocos.test.mjs usa. Tipo novo no contrato entra aqui sozinho, e o navegador
+// de verdade diz se a ficha sabe desenhá-lo.
+const DESCRICAO_DE_TODOS_OS_BLOCOS = JSON.stringify({ blocks: [
+ ...Object.entries(BLOCOS).map(([type, b]) => ({ type, data: b.exemplo })),
+ { type: 'attaches', data: { title: 'Contrato assinado' } },   // ferramenta que o editor ainda não tem
+] });
+
+test('agenda: a ficha desenha cada tipo de bloco da descrição, e o tipo sem desenho mostra o texto', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ const ID = '00000000-0000-4000-8000-000000000004';      // Daily, sem descrição no fixture
+ try {
+  await pagina.avaliar(`(() => { const e = ${NO_AGENDA}.eventos.find(x => x.id === '${ID}'); e.description = ${JSON.stringify(DESCRICAO_DE_TODOS_OS_BLOCOS)}; })()`);
+  await RECARREGAR_AGENDA();
+  await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]').click()`);
+  await pagina.esperar(`document.querySelector('#peek-agenda .ag-descricao')`, { descricao: 'descrição na ficha' });
+  const visto = await pagina.avaliar(`(() => {
+   const d = document.querySelector('#peek-agenda .ag-descricao');
+   return { tags: [...new Set([...d.querySelectorAll('*')].map(n => n.tagName.toLowerCase()))], texto: d.innerText, caixas: d.querySelectorAll('input[type=checkbox]').length };
+  })()`);
+  // Um desenho de verdade por tipo: título, lista, lista de tarefas, citação, código, divisória, tabela e destaque.
+  for (const tag of ['p', 'h2', 'ul', 'li', 'blockquote', 'pre', 'code', 'hr', 'table', 'th', 'td', 'strong', 'small'])
+   assert.ok(visto.tags.includes(tag), `a ficha não desenhou <${tag}>: ${visto.tags.join(', ')}`);
+  assert.equal(visto.caixas, 2, 'as duas tarefas da checklist viraram caixas');
+  // Nada cru: nem JSON, nem a sintaxe do Markdown que o conversor devia ter consumido.
+  assert.ok(!visto.texto.includes('{"') && !visto.texto.includes('"blocks"'), 'a ficha mostrou JSON cru: ' + visto.texto.slice(0, 120));
+  assert.ok(!/^\s*[>|#]/m.test(visto.texto), 'a ficha mostrou marcação de Markdown literal: ' + visto.texto.slice(0, 120));
+  assert.match(visto.texto, /Contrato assinado/, 'o bloco de tipo desconhecido perdeu o texto');
+  assert.match(visto.texto, /attaches/, 'a ficha não diz qual tipo ficou sem desenho');
+  semExcecoes();
+ } finally {
+  await pagina.avaliar(`(() => { const e = ${NO_AGENDA}.eventos.find(x => x.id === '${ID}'); e.description = null; })()`);
+  await RECARREGAR_AGENDA();
+ }
+});
+
+test('agenda: o editor da descrição registra cada ferramenta do contrato e grava todos os tipos', { skip: PULAR }, async t => {
+ await SEMANA_DE_HOJE();
+ await ABRIR_NOVA();
+ // O Editor.js e as ferramentas vêm de esm.sh. Sem rede o editor não instancia, e aí este teste não
+ // tem o que conferir — diz isso em vez de reprovar a mudança de quem está offline.
+ try { await pagina.esperar(`!!window.__editor && window.__editor.blocks`, { descricao: 'editor instanciado', limite: 15000 }); }
+ catch { await FECHAR_TUDO(); return t.skip('o Editor.js não carregou de esm.sh (sem rede?)'); }
+ const exemplos = Object.fromEntries(Object.entries(BLOCOS).map(([tipo, b]) => [tipo, b.exemplo]));
+ // Lista plana: é o que o @editorjs/list@1.9.0 sabe ler, e é o que `paraOEditor` entrega a ele.
+ exemplos.list = { style: 'unordered', items: ['pai', 'filho', 'irmão'] };
+ const gravado = await pagina.avaliar(`(async () => {
+  const e = window.__editor; await e.isReady;
+  const exemplos = ${JSON.stringify(exemplos)};
+  await e.render({ blocks: Object.keys(exemplos).map(tipo => ({ type: tipo, data: exemplos[tipo] })) });
+  const d = await e.save();
+  return { tipos: d.blocks.map(b => b.type), itens: d.blocks.find(b => b.type === 'list').data.items, texto: document.getElementById('editorjs-container').innerText };
+ })()`);
+ // Ferramenta do contrato que não estiver registrada (ou registrada com outro nome) desaparece aqui.
+ assert.deepEqual(gravado.tipos, Object.keys(BLOCOS), 'o editor perdeu algum tipo de bloco do contrato');
+ assert.deepEqual(gravado.itens, ['pai', 'filho', 'irmão'], 'os itens da lista não voltaram como texto');
+ assert.ok(!gravado.texto.includes('object Obj'), 'item de lista apareceu como carimbo de objeto');
+ await FECHAR_TUDO();
  semExcecoes();
 });
 

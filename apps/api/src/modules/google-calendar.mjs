@@ -3,8 +3,13 @@ import { fail, isUuid, json, input } from '../platform/http.mjs';
 import { digest } from '../platform/session.mjs';
 import { readKey, seal, open } from '../platform/secrets.mjs';
 import * as G from '../platform/google-calendar.mjs';
+import { editorJsParaMarkdown } from '../platform/markdown-editorjs.mjs';
 
 // Google Agenda e Meet. Cada operador conecta a PRÓPRIA conta; a sala é criada na agenda de quem clicou.
+//
+// A descrição da atividade é JSON de blocos do Editor.js: o Google Agenda mostraria o JSON cru no
+// convite. Vai em Markdown, pelo mesmo conversor que atende o bot MCP — o Google é o terceiro lugar
+// que mostra descrição, depois da ficha e do bot.
 // Depende da migração 049; sem ela tudo responde "indisponível" e nada quebra. Admin interno, como o resto do Core.
 
 export const MENSAGEM_049 = 'Google Agenda e Meet ainda não estão disponíveis neste banco: falta aplicar a migração 049.';
@@ -126,7 +131,7 @@ export function googleCalendarRoutes(router, { env = process.env, fetcher = fetc
   if (a.status === 'cancelled') throw fail(409, 'Atividade cancelada não ganha sala do Meet.');
   const acesso = await acessoDe(pool, operator.subject);
   // `requestId` estável por atividade: se o pedido se repetir, o Google devolve a mesma sala em vez de criar outra.
-  const criado = await G.criarEventoComMeet({ acesso, requestId: 'tzk-' + a.id, fetcher, evento: { titulo: a.title, descricao: a.description, local: a.location, inicio: a.starts_at, fim: a.ends_at, convidados } });
+  const criado = await G.criarEventoComMeet({ acesso, requestId: 'tzk-' + a.id, fetcher, evento: { titulo: a.title, descricao: editorJsParaMarkdown(a.description), local: a.location, inicio: a.starts_at, fim: a.ends_at, convidados } });
   const r = (await pool.query(
    `UPDATE service_activities SET meeting_url=$2, google_event_id=$3, google_owner_subject=$4, revision=revision+1, updated_at=now()
      WHERE id=$1 AND google_event_id IS NULL RETURNING *`, [params.id, criado.link, criado.id, operator.subject])).rows[0];
@@ -141,7 +146,7 @@ export function googleCalendarRoutes(router, { env = process.env, fetcher = fetc
    if (!await detector(pool)) return { ignorado: true };
    const acesso = await acessoDe(pool, atividade.google_owner_subject);
    if (acao === 'cancelar') { await G.removerEvento({ acesso, id: atividade.google_event_id, fetcher }); return { ok: true }; }
-   await G.atualizarEvento({ acesso, id: atividade.google_event_id, fetcher, evento: { titulo: atividade.title, descricao: atividade.description, local: atividade.location, inicio: atividade.starts_at, fim: atividade.ends_at } });
+   await G.atualizarEvento({ acesso, id: atividade.google_event_id, fetcher, evento: { titulo: atividade.title, descricao: editorJsParaMarkdown(atividade.description), local: atividade.location, inicio: atividade.starts_at, fim: atividade.ends_at } });
    return { ok: true };
   } catch (e) {
    console.error('[google-calendar] sincronização falhou:', e?.message);

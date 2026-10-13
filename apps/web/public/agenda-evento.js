@@ -8,6 +8,7 @@ if (typeof window !== 'undefined' && !window.__editorjs_safeguard) {
 }
 // Agenda: o formulário (criar/editar) e o painel lateral do evento. Não sabe desenhar o calendário; recebe os dados e avisa quando algo mudou.
 import { el, botao, campo, preencher } from './agenda-dom.js';
+import { renderDescricao, paraOEditor } from './agenda-descricao.js';
 import { createIcon } from './icons.js';
 import { criarPeek } from './peek.js';
 import { pares } from './inline-edit.js';
@@ -119,6 +120,34 @@ class DuplicateTune {
     };
   }
 }
+
+/**
+ * As ferramentas que criam BLOCO no editor. Esta é uma das três listas do contrato da descrição:
+ * toda chave aqui precisa ter desenho em `DESENHOS` (agenda-descricao.js) e ida e volta em `BLOCOS`
+ * (apps/api/src/platform/markdown-editorjs.mjs). Registrar ferramenta nova só aqui é o defeito que
+ * o dono viu — bloco que a ficha não desenhava e que o Markdown do bot não sabia construir nem ler.
+ * test/unit/descricao-blocos.test.mjs lê as três listas do fonte e quebra quando divergem.
+ */
+const FERRAMENTAS_DE_BLOCO = {
+  header: { class: Header, shortcut: 'CMD+SHIFT+H', toolbox: { title: 'Título' } },
+  list: { class: List, inlineToolbar: true, shortcut: 'CMD+SHIFT+L', toolbox: { title: 'Lista com marcadores' } },
+  checklist: { class: NotionChecklist, inlineToolbar: true, shortcut: 'CMD+SHIFT+X', toolbox: { title: 'Lista de tarefas' } },
+  table: { class: Table, inlineToolbar: true, shortcut: 'CMD+SHIFT+T', toolbox: { title: 'Tabela' } },
+  quote: { class: Quote, inlineToolbar: true, shortcut: 'CMD+SHIFT+O', toolbox: { title: 'Citação' } },
+  code: { class: CodeTool, shortcut: 'CMD+SHIFT+C', toolbox: { title: 'Código' } },
+  delimiter: { class: Delimiter, toolbox: { title: 'Divisor' } },
+  warning: { class: Warning, inlineToolbar: true, shortcut: 'CMD+SHIFT+W', toolbox: { title: 'Destaque' } },
+};
+/** O parágrafo é embutido no Editor.js (não se registra), mas é um bloco como os outros e entra no contrato. */
+const BLOCO_EMBUTIDO = 'paragraph';
+/** Ferramenta inline: marca texto dentro de um bloco. Cada chave precisa de par em `INLINE` (markdown-editorjs.mjs). */
+const FERRAMENTAS_INLINE = {
+  marker: { class: Marker, shortcut: 'CMD+SHIFT+M' },
+};
+/** Nem bloco nem marca: `duplicate` é um tune (opção do bloco), e não grava tipo nenhum. */
+const FERRAMENTAS_SEM_BLOCO = {
+  duplicate: DuplicateTune,
+};
 
 if (typeof Document !== 'undefined' && !Document.prototype.closest) Document.prototype.closest = () => null;
 
@@ -560,19 +589,8 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
           }
         }
       },
-      tools: {
-        duplicate: DuplicateTune,
-        header: { class: Header, shortcut: 'CMD+SHIFT+H', toolbox: { title: 'Título' } },
-        list: { class: List, inlineToolbar: true, shortcut: 'CMD+SHIFT+L', toolbox: { title: 'Lista com marcadores' } },
-        checklist: { class: NotionChecklist, inlineToolbar: true, shortcut: 'CMD+SHIFT+X', toolbox: { title: 'Lista de tarefas' } },
-        table: { class: Table, inlineToolbar: true, shortcut: 'CMD+SHIFT+T', toolbox: { title: 'Tabela' } },
-        quote: { class: Quote, inlineToolbar: true, shortcut: 'CMD+SHIFT+O', toolbox: { title: 'Citação' } },
-        code: { class: CodeTool, shortcut: 'CMD+SHIFT+C', toolbox: { title: 'Código' } },
-        Marker: { class: Marker, shortcut: 'CMD+SHIFT+M', toolbox: { title: 'Marcador' } },
-        delimiter: { class: Delimiter, toolbox: { title: 'Divisor' } },
-        warning: { class: Warning, inlineToolbar: true, shortcut: 'CMD+SHIFT+W', toolbox: { title: 'Destaque' } },
-      },
-      data: initialData
+      tools: { ...FERRAMENTAS_SEM_BLOCO, ...FERRAMENTAS_INLINE, ...FERRAMENTAS_DE_BLOCO },
+      data: paraOEditor(initialData)
     });
   };
   if (comCampos) setTimeout(loadEditor, 100);
@@ -1035,133 +1053,4 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
   aberto: () => atual !== null,
   id: () => atual,
  };
-}
-
-
-function renderDescricao(raw, onToggle = null) {
-  if (!raw) return null;
-  const container = el('div', null, 'ag-descricao');
-  try {
-    const data = JSON.parse(raw);
-    if (!data.blocks) throw new Error();
-    for (const b of data.blocks) {
-      if (b.type === 'paragraph') {
-        const p = el('p'); const doc = new DOMParser().parseFromString(b.data?.text || '', "text/html"); p.append(...doc.body.childNodes);
-        container.append(p);
-      }
-      else if (b.type === 'header') { 
-        const h = el('h' + Math.min(Math.max(Number(b.data?.level) || 3, 1), 6));
-        const doc = new DOMParser().parseFromString(b.data?.text || '', "text/html"); h.append(...doc.body.childNodes); 
-        h.style.margin = '12px 0 6px'; 
-        container.append(h); 
-      }
-      else if (b.type === 'list') {
-        const renderLista = (items, estilo) => {
-          const list = el(estilo === 'ordered' ? 'ol' : 'ul');
-          list.style.margin = '6px 0'; list.style.paddingLeft = '20px';
-          (items || []).forEach(i => {
-            const li = el('li');
-            const texto = typeof i === 'string' ? i : (i?.content || '');
-            const doc = new DOMParser().parseFromString(texto, "text/html"); li.append(...doc.body.childNodes);
-            if (i?.items && i.items.length) li.append(renderLista(i.items, estilo));
-            list.append(li);
-          });
-          return list;
-        };
-        container.append(renderLista(b.data?.items, b.data?.style));
-      }
-      else if (b.type === 'checklist') {
-        const list = el('ul', null, 'ag-desc-checklist');
-        list.style.listStyle = 'none'; list.style.padding = '0'; list.style.margin = '6px 0';
-        (b.data?.items || []).forEach(i => {
-          const li = el('li');
-          const lbl = el('label');
-          lbl.style.display = 'flex'; lbl.style.alignItems = 'flex-start'; lbl.style.gap = '8px'; lbl.style.margin = '4px 0';
-          if (onToggle) lbl.style.cursor = 'pointer';
-          const chk = el('input'); chk.type = 'checkbox'; chk.checked = !!i.checked;
-          chk.disabled = !onToggle;
-          chk.style.marginTop = '3px';
-          if (onToggle) chk.style.cursor = 'pointer';
-          const sp = el('span');
-          if (onToggle) {
-            chk.addEventListener('change', async () => {
-              i.checked = chk.checked;
-              if (i.checked) { sp.style.textDecoration = 'line-through'; sp.style.color = 'var(--muted)'; }
-              else { sp.style.textDecoration = 'none'; sp.style.color = ''; }
-              await onToggle(JSON.stringify(data));
-            });
-          }
-          if (i.checked) { sp.style.textDecoration = 'line-through'; sp.style.color = 'var(--muted)'; }
-          const docSp = new DOMParser().parseFromString(i.text || '', "text/html");
-          sp.append(...docSp.body.childNodes);
-          lbl.append(chk, sp);
-          li.append(lbl);
-          list.append(li);
-        });
-        container.append(list);
-      }
-      else if (b.type === 'quote') {
-        const q = el('blockquote');
-        q.style.borderLeft = '3px solid var(--line-strong)'; q.style.padding = '4px 0 4px 14px'; q.style.margin = '10px 0'; q.style.color = 'var(--text)';
-        const doc = new DOMParser().parseFromString(b.data?.text || '', "text/html"); q.append(...doc.body.childNodes);
-        if (b.data?.caption) {
-          const cap = el('cite', ' — ' + b.data.caption);
-          cap.style.display = 'block'; cap.style.fontSize = '13px'; cap.style.marginTop = '6px'; cap.style.color = 'var(--muted)'; cap.style.fontStyle = 'italic';
-          q.append(cap);
-        }
-        container.append(q);
-      }
-      else if (b.type === 'code') {
-        const pre = el('pre');
-        pre.style.background = 'var(--surface-hover)'; pre.style.border = '1px solid var(--line)'; pre.style.padding = '12px 16px'; pre.style.borderRadius = '6px'; pre.style.overflowX = 'auto';
-        const code = el('code', b.data?.code || '');
-        code.style.fontFamily = 'var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace)'; code.style.fontSize = '13px'; code.style.color = 'var(--text-strong)';
-        pre.append(code);
-        container.append(pre);
-      }
-      else if (b.type === 'delimiter') {
-        const hr = el('hr'); hr.style.border = 'none'; hr.style.borderTop = '1px solid var(--line)'; hr.style.margin = '18px 0';
-        container.append(hr);
-      }
-      else if (b.type === 'table') {
-        const table = el('table');
-        table.style.borderCollapse = 'collapse'; table.style.width = '100%'; table.style.margin = '10px 0'; table.style.borderRadius = '6px'; table.style.overflow = 'hidden';
-        (b.data?.content || []).forEach((row, rIdx) => {
-          const tr = el('tr');
-          (row || []).forEach(cell => {
-            const isHeading = b.data?.withHeadings && rIdx === 0;
-            const tag = isHeading ? 'th' : 'td';
-            const td = el(tag);
-            td.style.border = '1px solid var(--line)'; td.style.padding = '8px 12px'; td.style.fontSize = '14px'; td.style.lineHeight = '1.5';
-            if (isHeading) {
-              td.style.background = 'var(--surface-hover)'; td.style.fontWeight = '600'; td.style.color = 'var(--text-strong)';
-            } else {
-              td.style.color = 'var(--text)';
-            }
-            const doc = new DOMParser().parseFromString(cell || '', "text/html"); td.append(...doc.body.childNodes);
-            tr.append(td);
-          });
-          table.append(tr);
-        });
-        container.append(table);
-      }
-      else if (b.type === 'warning') {
-        const w = el('div', null, 'ag-desc-callout');
-        w.style.background = 'var(--surface-hover)'; w.style.border = '1px solid var(--line)'; w.style.color = 'var(--text)'; w.style.borderRadius = '6px'; w.style.padding = '12px 16px'; w.style.margin = '10px 0'; w.style.display = 'grid'; w.style.gridTemplateColumns = 'auto 1fr'; w.style.gap = '4px 12px';
-        const icone = el('span', '💡'); icone.style.gridRow = '1 / span 2'; icone.style.fontSize = '18px'; icone.style.lineHeight = '1.4';
-        w.append(icone);
-        if (b.data?.title) {
-          const t = el('strong', b.data.title); t.style.gridColumn = '2'; t.style.fontWeight = '600'; t.style.color = 'var(--text-strong)'; t.style.fontSize = '14.5px';
-          w.append(t);
-        }
-        const msg = el('div'); msg.style.gridColumn = '2'; msg.style.fontSize = '14px'; msg.style.lineHeight = '1.5';
-        const doc = new DOMParser().parseFromString(b.data?.message || '', "text/html"); msg.append(...doc.body.childNodes);
-        w.append(msg);
-        container.append(w);
-      }
-    }
-  } catch {
-    container.textContent = raw;
-  }
-  return container;
 }

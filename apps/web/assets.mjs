@@ -72,6 +72,7 @@ const FILES = {
  '/tracking.js': ['tracking.js', 'text/javascript'],
  '/agenda-model.js': ['agenda-model.js', 'text/javascript'],
  '/agenda-dom.js': ['agenda-dom.js', 'text/javascript'],
+ '/agenda-descricao.js': ['agenda-descricao.js', 'text/javascript'],
  '/agenda-evento.js': ['agenda-evento.js', 'text/javascript'],
  '/agenda-repeticao.js': ['agenda-repeticao.js', 'text/javascript'],
  '/tracking.css': ['tracking.css', 'text/css'],

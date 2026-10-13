@@ -347,8 +347,10 @@ test('MCP: criação de atividades com Markdown .md estruturado, herança de cat
  assert.equal(resPayload.activity.title, 'Call de Alinhamento Semanal');
  assert.equal(resPayload.activity.category, 'mentoria', 'herdou mentoria da contratação education');
   // Gravado como JSON do Editor.js (formato que a tela de Acompanhamento le); devolvido ao bot em Markdown.
+  // O "> " do bot vira bloco de citacao, nao paragrafo: antes a ficha mostrava "> " literal no meio do texto.
   const gravado = JSON.parse(inseridos.at(-1).description);
-  assert.deepEqual(gravado.blocks.map(b => b.type), ['header', 'checklist', 'paragraph']);
+  assert.deepEqual(gravado.blocks.map(b => b.type), ['header', 'checklist', 'quote']);
+  assert.equal(gravado.blocks[2].data.text, 'Alinhamento crucial para entrega do marco 1.');
   assert.equal(gravado.blocks[1].data.items[0].checked, true);
   assert.match(resPayload.activity.description, /^## Pauta do Alinhamento\n\n- \[x\] /);
 
