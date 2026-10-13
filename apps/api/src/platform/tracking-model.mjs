@@ -39,13 +39,15 @@ export function opcional(campo,valor){
  return t;
 }
 export function activityInput(b){
- input(b,['id','tenant_id','category','kind','title','starts_at','ends_at','engagement_id','reminders',...OPCIONAIS]);
+ input(b,['id','tenant_id','category','kind','title','starts_at','ends_at','engagement_id','reminders','responsible_id',...OPCIONAIS]);
  const starts_at=instant(b.starts_at),ends_at=instant(b.ends_at);
  intervalo(starts_at,ends_at);
  const out={id:uuid(b.id),tenant_id:uuid(b.tenant_id),category:choice(b.category,CATEGORIES),kind:choice(b.kind,KINDS),title:text(b.title,2,160),starts_at,ends_at,engagement_id:b.engagement_id==null||b.engagement_id===''?null:uuid(b.engagement_id)};
  for(const campo of OPCIONAIS){const v=opcional(campo,b[campo]);if(v!==null)out[campo]=v;}
  // Sem `reminders` a atividade usa o padrão da agenda (NULL no banco); com a lista, ela manda ([] = não avisar).
  if(b.reminders!==undefined&&b.reminders!==null)out.reminders=lembretes(b.reminders);
+ // Responsável é uma conta (uuid). Só a existência e o papel são conferidos na rota, que tem o banco.
+ if(b.responsible_id!==undefined&&b.responsible_id!==null&&b.responsible_id!=='')out.responsible_id=uuid(b.responsible_id);
  return out;
 }
 export const EDITAVEIS=['title','starts_at','ends_at','category','kind','reminders',...OPCIONAIS];

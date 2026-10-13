@@ -158,3 +158,31 @@ Postgres. Todo o resto das abas funciona sem ela. O detector é o `criarDetector
 O pedido de 06/10 é maior que isto. Os outros itens — descrição `.md` com `/coment`, links para GitHub e ads, anexos e pasta no Core,
 relações entre tasks, vínculo com o produto, cronologia padronizada e o contrato na ficha do cliente — estão em
 [ACOMPANHAMENTO-REDESENHO.md](ACOMPANHAMENTO-REDESENHO.md), cada um com o que falta para existir.
+
+## Responsável da atividade (migração 055)
+
+Toda atividade pode ter **uma pessoa responsável**: uma conta de operador (a mesma de Configurações → Acessos), escolhida no
+campo "Responsável" logo abaixo da Contratação. Só entram na lista contas **ativas** com papel Administrador ou Membro; Leitor
+e conta suspensa não aparecem e a API os recusa.
+
+**Quem é avisado.**
+
+| Situação | Lembrete (15 min antes etc.) | Aviso "atribuída a você" |
+|---|---|---|
+| Atividade **com** responsável | só os aparelhos dele | só os aparelhos dele |
+| Atividade **sem** responsável | quem assinou os lembretes da agenda, como sempre foi | — |
+| Responsável **suspenso** | cai no comportamento de sem responsável (a suspensão já revogou os aparelhos dele) | — |
+| Trocar para quem já era, tirar, ou atribuir **a si mesmo** | — | não avisa |
+
+O aparelho é achado pelo e-mail guardado quando foi registrado; sem e-mail, pelo subject de uma sessão da mesma pessoa. Quem
+não tem aparelho cadastrado não recebe nada, e **não** cai para "todo mundo": o ponto é não incomodar os outros. O aviso de
+atribuição usa o tópico dos lembretes da agenda, para não exigir um tópico novo.
+
+**Trocar** vai por `PUT /api/tracking/:id/responsible` (a revisão é obrigatória) e deixa de/para em `service_activity_audit`
+(`responsible_changed`). Na criação, `responsible_id` vai no próprio POST.
+
+**Limites conhecidos.** Atividade que se **repete** ainda não tem responsável (a série não guarda a coluna e as ocorrências
+nascem sem dono): a tela desativa o campo em vez de perder a escolha. Atividades criadas pelo bot (MCP) nascem sem responsável
+até o MCP aprender o campo.
+
+**Sem a migração 055** o campo não aparece, a API responde 409 com texto claro e o lembrete segue para quem assinou o tópico.

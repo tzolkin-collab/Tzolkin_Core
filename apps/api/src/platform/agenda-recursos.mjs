@@ -12,6 +12,7 @@ export const TABELAS_048 = Object.freeze(['service_activity_series', 'service_ac
 
 export const MENSAGEM_047 = 'Descrição, local e link da reunião ainda não estão disponíveis neste banco: falta aplicar a migração 047.';
 export const MENSAGEM_048 = 'Lembretes e repetição ainda não estão disponíveis neste banco: falta aplicar a migração 048.';
+export const MENSAGEM_055 = 'O responsável da atividade ainda não está disponível neste banco: falta aplicar a migração 055.';
 export const MENSAGEM_054 = 'A atividade do tipo Registro ainda não está disponível neste banco: falta aplicar a migração 054.';
 
 export function criarDetector({ relogio = Date.now, ttl = 60000 } = {}) {
@@ -70,6 +71,30 @@ export function criarDetectorVinculos({ relogio = Date.now, ttl = 60000 } = {}) 
   verificadoEm = relogio();
   const r = await db.query(`SELECT count(*)::int AS tabelas FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'service_activity_links'`);
   ok = (r.rows[0]?.tabelas || 0) > 0;
+  return ok;
+ };
+}
+
+/**
+ * A migração 055 acrescentou `service_activities.responsible_id` (a conta responsável pela atividade). Detector à parte,
+ * como o do Registro (054): quem já tem a 047 e a 048 não volta a perguntar por elas.
+ *
+ * Enquanto a 055 não está no banco, a tela não oferece o campo, o lembrete segue para quem assinou o tópico e a API recusa
+ * o uso com MENSAGEM_055, em vez de deixar o SQL estourar em "column does not exist".
+ */
+export function criarDetectorResponsavel({ relogio = Date.now, ttl = 60000 } = {}) {
+ let ok = false, verificadoEm = -Infinity;
+ /** db: qualquer coisa com .query (pool ou client). Devolve true quando a coluna existe. */
+ return async function responsavelDisponivel(db) {
+  if (ok) return true;
+  if (relogio() - verificadoEm < ttl) return false;
+  verificadoEm = relogio();
+  // pg_attribute e não information_schema: o detector da 047/048 já pergunta por aquele, e o teste que garante "uma pergunta só"
+  // conta as idas a ele. O catálogo responde a mesma coisa sem se misturar com essa conta (como o detector do Registro faz).
+  const r = await db.query(
+   `SELECT count(*)::int AS n FROM pg_attribute
+     WHERE attrelid = to_regclass(current_schema() || '.service_activities') AND attname = 'responsible_id' AND NOT attisdropped`);
+  ok = (r.rows[0]?.n || 0) > 0;
   return ok;
  };
 }

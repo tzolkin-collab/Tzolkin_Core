@@ -146,3 +146,17 @@ export function payloadLembrete({ titulo, empresa, inicio, minutos, atividadeId 
   view: 'tracking',
  };
 }
+
+/**
+ * Aviso de "esta atividade agora é sua". Vai só ao responsável, no mesmo tópico dos lembretes da agenda: quem desliga
+ * os lembretes não quer ser avisado de atividade nenhuma, e um tópico novo exigiria mexer na restrição de tópicos do banco.
+ * `tag` por atividade colapsa reatribuições seguidas em um aviso só.
+ */
+export function payloadAtribuicao({ titulo, empresa, inicio, por, atividadeId }) {
+ return {
+  title: corta(`Atividade atribuída a você — ${corta(titulo, 80)}`, 120),
+  body: [corta(empresa, 80), inicio ? hora(inicio) : null, por ? `por ${corta(por, 60)}` : null].filter(Boolean).join(' · '),
+  tag: `agenda:atribuida:${corta(atividadeId, 40)}`,
+  view: 'tracking',
+ };
+}

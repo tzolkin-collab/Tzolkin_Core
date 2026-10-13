@@ -50,6 +50,23 @@ export async function notificarTopico(pool, topico, payload, enviar) {
 }
 
 /**
+ * Envia só para os aparelhos de UMA pessoa, a que o e-mail identifica. O aparelho guarda o e-mail de quem o registrou
+ * (operator_email); quando esse campo veio vazio, o subject da sessão da mesma pessoa serve de segundo caminho.
+ * Sem aparelho cadastrado devolve enviados 0: NÃO cai para "todo mundo", porque o ponto de chamar por pessoa é
+ * justamente não incomodar os outros.
+ */
+export async function notificarPessoa(pool, topico, email, payload, enviar) {
+ if (!TOPICOS.includes(topico)) throw new Error('Tópico desconhecido: ' + topico);
+ if (!email) return { enviados: 0, revogados: 0, falhas: 0 };
+ const { rows } = await pool.query(
+  `SELECT s.id,s.endpoint,s.p256dh,s.auth FROM push_subscriptions s
+    WHERE s.revoked_at IS NULL AND $1 = ANY(s.topics)
+      AND (lower(s.operator_email) = lower($2)
+           OR s.operator_subject IN (SELECT subject FROM operator_sessions WHERE lower(email) = lower($2)))`, [topico, email]);
+ return enviarLote(pool, rows, payload, enviar);
+}
+
+/**
  * Aviso de lead novo. Chamado DEPOIS do commit do intake (ver `afterCommit` em
  * app.mjs), nunca dentro da transação. `enviar` nulo = push desligado: não faz nada.
  */

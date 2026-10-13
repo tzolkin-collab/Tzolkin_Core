@@ -234,6 +234,16 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   const cliente = campo(form, 'Cliente', 'text', [['', 'Selecione...'], ...tenants.map(t => [t.id, t.name])]); cliente.required = true; cliente.parentElement.dataset.prop = 'cliente';
   const contratacao = campo(form, 'Contratação (opcional)', 'text', contratacoesDe(dados, '', GERAL)); contratacao.parentElement.dataset.prop = 'contratacao';
 
+  // Responsável: a conta que recebe o aviso desta atividade, e só ela. Sem escolher, o lembrete segue para quem assinou o
+  // tópico, como sempre foi. A lista vem do servidor e já exclui Leitor e conta suspensa. Só aparece com a migração 055.
+  const comResponsavel = dados.agenda_responsavel === true;
+  const responsaveis = dados.responsaveis || [];
+  const responsavel = comResponsavel ? campo(form, 'Responsável (opcional)', 'text', [['', 'Sem responsável'], ...responsaveis.map(r => [r.id, r.name || r.email])]) : null;
+  if (responsavel) {
+   responsavel.parentElement.dataset.prop = 'responsavel';
+   responsavel.parentElement.append(el('small', 'O lembrete desta atividade chega só a essa pessoa. Sem responsável, vai para quem assinou os lembretes da agenda.', 'detail'));
+  }
+
   const contratacaoEscolhida = () => (dados.engagements || []).find(e => e.id === contratacao.value) || null;
   /**
    * Categoria que uma atividade NOVA vai gravar: a da contratação escolhida ou, no geral da empresa, a herdada do
@@ -692,7 +702,7 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     blocoSerie.append(el('legend', 'Esta atividade se repete'));
     blocoSerie.append(el('p', serie.descricao + '.', 'detail'));
     escopo = campo(blocoSerie, 'Aplicar a', 'text', [['um', 'Só este evento'], ['proximos', 'Este e os próximos']]);
-    escopo.addEventListener('change', () => { contratacao.disabled = escopo.value === 'proximos'; });
+    escopo.addEventListener('change', () => { contratacao.disabled = escopo.value === 'proximos'; if (responsavel) responsavel.disabled = escopo.value === 'proximos'; });
     form.prepend(blocoSerie);
   }
 
@@ -700,6 +710,13 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   let aba = evento ? M.abaDoKind(evento.kind) : 'call';
   const comRegistro = dados.agenda_registro === true || aba === 'registro';
   function sincronizarAba() {
+   // A série ainda não guarda responsável: oferecer o campo e perder a escolha nas ocorrências seria pior do que não oferecer.
+   if (responsavel) {
+    const repete = Boolean(repeticao?.escolhida?.());
+    responsavel.disabled = repete;
+    if (repete) responsavel.value = '';
+    responsavel.parentElement.title = repete ? 'Atividades que se repetem ainda não têm responsável.' : '';
+   }
    const iconeDoTipo = aba === 'call' ? 'activity' : aba === 'task' ? 'check' : 'book-open'; iconePagina.replaceChildren(createIcon(iconeDoTipo));
    const comHorario = M.abaExigeHorario(aba);
    comeco.required = termino.required = comHorario;
@@ -733,6 +750,10 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   if (evento) {
    nome.value = evento.title; cliente.value = evento.tenant_id; cliente.disabled = true;
    preencher(contratacao, contratacoesDe(dados, evento.tenant_id, GERAL), evento.engagement_id || '');
+   if (responsavel) {
+    if (evento.responsible_id && !responsaveis.some(r => r.id === evento.responsible_id)) responsavel.append(Object.assign(el('option', 'Conta suspensa ou removida'), { value: evento.responsible_id }));
+    responsavel.value = evento.responsible_id || '';
+   }
    comeco.value = M.paraCampoLocal(evento.ini); termino.value = M.paraCampoLocal(evento.fim);
    local.value = evento.location || '';
    if (local.value !== (evento.location || '')) { local.value = LOCAL_LIVRE; localLivre.value = evento.location; }
@@ -848,6 +869,7 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     // (agenda-jobs.mjs faz COALESCE(a.reminders, padrão)), e um registro datado na hora em que foi escrito dispararia
     // push de lembrete. Lista vazia é o "não avisar" explícito que a coluna entende.
     if (lembrete) { const rem = aba === 'registro' ? [] : lembrete.valor(); if (rem !== null) corpo.reminders = rem; }
+    if (responsavel?.value) corpo.responsible_id = responsavel.value;
     atividade = (await api('/api/tracking', 'POST', corpo)).activity;
    } else {
     const campos = {};
@@ -875,6 +897,12 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     // A contratação tem rota própria e exige a revisão que acabou de subir.
     if (mudouContratacao) {
      const res = await api(`/api/tracking/${evento.id}/engagement`, 'PUT', { engagement_id: contratacao.value || null, revision: evento.revision });
+     atividade = res.activity;
+     Object.assign(evento, atividade);
+    }
+    // O responsável também: o servidor guarda de/para na trilha e avisa só quem passou a ser responsável.
+    if (responsavel && !responsavel.disabled && (responsavel.value || null) !== (evento.responsible_id || null)) {
+     const res = await api(`/api/tracking/${evento.id}/responsible`, 'PUT', { responsible_id: responsavel.value || null, revision: evento.revision });
      atividade = res.activity;
      Object.assign(evento, atividade);
     }
@@ -940,6 +968,7 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
    { rotulo: 'Cliente', valor: clienteLink(e) },
    { rotulo: 'Contratação', valor: e.engagement_label || 'Geral da empresa' },
    { rotulo: 'Categoria', valor: selo(M.ROTULOS[e.category], M.TOM_DA_CATEGORIA[e.category]) },
+   { rotulo: 'Responsável', valor: e.responsible_id ? ((dados.responsaveis || []).find(r => r.id === e.responsible_id)?.name || (dados.responsaveis || []).find(r => r.id === e.responsible_id)?.email || 'Conta suspensa ou removida') : null },
    { rotulo: 'Tipo', valor: textoDoTipo(e.kind) },
    { rotulo: 'Situação', valor: selo(M.ROTULOS[e.status], TOM_DA_SITUACAO[e.status] || 'neutral') },
    { rotulo: 'Local', valor: e.location || null },

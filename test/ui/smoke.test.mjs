@@ -998,7 +998,7 @@ function eventosDaSemana() {
 const COM_AGENDA = lista => `(() => {
  const EVENTOS = ${JSON.stringify(lista)};
  // registro começa falso como o banco de hoje: a migração 054 (tipo 'registro', aba Registro) ainda não foi aplicada.
- window.__agenda = { eventos: EVENTOS, gets: [], puts: [], posts: [], tempos: [], recusar: null, semCampos: false, lembretes: false, registro: false, series: [], seriesPosts: [], seriesPuts: [], seriesFins: [], padrao: [15], meet: false, meets: [], meetFalha: false };
+ window.__agenda = { eventos: EVENTOS, gets: [], puts: [], posts: [], tempos: [], recusar: null, semCampos: false, lembretes: false, registro: false, series: [], seriesPosts: [], seriesPuts: [], seriesFins: [], padrao: [15], meet: false, meets: [], meetFalha: false, responsavel: false, responsaveis: [] };
  window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
  const json = (corpo, status = 200) => Promise.resolve(new Response(JSON.stringify(corpo), { status, headers: { 'content-type': 'application/json' } }));
  window.fetch = async (url, opcoes = {}) => {
@@ -1011,7 +1011,7 @@ const COM_AGENDA = lista => `(() => {
    window.__agenda.gets.push({ from: q.get('from'), to: q.get('to'), tenant: q.get('tenant_id') });
    const de = Date.parse(q.get('from') + 'T00:00:00-03:00'), ate = Date.parse(q.get('to') + 'T00:00:00-03:00');
    const dentro = EVENTOS.filter(e => Date.parse(e.ends_at) > de && Date.parse(e.starts_at) < ate && (!q.get('tenant_id') || e.tenant_id === q.get('tenant_id')));
-   return json({ activities: dentro.map(e => ({ ...e })), logs: [], engagements: [], truncated: false, time_zone: 'America/Sao_Paulo', agenda_campos: !window.__agenda.semCampos, agenda_lembretes: window.__agenda.lembretes, agenda_registro: window.__agenda.registro, series: window.__agenda.lembretes ? window.__agenda.series : [], agenda_prefs: window.__agenda.lembretes ? { default_reminders: window.__agenda.padrao, revision: 1 } : null, google_meet: window.__agenda.meet });
+   return json({ activities: dentro.map(e => ({ ...e })), logs: [], engagements: [], truncated: false, time_zone: 'America/Sao_Paulo', agenda_campos: !window.__agenda.semCampos, agenda_lembretes: window.__agenda.lembretes, agenda_registro: window.__agenda.registro, agenda_responsavel: window.__agenda.responsavel, responsaveis: window.__agenda.responsaveis, series: window.__agenda.lembretes ? window.__agenda.series : [], agenda_prefs: window.__agenda.lembretes ? { default_reminders: window.__agenda.padrao, revision: 1 } : null, google_meet: window.__agenda.meet });
   }
   if (partes[3] === 'series') {
    const a = window.__agenda;
@@ -1039,6 +1039,7 @@ const COM_AGENDA = lista => `(() => {
    window.__agenda.puts.push({ id: partes[3], sub: partes[4] || null, corpo });
    if (partes[4] === 'status') e.status = corpo.status;
    else if (partes[4] === 'engagement') e.engagement_id = corpo.engagement_id;
+   else if (partes[4] === 'responsible') e.responsible_id = corpo.responsible_id;
    else { const { revision, ...campos } = corpo; Object.assign(e, campos); }
    e.revision += 1; return json({ activity: { ...e } });
   }
@@ -1836,6 +1837,58 @@ test('agenda: o tipo da atividade é a aba, e cada aba mostra só o que faz sent
  assert.equal(await pagina.avaliar(ABA_ATIVA), 'Task');
  await FECHAR_TUDO();
  await pagina.avaliar(`${NO_AGENDA}.registro = false; ${NO_AGENDA}.meet = false`); await RECARREGAR_AGENDA();
+ semExcecoes();
+});
+
+test('agenda: o responsável só aparece com a migração 055, vai na criação, troca pela rota própria e a série não o oferece', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ await pagina.avaliar(`${NO_AGENDA}.lembretes = true; ${NO_AGENDA}.registro = true; ${NO_AGENDA}.posts.length = 0; ${NO_AGENDA}.puts.length = 0`); await RECARREGAR_AGENDA();
+ // Sem a 055 o formulário é o de antes: nenhum campo novo.
+ await ABRIR_NOVA();
+ assert.ok(!(await pagina.avaliar(ROTULOS_DO_FORM)).includes('Responsável (opcional)'), 'sem a migração o campo nem existe');
+ await FECHAR_TUDO();
+
+ await pagina.avaliar(`${NO_AGENDA}.responsavel = true; ${NO_AGENDA}.responsaveis = [{ id: '00000000-0000-4000-8000-0000000000b1', name: 'Ana', email: 'ana@tzolkin.test', role: 'member' }, { id: '00000000-0000-4000-8000-0000000000b2', name: null, email: 'bia@tzolkin.test', role: 'owner' }]`); await RECARREGAR_AGENDA();
+ await ABRIR_NOVA();
+ assert.ok((await pagina.avaliar(ROTULOS_DO_FORM)).includes('Responsável (opcional)'));
+ // Só quem a API manda, e quem não tem nome aparece pelo e-mail. A primeira opção é "sem responsável": nada muda por padrão.
+ assert.deepEqual(await pagina.avaliar(`[...${CAMPO_DO_FORM('Responsável (opcional)')}.options].map(o => o.textContent)`), ['Sem responsável', 'Ana', 'bia@tzolkin.test']);
+ assert.equal(await pagina.avaliar(`${CAMPO_DO_FORM('Responsável (opcional)')}.value`), '', 'sem escolha, o lembrete segue para quem assinou o tópico');
+ assert.match(await pagina.avaliar(`${CAMPO_DO_FORM('Responsável (opcional)')}.parentElement.querySelector('small').textContent`), /chega só a essa pessoa/);
+
+ // Escolhido na criação, vai no POST.
+ const dia = AM.somarDias(AM.segundaDe(AM.diaDe(Date.now())), 3);
+ await pagina.avaliar(`(() => { const set = (c, v, ev = 'input') => { c.value = v; c.dispatchEvent(new Event(ev, { bubbles: true })); };
+  set(${CAMPO_DO_FORM('Título')}, 'Revisar proposta'); set(${CAMPO_DO_FORM('Cliente')}, ${JSON.stringify(EMPRESA)}, 'change');
+  set(${CAMPO_DO_FORM('Início · Brasília')}, '${dia}T10:00', 'change'); set(${CAMPO_DO_FORM('Responsável (opcional)')}, '00000000-0000-4000-8000-0000000000b1', 'change'); })()`);
+ await ENVIAR_FORM();
+ await pagina.esperar(`${NO_AGENDA}.posts.length === 1`, { descricao: 'POST com responsável' });
+ assert.equal((await pagina.avaliar(`${NO_AGENDA}.posts[0]`)).responsible_id, '00000000-0000-4000-8000-0000000000b1');
+ await pagina.esperar(`!document.querySelector('dialog.tracking-editor[open]')`);
+
+ // Editar: trocar vai pela rota própria (a revisão sobe), e a visualização diz quem é.
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="00000000-0000-4000-8000-000000000005"]').click()`);
+ await pagina.esperar(PAINEL_ABERTO);
+ await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].find(b => b.textContent.trim() === 'Editar').click()`);
+ await pagina.esperar(`document.querySelector('dialog.tracking-editor[open]')`);
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Responsável (opcional)'), '00000000-0000-4000-8000-0000000000b2'));
+ await ENVIAR_FORM();
+ await pagina.esperar(`${NO_AGENDA}.puts.some(p => p.sub === 'responsible')`, { descricao: 'PUT da rota do responsável' });
+ const troca = await pagina.avaliar(`${NO_AGENDA}.puts.find(p => p.sub === 'responsible')`);
+ assert.equal(troca.corpo.responsible_id, '00000000-0000-4000-8000-0000000000b2');
+ assert.ok(Number.isInteger(troca.corpo.revision), 'a revisão vai junto: dois operadores não se sobrescrevem');
+ await FECHAR_TUDO();
+
+ // Série: a repetição ainda não guarda responsável, então o campo sai de cena em vez de a escolha se perder em silêncio.
+ await RECARREGAR_AGENDA();
+ await ABRIR_NOVA();
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Responsável (opcional)'), '00000000-0000-4000-8000-0000000000b1'));
+ await pagina.avaliar(DEFINIR(CAMPO_DO_FORM('Repete'), 'weekly'));
+ const aoRepetir = await pagina.avaliar(`({ desativado: ${CAMPO_DO_FORM('Responsável (opcional)')}.disabled, valor: ${CAMPO_DO_FORM('Responsável (opcional)')}.value })`);
+ assert.equal(aoRepetir.desativado, true, 'atividade que se repete não oferece responsável');
+ assert.equal(aoRepetir.valor, '', 'e não leva a escolha antiga para a série');
+ await FECHAR_TUDO();
+ await pagina.avaliar(`${NO_AGENDA}.responsavel = false; ${NO_AGENDA}.responsaveis = []; ${NO_AGENDA}.registro = false`); await RECARREGAR_AGENDA();
  semExcecoes();
 });
 

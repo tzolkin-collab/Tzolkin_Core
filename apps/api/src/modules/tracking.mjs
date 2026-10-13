@@ -1,6 +1,8 @@
 import {json,input,isUuid,fail} from '../platform/http.mjs';
 import {activityInput,activityUpdateInput,timeInput,trackingRange,OPCIONAIS} from '../platform/tracking-model.mjs';
-import {criarDetector,criarDetectorRegistro,criarDetectorVinculos,MENSAGEM_047,MENSAGEM_048,MENSAGEM_054} from '../platform/agenda-recursos.mjs';
+import {criarDetector,criarDetectorRegistro,criarDetectorVinculos,criarDetectorResponsavel,MENSAGEM_047,MENSAGEM_048,MENSAGEM_054,MENSAGEM_055} from '../platform/agenda-recursos.mjs';
+import {notificarPessoa} from './push.mjs';
+import {payloadAtribuicao,senderPadrao} from '../platform/webpush.mjs';
 import {descrever} from '../platform/recorrencia.mjs';
 // Comparar o que veio no pedido com o que já está gravado (repetir um cadastro idêntico devolve o que existe). Lista (lembretes) compara por conteúdo.
 const diferente=(gravado,pedido)=>Array.isArray(pedido)?JSON.stringify(gravado)!==JSON.stringify(pedido):gravado!==pedido;
@@ -10,7 +12,32 @@ const diferente=(gravado,pedido)=>Array.isArray(pedido)?JSON.stringify(gravado)!
 // `detector` diz se as migrações 047 (descrição, local, link) e 048 (lembretes, séries) já estão no banco, e `registro` se a 054
 // (o tipo 'registro', da aba Registro) já está. Enquanto não estão, a tela esconde o recurso e a API recusa o uso com mensagem
 // clara, e o resto funciona como antes (ver platform/agenda-recursos.mjs).
-export function trackingRoutes(router,{detector=criarDetector(),registro=criarDetectorRegistro(),vinculos=criarDetectorVinculos(),google=null}={}){
+// Aviso de "esta atividade agora é sua". Melhor esforço, DEPOIS do commit e sem esperar: nunca atrasa nem derruba a gravação.
+// `enviar` nulo = push desligado (sem chaves VAPID): não faz nada. Só vai ao responsável, nunca a quem assinou o tópico.
+async function avisarAtribuicaoPadrao(pool,{email,atividade,empresa,por}){
+ const enviar=senderPadrao();
+ if(!enviar||!email)return;
+ await notificarPessoa(pool,'agenda.lembrete',email,payloadAtribuicao({titulo:atividade.title,empresa,inicio:new Date(atividade.starts_at).getTime(),por,atividadeId:atividade.id}),enviar);
+}
+export function trackingRoutes(router,{detector=criarDetector(),registro=criarDetectorRegistro(),vinculos=criarDetectorVinculos(),responsavel=criarDetectorResponsavel(),avisarAtribuicao=avisarAtribuicaoPadrao,google=null}={}){
+ // O responsável é uma conta de operador ATIVA e com papel de quem trabalha (Administrador ou Membro): mesma regra de quem pode
+ // ser "Responsável" no comercial. Leitor não recebe tarefa, e conta suspensa não recebe aviso. Conferido antes de gravar, para
+ // a pessoa ler o motivo em português em vez de uma violação de chave estrangeira.
+ const conta=async(c,id)=>{
+  const r=(await c.query('SELECT id,email,name,role,status FROM operator_accounts WHERE id=$1',[id])).rows[0];
+  if(!r||r.status!=='active'||!['owner','member'].includes(r.role))throw fail(400,'Responsável inválido: escolha uma conta ativa de Administrador ou Membro.');
+  return r;
+ };
+ const exigirResponsavel=async db=>{if(!(await responsavel(db)))throw fail(409,MENSAGEM_055);};
+ // Fora da transação e sem esperar: quem recebe só importa depois que a atribuição está gravada.
+ const avisar=(pool,{responsavel:r,atividade,operator})=>{
+  if(!r?.email)return;
+  if(operator?.email&&String(operator.email).toLowerCase()===String(r.email).toLowerCase())return;   // atribuiu a si mesmo: não precisa de aviso
+  (async()=>{
+   const empresa=(await pool.query('SELECT name FROM tenants WHERE id=$1',[atividade.tenant_id])).rows[0]?.name??null;
+   await avisarAtribuicao(pool,{email:r.email,atividade,empresa,por:operator?.name||operator?.email||null});
+  })().catch(e=>console.error('[agenda] aviso de atribuição falhou:',e?.message));
+ };
  // 'registro' (aba Registro) depende da migração 054. Mesma regra da 047/048: enquanto o banco não a tem, a tela não
  // oferece a aba e quem insistir recebe 409 com texto claro, nunca a violação do CHECK vinda do Postgres.
  const exigirRegistro=async(db,kind)=>{if(kind==='registro'&&!(await registro(db)))throw fail(409,MENSAGEM_054);};
@@ -39,16 +66,20 @@ export function trackingRoutes(router,{detector=criarDetector(),registro=criarDe
   let meet=false;
   if(google&&operator&&await google.detector(pool).catch(()=>false))meet=Boolean((await pool.query('SELECT 1 FROM google_calendar_connections WHERE operator_subject=$1 AND revoked_at IS NULL',[operator.subject])).rows.length);
   const possuiVinculos=await vinculos(pool);
+  // Com a 055: quem pode ser escolhido como responsável. Só nome e e-mail de colegas que já aparecem em Configurações → Acessos.
+  const possuiResponsavel=await responsavel(pool);
+  const responsaveis=possuiResponsavel?(await pool.query("SELECT id,name,email,role FROM operator_accounts WHERE status='active' AND role IN ('owner','member') ORDER BY lower(COALESCE(name,email))")).rows:[];
   let links=[];
   if(possuiVinculos&&activities.rows.length){
    links=(await pool.query('SELECT * FROM service_activity_links WHERE activity_id=ANY($1)',[activities.rows.map(a=>a.id)])).rows;
   }
-  reply(200,{activities:activities.rows.slice(0,500),logs:logs.rows.slice(0,500),engagements:engagements.rows,links,truncated:activities.rows.length>500||logs.rows.length>500,time_zone:'America/Sao_Paulo',agenda_campos:rec.campos,agenda_lembretes:rec.lembretes,agenda_registro:await registro(pool),agenda_vinculos:possuiVinculos,series,agenda_prefs:prefs,google_meet:meet});
+  reply(200,{activities:activities.rows.slice(0,500),logs:logs.rows.slice(0,500),engagements:engagements.rows,links,truncated:activities.rows.length>500||logs.rows.length>500,time_zone:'America/Sao_Paulo',agenda_responsavel:possuiResponsavel,responsaveis,agenda_campos:rec.campos,agenda_lembretes:rec.lembretes,agenda_registro:await registro(pool),agenda_vinculos:possuiVinculos,series,agenda_prefs:prefs,google_meet:meet});
  });
  async function transaction(pool,fn){const c=await pool.connect();try{await c.query('BEGIN');const result=await fn(c);await c.query('COMMIT');return result;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}
  const audit=(c,id,action,details,operator)=>c.query('INSERT INTO service_activity_audit(activity_id,action,actor,details) VALUES($1,$2,$3,$4)',[id,action,operator?.email||operator?.subject||'unknown',details]);
  router.post('/api/tracking',async({pool,req,reply,operator})=>{
   const b=activityInput(await json(req));
+  let novo=null;
   const result=await transaction(pool,async c=>{
    // O que depende de migração só entra se o banco já a tem; só pergunta ao banco quando o pedido usa o recurso.
    const usaCampos=OPCIONAIS.some(k=>k in b),usaLembretes='reminders' in b;
@@ -58,16 +89,20 @@ export function trackingRoutes(router,{detector=criarDetector(),registro=criarDe
     if(usaLembretes&&!rec.lembretes)throw fail(409,MENSAGEM_048);
    }
    await exigirRegistro(c,b.kind);
+   let responsavelEscolhido=null;
+   if(b.responsible_id){await exigirResponsavel(c);responsavelEscolhido=await conta(c,b.responsible_id);}
    // A contratação tem de ser da mesma empresa. Conferida antes do INSERT: a chave composta também recusa, mas como erro de banco (409), não como 400 claro.
    let engagement=null;
    if(b.engagement_id){engagement=(await c.query('SELECT tenant_id,archived_at FROM client_engagements WHERE id=$1',[b.engagement_id])).rows[0];if(!engagement||engagement.tenant_id!==b.tenant_id)throw fail(400,'A contratação não é desta empresa ou está arquivada.');}
    const row=(await c.query(`INSERT INTO service_activities(${Object.keys(b).join(',')}) VALUES(${Object.keys(b).map((_,i)=>'$'+(i+1)).join(',')}) ON CONFLICT(id) DO NOTHING RETURNING *`,Object.values(b))).rows[0];
    // Arquivada só barra atividade NOVA: repetir um cadastro antigo (mesmo id e mesmo conteúdo) continua devolvendo o que já existe.
-   if(row){if(engagement?.archived_at)throw fail(400,'A contratação não é desta empresa ou está arquivada.');await audit(c,b.id,'created',b,operator);return row;}
+   if(row){if(engagement?.archived_at)throw fail(400,'A contratação não é desta empresa ou está arquivada.');await audit(c,b.id,'created',b,operator);novo={row,responsavel:responsavelEscolhido};return row;}
    const existing=(await c.query('SELECT * FROM service_activities WHERE id=$1',[b.id])).rows[0];
    if(!existing||Object.entries(b).some(([k,v])=>k.endsWith('_at')?new Date(existing[k]).toISOString()!==v:diferente(existing[k],v)))throw fail(409,'Identificador já usado em outro cadastro.');
    return existing;
-  });reply(200,{activity:result});
+  });
+  if(novo?.responsavel)avisar(pool,{responsavel:novo.responsavel,atividade:novo.row,operator});   // só quando a atividade é nova: repetir um cadastro idêntico não reavisa
+  reply(200,{activity:result});
  });
  // Edita título, horário, categoria, tipo, lembretes e os campos de agenda (descrição, local, link). A revisão que a tela leu é obrigatória:
  // se outra pessoa mexeu antes, volta 409 em vez de sobrescrever. As colunas do SET vêm de activityUpdateInput (lista fixa).
@@ -116,6 +151,28 @@ export function trackingRoutes(router,{detector=criarDetector(),registro=criarDe
    if(!result)throw fail(409,'Registro alterado ou inexistente. Atualize a agenda.');
    await audit(c,params.id,'engagement_changed',{engagement_id:engagement,revision:b.revision},operator);return result;
   });reply(200,{activity:row});
+ });
+ // Troca (ou tira) o responsável de uma atividade já criada. Isolada como a troca de contratação: a revisão que a tela leu é
+ // obrigatória e a mudança fica na trilha com quem era e quem passou a ser. Avisa SÓ a pessoa que passou a ser responsável.
+ router.put('/api/tracking/:id/responsible',async({pool,params,req,reply,operator})=>{
+  const b=await json(req);input(b,['responsible_id','revision']);
+  const alvo=b.responsible_id==null||b.responsible_id===''?null:b.responsible_id;
+  if(!isUuid(params.id)||(alvo!==null&&!isUuid(alvo))||!Number.isInteger(b.revision)||b.revision<1)throw fail(400,'Responsável ou revisão inválidos.');
+  let escolhido=null;
+  const row=await transaction(pool,async c=>{
+   await exigirResponsavel(c);
+   if(alvo)escolhido=await conta(c,alvo);
+   const antes=(await c.query('SELECT responsible_id FROM service_activities WHERE id=$1 FOR UPDATE',[params.id])).rows[0];
+   if(!antes)throw fail(404,'Atividade não encontrada.');
+   const result=(await c.query('UPDATE service_activities SET responsible_id=$1,revision=revision+1,updated_at=now() WHERE id=$2 AND revision=$3 RETURNING *',[alvo,params.id,b.revision])).rows[0];
+   if(!result)throw fail(409,'Registro alterado ou inexistente. Atualize a agenda.');
+   await audit(c,params.id,'responsible_changed',{de:antes.responsible_id,para:alvo,revision:b.revision},operator);
+   // Só avisa quem PASSOU a ser responsável: tirar ou manter o mesmo não manda nada.
+   if(!(antes.responsible_id===alvo))escolhido=alvo?escolhido:null;else escolhido=null;
+   return result;
+  });
+  if(escolhido)avisar(pool,{responsavel:escolhido,atividade:row,operator});
+  reply(200,{activity:row});
  });
  router.post('/api/tracking/:id/time',async({pool,params,req,reply,operator})=>{
   if(!isUuid(params.id))throw fail(400,'Atividade inválida.');const b=timeInput(await json(req));

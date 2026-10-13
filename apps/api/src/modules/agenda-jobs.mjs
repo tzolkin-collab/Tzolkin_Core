@@ -1,7 +1,7 @@
-import {notificarTopico} from './push.mjs';
+import {notificarTopico,notificarPessoa} from './push.mjs';
 import {gerarOcorrencias} from './agenda.mjs';
 import {payloadLembrete,senderPadrao} from '../platform/webpush.mjs';
-import {criarDetector} from '../platform/agenda-recursos.mjs';
+import {criarDetector,criarDetectorResponsavel} from '../platform/agenda-recursos.mjs';
 import {vivo} from '../platform/env-vivo.mjs';
 import {hojeEmBrasilia} from '../platform/recorrencia.mjs';
 
@@ -17,12 +17,15 @@ export const JANELA_MIN=20;
 // `agenda_reminders_sent` tem chave (atividade, minutos): o INSERT ... ON CONFLICT DO NOTHING só devolve a linha a quem a gravou primeiro,
 // então, mesmo com dois servidores ou dois ciclos sobrepostos, cada aviso sai uma vez.
 // Atividade sem lembretes próprios (NULL) usa o padrão da agenda; '{}' é "não avisar". Só atividade planejada e não arquivada.
-const SQL_VENCIDOS=`
+// Com a 055, a atividade pode ter responsável: o e-mail dele sai junto e o aviso vai só aos aparelhos dele. Responsável SUSPENSO
+// não conta (a suspensão já revogou os aparelhos dele): cai no comportamento de sem responsável, para o aviso não se perder.
+const sqlVencidos=comResponsavel=>`
  WITH padrao AS (SELECT default_reminders AS m FROM agenda_preferences WHERE id),
  candidatas AS (
-  SELECT a.id,a.title,a.starts_at,t.name AS empresa,x.min AS minutos
+  SELECT a.id,a.title,a.starts_at,t.name AS empresa,x.min AS minutos,${comResponsavel?"CASE WHEN r.status='active' THEN r.email END":'NULL::text'} AS responsavel_email
   FROM service_activities a
   JOIN tenants t ON t.id=a.tenant_id
+  ${comResponsavel?'LEFT JOIN operator_accounts r ON r.id=a.responsible_id':''}
   CROSS JOIN LATERAL unnest(COALESCE(a.reminders,(SELECT m FROM padrao),ARRAY[]::int[])) AS x(min)
   WHERE a.status='planned' AND a.archived_at IS NULL
    AND a.starts_at-(x.min*interval '1 minute')<=$1::timestamptz
@@ -34,20 +37,22 @@ const SQL_VENCIDOS=`
   ON CONFLICT DO NOTHING
   RETURNING activity_id,minutes
  )
- SELECT c.id,c.title,c.starts_at,c.empresa,c.minutos FROM candidatas c JOIN novas n ON n.activity_id=c.id AND n.minutes=c.minutos
+ SELECT c.id,c.title,c.starts_at,c.empresa,c.minutos,c.responsavel_email FROM candidatas c JOIN novas n ON n.activity_id=c.id AND n.minutes=c.minutos
  ORDER BY c.starts_at,c.minutos DESC`;
 
 /** Envia os lembretes vencidos. Nunca lança. `enviar` nulo = push desligado (sem chaves VAPID): não faz nada. */
-export async function enviarLembretes(pool,{enviar=senderPadrao(),detector=criarDetector(),agora=Date.now,notificar=notificarTopico,janelaMin=JANELA_MIN}={}){
+export async function enviarLembretes(pool,{enviar=senderPadrao(),detector=criarDetector(),responsavel=criarDetectorResponsavel(),agora=Date.now,notificar=notificarTopico,notificarUm=notificarPessoa,janelaMin=JANELA_MIN}={}){
  if(!enviar)return {desligado:true};
  const rec=await detector(pool);
  if(!rec.lembretes)return {indisponivel:true};
- const r=await pool.query(SQL_VENCIDOS,[new Date(agora()).toISOString(),janelaMin]);
+ const comResponsavel=await responsavel(pool).catch(()=>false);
+ const r=await pool.query(sqlVencidos(comResponsavel),[new Date(agora()).toISOString(),janelaMin]);
  const saida={devidos:r.rows.length,enviados:0,falhas:0};
  for(const linha of r.rows){
   try{
    const payload=payloadLembrete({titulo:linha.title,empresa:linha.empresa,inicio:new Date(linha.starts_at).getTime(),minutos:linha.minutos,atividadeId:linha.id});
-   const env=await notificar(pool,'agenda.lembrete',payload,enviar);
+   // Com responsável, só ele; sem, quem assinou o tópico (o comportamento de antes).
+   const env=linha.responsavel_email?await notificarUm(pool,'agenda.lembrete',linha.responsavel_email,payload,enviar):await notificar(pool,'agenda.lembrete',payload,enviar);
    saida.enviados+=env?.enviados??0;
    await pool.query('UPDATE agenda_reminders_sent SET devices=$3 WHERE activity_id=$1 AND minutes=$2',[linha.id,linha.minutos,env?.enviados??0]);
   }catch{saida.falhas++;}
