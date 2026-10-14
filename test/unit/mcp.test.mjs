@@ -40,6 +40,9 @@ test('MCP: protocolo, ferramentas e instruções para bots', () => {
   'criar_atividade',
   'editar_atividade',
   'excluir_atividade',
+  'listar_tags',
+  'criar_tag',
+  'revisar_tag',
  ]);
 
  for (const f of _internals.TOOLS) {
@@ -168,7 +171,7 @@ test('MCP: rotas registradas e método POST /api/mcp responde initialize, ping e
  // 3. tools/list
  const lista = await chamarMcp({ jsonrpc: '2.0', id: 3, method: 'tools/list' });
  assert.equal(lista.codigo, 200);
- assert.equal(lista.resposta.result.tools.length, 8);
+ assert.equal(lista.resposta.result.tools.length, 11);
 
  // 4. Método desconhecido
  const desconhecido = await chamarMcp({ jsonrpc: '2.0', id: 4, method: 'inexistente' });
@@ -537,7 +540,7 @@ test('MCP: gestão de tokens de bots para Configurações (gerar, listar, revoga
  assert.equal(resStatus.st, 200);
  assert.equal(resStatus.dados.tokens_ativos, 1);
  assert.equal(resStatus.dados.protocolo, '2024-11-05');
- assert.equal(resStatus.dados.ferramentas_count, 8);
+ assert.equal(resStatus.dados.ferramentas_count, 11);
 
  // 4. Revogar chave (DELETE /api/mcp/tokens/:id)
  let resRevogar = null;

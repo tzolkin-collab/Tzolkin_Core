@@ -998,11 +998,27 @@ function eventosDaSemana() {
 const COM_AGENDA = lista => `(() => {
  const EVENTOS = ${JSON.stringify(lista)};
  // registro começa falso como o banco de hoje: a migração 054 (tipo 'registro', aba Registro) ainda não foi aplicada.
- window.__agenda = { eventos: EVENTOS, gets: [], puts: [], posts: [], tempos: [], recusar: null, semCampos: false, lembretes: false, registro: false, series: [], seriesPosts: [], seriesPuts: [], seriesFins: [], padrao: [15], meet: false, meets: [], meetFalha: false, responsavel: false, responsaveis: [] };
+ window.__agenda = { eventos: EVENTOS, gets: [], puts: [], posts: [], tempos: [], recusar: null, semCampos: false, lembretes: false, registro: false, series: [], seriesPosts: [], seriesPuts: [], seriesFins: [], padrao: [15], meet: false, meets: [], meetFalha: false, responsavel: false, responsaveis: [], tagsEstado: false, tags: [], activityTags: {}, tagsPosts: [], tagsPuts: [] };
  window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
  const json = (corpo, status = 200) => Promise.resolve(new Response(JSON.stringify(corpo), { status, headers: { 'content-type': 'application/json' } }));
  window.fetch = async (url, opcoes = {}) => {
   const u = String(url), metodo = (opcoes.method || 'GET').toUpperCase();
+  if (u.startsWith('/api/tags')) {
+   const c = opcoes.body ? JSON.parse(opcoes.body) : {};
+   if (metodo === 'POST') {
+    window.__agenda.tagsPosts.push(c);
+    const nova = { id: 'tag-nova-' + (window.__agenda.tags.length + 1), slug: String(c.label).toLowerCase(), label: c.label, tone: c.tone || 'neutral', origin: 'person', created_by: 'person:eu', reviewed: true, reviewed_by: 'person:eu', archived: false, revision: 1, uses: 0 };
+    window.__agenda.tags.push(nova);
+    return json({ tag: nova, created: true });
+   }
+   if (metodo === 'PUT') {
+    const t = window.__agenda.tags.find(x => x.id === u.split('/')[3]);
+    window.__agenda.tagsPuts.push({ id: t.id, corpo: c });
+    Object.assign(t, { reviewed: c.reviewed === true ? true : t.reviewed, revision: t.revision + 1 });
+    return json({ tag: { ...t } });
+   }
+   return json({ available: window.__agenda.tagsEstado, tags: window.__agenda.tags });
+  }
   if (!u.startsWith('/api/tracking')) return window.__fetchOriginal(url, opcoes);
   const [caminho, consulta] = u.split('?'), partes = caminho.split('/');
   const corpo = opcoes.body ? JSON.parse(opcoes.body) : {};
@@ -1011,7 +1027,7 @@ const COM_AGENDA = lista => `(() => {
    window.__agenda.gets.push({ from: q.get('from'), to: q.get('to'), tenant: q.get('tenant_id') });
    const de = Date.parse(q.get('from') + 'T00:00:00-03:00'), ate = Date.parse(q.get('to') + 'T00:00:00-03:00');
    const dentro = EVENTOS.filter(e => Date.parse(e.ends_at) > de && Date.parse(e.starts_at) < ate && (!q.get('tenant_id') || e.tenant_id === q.get('tenant_id')));
-   return json({ activities: dentro.map(e => ({ ...e })), logs: [], engagements: [], truncated: false, time_zone: 'America/Sao_Paulo', agenda_campos: !window.__agenda.semCampos, agenda_lembretes: window.__agenda.lembretes, agenda_registro: window.__agenda.registro, agenda_responsavel: window.__agenda.responsavel, responsaveis: window.__agenda.responsaveis, series: window.__agenda.lembretes ? window.__agenda.series : [], agenda_prefs: window.__agenda.lembretes ? { default_reminders: window.__agenda.padrao, revision: 1 } : null, google_meet: window.__agenda.meet });
+   return json({ activities: dentro.map(e => ({ ...e })), logs: [], engagements: [], truncated: false, time_zone: 'America/Sao_Paulo', agenda_campos: !window.__agenda.semCampos, agenda_lembretes: window.__agenda.lembretes, agenda_registro: window.__agenda.registro, agenda_responsavel: window.__agenda.responsavel, responsaveis: window.__agenda.responsaveis, agenda_tags: window.__agenda.tagsEstado, tags: window.__agenda.tags, activity_tags: window.__agenda.activityTags, series: window.__agenda.lembretes ? window.__agenda.series : [], agenda_prefs: window.__agenda.lembretes ? { default_reminders: window.__agenda.padrao, revision: 1 } : null, google_meet: window.__agenda.meet });
   }
   if (partes[3] === 'series') {
    const a = window.__agenda;
@@ -1040,6 +1056,7 @@ const COM_AGENDA = lista => `(() => {
    if (partes[4] === 'status') e.status = corpo.status;
    else if (partes[4] === 'engagement') e.engagement_id = corpo.engagement_id;
    else if (partes[4] === 'responsible') e.responsible_id = corpo.responsible_id;
+   else if (partes[4] === 'tags') window.__agenda.activityTags[e.id] = corpo.tags.map(id => window.__agenda.tags.find(t => t.id === id)).filter(Boolean);
    else { const { revision, ...campos } = corpo; Object.assign(e, campos); }
    e.revision += 1; return json({ activity: { ...e } });
   }
@@ -1889,6 +1906,65 @@ test('agenda: o responsável só aparece com a migração 055, vai na criação,
  assert.equal(aoRepetir.valor, '', 'e não leva a escolha antiga para a série');
  await FECHAR_TUDO();
  await pagina.avaliar(`${NO_AGENDA}.responsavel = false; ${NO_AGENDA}.responsaveis = []; ${NO_AGENDA}.registro = false`); await RECARREGAR_AGENDA();
+ semExcecoes();
+});
+
+test('agenda: tags só com a migração 056; escolhe as que existem, cria as novas, mostra a sugerida pela IA e a aprova no lugar', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ await pagina.avaliar(`${NO_AGENDA}.lembretes = true; ${NO_AGENDA}.tagsEstado = false; ${NO_AGENDA}.tags = []; ${NO_AGENDA}.activityTags = {}; ${NO_AGENDA}.tagsPosts.length = 0; ${NO_AGENDA}.tagsPuts.length = 0; ${NO_AGENDA}.puts.length = 0; ${NO_AGENDA}.posts.length = 0`); await RECARREGAR_AGENDA();
+ // Sem a 056 o formulário é o de antes.
+ await ABRIR_NOVA();
+ assert.ok(!(await pagina.avaliar(ROTULOS_DO_FORM)).includes('Tags (opcional)'), 'sem a migração o campo nem existe');
+ await FECHAR_TUDO();
+
+ await pagina.avaliar(`${NO_AGENDA}.tagsEstado = true; ${NO_AGENDA}.tags = [
+  { id: 'tag-a', slug: 'revisao-tecnica', label: 'Revisão Técnica', tone: 'info', origin: 'person', reviewed: true, revision: 1 },
+  { id: 'tag-ia', slug: 'onboarding', label: 'Onboarding', tone: 'accent', origin: 'ai', reviewed: false, revision: 1 }]`); await RECARREGAR_AGENDA();
+ await ABRIR_NOVA();
+ assert.ok((await pagina.avaliar(ROTULOS_DO_FORM)).includes('Tags (opcional)'));
+ const CHIPS = `[...document.querySelectorAll('dialog.tracking-editor .ag-tags-caixa .ag-tag')]`;
+ const digitar = async texto => { await pagina.avaliar(`(() => { const i = ${CAMPO_DO_FORM('Tags (opcional)')}; i.value = ${JSON.stringify(texto)}; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); })()`); await new Promise(r => setTimeout(r, 150)); };
+ // O catálogo vira sugestão do campo, e digitar sem acento nem maiúscula acha a MESMA tag (nada de POST).
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('datalist option')].map(o => o.value).filter(v => ['Revisão Técnica', 'Onboarding'].includes(v))`), ['Revisão Técnica', 'Onboarding']);
+ await digitar('revisao tecnica');
+ assert.equal(await pagina.avaliar(`${NO_AGENDA}.tagsPosts.length`), 0, 'achou a que existe, sem criar outra');
+ assert.deepEqual(await pagina.avaliar(`${CHIPS}.map(c => c.querySelector('.ag-tag-nome').textContent)`), ['Revisão Técnica']);
+ // Nome novo: cria na hora (a tela precisa do id) e entra na lista.
+ await digitar('Nova Frente');
+ assert.equal(await pagina.avaliar(`${NO_AGENDA}.tagsPosts.length`), 1);
+ assert.equal((await pagina.avaliar(`${CHIPS}.length`)), 2);
+ // Tag da IA: vale (dá para escolher), vem marcada "IA", e aprovar é um clique ali mesmo.
+ await digitar('onboarding');
+ assert.equal(await pagina.avaliar(`${CHIPS}.filter(c => c.querySelector('.ag-tag-ia')).length`), 1, 'a sugerida pela IA leva o selo');
+ assert.match(await pagina.avaliar(`${CHIPS}.find(c => c.querySelector('.ag-tag-ia')).querySelector('.ag-tag-ia').title`), /aguardando revisão/);
+ await pagina.avaliar(`${CHIPS}.find(c => c.querySelector('.ag-tag-ia')).querySelector('[aria-label^="Aprovar"]').click()`);
+ await pagina.esperar(`${NO_AGENDA}.tagsPuts.length === 1`, { descricao: 'PUT que aprova a tag' });
+ assert.deepEqual(await pagina.avaliar(`${NO_AGENDA}.tagsPuts[0]`), { id: 'tag-ia', corpo: { revision: 1, reviewed: true } }, 'a revisão da tag vai junto');
+ await pagina.esperar(`${CHIPS}.filter(c => c.querySelector('.ag-tag-ia')).length === 0`, { descricao: 'o selo some depois de aprovada' });
+ // Tirar uma tag do campo é um clique no ×.
+ await pagina.avaliar(`${CHIPS}.find(c => c.textContent.includes('Nova Frente')).querySelector('[aria-label^="Tirar"]').click()`);
+ assert.equal(await pagina.avaliar(`${CHIPS}.length`), 2);
+
+ // Salvar: a atividade nasce e, depois, as tags vão pela rota própria, com a revisão que ela acabou de ganhar.
+ const dia = AM.somarDias(AM.segundaDe(AM.diaDe(Date.now())), 4);
+ await pagina.avaliar(`(() => { const set = (c, v, ev = 'input') => { c.value = v; c.dispatchEvent(new Event(ev, { bubbles: true })); };
+  set(${CAMPO_DO_FORM('Título')}, 'Planejar frente'); set(${CAMPO_DO_FORM('Cliente')}, ${JSON.stringify(EMPRESA)}, 'change'); set(${CAMPO_DO_FORM('Início · Brasília')}, '${dia}T10:00', 'change'); })()`);
+ await ENVIAR_FORM();
+ await pagina.esperar(`${NO_AGENDA}.puts.some(p => p.sub === 'tags')`, { descricao: 'PUT das tags da atividade' });
+ const gravou = await pagina.avaliar(`${NO_AGENDA}.puts.find(p => p.sub === 'tags')`);
+ assert.deepEqual(gravou.corpo.tags, ['tag-a', 'tag-ia']);
+ assert.ok(Number.isInteger(gravou.corpo.revision), 'a revisão vai junto: duas pessoas não se sobrescrevem');
+ await pagina.esperar(`!document.querySelector('dialog.tracking-editor[open]')`);
+
+ // Na visualização, as tags da atividade aparecem como etiquetas, e a sugerida pela IA continua marcada.
+ await pagina.avaliar(`${NO_AGENDA}.activityTags['00000000-0000-4000-8000-000000000005'] = [{ id: 'tag-a', label: 'Revisão Técnica', tone: 'info', origin: 'person', reviewed: true }, { id: 'tag-x', label: 'Pendente', tone: 'neutral', origin: 'ai', reviewed: false }]`);
+ await RECARREGAR_AGENDA();   // a tela guarda a listagem anterior: as tags novas só chegam num novo GET
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="00000000-0000-4000-8000-000000000005"]').click()`);
+ await pagina.esperar(PAINEL_ABERTO);
+ const painel = await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda .ag-tag')].map(t => t.textContent.replace(/\\s+/g, ' ').trim())`);
+ assert.deepEqual(painel, ['Revisão Técnica', 'Pendente IA']);
+ await FECHAR_TUDO();
+ await pagina.avaliar(`${NO_AGENDA}.tagsEstado = false; ${NO_AGENDA}.tags = []; ${NO_AGENDA}.activityTags = {}`); await RECARREGAR_AGENDA();
  semExcecoes();
 });
 

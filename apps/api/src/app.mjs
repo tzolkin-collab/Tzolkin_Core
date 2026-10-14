@@ -18,6 +18,8 @@ import { infrastructureRoutes } from './modules/infrastructure.mjs';
 import { deliveryRoutes } from './modules/delivery.mjs';
 import { platformOperationsRoutes } from './modules/platform-operations.mjs';
 import { trackingRoutes } from './modules/tracking.mjs';
+import { agendaTagsRoutes } from './modules/agenda-tags.mjs';
+import { criarDetectorTags } from './platform/agenda-tags.mjs';
 import { agendaRoutes } from './modules/agenda.mjs';
 import { criarDetector } from './platform/agenda-recursos.mjs';
 import { financeRoutes } from './modules/finance.mjs';
@@ -77,7 +79,10 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  const detectorAgenda = criarDetector();
  // Google Agenda/Meet: conexão por operador, criação da sala e sincronização (migração 049). A atividade avisa o Google quando muda.
  const google = googleCalendarRoutes(router, { clock, ...(webhookEnv ? { env: webhookEnv } : {}), ...googleOptions });
- trackingRoutes(router, { detector: detectorAgenda, google });
+ // Tags (056): um detector só, para a listagem da agenda e as rotas de tag perguntarem ao banco uma vez.
+ const detectorTags = criarDetectorTags();
+ trackingRoutes(router, { detector: detectorAgenda, google, tags: detectorTags });
+ agendaTagsRoutes(router, { detector: detectorTags });
  agendaRoutes(router, { detector: detectorAgenda, relogio: clock });
  // Integrações externas são opcionais e injetáveis: os testes passam um registro
  // apontado para um stub local, e nunca tocam num provedor de verdade.

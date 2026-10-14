@@ -6,6 +6,7 @@ import { json, fail, isUuid, text } from '../platform/http.mjs';
 import { digest } from '../platform/session.mjs';
 import { CATEGORIES, KINDS, activityInput, activityUpdateInput, opcional, lembretes } from '../platform/tracking-model.mjs';
 import { markdownParaEditorJs, editorJsParaMarkdown } from '../platform/markdown-editorjs.mjs';
+import { criarDetectorTags, garantirTag, revisarTag, listarTags, definirTagsDaAtividade, tagsDasAtividades, tagPublica, autorDaIa, MENSAGEM_056 } from '../platform/agenda-tags.mjs';
 
 const MCP_PROTOCOL_VERSION = '2024-11-05';
 const SERVER_INFO = Object.freeze({ name: 'tzolkin-core', version: '1.0.0' });
@@ -28,6 +29,12 @@ Ao preencher o campo 'description', você DEVE formatar o texto utilizando Markd
 - Listas de tarefas acionáveis com caixas de seleção ('- [ ] Ação a realizar').
 - Tópicos organizados com marcadores ('- ').
 - Citações ('> ') para observações críticas ou definições de alinhamento.
+
+## 2b. TAGS
+Atividades podem ter tags: classificação livre, além da categoria que vem do cliente. Use 'listar_tags' ANTES de criar uma tag nova e reaproveite as que existem:
+"Revisão Técnica" e "revisao tecnica" são a mesma tag, e pedir um nome que já existe devolve a tag que está lá. Tag criada por você vale na hora, mas
+aparece como "sugerida pela IA" até uma pessoa (ou 'revisar_tag') aprovar, renomear ou arquivar. Envie 'tags' como lista de nomes em 'criar_atividade' e 'editar_atividade'.
+Elas importam sobretudo quando a atividade não tem cliente ou é da própria Tzolkin, onde não há categoria para herdar.
 
 ## 3. HORÁRIOS E FUSO
 - O Core opera no fuso horário de Brasília (UTC-3). Sempre envie horários em formato ISO 8601 (ex.: '2026-10-08T14:00:00-03:00') ou 'YYYY-MM-DDTHH:mm:ss-03:00'.
@@ -110,6 +117,7 @@ const TOOLS = [
     description: { type: 'string', description: 'Descrição estruturada em Markdown (.md) com tópicos, checklists e cabeçalhos' },
     location: { type: 'string', description: 'Local físico ou link da reunião' },
     reminders: { type: 'array', items: { type: 'integer' }, description: 'Antecedência de lembretes em minutos (ex: [15, 60])' },
+    tags: { type: 'array', items: { type: 'string' }, description: 'Nomes das tags (até 12). Reaproveita as que existem; as que faltam são criadas como sugeridas pela IA. Veja listar_tags.' },
    },
    required: ['title', 'kind', 'tenant_id', 'starts_at'],
   },
@@ -130,6 +138,7 @@ const TOOLS = [
     description: { type: 'string', description: 'Nova descrição estruturada em Markdown (.md)' },
     location: { type: 'string', description: 'Novo local' },
     engagement_id: { type: 'string', description: 'Novo UUID de contratação vinculada' },
+    tags: { type: 'array', items: { type: 'string' }, description: 'Lista COMPLETA de tags da atividade (substitui as atuais); [] tira todas. Nomes, até 12.' },
    },
    required: ['id'],
   },
@@ -144,6 +153,38 @@ const TOOLS = [
     motivo: { type: 'string', description: 'Motivo opcional do cancelamento' },
    },
    required: ['id'],
+  },
+ },
+ {
+  name: 'listar_tags',
+  description: 'Lista as tags da agenda (nome, cor, quantas atividades usam, se foi sugerida pela IA e ainda espera revisão). Use antes de criar uma tag nova.',
+  inputSchema: { type: 'object', properties: { arquivadas: { type: 'boolean', description: 'Inclui as arquivadas (padrão: não)' } } },
+ },
+ {
+  name: 'criar_tag',
+  description: 'Cria uma tag, ou devolve a que já existe com o mesmo nome (ignora maiúscula e acento). Vale na hora e fica marcada como sugerida pela IA até ser revisada.',
+  inputSchema: {
+   type: 'object',
+   properties: {
+    label: { type: 'string', description: 'Nome da tag (2 a 40 caracteres)' },
+    tone: { type: 'string', enum: ['accent', 'info', 'success', 'warning', 'danger', 'neutral'], description: 'Cor (opcional, padrão neutra)' },
+   },
+   required: ['label'],
+  },
+ },
+ {
+  name: 'revisar_tag',
+  description: 'Revisa uma tag: aprova (tira o selo de sugerida), renomeia, troca a cor ou arquiva/reativa. Informe id ou slug.',
+  inputSchema: {
+   type: 'object',
+   properties: {
+    id: { type: 'string', description: 'UUID da tag' },
+    slug: { type: 'string', description: 'Slug da tag (alternativa ao id)' },
+    aprovar: { type: 'boolean', description: 'true = aprova a tag' },
+    label: { type: 'string', description: 'Novo nome' },
+    tone: { type: 'string', enum: ['accent', 'info', 'success', 'warning', 'danger', 'neutral'] },
+    arquivar: { type: 'boolean', description: 'true = arquiva; false = reativa' },
+   },
   },
  },
 ];
@@ -592,6 +633,24 @@ button:hover { background: #388bfd; }
   { webhook: true, auth: 'public' }
  );
 
+ // Tags (056). Chamar pelo MCP é sempre ação da IA: a tag criada por aqui nasce "sugerida" e vale na hora.
+ const detectorTags = criarDetectorTags();
+ const exigirTags = async () => { if (!(await detectorTags(pool))) throw new Error(MENSAGEM_056); };
+ const nomesDeTags = lista => (lista || []).map(t => ({ label: t.label, sugerida_pela_ia: t.origin === 'ai' && !t.reviewed_at }));
+ // Nomes que a IA mandou -> ids, criando os que faltam. Dentro da transação de quem chama: se algo falhar, nenhuma tag nasce.
+ const resolverTags = async (db, nomes, autor) => {
+  if (!Array.isArray(nomes)) throw new Error('"tags" deve ser uma lista de nomes.');
+  const ids = [];
+  for (const nome of nomes) ids.push((await garantirTag(db, { label: nome, autor })).tag.id);
+  return ids;
+ };
+ // As respostas de atividade levam as tags, quando a migração existe.
+ const comTags = async linhas => {
+  if (!linhas.length || !(await detectorTags(pool))) return linhas.map(atividadeParaBot);
+  const mapa = await tagsDasAtividades(pool, linhas.map(l => l.id));
+  return linhas.map(l => ({ ...atividadeParaBot(l), tags: nomesDeTags(mapa.get(l.id)) }));
+ };
+
  // 2. Execução de Ferramentas MCP
  async function executarFerramenta(nome, args, auth) {
   switch (nome) {
@@ -729,7 +788,7 @@ button:hover { background: #388bfd; }
     sql += ' ORDER BY a.starts_at LIMIT 200';
 
     const r = await pool.query(sql, params);
-    return r.rows.map(atividadeParaBot);
+    return await comTags(r.rows);
    }
 
    case 'obter_atividade': {
@@ -746,8 +805,9 @@ button:hover { background: #388bfd; }
     const atividade = r.rows[0];
     const logs = await pool.query('SELECT * FROM service_time_logs WHERE activity_id = $1 ORDER BY worked_on DESC', [args.id]);
     const links = await pool.query('SELECT * FROM service_activity_links WHERE activity_id = $1', [args.id]).catch(() => ({ rows: [] }));
+    const [atividadeComTags] = await comTags([atividade]);
     return {
-     ...atividadeParaBot(atividade),
+     ...atividadeComTags,
      time_logs: logs.rows,
      links: links.rows,
     };
@@ -768,6 +828,8 @@ button:hover { background: #388bfd; }
      }
     }
 
+    // Sem a migração das tags, recusa ANTES de gravar: criar a atividade e perder as tags em silêncio seria pior.
+    if (args.tags !== undefined) await exigirTags();
     let engagementId = args.engagement_id && isUuid(args.engagement_id) ? args.engagement_id : null;
     let categoria = args.category;
 
@@ -807,11 +869,16 @@ button:hover { background: #388bfd; }
       'INSERT INTO service_activity_audit(activity_id, action, actor, details) VALUES($1, $2, $3, $4)',
       [id, 'created_via_mcp', auth.ator || 'spark-bot', JSON.stringify({ ...payload, via: 'mcp' })]
      );
+     if (args.tags !== undefined) {
+      const autorIa = autorDaIa(auth.ator);
+      await definirTagsDaAtividade(client, { atividadeId: id, tagIds: await resolverTags(client, args.tags, autorIa), autor: autorIa });
+     }
      await client.query('COMMIT');
+     const tagsCriadas = args.tags !== undefined ? nomesDeTags((await tagsDasAtividades(pool, [id])).get(id)) : null;
      return {
       ok: true,
       mensagem: `Atividade '${payload.title}' criada com sucesso no Acompanhamento.`,
-      activity: atividadeParaBot(r.rows[0]),
+      activity: { ...atividadeParaBot(r.rows[0]), ...(tagsCriadas ? { tags: tagsCriadas } : {}) },
      };
     } catch (e) {
      await client.query('ROLLBACK');
@@ -841,7 +908,11 @@ button:hover { background: #388bfd; }
      camposParaValidar.ends_at = normalizarDataFuso(args.ends_at) || new Date(existente.ends_at).toISOString();
     }
 
-    const { revision, campos } = activityUpdateInput(camposParaValidar);
+    // activityUpdateInput recusa "nada para alterar" quando só há a revisão. Mas status, contratação e tags mudam por fora dele:
+    // sem este desvio, editar SÓ o status (ou só as tags) devolvia erro, embora houvesse o que gravar.
+    const mudaPorFora = args.status !== undefined || args.engagement_id !== undefined || args.tags !== undefined;
+    let revision = existente.revision, campos = {};
+    if (Object.keys(camposParaValidar).length > 1 || !mudaPorFora) ({ revision, campos } = activityUpdateInput(camposParaValidar));
     if (args.status && ['planned', 'done', 'cancelled'].includes(args.status)) {
      campos.status = args.status;
     }
@@ -850,24 +921,85 @@ button:hover { background: #388bfd; }
     }
 
     const nomes = Object.keys(campos);
-    if (!nomes.length) return { ok: true, mensagem: 'Nenhum campo para alterar.', activity: atividadeParaBot(existente) };
+    if (args.tags !== undefined) await exigirTags();
+    if (!nomes.length && args.tags === undefined) return { ok: true, mensagem: 'Nenhum campo para alterar.', activity: atividadeParaBot(existente) };
 
     const client = await pool.connect();
     try {
      await client.query('BEGIN');
-     const sql = `UPDATE service_activities SET ${nomes.map((n, i) => `${n}=$${i + 3}`).join(',')}, revision=revision+1, updated_at=now() WHERE id=$1 AND revision=$2 RETURNING *`;
+     // Só tags mudando: não há campo para o SET, e a atividade ainda sobe a revisão (as tags fazem parte dela).
+     const sql = `UPDATE service_activities SET ${[...nomes.map((n, i) => `${n}=$${i + 3}`), 'revision=revision+1', 'updated_at=now()'].join(', ')} WHERE id=$1 AND revision=$2 RETURNING *`;
      const r = await client.query(sql, [args.id, revision, ...nomes.map(n => campos[n])]);
      if (!r.rows.length) throw new Error('A atividade foi alterada por outro usuário simultaneamente. Atualize os dados e tente novamente.');
      await client.query(
       'INSERT INTO service_activity_audit(activity_id, action, actor, details) VALUES($1, $2, $3, $4)',
-      [args.id, 'updated_via_mcp', auth.ator || 'spark-bot', JSON.stringify({ campos, via: 'mcp' })]
+      [args.id, 'updated_via_mcp', auth.ator || 'spark-bot', JSON.stringify({ campos, ...(args.tags !== undefined ? { tags: args.tags } : {}), via: 'mcp' })]
      );
+     if (args.tags !== undefined) {
+      const autorIa = autorDaIa(auth.ator);
+      await definirTagsDaAtividade(client, { atividadeId: args.id, tagIds: await resolverTags(client, args.tags, autorIa), autor: autorIa });
+     }
      await client.query('COMMIT');
+     const [editada] = await comTags([r.rows[0]]);
      return {
       ok: true,
       mensagem: `Atividade '${r.rows[0].title}' atualizada com sucesso.`,
-      activity: atividadeParaBot(r.rows[0]),
+      activity: editada,
      };
+    } catch (e) {
+     await client.query('ROLLBACK');
+     throw e;
+    } finally {
+     client.release();
+    }
+   }
+
+   case 'listar_tags': {
+    await exigirTags();
+    return (await listarTags(pool, { arquivadas: args.arquivadas === true })).map(tagPublica).map(t => ({
+     id: t.id, slug: t.slug, label: t.label, tone: t.tone, usos: t.uses, arquivada: t.archived,
+     sugerida_pela_ia: t.origin === 'ai' && !t.reviewed, revisada_por: t.reviewed_by,
+    }));
+   }
+
+   case 'criar_tag': {
+    await exigirTags();
+    const client = await pool.connect();
+    try {
+     await client.query('BEGIN');
+     const { tag, criada } = await garantirTag(client, { label: args.label, tone: args.tone, autor: autorDaIa(auth.ator) });
+     await client.query('COMMIT');
+     return {
+      ok: true,
+      criada,
+      mensagem: criada ? `Tag '${tag.label}' criada e marcada como sugerida pela IA.` : `A tag '${tag.label}' já existia: use esta.`,
+      tag: { id: tag.id, slug: tag.slug, label: tag.label, tone: tag.tone, sugerida_pela_ia: tag.origin === 'ai' && !tag.reviewed_at },
+     };
+    } catch (e) {
+     await client.query('ROLLBACK');
+     throw e;
+    } finally {
+     client.release();
+    }
+   }
+
+   case 'revisar_tag': {
+    await exigirTags();
+    const client = await pool.connect();
+    try {
+     await client.query('BEGIN');
+     const achada = args.id && isUuid(args.id)
+      ? (await client.query('SELECT id,revision FROM agenda_tags WHERE id=$1', [args.id])).rows[0]
+      : args.slug ? (await client.query('SELECT id,revision FROM agenda_tags WHERE slug=$1', [String(args.slug).toLowerCase()])).rows[0] : null;
+     if (!achada) throw new Error('Tag não encontrada: informe um id ou slug válido.');
+     if (args.aprovar !== undefined && args.aprovar !== true) throw new Error('A revisão só se aprova: para tirar a tag de circulação, use arquivar.');
+     // A IA não conhece a revisão da tag: lê a que está gravada, dentro da transação, e revisa em cima dela.
+     const tag = await revisarTag(client, {
+      id: achada.id, revision: achada.revision, label: args.label, tone: args.tone,
+      reviewed: args.aprovar === true ? true : undefined, archived: typeof args.arquivar === 'boolean' ? args.arquivar : undefined, autor: autorDaIa(auth.ator),
+     });
+     await client.query('COMMIT');
+     return { ok: true, mensagem: `Tag '${tag.label}' atualizada.`, tag: { id: tag.id, slug: tag.slug, label: tag.label, tone: tag.tone, sugerida_pela_ia: tag.origin === 'ai' && !tag.reviewed_at, arquivada: Boolean(tag.archived_at) } };
     } catch (e) {
      await client.query('ROLLBACK');
      throw e;
