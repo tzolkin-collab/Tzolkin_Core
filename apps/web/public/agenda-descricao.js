@@ -10,6 +10,7 @@
 // são `FERRAMENTAS_DE_BLOCO` (agenda-evento.js) e `BLOCOS` (apps/api/src/platform/markdown-editorjs.mjs).
 // test/unit/descricao-blocos.test.mjs lê as três do fonte e quebra quando divergem.
 import { el } from './agenda-dom.js';
+import { markdownParaEditorJs } from './markdown-editorjs.js';
 
 /** HTML inline do bloco -> nós de verdade. O texto do editor é HTML; a ficha transforma em DOM. */
 const comoNos = html => new DOMParser().parseFromString(html || '', 'text/html').body.childNodes;
@@ -195,6 +196,12 @@ export function paraOEditor(dados) {
  };
 }
 
+/** Markdown em texto puro -> `{ blocks }`, ou null quando não há o que converter (vazio, ou a conversão falhou). */
+const comoMarkdown = texto => {
+ try { const dados = JSON.parse(markdownParaEditorJs(texto) || 'null'); return Array.isArray(dados?.blocks) && dados.blocks.length ? dados : null; }
+ catch { return null; }
+};
+
 /**
  * A descrição inteira. `raw` é a string gravada em service_activities.description: JSON de blocos, ou
  * texto puro do tempo anterior ao editor (que volta como texto, sem fingir que é bloco).
@@ -203,8 +210,13 @@ export function renderDescricao(raw, onToggle = null) {
  if (!raw) return null;
  const container = el('div', null, 'ag-descricao');
  let data;
- try { data = JSON.parse(raw); } catch { container.textContent = raw; return container; }
- if (!data || !Array.isArray(data.blocks)) { container.textContent = raw; return container; }
+ try { data = JSON.parse(raw); } catch { data = null; }
+ if (!data || !Array.isArray(data.blocks)) {
+  // Texto puro (descrição de antes do editor, ou gravada como Markdown por quem não passou pela conversão): desenha como o
+  // Markdown que ele é, em vez de mostrar "**", "- " e "> " crus. Só a ficha converte; o texto guardado e o editor ficam como estão.
+  data = comoMarkdown(raw);
+  if (!data) { container.textContent = raw; return container; }
+ }
  for (const b of data.blocks) {
   const desenho = DESENHOS[b?.type];
   const tipo = String(b?.type ?? 'sem tipo');

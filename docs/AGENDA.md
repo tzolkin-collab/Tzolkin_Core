@@ -233,3 +233,11 @@ de tempo ou vínculos —, o tipo **não troca mais**. Quem precisa de outro tip
 - **Um filtro para cada atributo**, na lateral, todos somados: Cliente (único que consulta o servidor), Situação, **Tipo**, **Contratação** (inclui "Geral da empresa"), **Responsável** e **Tag** (com "Sem responsável" / "Sem tag"; só aparecem com as migrações 060 e 061) e Categorias. O cabeçalho conta quantos estão ativos e **Limpar filtros** zera todos, inclusive a busca.
 - **A busca de texto** olha título, cliente, contratação, local, categoria, tipo, situação, nome do responsável e nomes das tags.
 - Os filtros agem sobre o que já foi carregado para o período; trocar o Cliente recarrega.
+
+## Descrição em Markdown puro aparece formatada na ficha
+
+A descrição é guardada como JSON de blocos do editor, mas pode estar guardada como **texto puro com Markdown** (atividade de antes do editor, ou gravada por quem não passou pela conversão). Antes a ficha mostrava esse texto cru: `**negrito**`, `- item`, `1. passo`, `> citação`, `| tabela |`, `---`. Agora `renderDescricao` (`apps/web/public/agenda-descricao.js`) converte o Markdown em blocos **só na hora de desenhar**: listas (com aninhamento e checklist), títulos, citação, código, tabela, divisória, destaque (`> [!AVISO]`) e as marcas inline.
+
+- O texto guardado **não é alterado** pela ficha, e o **editor continua como estava** (a descrição em texto puro abre como um parágrafo). Só quando alguém marca uma caixa da checklist na ficha a descrição é regravada, já como blocos.
+- Texto sem nenhum Markdown segue como texto comum.
+- O conversor mora em `apps/web/public/markdown-editorjs.js` (o navegador o serve) e a API o reexporta de `apps/api/src/platform/markdown-editorjs.mjs`: uma fonte só.

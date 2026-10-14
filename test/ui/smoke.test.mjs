@@ -2120,6 +2120,43 @@ test('agenda: atividade com conteúdo não troca de tipo (abas travadas, com o m
  semExcecoes();
 });
 
+test('agenda: descrição gravada como Markdown em texto puro aparece formatada na ficha (listas e blocos do "/"), sem símbolos crus', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ const ID = '00000000-0000-4000-8000-000000000003';
+ const md = ['## Pauta', '', 'Texto com **negrito**, *itálico*, `código` e [link](https://exemplo.com)', '', '- item um', '- pai', '  - filho', '1. primeiro', '2. segundo', '', '- [x] feito', '- [ ] a fazer', '', '> citação', '', '| Mês | Valor |', '| --- | --- |', '| Maio | R$ 4.000 |', '', '---', '', '> [!AVISO] Cuidado', '> depende do dono'].join('\n');
+ const guardada = await pagina.avaliar(`${NO_AGENDA}.eventos.find(x => x.id === '${ID}').description`);
+ await pagina.avaliar(`${NO_AGENDA}.eventos.find(x => x.id === '${ID}').description = ${JSON.stringify(md)}`);
+ await RECARREGAR_AGENDA();
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]').click()`);
+ await pagina.esperar(PAINEL_ABERTO);
+ const D = '#peek-agenda .ag-descricao';
+ const contar = seletor => pagina.avaliar(`document.querySelectorAll(${JSON.stringify(D + ' ' + seletor)}).length`);
+ assert.equal(await contar('h2'), 1, 'título virou título');
+ assert.ok(await contar('b') >= 1 && await contar('i') >= 1 && await contar('code') >= 1 && await contar('a[href="https://exemplo.com"]') === 1, 'negrito, itálico, código e link inline');
+ assert.ok(await contar('ul > li') >= 3, 'lista com marcadores');
+ assert.equal(await contar('ul ul > li'), 1, 'o aninhamento (filho) foi preservado');
+ assert.equal(await contar('ol > li'), 2, 'lista numerada');
+ assert.equal(await contar('.ag-desc-checklist input[type="checkbox"]'), 2, 'checklist');
+ assert.equal(await contar('blockquote'), 1, 'citação');
+ assert.equal(await contar('table'), 1, 'tabela');
+ assert.equal(await contar('hr'), 1, 'divisória');
+ assert.equal(await contar('.ag-desc-callout'), 1, 'destaque');
+ const texto = await pagina.avaliar(`document.querySelector(${JSON.stringify(D)}).innerText`);
+ for (const cru of ['**', '## ', '| ---', '[!AVISO]', '](https']) assert.ok(!texto.includes(cru), `símbolo cru na ficha: ${cru}`);
+ await FECHAR_TUDO();
+ // Texto comum (sem Markdown) segue como texto, e o que está guardado não é alterado pela ficha.
+ await pagina.avaliar(`${NO_AGENDA}.eventos.find(x => x.id === '${ID}').description = 'Só uma linha de texto, sem nada especial.'`);
+ await RECARREGAR_AGENDA();
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="${ID}"]').click()`);
+ await pagina.esperar(PAINEL_ABERTO);
+ assert.equal(await pagina.avaliar(`document.querySelector(${JSON.stringify(D)}).innerText.trim()`), 'Só uma linha de texto, sem nada especial.');
+ assert.equal(await pagina.avaliar(`${NO_AGENDA}.eventos.find(x => x.id === '${ID}').description`), 'Só uma linha de texto, sem nada especial.', 'a ficha desenha, não regrava');
+ await FECHAR_TUDO();
+ await pagina.avaliar(`${NO_AGENDA}.eventos.find(x => x.id === '${ID}').description = ${JSON.stringify(guardada)}`);
+ await RECARREGAR_AGENDA();
+ semExcecoes();
+});
+
 test('agenda: ao lado do X, os três modos de janela (centralizado, popup, lateral) valem na hora e ficam para a próxima abertura', { skip: PULAR }, async () => {
  await SEMANA_DE_HOJE();
  await pagina.avaliar(`try { localStorage.removeItem('tzolkin-agenda-janela'); } catch {}`);
@@ -2167,7 +2204,9 @@ test('agenda: o painel do evento mostra os detalhes, conclui, edita só o que mu
  assert.deepEqual(painel.abas.map(t => t.replace(/\d+$/, '')), ['Detalhes', 'Tempo']);
  assert.match(painel.linhas['Quando'], /14:00 – 15:30 \(1 h 30 min\)/);
  assert.equal(painel.linhas['Cliente'], 'Empresa Alfa'); assert.equal(painel.linhas['Categoria'], 'Consultoria'); assert.equal(painel.linhas['Situação'], 'Planejado');
- assert.equal(painel.linhas['Descrição'], 'Pauta:\n1. Metas', 'a descrição mantém as quebras de linha');
+ // Descrição em texto puro com Markdown: "Pauta:" vira parágrafo e "1. Metas" vira item de lista numerada (antes ficava o "1. " cru).
+ assert.equal(painel.linhas['Descrição'], 'Pauta:Metas', 'a descrição mantém as quebras: cada linha em seu bloco');
+ assert.deepEqual(await pagina.avaliar(`({ p: [...document.querySelectorAll('#peek-agenda .ag-descricao > p')].map(x => x.textContent), ol: [...document.querySelectorAll('#peek-agenda .ag-descricao ol > li')].map(x => x.textContent) })`), { p: ['Pauta:'], ol: ['Metas'] }, 'parágrafo e lista numerada de verdade');
  assert.match(painel.link, /href="https:\/\/meet\.google\.com\/abc-defg-hij"/); assert.match(painel.link, /rel="noopener noreferrer"/); assert.match(painel.link, /target="_blank"/);
  assert.ok(!('Local' in painel.linhas), 'campo sem valor não aparece');
  assert.deepEqual(painel.botoes, ['Editar', 'Cancelar atividade', 'Concluir']);
