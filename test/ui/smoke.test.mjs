@@ -998,7 +998,7 @@ function eventosDaSemana() {
 const COM_AGENDA = lista => `(() => {
  const EVENTOS = ${JSON.stringify(lista)};
  // registro começa falso como o banco de hoje: a migração 054 (tipo 'registro', aba Registro) ainda não foi aplicada.
- window.__agenda = { eventos: EVENTOS, gets: [], puts: [], posts: [], tempos: [], recusar: null, semCampos: false, lembretes: false, registro: false, series: [], seriesPosts: [], seriesPuts: [], seriesFins: [], padrao: [15], meet: false, meets: [], meetFalha: false, responsavel: false, responsaveis: [], tagsEstado: false, tags: [], activityTags: {}, tagsPosts: [], tagsPuts: [] };
+ window.__agenda = { eventos: EVENTOS, gets: [], puts: [], posts: [], tempos: [], recusar: null, semCampos: false, lembretes: false, registro: false, series: [], seriesPosts: [], seriesPuts: [], seriesFins: [], padrao: [15], meet: false, meets: [], meetFalha: false, responsavel: false, responsaveis: [], tagsEstado: false, tags: [], activityTags: {}, tagsPosts: [], tagsPuts: [], contratacoes: [] };
  window.__fetchOriginal = window.__fetchOriginal || window.fetch.bind(window);
  const json = (corpo, status = 200) => Promise.resolve(new Response(JSON.stringify(corpo), { status, headers: { 'content-type': 'application/json' } }));
  window.fetch = async (url, opcoes = {}) => {
@@ -1027,7 +1027,7 @@ const COM_AGENDA = lista => `(() => {
    window.__agenda.gets.push({ from: q.get('from'), to: q.get('to'), tenant: q.get('tenant_id') });
    const de = Date.parse(q.get('from') + 'T00:00:00-03:00'), ate = Date.parse(q.get('to') + 'T00:00:00-03:00');
    const dentro = EVENTOS.filter(e => Date.parse(e.ends_at) > de && Date.parse(e.starts_at) < ate && (!q.get('tenant_id') || e.tenant_id === q.get('tenant_id')));
-   return json({ activities: dentro.map(e => ({ ...e })), logs: [], engagements: [], truncated: false, time_zone: 'America/Sao_Paulo', agenda_campos: !window.__agenda.semCampos, agenda_lembretes: window.__agenda.lembretes, agenda_registro: window.__agenda.registro, agenda_responsavel: window.__agenda.responsavel, responsaveis: window.__agenda.responsaveis, agenda_tags: window.__agenda.tagsEstado, tags: window.__agenda.tags, activity_tags: window.__agenda.activityTags, series: window.__agenda.lembretes ? window.__agenda.series : [], agenda_prefs: window.__agenda.lembretes ? { default_reminders: window.__agenda.padrao, revision: 1 } : null, google_meet: window.__agenda.meet });
+   return json({ activities: dentro.map(e => ({ ...e })), logs: [], engagements: window.__agenda.contratacoes || [], truncated: false, time_zone: 'America/Sao_Paulo', agenda_campos: !window.__agenda.semCampos, agenda_lembretes: window.__agenda.lembretes, agenda_registro: window.__agenda.registro, agenda_responsavel: window.__agenda.responsavel, responsaveis: window.__agenda.responsaveis, agenda_tags: window.__agenda.tagsEstado, tags: window.__agenda.tags, activity_tags: window.__agenda.activityTags, series: window.__agenda.lembretes ? window.__agenda.series : [], agenda_prefs: window.__agenda.lembretes ? { default_reminders: window.__agenda.padrao, revision: 1 } : null, google_meet: window.__agenda.meet });
   }
   if (partes[3] === 'series') {
    const a = window.__agenda;
@@ -1965,6 +1965,158 @@ test('agenda: tags só com a migração 061; escolhe as que existem, cria as nov
  assert.deepEqual(painel, ['Revisão Técnica', 'Pendente IA']);
  await FECHAR_TUDO();
  await pagina.avaliar(`${NO_AGENDA}.tagsEstado = false; ${NO_AGENDA}.tags = []; ${NO_AGENDA}.activityTags = {}`); await RECARREGAR_AGENDA();
+ semExcecoes();
+});
+
+// ---- Lista (visão Agenda): "Hoje" mostra só hoje; o alcance alarga; cada atributo da atividade tem o seu filtro ----
+const DIA_E_HORA = (n, hhmm) => `${AM.somarDias(AM.diaDe(Date.now()), n)}T${hhmm}:00-03:00`;
+const TITULOS_NA_LISTA = prefixo => `[...document.querySelectorAll('#view-tracking .ag-linha-titulo')].map(t => t.textContent).filter(t => t.startsWith(${JSON.stringify(prefixo)})).sort()`;
+const EM_AGENDA_COM = async (eventos, ajustes = '') => {
+ await pagina.avaliar(`(() => { const a = ${NO_AGENDA}; ${ajustes}; a.eventos.push(...${JSON.stringify(eventos)}); })()`);
+};
+const TIRAR_DA_AGENDA = ids => pagina.avaliar(`(() => { const a = ${NO_AGENDA}; for (const id of ${JSON.stringify(ids)}) { const i = a.eventos.findIndex(e => e.id === id); if (i >= 0) a.eventos.splice(i, 1); } })()`);
+const BASE_DE_FILTRO = { tenant_id: EMPRESA, tenant_name: 'Empresa Alfa', engagement_id: null, engagement_label: null, status: 'planned', revision: 1, category: 'outro' };
+
+test('agenda (lista): "Hoje" mostra só hoje, e o seletor de dias alarga para 7 e para 31', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ const id = n => `00000000-0000-4000-8000-0000000002${String(n).padStart(2, '0')}`;
+ const base = { ...BASE_DE_FILTRO, kind: 'tarefa' };
+ await EM_AGENDA_COM([
+  { ...base, id: id(1), title: 'Alcance Hoje', starts_at: DIA_E_HORA(0, '12:00'), ends_at: DIA_E_HORA(0, '12:30') },
+  { ...base, id: id(2), title: 'Alcance Amanhã', starts_at: DIA_E_HORA(1, '12:00'), ends_at: DIA_E_HORA(1, '12:30') },
+  { ...base, id: id(3), title: 'Alcance Em 10 dias', starts_at: DIA_E_HORA(10, '12:00'), ends_at: DIA_E_HORA(10, '12:30') },
+ ]);
+ const antes = await pagina.avaliar(`${NO_AGENDA}.gets.length`);
+ await pagina.avaliar(`${BOTAO_VISAO('agenda')}.click()`);
+ await pagina.esperar(`${NO_AGENDA}.gets.length > ${antes} && ${VISAO_ATIVA} === 'agenda' && !document.querySelector('#view-tracking [aria-busy]') && document.querySelector('#view-tracking .ag-lista')`, { descricao: 'lista aberta' });
+ const ALCANCE = n => `document.querySelector('#view-tracking .ag-alcances button[data-alcance="${n}"]')`;
+ assert.equal(await pagina.avaliar(`document.querySelector('#view-tracking .ag-alcances').hidden`), false, 'o seletor aparece na lista');
+ const hoje = AM.diaDe(Date.now());
+ const irAlcance = async n => {
+  if (await pagina.avaliar(`${ALCANCE(n)}.getAttribute('aria-pressed') === 'true'`)) return;   // já está nele: o clique não faz nada
+  const c = await pagina.avaliar(`${NO_AGENDA}.gets.length`);
+  await pagina.avaliar(`${ALCANCE(n)}.click()`);
+  await pagina.esperar(`${NO_AGENDA}.gets.length > ${c} && ${ALCANCE(n)}.getAttribute('aria-pressed') === 'true' && !document.querySelector('#view-tracking [aria-busy]')`, { descricao: `alcance ${n}` });
+ };
+ // Sem mexer em nada, a lista é a de sempre (31 dias): os três aparecem.
+ await irAlcance(31);
+ assert.deepEqual(await pagina.avaliar(TITULOS_NA_LISTA('Alcance')), ['Alcance Amanhã', 'Alcance Em 10 dias', 'Alcance Hoje']);
+ // "Hoje" na lista = SÓ hoje (era: hoje + 30 dias).
+ const c = await pagina.avaliar(`${NO_AGENDA}.gets.length`);
+ await pagina.avaliar(`[...document.querySelectorAll('#view-tracking .ag-hoje')][0].click()`);
+ await pagina.esperar(`${NO_AGENDA}.gets.length > ${c} && ${ALCANCE(1)}.getAttribute('aria-pressed') === 'true' && !document.querySelector('#view-tracking [aria-busy]')`, { descricao: 'Hoje na lista' });
+ assert.deepEqual(await pagina.avaliar(TITULOS_NA_LISTA('Alcance')), ['Alcance Hoje'], 'só o que é de hoje');
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#view-tracking .ag-grupo')].map(g => g.dataset.dia)`), [hoje], 'um único dia na lista');
+ assert.match(await pagina.avaliar(`document.querySelector('#view-tracking .ag-titulo').textContent`), /hoje|\d{4}/i, 'o título é o do dia, não o de uma faixa de 31 dias');
+ assert.equal((await pagina.avaliar(`document.querySelector('#view-tracking .ag-titulo').textContent`)).includes('–'), false, 'o título do dia não é uma faixa');
+ await irAlcance(7);
+ assert.deepEqual(await pagina.avaliar(TITULOS_NA_LISTA('Alcance')), ['Alcance Amanhã', 'Alcance Hoje'], '7 dias: sem o de daqui a 10');
+ await irAlcance(31);
+ assert.deepEqual(await pagina.avaliar(TITULOS_NA_LISTA('Alcance')), ['Alcance Amanhã', 'Alcance Em 10 dias', 'Alcance Hoje']);
+ // Fora da lista o seletor some, e a tecla t também leva só a hoje quando se está nela.
+ await pagina.avaliar(`${BOTAO_VISAO('semana')}.click()`);
+ await pagina.esperar(`${VISAO_ATIVA} === 'semana'`);
+ assert.equal(await pagina.avaliar(`document.querySelector('#view-tracking .ag-alcances').hidden`), true, 'o seletor some fora da lista');
+ await TIRAR_DA_AGENDA([id(1), id(2), id(3)]);
+ await SEMANA_DE_HOJE();
+ semExcecoes();
+});
+
+test('agenda (lista): um filtro para cada atributo (tipo, contratação, responsável, tag, texto) e "Limpar filtros" zera todos', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ const id = n => `00000000-0000-4000-8000-0000000003${String(n).padStart(2, '0')}`;
+ const base = { ...BASE_DE_FILTRO };
+ const tUrgente = { id: 't-urgente', label: 'Urgente', tone: 'danger', origin: 'person', reviewed: true, archived: false, revision: 1 };
+ const tRotina = { id: 't-rotina', label: 'Rotina', tone: 'neutral', origin: 'person', reviewed: true, archived: false, revision: 1 };
+ const eventos = [
+  { ...base, id: id(1), title: 'Filtro Um', kind: 'sessao', responsible_id: 'r-ana', engagement_id: 'e-1', engagement_label: 'Mentoria Alfa', starts_at: DIA_E_HORA(1, '12:00'), ends_at: DIA_E_HORA(1, '12:30') },
+  { ...base, id: id(2), title: 'Filtro Dois', kind: 'tarefa', responsible_id: 'r-beto', starts_at: DIA_E_HORA(1, '13:00'), ends_at: DIA_E_HORA(1, '13:30') },
+  { ...base, id: id(3), title: 'Filtro Tres', kind: 'tarefa', engagement_id: 'e-1', engagement_label: 'Mentoria Alfa', starts_at: DIA_E_HORA(2, '12:00'), ends_at: DIA_E_HORA(2, '12:30') },
+ ];
+ await EM_AGENDA_COM(eventos, `a.responsavel = true; a.responsaveis = [{ id: 'r-ana', name: 'Ana Souza' }, { id: 'r-beto', name: 'Beto Lima' }]; a.tagsEstado = true; a.tags = ${JSON.stringify([tUrgente, tRotina])}; a.activityTags = { '${id(1)}': [${JSON.stringify(tUrgente)}], '${id(2)}': [${JSON.stringify(tRotina)}] }; a.contratacoes = [{ id: 'e-1', tenant_id: '${EMPRESA}', label: 'Mentoria Alfa' }]`);
+ const antes = await pagina.avaliar(`${NO_AGENDA}.gets.length`);
+ await pagina.avaliar(`${BOTAO_VISAO('agenda')}.click()`);
+ await pagina.esperar(`${NO_AGENDA}.gets.length > ${antes} && ${VISAO_ATIVA} === 'agenda' && !document.querySelector('#view-tracking [aria-busy]') && document.querySelector('#view-tracking .ag-lista')`, { descricao: 'lista aberta' });
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-alcances button[data-alcance="31"]').click()`);
+ await pagina.esperar(`!document.querySelector('#view-tracking [aria-busy]') && document.querySelector('#view-tracking .ag-alcances button[data-alcance="31"]').getAttribute('aria-pressed') === 'true'`);
+
+ const FILTRO = rotulo => `[...document.querySelectorAll('#view-tracking .ag-filtros label')].find(l => l.firstChild?.textContent.trim() === ${JSON.stringify(rotulo)})?.querySelector('select')`;
+ const escolher = async (rotulo, valor) => { await pagina.avaliar(`(() => { const c = ${FILTRO(rotulo)}; c.value = ${JSON.stringify(valor)}; c.dispatchEvent(new Event('change', { bubbles: true })); })()`); };
+ const titulos = () => pagina.avaliar(TITULOS_NA_LISTA('Filtro'));
+ const TODOS = ['Filtro Dois', 'Filtro Tres', 'Filtro Um'];
+ const rotulosDoFiltro = await pagina.avaliar(`[...document.querySelectorAll('#view-tracking .ag-filtros label')].map(l => l.firstChild?.textContent.trim())`);
+ for (const r of ['Cliente', 'Situação', 'Tipo', 'Contratação', 'Responsável', 'Tag']) assert.ok(rotulosDoFiltro.includes(r), `falta o filtro ${r}: ${rotulosDoFiltro}`);
+ assert.deepEqual(await titulos(), TODOS);
+
+ await escolher('Tipo', 'call'); assert.deepEqual(await titulos(), ['Filtro Um'], 'Tipo: Call');
+ await escolher('Tipo', 'task'); assert.deepEqual(await titulos(), ['Filtro Dois', 'Filtro Tres'], 'Tipo: Task');
+ await escolher('Tipo', '');
+ await escolher('Contratação', 'e-1'); assert.deepEqual(await titulos(), ['Filtro Tres', 'Filtro Um'], 'Contratação escolhida');
+ await escolher('Contratação', '__nenhum'); assert.deepEqual(await titulos(), ['Filtro Dois'], 'Geral da empresa (sem contratação)');
+ await escolher('Contratação', '');
+ await escolher('Responsável', 'r-beto'); assert.deepEqual(await titulos(), ['Filtro Dois'], 'Responsável');
+ await escolher('Responsável', '__nenhum'); assert.deepEqual(await titulos(), ['Filtro Tres'], 'Sem responsável');
+ await escolher('Responsável', '');
+ await escolher('Tag', 't-urgente'); assert.deepEqual(await titulos(), ['Filtro Um'], 'Tag');
+ await escolher('Tag', '__nenhum'); assert.deepEqual(await titulos(), ['Filtro Tres'], 'Sem tag');
+ await escolher('Tag', '');
+ // Filtros se somam: Task + com a contratação -> só a Tres.
+ await escolher('Tipo', 'task'); await escolher('Contratação', 'e-1');
+ assert.deepEqual(await titulos(), ['Filtro Tres'], 'filtros somados');
+ assert.match(await pagina.avaliar(`document.querySelector('#view-tracking .ag-filtros-det summary').textContent`), /2 ativos/);
+ // O texto olha também o nome do responsável e as tags (que não estão no título).
+ const buscar = async t => { await pagina.avaliar(`(() => { const i = document.querySelector('#view-tracking .ag-busca input'); i.value = ${JSON.stringify(t)}; i.dispatchEvent(new Event('input', { bubbles: true })); })()`); };
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-limpar-filtros').click()`);
+ assert.deepEqual(await titulos(), TODOS, 'Limpar filtros zera tudo');
+ assert.equal(await pagina.avaliar(`document.querySelector('#view-tracking .ag-busca input').value`), '', 'e a busca');
+ assert.equal(await pagina.avaliar(`!!document.querySelector('#view-tracking .ag-limpar-filtros')`), false, 'sem filtro ativo, sem o botão');
+ await buscar('ana souza'); assert.deepEqual(await titulos(), ['Filtro Um'], 'busca pelo nome do responsável');
+ await buscar('rotina'); assert.deepEqual(await titulos(), ['Filtro Dois'], 'busca pelo nome da tag');
+ await buscar('call'); assert.deepEqual(await titulos(), ['Filtro Um'], 'busca pelo tipo');
+ await pagina.avaliar(`document.querySelector('#view-tracking .ag-limpar-filtros').click()`);
+
+ await pagina.avaliar(`(() => { const a = ${NO_AGENDA}; a.responsavel = false; a.responsaveis = []; a.tagsEstado = false; a.tags = []; a.activityTags = {}; a.contratacoes = []; })()`);
+ await TIRAR_DA_AGENDA(eventos.map(e => e.id));
+ await SEMANA_DE_HOJE();
+ semExcecoes();
+});
+
+test('agenda: atividade com conteúdo não troca de tipo (abas travadas, com o motivo); sem conteúdo troca', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ const vazia = { ...BASE_DE_FILTRO, id: '00000000-0000-4000-8000-000000000401', title: 'Tipo Livre', kind: 'tarefa', starts_at: DIA_E_HORA(0, '12:00'), ends_at: DIA_E_HORA(0, '12:30'), description: '{"time":1,"blocks":[],"version":"2.30.6"}' };
+ await EM_AGENDA_COM([vazia]);
+ await RECARREGAR_AGENDA();
+ const abrirEdicao = async id => {
+  await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="${id}"]').click()`);
+  await pagina.esperar(PAINEL_ABERTO);
+  await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda footer button')].find(b => b.textContent.trim() === 'Editar').click()`);
+  await pagina.esperar(`document.querySelector('dialog.tracking-editor[open] [role="tab"]')`);
+ };
+ const ABAS = `[...document.querySelectorAll('dialog.tracking-editor [role="tab"]')]`;
+ // Sem conteúdo (descrição só com a casca vazia do editor): troca livre.
+ await abrirEdicao(vazia.id);
+ assert.deepEqual(await pagina.avaliar(`${ABAS}.map(b => b.disabled)`), [false, false], 'sem conteúdo, as abas ficam livres');
+ assert.equal(await pagina.avaliar(`!!document.querySelector('dialog.tracking-editor .ag-tipo-travado')`), false);
+ await pagina.avaliar(`${ABAS}.find(b => b.textContent.trim() === 'Call').click()`);
+ assert.equal(await pagina.avaliar(`${ABAS}.find(b => b.textContent.trim() === 'Call').getAttribute('aria-selected')`), 'true', 'a troca acontece');
+ await FECHAR_TUDO();
+ await SEMANA_DE_HOJE();
+ // Com conteúdo (a Consultoria Beta tem descrição e link da reunião): as outras abas ficam travadas, com o motivo.
+ await abrirEdicao('00000000-0000-4000-8000-000000000003');
+ const estado = await pagina.avaliar(`${ABAS}.map(b => ({ nome: b.textContent.trim(), ativa: b.getAttribute('aria-selected') === 'true', travada: b.disabled, titulo: b.title }))`);
+ assert.deepEqual(estado.filter(a => a.ativa).map(a => a.nome), ['Call']);
+ assert.ok(estado.filter(a => !a.ativa).length >= 1 && estado.filter(a => !a.ativa).every(a => a.travada && /não muda/.test(a.titulo)), 'as outras abas travadas, com o motivo');
+ const aviso = await pagina.avaliar(`document.querySelector('dialog.tracking-editor .ag-tipo-travado')?.textContent`);
+ assert.match(aviso, /descrição/); assert.match(aviso, /link da reunião/);
+ await pagina.avaliar(`${ABAS}.find(b => b.textContent.trim() === 'Task').click()`);
+ assert.equal(await pagina.avaliar(`${ABAS}.find(b => b.getAttribute('aria-selected') === 'true').textContent.trim()`), 'Call', 'clicar numa aba travada não troca o tipo');
+ await FECHAR_TUDO();
+ // Atividade nova: as três abas livres.
+ await ABRIR_NOVA();
+ assert.equal(await pagina.avaliar(`${ABAS}.some(b => b.disabled)`), false);
+ await FECHAR_TUDO();
+ await TIRAR_DA_AGENDA([vazia.id]);
+ await SEMANA_DE_HOJE();
  semExcecoes();
 });
 

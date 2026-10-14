@@ -28,7 +28,7 @@ const limitar = (n, a, b) => Math.min(Math.max(n, a), b);
 export function setupTracking({ api, openTenant }) {
  const host = document.getElementById('view-tracking');
  const celular = window.matchMedia('(max-width:700px)');
- const estado = { visao: visaoInicial() || lerVisao() || (celular.matches ? 'dia' : 'semana'), dia: hoje(), miniMes: hoje(), fim: null, tenant: '', texto: '', categorias: new Set(), status: '' };
+ const estado = { visao: visaoInicial() || lerVisao() || (celular.matches ? 'dia' : 'semana'), dia: hoje(), miniMes: hoje(), fim: null, tenant: '', texto: '', categorias: new Set(), status: '', alcance: M.ALCANCE_PADRAO, aba: '', engagement: '', responsavel: '', tag: '' };
  let dados = null, eventos = [], tenants = [], pessoas = [], geracao = 0, aviso = '', rolagem = null, relogio = 0, suprimirClique = false, filtrosAbertos = false;
  const compacta = window.matchMedia('(max-width:1100px)');   // abaixo disso a lateral some e os filtros viram um bloco recolhível
  const salvando = new Set();
@@ -46,13 +46,22 @@ export function setupTracking({ api, openTenant }) {
  });
 
  // ---------- dados ----------
- const visiveis = () => M.filtrar(eventos, { texto: estado.texto, categorias: estado.categorias, status: estado.status });
+ // Todos os filtros somados (E). `sem` tira um deles: a contagem de cada categoria ignora o filtro de categoria, como sempre foi.
+ const nomeDoResponsavel = id => (dados?.responsaveis || []).find(r => r.id === id)?.name || (dados?.responsaveis || []).find(r => r.id === id)?.email || '';
+ const criterios = (sem = '') => ({
+  texto: estado.texto, status: estado.status, aba: estado.aba, engagement: estado.engagement, responsavel: estado.responsavel, tag: estado.tag,
+  categorias: sem === 'categorias' ? null : estado.categorias,
+  tagsDe: e => (dados?.activity_tags?.[e.id] || []).map(t => t.id),
+  textoExtra: e => [nomeDoResponsavel(e.responsible_id), ...(dados?.activity_tags?.[e.id] || []).map(t => t.label)].join(' '),
+ });
+ const visiveis = () => M.filtrar(eventos, criterios());
+ const filtrosAtivos = () => (estado.tenant ? 1 : 0) + (estado.status ? 1 : 0) + (estado.categorias.size ? 1 : 0) + (estado.aba ? 1 : 0) + (estado.engagement ? 1 : 0) + (estado.responsavel ? 1 : 0) + (estado.tag ? 1 : 0) + (estado.texto.trim() ? 1 : 0);
 
  async function carregar({ silencioso = false } = {}) {
   const ticket = ++geracao;
   if (!dados) host.replaceChildren(el('p', 'Carregando acompanhamento…', 'empty-list'));
   else if (!silencioso) host.setAttribute('aria-busy', 'true');
-  const j = M.janela(estado.visao, estado.dia, estado.fim);
+  const j = M.janela(estado.visao, estado.dia, estado.fim, estado.alcance);
   const filtro = new URLSearchParams({ from: j.from, to: j.to, ...(estado.tenant ? { tenant_id: estado.tenant } : {}) });
   try {
    const [resposta, diretorio] = await Promise.all([api('/api/tracking?' + filtro), tenants.length ? null : api('/api/overview')]);
@@ -71,20 +80,23 @@ export function setupTracking({ api, openTenant }) {
 
  /** Um passo para trás/frente: o período livre anda do tamanho dele; as demais visões, o passo de sempre. */
  const andar = sentido => {
-  if (estado.visao !== 'periodo') return { dia: M.navegar(estado.visao, estado.dia, sentido) };
+  if (estado.visao !== 'periodo') return { dia: M.navegar(estado.visao, estado.dia, sentido, estado.alcance) };
   const n = M.intervalo(estado.dia, estado.fim).length;
   return { visao: 'periodo', dia: M.somarDias(estado.dia, n * sentido), fim: M.somarDias(estado.fim, n * sentido) };
  };
  /** Período livre (mini-calendário): de `dia` até `fim`, inclusive. Qualquer outra navegação sai dele. */
- function irPara({ dia = estado.dia, visao = estado.visao, fim = null } = {}) {
+ function irPara({ dia = estado.dia, visao = estado.visao, fim = null, alcance = estado.alcance } = {}) {
   const mudouVisao = visao !== estado.visao;
   if (visao === 'periodo') { if (fim && fim < dia) [dia, fim] = [fim, dia]; if (!fim || fim === dia) { visao = 'dia'; fim = null; } else fim = M.somarDias(dia, Math.min(M.intervalo(dia, fim).length, M.MAX_PERIODO) - 1); } else fim = null;
-  estado.dia = dia; estado.visao = visao; estado.fim = fim; estado.miniMes = M.primeiroDoMes(dia); aviso = '';
+  estado.dia = dia; estado.visao = visao; estado.fim = fim; estado.alcance = M.alcanceValido(alcance); estado.miniMes = M.primeiroDoMes(dia); aviso = '';
   if (mudouVisao && visao !== 'periodo') guardarVisao(visao);
   rolagem = null;
   desenharTopo(); desenharLateral();
   carregar();
  }
+
+ /** "Hoje": na visão Agenda (lista) mostra SÓ hoje — antes mostrava 31 dias a partir dele. O seletor de alcance alarga de novo. */
+ const irParaHoje = () => irPara({ dia: hoje(), ...(estado.visao === 'agenda' ? { alcance: 1 } : {}) });
 
  // ---------- edição ----------
  // `extra.aviso`: algo que deu errado DEPOIS de salvar (a sala do Meet, por exemplo): a atividade existe, e a pessoa precisa saber do resto.
@@ -134,8 +146,8 @@ export function setupTracking({ api, openTenant }) {
   const proximo = botao('', 'arrow', () => irPara(andar(1)), 'quiet ag-icone');
   const rotulos = { dia: ['Dia anterior', 'Próximo dia'], semana: ['Semana anterior', 'Próxima semana'], mes: ['Mês anterior', 'Próximo mês'], agenda: ['Período anterior', 'Próximo período'], periodo: ['Período anterior', 'Próximo período'] }[estado.visao];
   for (const [b, r] of [[anterior, rotulos[0]], [proximo, rotulos[1]]]) { b.setAttribute('aria-label', r); b.title = r; }
-  const titulo = el('h2', maiuscula(M.titulo(estado.visao, estado.dia, estado.fim ?? estado.dia)), 'ag-titulo'); titulo.setAttribute('aria-live', 'polite');
-  nav.append(botao('Hoje', null, () => irPara({ dia: hoje() }), 'secondary ag-hoje'), anterior, proximo, titulo);
+  const titulo = el('h2', maiuscula(M.titulo(estado.visao, estado.dia, estado.fim ?? estado.dia, estado.alcance)), 'ag-titulo'); titulo.setAttribute('aria-live', 'polite');
+  nav.append(botao('Hoje', null, irParaHoje, 'secondary ag-hoje'), anterior, proximo, titulo);
 
   const acoes = el('div', null, 'ag-acoes');
   const busca = el('label', null, 'ag-busca');
@@ -149,12 +161,25 @@ export function setupTracking({ api, openTenant }) {
    b.onclick = () => { if (v !== estado.visao) irPara({ visao: v }); };
    visoes.append(b);
   }
+  const alcances = el('div', null, 'ag-alcances'); alcances.setAttribute('role', 'group'); alcances.setAttribute('aria-label', 'Quantos dias mostrar'); alcances.hidden = estado.visao !== 'agenda';
+  for (const n of M.ALCANCES) {
+   const b = el('button', M.ROTULO_DO_ALCANCE[n]); b.type = 'button'; b.dataset.alcance = String(n); b.setAttribute('aria-pressed', String(n === estado.alcance));
+   b.onclick = () => { if (n !== estado.alcance) irPara({ alcance: n }); };
+   alcances.append(b);
+  }
   const ajuda = botao('?', null, ajudaDeAtalhos, 'quiet ag-icone ag-ajuda-botao'); ajuda.setAttribute('aria-label', 'Atalhos do teclado'); ajuda.title = 'Atalhos do teclado (?)';
-  acoes.append(busca, visoes, ajuda, botao('Nova atividade', 'plus', () => novo(), 'primary'));
+  acoes.append(busca, visoes, alcances, ajuda, botao('Nova atividade', 'plus', () => novo(), 'primary'));
   topo.append(nav, acoes);
  }
 
  // ---------- lateral: mini-calendário e filtros ----------
+ /** Zera todos os filtros (inclusive a busca de texto) e recarrega: o Cliente é o único que muda o que vem do servidor. */
+ function limparFiltros() {
+  const mudouCliente = Boolean(estado.tenant);
+  Object.assign(estado, { tenant: '', texto: '', categorias: new Set(), status: '', aba: '', engagement: '', responsavel: '', tag: '' });
+  if (partes.entrada) partes.entrada.value = '';
+  if (mudouCliente) carregar(); else { desenharPrincipal(); desenharLateral(); }
+ }
  let suprimirMini = false;
  function ligarIntervalo(grade) {
   grade.addEventListener('pointerdown', ev => {
@@ -197,13 +222,24 @@ export function setupTracking({ api, openTenant }) {
 
   const filtros = el('section', null, 'ag-filtros'); filtros.setAttribute('aria-label', 'Filtros');
   const cliente = campo(filtros, 'Cliente', 'text', [['', 'Todos os clientes'], ...tenants.map(t => [t.id, t.name])]); cliente.value = estado.tenant;
-  cliente.onchange = () => { estado.tenant = cliente.value; carregar(); };
+  cliente.onchange = () => { estado.tenant = cliente.value; estado.engagement = ''; carregar(); };   // a contratação escolhida era de outro cliente
   const situacao = campo(filtros, 'Situação', 'text', [['', 'Todas'], ['planned', M.ROTULOS.planned], ['done', M.ROTULOS.done], ['cancelled', M.ROTULOS.cancelled]]); situacao.value = estado.status;
   situacao.onchange = () => { estado.status = situacao.value; desenharPrincipal(); desenharLateral(); };
+  // Um filtro para cada coluna/atributo da atividade. Todos locais: filtram o que já foi carregado (só o Cliente vai ao servidor).
+  const aoMudar = (chave, controle) => { controle.onchange = () => { estado[chave] = controle.value; desenharPrincipal(); desenharLateral(); }; };
+  const tipo = campo(filtros, 'Tipo', 'text', [['', 'Todos os tipos'], ...M.ABAS.filter(a => a !== 'registro' || dados.agenda_registro === true).map(a => [a, M.ROTULO_DA_ABA[a]])]); tipo.value = estado.aba; aoMudar('aba', tipo);
+  const doCliente = (dados.engagements || []).filter(e => !estado.tenant || e.tenant_id === estado.tenant);
+  const contratacao = campo(filtros, 'Contratação', 'text', [['', 'Todas'], [M.SEM_VALOR, 'Geral da empresa (sem contratação)'], ...doCliente.map(e => [e.id, e.label])]); contratacao.value = estado.engagement; aoMudar('engagement', contratacao);
+  if (dados.agenda_responsavel) {
+   const quem = campo(filtros, 'Responsável', 'text', [['', 'Todos'], [M.SEM_VALOR, 'Sem responsável'], ...(dados.responsaveis || []).map(r => [r.id, r.name || r.email])]); quem.value = estado.responsavel; aoMudar('responsavel', quem);
+  }
+  if (dados.agenda_tags) {
+   const qual = campo(filtros, 'Tag', 'text', [['', 'Todas'], [M.SEM_VALOR, 'Sem tag'], ...(dados.tags || []).filter(t => !t.archived).map(t => [t.id, t.label])]); qual.value = estado.tag; aoMudar('tag', qual);
+  }
 
   const cats = el('fieldset', null, 'ag-categorias'); cats.append(el('legend', 'Categorias'));
   const contagem = {};
-  for (const e of M.filtrar(eventos, { texto: estado.texto, status: estado.status })) contagem[e.category] = (contagem[e.category] || 0) + 1;
+  for (const e of M.filtrar(eventos, criterios('categorias'))) contagem[e.category] = (contagem[e.category] || 0) + 1;
   for (const c of M.CATEGORIAS) {
    const linha = el('label', null, 'ag-categoria');
    const caixa = el('input'); caixa.type = 'checkbox'; caixa.checked = !estado.categorias.size || estado.categorias.has(c); caixa.dataset.categoria = c;
@@ -219,8 +255,9 @@ export function setupTracking({ api, openTenant }) {
   }
   filtros.append(cats);
   // Telas pequenas: os filtros ficam recolhidos para o calendário aparecer logo. No desktop o bloco fica aberto e sem título.
-  const ativos = (estado.tenant ? 1 : 0) + (estado.status ? 1 : 0) + (estado.categorias.size ? 1 : 0);
+  const ativos = filtrosAtivos();
   const bloco = el('details', null, 'ag-filtros-det');
+  if (ativos) filtros.append(botao('Limpar filtros', null, limparFiltros, 'quiet ag-limpar-filtros'));
   bloco.append(el('summary', 'Filtros' + (ativos ? ` · ${ativos} ativo${ativos > 1 ? 's' : ''}` : '')), filtros);
   bloco.open = !compacta.matches || filtrosAbertos;
   bloco.addEventListener('toggle', () => { if (compacta.matches) filtrosAbertos = bloco.open; });
@@ -486,7 +523,7 @@ export function setupTracking({ api, openTenant }) {
 
  // ---------- visão Agenda (lista) ----------
  function desenharAgenda(lista) { setTimeout(atualizarSelecaoVisual, 0);
-  const j = estado.visao === 'periodo' ? M.janela('periodo', estado.dia, estado.fim) : M.janela('agenda', estado.dia);
+  const j = estado.visao === 'periodo' ? M.janela('periodo', estado.dia, estado.fim) : M.janela('agenda', estado.dia, estado.dia, estado.alcance);
   const grupos = M.agruparPorDia(lista, j.from, j.to);
   const raiz = el('div', null, 'ag-lista'); raiz.setAttribute('role', 'region'); raiz.setAttribute('aria-label', 'Agenda em lista');
   if (!grupos.length) {
@@ -574,7 +611,7 @@ export function setupTracking({ api, openTenant }) {
   if (digitando || document.querySelector('dialog[open]') || painel.aberto()) return;
   const k = ev.key.toLowerCase();
   const visoes = { d: 'dia', w: 'semana', m: 'mes', a: 'agenda' };
-  if (k === 't') irPara({ dia: hoje() });
+  if (k === 't') irParaHoje();
   else if (visoes[k]) irPara({ visao: visoes[k] });
   else if (k === 'arrowleft') irPara(andar(-1));
   else if (k === 'arrowright' || k === 'n' || k === 'j') irPara(andar(1));
@@ -590,10 +627,10 @@ export function setupTracking({ api, openTenant }) {
   geracao++; clearInterval(relogio); painel.fechar(); toast = null; clearTimeout(toastTimer);
   host.replaceChildren();
   dados = null; eventos = []; tenants = []; aviso = ''; rolagem = null;
-  Object.assign(estado, { tenant: '', texto: '', categorias: new Set(), status: '', dia: hoje(), miniMes: hoje() });
+  Object.assign(estado, { tenant: '', texto: '', categorias: new Set(), status: '', aba: '', engagement: '', responsavel: '', tag: '', alcance: M.ALCANCE_PADRAO, dia: hoje(), miniMes: hoje() });
   for (const k of Object.keys(partes)) partes[k] = null; selecionados.clear(); ultimaSelecaoId = null; hoveredEventId = null;
  };
  // Chegada pela ficha da empresa: semana corrente, filtrada por ela, sem busca nem situação herdadas.
- const focar = tenantId => { Object.assign(estado, { tenant: tenantId || '', dia: hoje(), miniMes: hoje(), texto: '', status: '', categorias: new Set() }); };
+ const focar = tenantId => { Object.assign(estado, { tenant: tenantId || '', dia: hoje(), miniMes: hoje(), texto: '', status: '', categorias: new Set(), aba: '', engagement: '', responsavel: '', tag: '' }); };
  return { load: carregar, clear: limpar, focus: focar };
 }

@@ -817,6 +817,16 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
    label: 'Tipo da atividade', prefix: prefixo, panelId: form.id,
    onChange: chave => { aba = chave; sincronizarAba(); },
   });
+  // Atividade com conteúdo não troca de tipo (o servidor também recusa): as outras abas ficam desativadas e dizem por quê.
+  const conteudoDoTipo = evento ? M.conteudoDaAtividade(evento, { logs: (dados.logs || []).filter(l => l.activity_id === evento.id), links: (dados.links || []).filter(l => l.activity_id === evento.id) }) : [];
+  if (conteudoDoTipo.length) {
+   const motivo = `O tipo não muda depois que a atividade tem conteúdo (${conteudoDoTipo.join(', ')}). Crie outra atividade do tipo que você quer.`;
+   for (const b of abasHost.querySelectorAll('[role="tab"]')) {
+    if (b.getAttribute('aria-selected') === 'true') continue;
+    b.disabled = true; b.setAttribute('aria-disabled', 'true'); b.title = motivo; b.dataset.travada = '';
+   }
+   abasHost.append(el('p', motivo, 'detail ag-tipo-travado'));
+  }
   if (!comRegistro) abasHost.append(el('p', 'Registro fica disponível quando a atualização do banco (migração 054) for aplicada.', 'detail'));
 
   // Valores iniciais

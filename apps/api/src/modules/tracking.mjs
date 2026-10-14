@@ -2,6 +2,7 @@ import {json,input,isUuid,fail} from '../platform/http.mjs';
 import {activityInput,activityUpdateInput,timeInput,trackingRange,OPCIONAIS} from '../platform/tracking-model.mjs';
 import {criarDetector,criarDetectorRegistro,criarDetectorVinculos,criarDetectorResponsavel,MENSAGEM_047,MENSAGEM_048,MENSAGEM_054,MENSAGEM_060} from '../platform/agenda-recursos.mjs';
 import {notificarPessoa} from './push.mjs';
+import {exigirTipoLivre} from '../platform/agenda-tipo.mjs';
 import {criarDetectorTags,listarTags,tagsDasAtividades,tagPublica} from '../platform/agenda-tags.mjs';
 import {payloadAtribuicao,senderPadrao} from '../platform/webpush.mjs';
 import {descrever} from '../platform/recorrencia.mjs';
@@ -127,6 +128,7 @@ export function trackingRoutes(router,{detector=criarDetector(),registro=criarDe
     if(usaLembretes&&!rec.lembretes)throw fail(409,MENSAGEM_048);
    }else if(nomes.length)rec=await detector(c);
    await exigirRegistro(c,campos.kind);
+   await exigirTipoLivre(c,params.id,campos.kind);   // com conteúdo, o tipo não troca (vale para a tela e para o MCP)
    // Ocorrência de série mexida à mão deixa de acompanhar a série: editar a série depois não a sobrescreve.
    const solta=rec.lembretes?',series_detached=(series_detached OR series_id IS NOT NULL)':'';
    const result=(await c.query(`UPDATE service_activities SET ${nomes.map((n,i)=>n+'=$'+(i+3)).join(',')}${solta},revision=revision+1,updated_at=now() WHERE id=$1 AND revision=$2 RETURNING *`,[params.id,revision,...nomes.map(n=>campos[n])])).rows[0];

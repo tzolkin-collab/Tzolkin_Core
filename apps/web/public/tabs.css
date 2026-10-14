@@ -12,3 +12,5 @@
 @media (max-width: 720px) {
  .tabs { gap: 20px; margin-inline: -16px; padding-inline: 16px; }
 }
+.tab:disabled { opacity: .45; cursor: not-allowed; }
+.tab:disabled:hover { color: inherit; }

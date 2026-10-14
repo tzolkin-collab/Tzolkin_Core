@@ -216,3 +216,20 @@ Ler é para qualquer operador logado; escrever exige Administrador ou Membro (Le
 tela para revisar o catálogo em bloco.
 
 **Sem a migração 061** o campo não aparece, a leitura responde "indisponível" e a escrita responde 409 com texto claro.
+
+## Tipo da atividade trava com conteúdo
+
+Call, Task e Registro mostram campos diferentes (Meet só em Call, vínculos só em Task, horário opcional em Registro). Por isso, depois
+que a atividade tem **conteúdo** — descrição (o editor vazio não conta), local, link da reunião, evento no Google Agenda, apontamentos
+de tempo ou vínculos —, o tipo **não troca mais**. Quem precisa de outro tipo cria outra atividade.
+
+- **Tela:** ao editar, as outras abas ficam desativadas e uma frase diz o que impede ("descrição, link da reunião…"). Atividade vazia e atividade nova trocam livremente.
+- **Servidor (a regra de verdade):** `PUT /api/tracking/:id` e a ferramenta `editar_atividade` do MCP respondem 409 se o pedido muda de grupo. `apps/api/src/platform/agenda-tipo.mjs`.
+- Trocar dentro do mesmo grupo (`entregavel`/`feature` → `tarefa`, todos Task) continua livre.
+
+## Lista (visão Agenda): hoje, alcance e filtros
+
+- **Hoje na lista mostra só hoje.** Antes o botão (e a tecla `t`) listava 31 dias a partir dele. Ao lado do seletor de visões aparece **Dia / 7 dias / 31 dias** (só na lista); 31 dias continua sendo o padrão ao entrar nela. As setas andam o mesmo tanto do alcance.
+- **Um filtro para cada atributo**, na lateral, todos somados: Cliente (único que consulta o servidor), Situação, **Tipo**, **Contratação** (inclui "Geral da empresa"), **Responsável** e **Tag** (com "Sem responsável" / "Sem tag"; só aparecem com as migrações 060 e 061) e Categorias. O cabeçalho conta quantos estão ativos e **Limpar filtros** zera todos, inclusive a busca.
+- **A busca de texto** olha título, cliente, contratação, local, categoria, tipo, situação, nome do responsável e nomes das tags.
+- Os filtros agem sobre o que já foi carregado para o período; trocar o Cliente recarrega.

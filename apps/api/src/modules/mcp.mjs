@@ -6,6 +6,7 @@ import { json, fail, isUuid, text } from '../platform/http.mjs';
 import { digest } from '../platform/session.mjs';
 import { CATEGORIES, KINDS, activityInput, activityUpdateInput, opcional, lembretes } from '../platform/tracking-model.mjs';
 import { markdownParaEditorJs, editorJsParaMarkdown } from '../platform/markdown-editorjs.mjs';
+import { exigirTipoLivre } from '../platform/agenda-tipo.mjs';
 import { criarDetectorTags, garantirTag, revisarTag, listarTags, definirTagsDaAtividade, tagsDasAtividades, tagPublica, autorDaIa, MENSAGEM_061 } from '../platform/agenda-tags.mjs';
 
 const MCP_PROTOCOL_VERSION = '2024-11-05';
@@ -928,6 +929,7 @@ button:hover { background: #388bfd; }
     try {
      await client.query('BEGIN');
      // Só tags mudando: não há campo para o SET, e a atividade ainda sobe a revisão (as tags fazem parte dela).
+     await exigirTipoLivre(client, args.id, campos.kind);   // com conteúdo, o tipo não troca
      const sql = `UPDATE service_activities SET ${[...nomes.map((n, i) => `${n}=$${i + 3}`), 'revision=revision+1', 'updated_at=now()'].join(', ')} WHERE id=$1 AND revision=$2 RETURNING *`;
      const r = await client.query(sql, [args.id, revision, ...nomes.map(n => campos[n])]);
      if (!r.rows.length) throw new Error('A atividade foi alterada por outro usuário simultaneamente. Atualize os dados e tente novamente.');

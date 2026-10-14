@@ -30,11 +30,11 @@
 .ag-busca { position: relative; display: block; width: 220px; }
 .ag-busca svg { position: absolute; left: 10px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
 #view-tracking .ag-busca input { height: 34px; min-height: 34px; padding: 0 10px 0 32px; font-size: 13px; }
-.ag-visoes { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
-#view-tracking .ag-visoes button { height: 32px; min-height: 32px; padding: 0 12px; border: 0; border-right: 1px solid var(--line-strong); border-radius: 0; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 500; }
-#view-tracking .ag-visoes button:last-child { border-right: 0; }
-#view-tracking .ag-visoes button:hover { background: var(--surface-hover); color: var(--text); }
-#view-tracking .ag-visoes button[aria-pressed="true"] { background: var(--surface-hover); color: var(--text); font-weight: 600; }
+.ag-visoes, .ag-alcances { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+#view-tracking .ag-visoes button, #view-tracking .ag-alcances button { height: 32px; min-height: 32px; padding: 0 12px; border: 0; border-right: 1px solid var(--line-strong); border-radius: 0; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 500; }
+#view-tracking .ag-visoes button:last-child, #view-tracking .ag-alcances button:last-child { border-right: 0; }
+#view-tracking .ag-visoes button:hover, #view-tracking .ag-alcances button:hover { background: var(--surface-hover); color: var(--text); }
+#view-tracking .ag-visoes button[aria-pressed="true"], #view-tracking .ag-alcances button[aria-pressed="true"] { background: var(--surface-hover); color: var(--text); font-weight: 600; }
 #view-tracking .ag-acoes .primary { height: 34px; min-height: 34px; padding: 0 14px; font-size: 13px; }
 
 /* ---------- corpo: lateral + principal ---------- */
@@ -219,8 +219,8 @@
  .ag-titulo { font-size: 17px; }
  .ag-acoes { width: 100%; }
  .ag-busca { flex: 1 1 100%; width: auto; }
- .ag-visoes { flex: 1 1 100%; }
- #view-tracking .ag-visoes button { flex: 1; height: 40px; }
+ .ag-visoes, .ag-alcances { flex: 1 1 100%; }
+ #view-tracking .ag-visoes button, #view-tracking .ag-alcances button { flex: 1; height: 40px; }
  #view-tracking .ag-acoes .primary { flex: 1 1 100%; height: 44px; }
  #view-tracking :is(input, select, textarea) { font-size: 16px; }
  .ag-rolagem { --gutter: 44px; height: clamp(380px, calc(100dvh - 330px), 800px); }
@@ -1833,3 +1833,6 @@ dialog.tracking-editor {
  .tracking-form input[type="datetime-local"], .tracking-form input[type="date"], .tracking-form input[type="time"] {
   flex: 1 1 100% !important; min-width: 0 !important; width: 100% !important; max-width: 100% !important; text-align: left; }
 }
+/* Seletor "quantos dias" da lista: só aparece na visão Agenda. O atributo hidden perderia para o display do .ag-visoes. */
+#view-tracking .ag-alcances[hidden] { display: none; }
+#view-tracking .ag-limpar-filtros { align-self: flex-start; margin-top: 8px; }
