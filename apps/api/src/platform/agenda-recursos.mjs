@@ -12,7 +12,7 @@ export const TABELAS_048 = Object.freeze(['service_activity_series', 'service_ac
 
 export const MENSAGEM_047 = 'Descrição, local e link da reunião ainda não estão disponíveis neste banco: falta aplicar a migração 047.';
 export const MENSAGEM_048 = 'Lembretes e repetição ainda não estão disponíveis neste banco: falta aplicar a migração 048.';
-export const MENSAGEM_055 = 'O responsável da atividade ainda não está disponível neste banco: falta aplicar a migração 055.';
+export const MENSAGEM_060 = 'O responsável da atividade ainda não está disponível neste banco: falta aplicar a migração 060.';
 export const MENSAGEM_054 = 'A atividade do tipo Registro ainda não está disponível neste banco: falta aplicar a migração 054.';
 
 export function criarDetector({ relogio = Date.now, ttl = 60000 } = {}) {
@@ -76,11 +76,11 @@ export function criarDetectorVinculos({ relogio = Date.now, ttl = 60000 } = {}) 
 }
 
 /**
- * A migração 055 acrescentou `service_activities.responsible_id` (a conta responsável pela atividade). Detector à parte,
+ * A migração 060 acrescentou `service_activities.responsible_id` (a conta responsável pela atividade). Detector à parte,
  * como o do Registro (054): quem já tem a 047 e a 048 não volta a perguntar por elas.
  *
- * Enquanto a 055 não está no banco, a tela não oferece o campo, o lembrete segue para quem assinou o tópico e a API recusa
- * o uso com MENSAGEM_055, em vez de deixar o SQL estourar em "column does not exist".
+ * Enquanto a 060 não está no banco, a tela não oferece o campo, o lembrete segue para quem assinou o tópico e a API recusa
+ * o uso com MENSAGEM_060, em vez de deixar o SQL estourar em "column does not exist".
  */
 export function criarDetectorResponsavel({ relogio = Date.now, ttl = 60000 } = {}) {
  let ok = false, verificadoEm = -Infinity;

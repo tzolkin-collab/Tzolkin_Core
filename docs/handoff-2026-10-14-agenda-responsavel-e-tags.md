@@ -9,6 +9,12 @@ separado abaixo, com a prova de cada coisa. Comece pela seção 1.
 > mensagens curtas. **Lembrete pedido pelo dono:** os destinos dos webhooks da Stripe e do Asaas continuam sem cadastro nos painéis
 > — sem isso o Core não confirma pagamento. Citar no início de toda sessão até ele dizer que foi feito.
 
+> **Atualização (mesmo dia, sessão na nuvem):** as migrações do responsável e das tags foram **renumeradas** para
+> `060_responsavel_da_atividade.sql` e `061_tags_da_atividade.sql` (ainda **não aplicadas**); onde este texto diz 055/056 do
+> responsável/tags, leia 060/061. `MENSAGEM_055`/`MENSAGEM_056` viraram `MENSAGEM_060`/`MENSAGEM_061`. O teste de tela das tags
+> passa (a causa era o × que tirava a primeira tag, não só a expectativa). **Não rodado nesta sessão:** os testes que aplicam as
+> migrações em PostgreSQL descartável (`test/agenda-responsavel.test.mjs`, `test/agenda-tags.test.mjs`) — sem servidor no ambiente.
+
 ## 1. Onde está cada coisa
 
 | Item | Código | Banco de produção | No ar? |

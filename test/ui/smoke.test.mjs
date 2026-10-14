@@ -1857,10 +1857,10 @@ test('agenda: o tipo da atividade é a aba, e cada aba mostra só o que faz sent
  semExcecoes();
 });
 
-test('agenda: o responsável só aparece com a migração 055, vai na criação, troca pela rota própria e a série não o oferece', { skip: PULAR }, async () => {
+test('agenda: o responsável só aparece com a migração 060, vai na criação, troca pela rota própria e a série não o oferece', { skip: PULAR }, async () => {
  await SEMANA_DE_HOJE();
  await pagina.avaliar(`${NO_AGENDA}.lembretes = true; ${NO_AGENDA}.registro = true; ${NO_AGENDA}.posts.length = 0; ${NO_AGENDA}.puts.length = 0`); await RECARREGAR_AGENDA();
- // Sem a 055 o formulário é o de antes: nenhum campo novo.
+ // Sem a 060 o formulário é o de antes: nenhum campo novo.
  await ABRIR_NOVA();
  assert.ok(!(await pagina.avaliar(ROTULOS_DO_FORM)).includes('Responsável (opcional)'), 'sem a migração o campo nem existe');
  await FECHAR_TUDO();
@@ -1909,10 +1909,10 @@ test('agenda: o responsável só aparece com a migração 055, vai na criação,
  semExcecoes();
 });
 
-test('agenda: tags só com a migração 056; escolhe as que existem, cria as novas, mostra a sugerida pela IA e a aprova no lugar', { skip: PULAR }, async () => {
+test('agenda: tags só com a migração 061; escolhe as que existem, cria as novas, mostra a sugerida pela IA e a aprova no lugar', { skip: PULAR }, async () => {
  await SEMANA_DE_HOJE();
  await pagina.avaliar(`${NO_AGENDA}.lembretes = true; ${NO_AGENDA}.tagsEstado = false; ${NO_AGENDA}.tags = []; ${NO_AGENDA}.activityTags = {}; ${NO_AGENDA}.tagsPosts.length = 0; ${NO_AGENDA}.tagsPuts.length = 0; ${NO_AGENDA}.puts.length = 0; ${NO_AGENDA}.posts.length = 0`); await RECARREGAR_AGENDA();
- // Sem a 056 o formulário é o de antes.
+ // Sem a 061 o formulário é o de antes.
  await ABRIR_NOVA();
  assert.ok(!(await pagina.avaliar(ROTULOS_DO_FORM)).includes('Tags (opcional)'), 'sem a migração o campo nem existe');
  await FECHAR_TUDO();

@@ -1,6 +1,6 @@
 import {json,input,isUuid,fail} from '../platform/http.mjs';
 import {activityInput,activityUpdateInput,timeInput,trackingRange,OPCIONAIS} from '../platform/tracking-model.mjs';
-import {criarDetector,criarDetectorRegistro,criarDetectorVinculos,criarDetectorResponsavel,MENSAGEM_047,MENSAGEM_048,MENSAGEM_054,MENSAGEM_055} from '../platform/agenda-recursos.mjs';
+import {criarDetector,criarDetectorRegistro,criarDetectorVinculos,criarDetectorResponsavel,MENSAGEM_047,MENSAGEM_048,MENSAGEM_054,MENSAGEM_060} from '../platform/agenda-recursos.mjs';
 import {notificarPessoa} from './push.mjs';
 import {criarDetectorTags,listarTags,tagsDasAtividades,tagPublica} from '../platform/agenda-tags.mjs';
 import {payloadAtribuicao,senderPadrao} from '../platform/webpush.mjs';
@@ -29,7 +29,7 @@ export function trackingRoutes(router,{detector=criarDetector(),registro=criarDe
   if(!r||r.status!=='active'||!['owner','member'].includes(r.role))throw fail(400,'Responsável inválido: escolha uma conta ativa de Administrador ou Membro.');
   return r;
  };
- const exigirResponsavel=async db=>{if(!(await responsavel(db)))throw fail(409,MENSAGEM_055);};
+ const exigirResponsavel=async db=>{if(!(await responsavel(db)))throw fail(409,MENSAGEM_060);};
  // Fora da transação e sem esperar: quem recebe só importa depois que a atribuição está gravada.
  const avisar=(pool,{responsavel:r,atividade,operator})=>{
   if(!r?.email)return;
@@ -67,10 +67,10 @@ export function trackingRoutes(router,{detector=criarDetector(),registro=criarDe
   let meet=false;
   if(google&&operator&&await google.detector(pool).catch(()=>false))meet=Boolean((await pool.query('SELECT 1 FROM google_calendar_connections WHERE operator_subject=$1 AND revoked_at IS NULL',[operator.subject])).rows.length);
   const possuiVinculos=await vinculos(pool);
-  // Com a 055: quem pode ser escolhido como responsável. Só nome e e-mail de colegas que já aparecem em Configurações → Acessos.
+  // Com a 060: quem pode ser escolhido como responsável. Só nome e e-mail de colegas que já aparecem em Configurações → Acessos.
   const possuiResponsavel=await responsavel(pool);
   const responsaveis=possuiResponsavel?(await pool.query("SELECT id,name,email,role FROM operator_accounts WHERE status='active' AND role IN ('owner','member') ORDER BY lower(COALESCE(name,email))")).rows:[];
-  // Com a 056: o catálogo de tags (para o campo oferecer as que existem) e as tags valendo em cada atividade da janela.
+  // Com a 061: o catálogo de tags (para o campo oferecer as que existem) e as tags valendo em cada atividade da janela.
   const possuiTags=await tags(pool);
   let catalogoTags=[],tagsDasAtiv={};
   if(possuiTags){

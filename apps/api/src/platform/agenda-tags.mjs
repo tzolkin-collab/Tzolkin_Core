@@ -1,4 +1,4 @@
-// Tags da agenda (migração 056): a lógica que a tela (rotas) e a IA (MCP) compartilham.
+// Tags da agenda (migração 061): a lógica que a tela (rotas) e a IA (MCP) compartilham.
 //
 // Fica num lugar só para as duas portas se comportarem igual: o mesmo nome vira o mesmo slug, a mesma tag não nasce duas
 // vezes, e a regra de revisão (pessoa nasce revisada, IA nasce "sugerida" e vale na hora) não depende de quem chama.
@@ -8,7 +8,7 @@ import { fail, text } from './http.mjs';
 
 export const TONS = Object.freeze(['accent', 'info', 'success', 'warning', 'danger', 'neutral']);
 export const MAX_TAGS_POR_ATIVIDADE = 12;
-export const MENSAGEM_056 = 'As tags ainda não estão disponíveis neste banco: falta aplicar a migração 056.';
+export const MENSAGEM_061 = 'As tags ainda não estão disponíveis neste banco: falta aplicar a migração 061.';
 
 /**
  * O nome vira o identificador: sem acento, minúsculo, hífen no lugar do resto. "Revisão Técnica" e "revisao tecnica"
@@ -30,7 +30,7 @@ export function tagInput(b) {
 }
 
 /**
- * A migração 056 chegou ao banco? Lembrado: verdadeiro nunca volta a falso; falso só é reverificado depois de `ttl`, para a
+ * A migração 061 chegou ao banco? Lembrado: verdadeiro nunca volta a falso; falso só é reverificado depois de `ttl`, para a
  * primeira consulta depois de aplicar já enxergar o recurso. Lê o catálogo do Postgres (como o detector do Registro) e não
  * information_schema, para não se misturar com a conta de perguntas do detector da 047/048.
  */

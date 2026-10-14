@@ -1,11 +1,11 @@
-// Tags da agenda (migração 056) sem banco: o nome virando identificador, o que acontece ANTES da migração e a regra de não apagar.
+// Tags da agenda (migração 061) sem banco: o nome virando identificador, o que acontece ANTES da migração e a regra de não apagar.
 // O SQL de verdade, e as duas portas (tela e MCP) juntas, estão em test/agenda-tags.test.mjs (banco descartável).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { agendaTagsRoutes } from '../../apps/api/src/modules/agenda-tags.mjs';
 import { _internals as mcp } from '../../apps/api/src/modules/mcp.mjs';
-import { slugDaTag, tagInput, criarDetectorTags, autorDaIa, autorDaPessoa, MENSAGEM_056, MAX_TAGS_POR_ATIVIDADE } from '../../apps/api/src/platform/agenda-tags.mjs';
+import { slugDaTag, tagInput, criarDetectorTags, autorDaIa, autorDaPessoa, MENSAGEM_061, MAX_TAGS_POR_ATIVIDADE } from '../../apps/api/src/platform/agenda-tags.mjs';
 
 const falha = (fn, status = 400) => assert.throws(fn, e => e.status === status);
 
@@ -30,7 +30,7 @@ test('quem agiu fica gravado com o prefixo que diferencia pessoa de IA', () => {
  assert.equal(autorDaIa(undefined), 'ai:mcp');
 });
 
-test('detector da 056: verdadeiro fica; falso só é reverificado depois do prazo', async () => {
+test('detector da 061: verdadeiro fica; falso só é reverificado depois do prazo', async () => {
  let agora = 0, perguntas = 0, existe = false;
  const db = { query: async () => { perguntas++; return { rows: [{ ok: existe }] }; } };
  const detector = criarDetectorTags({ relogio: () => agora, ttl: 1000 });
@@ -48,15 +48,15 @@ function rotas() {
  return r;
 }
 const operador = { email: 'ana@tzolkin.test', subject: 's1' };
-const semBanco = { query: async () => assert.fail('antes da 056 nem consulta o banco') };
+const semBanco = { query: async () => assert.fail('antes da 061 nem consulta o banco') };
 
-test('antes da 056: ler diz "indisponível" sem erro, e escrever recusa com 409 e a mensagem da migração', async () => {
+test('antes da 061: ler diz "indisponível" sem erro, e escrever recusa com 409 e a mensagem da migração', async () => {
  const r = rotas(); let saida;
  await r['GET /api/tags']({ pool: semBanco, url: new URL('http://x/api/tags'), reply: (s, b) => { saida = { s, b }; } });
  assert.equal(saida.s, 200); assert.equal(saida.b.available, false); assert.deepEqual(saida.b.tags, []);
  for (const [rota, extra] of [['POST /api/tags', { body: { label: 'Onboarding' } }], ['PUT /api/tags/:id', { params: { id: '00000000-0000-4000-8000-000000000001' }, body: { revision: 1, reviewed: true } }],
   ['PUT /api/tracking/:id/tags', { params: { id: '00000000-0000-4000-8000-000000000001' }, body: { tags: [], revision: 1 } }]])
-  await assert.rejects(r[rota]({ client: semBanco, operator: operador, ...extra }), e => e.status === 409 && e.message === MENSAGEM_056, rota);
+  await assert.rejects(r[rota]({ client: semBanco, operator: operador, ...extra }), e => e.status === 409 && e.message === MENSAGEM_061, rota);
 });
 
 test('os pedidos mal formados são recusados antes de tocar o banco (com a migração presente)', async () => {
@@ -87,8 +87,8 @@ test('o MCP oferece as três ferramentas de tag e o parâmetro tags em criar e e
 });
 
 // ---------- a migração e a regra de não apagar ----------
-test('a migração 056 só cria duas tabelas, sem apagar nada; e o código das tags nunca emite DELETE', () => {
- const sql = readFileSync('db/migrations/056_tags_da_atividade.sql', 'utf8');
+test('a migração 061 só cria duas tabelas, sem apagar nada; e o código das tags nunca emite DELETE', () => {
+ const sql = readFileSync('db/migrations/061_tags_da_atividade.sql', 'utf8');
  const codigo = sql.replace(/--.*$/gm, '').replace(/'[^']*'/g, '');
  assert.match(codigo, /CREATE TABLE IF NOT EXISTS agenda_tags/); assert.match(codigo, /CREATE TABLE IF NOT EXISTS service_activity_tags/);
  assert.doesNotMatch(codigo, /\bDROP\b|\bDELETE\b|\bTRUNCATE\b|ALTER TABLE service_activities/i, 'nada é apagado e a tabela da atividade não é tocada');

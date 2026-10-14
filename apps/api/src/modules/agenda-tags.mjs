@@ -1,18 +1,18 @@
-// Tags da agenda (migração 056): catálogo, criação, revisão e as tags de cada atividade.
+// Tags da agenda (migração 061): catálogo, criação, revisão e as tags de cada atividade.
 //
 // Admin interno, como o resto da agenda. Ler é para qualquer operador logado; escrever exige quem trabalha (Administrador ou
 // Membro), a mesma regra do comercial: Leitor lê as tags, não as cria nem as muda.
 //
-// Enquanto a migração 056 não está no banco as rotas de leitura respondem "indisponível" e as de escrita recusam com 409 e
-// MENSAGEM_056, em vez de "relation does not exist".
+// Enquanto a migração 061 não está no banco as rotas de leitura respondem "indisponível" e as de escrita recusam com 409 e
+// MENSAGEM_061, em vez de "relation does not exist".
 import { input, isUuid, fail } from '../platform/http.mjs';
 import { commercialPermission } from './commercial-keys.mjs';
 import {
- criarDetectorTags, garantirTag, revisarTag, listarTags, definirTagsDaAtividade, autorDaPessoa, tagPublica as publica, MENSAGEM_056, TONS,
+ criarDetectorTags, garantirTag, revisarTag, listarTags, definirTagsDaAtividade, autorDaPessoa, tagPublica as publica, MENSAGEM_061, TONS,
 } from '../platform/agenda-tags.mjs';
 
 export function agendaTagsRoutes(router, { detector = criarDetectorTags() } = {}) {
- const exigir = async db => { if (!(await detector(db))) throw fail(409, MENSAGEM_056); };
+ const exigir = async db => { if (!(await detector(db))) throw fail(409, MENSAGEM_061); };
 
  router.get('/api/tags', async ({ pool, url, reply }) => {
   if (!(await detector(pool))) return reply(200, { available: false, tags: [], tones: TONS });

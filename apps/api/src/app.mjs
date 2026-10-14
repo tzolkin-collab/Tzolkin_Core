@@ -79,7 +79,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  const detectorAgenda = criarDetector();
  // Google Agenda/Meet: conexão por operador, criação da sala e sincronização (migração 049). A atividade avisa o Google quando muda.
  const google = googleCalendarRoutes(router, { clock, ...(webhookEnv ? { env: webhookEnv } : {}), ...googleOptions });
- // Tags (056): um detector só, para a listagem da agenda e as rotas de tag perguntarem ao banco uma vez.
+ // Tags (061): um detector só, para a listagem da agenda e as rotas de tag perguntarem ao banco uma vez.
  const detectorTags = criarDetectorTags();
  trackingRoutes(router, { detector: detectorAgenda, google, tags: detectorTags });
  agendaTagsRoutes(router, { detector: detectorTags });

@@ -17,7 +17,7 @@ export const JANELA_MIN=20;
 // `agenda_reminders_sent` tem chave (atividade, minutos): o INSERT ... ON CONFLICT DO NOTHING só devolve a linha a quem a gravou primeiro,
 // então, mesmo com dois servidores ou dois ciclos sobrepostos, cada aviso sai uma vez.
 // Atividade sem lembretes próprios (NULL) usa o padrão da agenda; '{}' é "não avisar". Só atividade planejada e não arquivada.
-// Com a 055, a atividade pode ter responsável: o e-mail dele sai junto e o aviso vai só aos aparelhos dele. Responsável SUSPENSO
+// Com a 060, a atividade pode ter responsável: o e-mail dele sai junto e o aviso vai só aos aparelhos dele. Responsável SUSPENSO
 // não conta (a suspensão já revogou os aparelhos dele): cai no comportamento de sem responsável, para o aviso não se perder.
 const sqlVencidos=comResponsavel=>`
  WITH padrao AS (SELECT default_reminders AS m FROM agenda_preferences WHERE id),

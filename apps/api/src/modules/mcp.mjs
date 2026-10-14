@@ -6,7 +6,7 @@ import { json, fail, isUuid, text } from '../platform/http.mjs';
 import { digest } from '../platform/session.mjs';
 import { CATEGORIES, KINDS, activityInput, activityUpdateInput, opcional, lembretes } from '../platform/tracking-model.mjs';
 import { markdownParaEditorJs, editorJsParaMarkdown } from '../platform/markdown-editorjs.mjs';
-import { criarDetectorTags, garantirTag, revisarTag, listarTags, definirTagsDaAtividade, tagsDasAtividades, tagPublica, autorDaIa, MENSAGEM_056 } from '../platform/agenda-tags.mjs';
+import { criarDetectorTags, garantirTag, revisarTag, listarTags, definirTagsDaAtividade, tagsDasAtividades, tagPublica, autorDaIa, MENSAGEM_061 } from '../platform/agenda-tags.mjs';
 
 const MCP_PROTOCOL_VERSION = '2024-11-05';
 const SERVER_INFO = Object.freeze({ name: 'tzolkin-core', version: '1.0.0' });
@@ -633,9 +633,9 @@ button:hover { background: #388bfd; }
   { webhook: true, auth: 'public' }
  );
 
- // Tags (056). Chamar pelo MCP é sempre ação da IA: a tag criada por aqui nasce "sugerida" e vale na hora.
+ // Tags (061). Chamar pelo MCP é sempre ação da IA: a tag criada por aqui nasce "sugerida" e vale na hora.
  const detectorTags = criarDetectorTags();
- const exigirTags = async () => { if (!(await detectorTags(pool))) throw new Error(MENSAGEM_056); };
+ const exigirTags = async () => { if (!(await detectorTags(pool))) throw new Error(MENSAGEM_061); };
  const nomesDeTags = lista => (lista || []).map(t => ({ label: t.label, sugerida_pela_ia: t.origin === 'ai' && !t.reviewed_at }));
  // Nomes que a IA mandou -> ids, criando os que faltam. Dentro da transação de quem chama: se algo falhar, nenhuma tag nasce.
  const resolverTags = async (db, nomes, autor) => {

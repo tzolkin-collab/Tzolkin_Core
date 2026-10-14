@@ -251,7 +251,7 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   const contratacao = campo(form, 'Contratação (opcional)', 'text', contratacoesDe(dados, '', GERAL)); contratacao.parentElement.dataset.prop = 'contratacao';
 
   // Responsável: a conta que recebe o aviso desta atividade, e só ela. Sem escolher, o lembrete segue para quem assinou o
-  // tópico, como sempre foi. A lista vem do servidor e já exclui Leitor e conta suspensa. Só aparece com a migração 055.
+  // tópico, como sempre foi. A lista vem do servidor e já exclui Leitor e conta suspensa. Só aparece com a migração 060.
   const comResponsavel = dados.agenda_responsavel === true;
   const responsaveis = dados.responsaveis || [];
   const responsavel = comResponsavel ? campo(form, 'Responsável (opcional)', 'text', [['', 'Sem responsável'], ...responsaveis.map(r => [r.id, r.name || r.email])]) : null;
@@ -260,8 +260,8 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
    responsavel.parentElement.append(el('small', 'O lembrete desta atividade chega só a essa pessoa. Sem responsável, vai para quem assinou os lembretes da agenda.', 'detail'));
   }
 
-  // Tags (056): classificação livre, além da categoria herdada do cliente. Pessoa e IA criam; a da IA vale na hora e aparece
-  // marcada "IA" até alguém aprovar. Escolher uma que existe só a seleciona; digitar uma nova a cria (Enter). Só com a 056.
+  // Tags (061): classificação livre, além da categoria herdada do cliente. Pessoa e IA criam; a da IA vale na hora e aparece
+  // marcada "IA" até alguém aprovar. Escolher uma que existe só a seleciona; digitar uma nova a cria (Enter). Só com a 061.
   const comTags = dados.agenda_tags === true;
   let catalogoTags = [...(dados.tags || [])];
   let tagsAtuais = comTags && evento ? [...(dados.activity_tags?.[evento.id] || [])] : [];

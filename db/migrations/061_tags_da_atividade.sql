@@ -1,8 +1,8 @@
--- 056 — Tags da atividade.
+-- 061 — Tags da atividade.
 --
 -- NÃO APLICADA. Escrita em 2026-10-13, pendente de autorização do dono (o banco compartilhado é o de produção).
 -- Até ela ser aplicada o Core funciona como antes: GET /api/tracking responde `agenda_tags: false`, a tela não oferece o campo,
--- o MCP recusa as ferramentas de tag com MENSAGEM_056 e nada quebra.
+-- o MCP recusa as ferramentas de tag com MENSAGEM_061 e nada quebra.
 --
 -- DUAS TABELAS, ADITIVAS.
 --

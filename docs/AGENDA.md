@@ -159,7 +159,7 @@ O pedido de 06/10 é maior que isto. Os outros itens — descrição `.md` com `
 relações entre tasks, vínculo com o produto, cronologia padronizada e o contrato na ficha do cliente — estão em
 [ACOMPANHAMENTO-REDESENHO.md](ACOMPANHAMENTO-REDESENHO.md), cada um com o que falta para existir.
 
-## Responsável da atividade (migração 055)
+## Responsável da atividade (migração 060)
 
 Toda atividade pode ter **uma pessoa responsável**: uma conta de operador (a mesma de Configurações → Acessos), escolhida no
 campo "Responsável" logo abaixo da Contratação. Só entram na lista contas **ativas** com papel Administrador ou Membro; Leitor
@@ -185,4 +185,4 @@ atribuição usa o tópico dos lembretes da agenda, para não exigir um tópico 
 nascem sem dono): a tela desativa o campo em vez de perder a escolha. Atividades criadas pelo bot (MCP) nascem sem responsável
 até o MCP aprender o campo.
 
-**Sem a migração 055** o campo não aparece, a API responde 409 com texto claro e o lembrete segue para quem assinou o tópico.
+**Sem a migração 060** o campo não aparece, a API responde 409 com texto claro e o lembrete segue para quem assinou o tópico.
