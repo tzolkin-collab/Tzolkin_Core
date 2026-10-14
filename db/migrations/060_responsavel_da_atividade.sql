@@ -1,8 +1,8 @@
--- 055 — Responsável da atividade.
+-- 060 — Responsável da atividade.
 --
 -- NÃO APLICADA. Escrita em 2026-10-13, pendente de autorização do dono (o banco compartilhado é o de produção).
 -- Até ela ser aplicada o Core funciona como antes: GET /api/tracking responde `agenda_responsavel: false`, a tela não
--- oferece o campo e quem tentar gravar um responsável recebe 409 com MENSAGEM_055, nunca a violação da coluna.
+-- oferece o campo e quem tentar gravar um responsável recebe 409 com MENSAGEM_060, nunca a violação da coluna.
 --
 -- UMA COLUNA, ADITIVA. A atividade passa a poder ter uma pessoa responsável, que é uma CONTA de operador
 -- (operator_accounts), a mesma que já é "Responsável" de lead, tarefa e contrato no comercial (013/025). Não é texto

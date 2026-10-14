@@ -1,4 +1,4 @@
-// Responsável da atividade (migração 055): quem pode ser escolhido, quem é avisado e quem NÃO é.
+// Responsável da atividade (migração 060): quem pode ser escolhido, quem é avisado e quem NÃO é.
 //
 // O ponto de ter um responsável é o aviso chegar só a ele. Por isso a maior parte destes testes é sobre o que NÃO sai:
 // trocar para quem já era, tirar o responsável, atribuir a si mesmo, e lembrete de atividade que tem dono não vai ao grupo.
@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { trackingRoutes } from '../../apps/api/src/modules/tracking.mjs';
 import { notificarPessoa } from '../../apps/api/src/modules/push.mjs';
 import { enviarLembretes } from '../../apps/api/src/modules/agenda-jobs.mjs';
-import { criarDetector, criarDetectorResponsavel, MENSAGEM_055 } from '../../apps/api/src/platform/agenda-recursos.mjs';
+import { criarDetector, criarDetectorResponsavel, MENSAGEM_060 } from '../../apps/api/src/platform/agenda-recursos.mjs';
 import { payloadAtribuicao } from '../../apps/api/src/platform/webpush.mjs';
 
 const ID = '00000000-0000-4000-8000-000000000001';
@@ -22,7 +22,7 @@ const corpo = b => ({ headers: { 'content-type': 'application/json' }, async *[S
 const espera = () => new Promise(r => setTimeout(r, 5));
 
 // ---------- detector ----------
-test('detector da 055: verdadeiro fica; falso só é reverificado depois do prazo', async () => {
+test('detector da 060: verdadeiro fica; falso só é reverificado depois do prazo', async () => {
  let agora = 0, perguntas = 0, existe = false;
  const db = { query: async () => { perguntas++; return { rows: [{ n: existe ? 1 : 0 }] }; } };
  const detector = criarDetectorResponsavel({ relogio: () => agora, ttl: 1000 });
@@ -78,7 +78,7 @@ test('lembrete: com responsável vai só a ele; sem, a quem assinou o tópico, c
  assert.equal(r.enviados, 4);
 });
 
-test('lembrete: antes da 055 o SQL nem menciona o responsável (a coluna não existe)', async () => {
+test('lembrete: antes da 060 o SQL nem menciona o responsável (a coluna não existe)', async () => {
  const sem = bancoDoJob([]); const com = bancoDoJob([]);
  const base = { enviar: () => {}, detector: criarDetector(), agora: () => Date.parse('2026-10-05T17:15:30Z'), notificar: async () => ({ enviados: 0 }) };
  await enviarLembretes(sem, { ...base, responsavel: async () => false });
@@ -136,10 +136,10 @@ test('responsável inválido: leitor, conta suspensa e conta que não existe sã
  }
 });
 
-test('antes da 055: pedir responsável dá 409 com a mensagem da migração, e sem consultar contas', async () => {
+test('antes da 060: pedir responsável dá 409 com a mensagem da migração, e sem consultar contas', async () => {
  const m = montar({ migracao: false });
- await assert.rejects(m.chamar('POST /api/tracking', { req: corpo({ ...base, responsible_id: ANA.id }) }), e => e.status === 409 && e.message === MENSAGEM_055);
- await assert.rejects(m.chamar('PUT /api/tracking/:id/responsible', { params: { id: ID }, req: corpo({ responsible_id: ANA.id, revision: 1 }) }), e => e.status === 409 && e.message === MENSAGEM_055);
+ await assert.rejects(m.chamar('POST /api/tracking', { req: corpo({ ...base, responsible_id: ANA.id }) }), e => e.status === 409 && e.message === MENSAGEM_060);
+ await assert.rejects(m.chamar('PUT /api/tracking/:id/responsible', { params: { id: ID }, req: corpo({ responsible_id: ANA.id, revision: 1 }) }), e => e.status === 409 && e.message === MENSAGEM_060);
  assert.ok(!m.log.some(q => q.sql.includes('FROM operator_accounts')));
 });
 
@@ -190,9 +190,9 @@ test('GET /api/tracking oferece só quem pode ser escolhido e diz se a migraçã
  assert.match(sqlContas, /status='active'/); assert.match(sqlContas, /role IN \('owner','member'\)/, 'Leitor e suspenso nunca aparecem na lista');
 });
 
-test('a migração 055 só acrescenta uma coluna, com chave para a conta, sem apagar nada', async () => {
+test('a migração 060 só acrescenta uma coluna, com chave para a conta, sem apagar nada', async () => {
  const { readFileSync } = await import('node:fs');
- const sql = readFileSync('db/migrations/055_responsavel_da_atividade.sql', 'utf8');
+ const sql = readFileSync('db/migrations/060_responsavel_da_atividade.sql', 'utf8');
  assert.match(sql, /ADD COLUMN IF NOT EXISTS responsible_id uuid REFERENCES operator_accounts\(id\)/);
  const codigo = sql.replace(/--.*$/gm, '').replace(/'[^']*'/g, '');   // sem comentário nem o texto do COMMENT
  assert.doesNotMatch(codigo, /\bDROP\b|\bDELETE\b|\bTRUNCATE\b/i, 'nada é apagado');

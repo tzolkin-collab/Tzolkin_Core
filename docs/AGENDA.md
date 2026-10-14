@@ -159,7 +159,7 @@ O pedido de 06/10 é maior que isto. Os outros itens — descrição `.md` com `
 relações entre tasks, vínculo com o produto, cronologia padronizada e o contrato na ficha do cliente — estão em
 [ACOMPANHAMENTO-REDESENHO.md](ACOMPANHAMENTO-REDESENHO.md), cada um com o que falta para existir.
 
-## Responsável da atividade (migração 055)
+## Responsável da atividade (migração 060)
 
 Toda atividade pode ter **uma pessoa responsável**: uma conta de operador (a mesma de Configurações → Acessos), escolhida no
 campo "Responsável" logo abaixo da Contratação. Só entram na lista contas **ativas** com papel Administrador ou Membro; Leitor
@@ -185,4 +185,59 @@ atribuição usa o tópico dos lembretes da agenda, para não exigir um tópico 
 nascem sem dono): a tela desativa o campo em vez de perder a escolha. Atividades criadas pelo bot (MCP) nascem sem responsável
 até o MCP aprender o campo.
 
-**Sem a migração 055** o campo não aparece, a API responde 409 com texto claro e o lembrete segue para quem assinou o tópico.
+**Sem a migração 060** o campo não aparece, a API responde 409 com texto claro e o lembrete segue para quem assinou o tópico.
+
+## Tags da atividade (migração 061)
+
+Além da categoria — que continua vindo da contratação ou do cliente, automática e separada —, a atividade pode ter **tags**:
+classificação livre, até **12 por atividade**, que aparecem sempre (no formulário e como etiquetas na visualização).
+
+**Como se usa na tela.** No campo "Tags (opcional)": escolher uma da lista sugerida só a seleciona; digitar um nome novo e dar
+Enter a cria na hora. "Revisão técnica" e "revisao tecnica" são a mesma tag (a comparação ignora acento, maiúscula e símbolo,
+no servidor e na tela). Tirar uma tag da atividade é o × da etiqueta.
+
+**Tag criada pela IA** (pelo MCP) **vale na hora**, mas leva o selo "IA" e a explicação "aguardando revisão" até alguém aprovar:
+o ✓ da etiqueta, no formulário, aprova. Renomear, trocar a cor e arquivar existem na API e no MCP; ainda não há tela de catálogo.
+
+**Nada se apaga.** Arquivar uma tag grava `archived_at`; tirar uma tag de uma atividade grava `removed_at`. O código das tags nunca
+emite `DELETE` (há teste que confere).
+
+| Onde | O quê |
+|---|---|
+| `GET /api/tags` | catálogo (`?arquivadas=1` inclui as arquivadas) e os tons disponíveis |
+| `POST /api/tags` | cria; idempotente: nome que já existe devolve a tag existente (`created: false`) |
+| `PUT /api/tags/:id` | aprova, renomeia, troca a cor, arquiva ou reativa; a revisão lida é obrigatória |
+| `PUT /api/tracking/:id/tags` | define as tags da atividade (lista de ids; revisão obrigatória) |
+| MCP | `listar_tags`, `criar_tag`, `revisar_tag`; parâmetro `tags` (lista de nomes) em `criar_atividade` e `editar_atividade` |
+
+Ler é para qualquer operador logado; escrever exige Administrador ou Membro (Leitor lê, não cria nem muda).
+
+**Limites conhecidos.** Atividade que se **repete** não tem tags (a tela desativa o campo); não há filtro por tag na agenda; falta a
+tela para revisar o catálogo em bloco.
+
+**Sem a migração 061** o campo não aparece, a leitura responde "indisponível" e a escrita responde 409 com texto claro.
+
+## Tipo da atividade trava com conteúdo
+
+Call, Task e Registro mostram campos diferentes (Meet só em Call, vínculos só em Task, horário opcional em Registro). Por isso, depois
+que a atividade tem **conteúdo** — descrição (o editor vazio não conta), local, link da reunião, evento no Google Agenda, apontamentos
+de tempo ou vínculos —, o tipo **não troca mais**. Quem precisa de outro tipo cria outra atividade.
+
+- **Tela:** ao editar, as outras abas ficam desativadas e uma frase diz o que impede ("descrição, link da reunião…"). Atividade vazia e atividade nova trocam livremente.
+- **Servidor (a regra de verdade):** `PUT /api/tracking/:id` e a ferramenta `editar_atividade` do MCP respondem 409 se o pedido muda de grupo. `apps/api/src/platform/agenda-tipo.mjs`.
+- Trocar dentro do mesmo grupo (`entregavel`/`feature` → `tarefa`, todos Task) continua livre.
+
+## Lista (visão Agenda): hoje, alcance e filtros
+
+- **Hoje na lista mostra só hoje.** Antes o botão (e a tecla `t`) listava 31 dias a partir dele. Ao lado do seletor de visões aparece **Dia / 7 dias / 31 dias** (só na lista); 31 dias continua sendo o padrão ao entrar nela. As setas andam o mesmo tanto do alcance.
+- **Um filtro para cada atributo**, na lateral, todos somados: Cliente (único que consulta o servidor), Situação, **Tipo**, **Contratação** (inclui "Geral da empresa"), **Responsável** e **Tag** (com "Sem responsável" / "Sem tag"; só aparecem com as migrações 060 e 061) e Categorias. O cabeçalho conta quantos estão ativos e **Limpar filtros** zera todos, inclusive a busca.
+- **A busca de texto** olha título, cliente, contratação, local, categoria, tipo, situação, nome do responsável e nomes das tags.
+- Os filtros agem sobre o que já foi carregado para o período; trocar o Cliente recarrega.
+
+## Descrição em Markdown puro aparece formatada na ficha
+
+A descrição é guardada como JSON de blocos do editor, mas pode estar guardada como **texto puro com Markdown** (atividade de antes do editor, ou gravada por quem não passou pela conversão). Antes a ficha mostrava esse texto cru: `**negrito**`, `- item`, `1. passo`, `> citação`, `| tabela |`, `---`. Agora `renderDescricao` (`apps/web/public/agenda-descricao.js`) converte o Markdown em blocos **só na hora de desenhar**: listas (com aninhamento e checklist), títulos, citação, código, tabela, divisória, destaque (`> [!AVISO]`) e as marcas inline.
+
+- O texto guardado **não é alterado** pela ficha, e o **editor continua como estava** (a descrição em texto puro abre como um parágrafo). Só quando alguém marca uma caixa da checklist na ficha a descrição é regravada, já como blocos.
+- Texto sem nenhum Markdown segue como texto comum.
+- O conversor mora em `apps/web/public/markdown-editorjs.js` (o navegador o serve) e a API o reexporta de `apps/api/src/platform/markdown-editorjs.mjs`: uma fonte só.

@@ -1,7 +1,9 @@
 import {json,input,isUuid,fail} from '../platform/http.mjs';
 import {activityInput,activityUpdateInput,timeInput,trackingRange,OPCIONAIS} from '../platform/tracking-model.mjs';
-import {criarDetector,criarDetectorRegistro,criarDetectorVinculos,criarDetectorResponsavel,MENSAGEM_047,MENSAGEM_048,MENSAGEM_054,MENSAGEM_055} from '../platform/agenda-recursos.mjs';
+import {criarDetector,criarDetectorRegistro,criarDetectorVinculos,criarDetectorResponsavel,MENSAGEM_047,MENSAGEM_048,MENSAGEM_054,MENSAGEM_060} from '../platform/agenda-recursos.mjs';
 import {notificarPessoa} from './push.mjs';
+import {exigirTipoLivre} from '../platform/agenda-tipo.mjs';
+import {criarDetectorTags,listarTags,tagsDasAtividades,tagPublica} from '../platform/agenda-tags.mjs';
 import {payloadAtribuicao,senderPadrao} from '../platform/webpush.mjs';
 import {descrever} from '../platform/recorrencia.mjs';
 // Comparar o que veio no pedido com o que já está gravado (repetir um cadastro idêntico devolve o que existe). Lista (lembretes) compara por conteúdo.
@@ -19,7 +21,7 @@ async function avisarAtribuicaoPadrao(pool,{email,atividade,empresa,por}){
  if(!enviar||!email)return;
  await notificarPessoa(pool,'agenda.lembrete',email,payloadAtribuicao({titulo:atividade.title,empresa,inicio:new Date(atividade.starts_at).getTime(),por,atividadeId:atividade.id}),enviar);
 }
-export function trackingRoutes(router,{detector=criarDetector(),registro=criarDetectorRegistro(),vinculos=criarDetectorVinculos(),responsavel=criarDetectorResponsavel(),avisarAtribuicao=avisarAtribuicaoPadrao,google=null}={}){
+export function trackingRoutes(router,{detector=criarDetector(),registro=criarDetectorRegistro(),vinculos=criarDetectorVinculos(),responsavel=criarDetectorResponsavel(),tags=criarDetectorTags(),avisarAtribuicao=avisarAtribuicaoPadrao,google=null}={}){
  // O responsável é uma conta de operador ATIVA e com papel de quem trabalha (Administrador ou Membro): mesma regra de quem pode
  // ser "Responsável" no comercial. Leitor não recebe tarefa, e conta suspensa não recebe aviso. Conferido antes de gravar, para
  // a pessoa ler o motivo em português em vez de uma violação de chave estrangeira.
@@ -28,7 +30,7 @@ export function trackingRoutes(router,{detector=criarDetector(),registro=criarDe
   if(!r||r.status!=='active'||!['owner','member'].includes(r.role))throw fail(400,'Responsável inválido: escolha uma conta ativa de Administrador ou Membro.');
   return r;
  };
- const exigirResponsavel=async db=>{if(!(await responsavel(db)))throw fail(409,MENSAGEM_055);};
+ const exigirResponsavel=async db=>{if(!(await responsavel(db)))throw fail(409,MENSAGEM_060);};
  // Fora da transação e sem esperar: quem recebe só importa depois que a atribuição está gravada.
  const avisar=(pool,{responsavel:r,atividade,operator})=>{
   if(!r?.email)return;
@@ -66,14 +68,21 @@ export function trackingRoutes(router,{detector=criarDetector(),registro=criarDe
   let meet=false;
   if(google&&operator&&await google.detector(pool).catch(()=>false))meet=Boolean((await pool.query('SELECT 1 FROM google_calendar_connections WHERE operator_subject=$1 AND revoked_at IS NULL',[operator.subject])).rows.length);
   const possuiVinculos=await vinculos(pool);
-  // Com a 055: quem pode ser escolhido como responsável. Só nome e e-mail de colegas que já aparecem em Configurações → Acessos.
+  // Com a 060: quem pode ser escolhido como responsável. Só nome e e-mail de colegas que já aparecem em Configurações → Acessos.
   const possuiResponsavel=await responsavel(pool);
   const responsaveis=possuiResponsavel?(await pool.query("SELECT id,name,email,role FROM operator_accounts WHERE status='active' AND role IN ('owner','member') ORDER BY lower(COALESCE(name,email))")).rows:[];
+  // Com a 061: o catálogo de tags (para o campo oferecer as que existem) e as tags valendo em cada atividade da janela.
+  const possuiTags=await tags(pool);
+  let catalogoTags=[],tagsDasAtiv={};
+  if(possuiTags){
+   catalogoTags=(await listarTags(pool)).map(tagPublica);
+   tagsDasAtiv=Object.fromEntries([...(await tagsDasAtividades(pool,activities.rows.slice(0,500).map(a=>a.id))).entries()].map(([id,lista])=>[id,lista.map(tagPublica)]));
+  }
   let links=[];
   if(possuiVinculos&&activities.rows.length){
    links=(await pool.query('SELECT * FROM service_activity_links WHERE activity_id=ANY($1)',[activities.rows.map(a=>a.id)])).rows;
   }
-  reply(200,{activities:activities.rows.slice(0,500),logs:logs.rows.slice(0,500),engagements:engagements.rows,links,truncated:activities.rows.length>500||logs.rows.length>500,time_zone:'America/Sao_Paulo',agenda_responsavel:possuiResponsavel,responsaveis,agenda_campos:rec.campos,agenda_lembretes:rec.lembretes,agenda_registro:await registro(pool),agenda_vinculos:possuiVinculos,series,agenda_prefs:prefs,google_meet:meet});
+  reply(200,{activities:activities.rows.slice(0,500),logs:logs.rows.slice(0,500),engagements:engagements.rows,links,truncated:activities.rows.length>500||logs.rows.length>500,time_zone:'America/Sao_Paulo',agenda_responsavel:possuiResponsavel,responsaveis,agenda_tags:possuiTags,tags:catalogoTags,activity_tags:tagsDasAtiv,agenda_campos:rec.campos,agenda_lembretes:rec.lembretes,agenda_registro:await registro(pool),agenda_vinculos:possuiVinculos,series,agenda_prefs:prefs,google_meet:meet});
  });
  async function transaction(pool,fn){const c=await pool.connect();try{await c.query('BEGIN');const result=await fn(c);await c.query('COMMIT');return result;}catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}}
  const audit=(c,id,action,details,operator)=>c.query('INSERT INTO service_activity_audit(activity_id,action,actor,details) VALUES($1,$2,$3,$4)',[id,action,operator?.email||operator?.subject||'unknown',details]);
@@ -119,6 +128,7 @@ export function trackingRoutes(router,{detector=criarDetector(),registro=criarDe
     if(usaLembretes&&!rec.lembretes)throw fail(409,MENSAGEM_048);
    }else if(nomes.length)rec=await detector(c);
    await exigirRegistro(c,campos.kind);
+   await exigirTipoLivre(c,params.id,campos.kind);   // com conteúdo, o tipo não troca (vale para a tela e para o MCP)
    // Ocorrência de série mexida à mão deixa de acompanhar a série: editar a série depois não a sobrescreve.
    const solta=rec.lembretes?',series_detached=(series_detached OR series_id IS NOT NULL)':'';
    const result=(await c.query(`UPDATE service_activities SET ${nomes.map((n,i)=>n+'=$'+(i+3)).join(',')}${solta},revision=revision+1,updated_at=now() WHERE id=$1 AND revision=$2 RETURNING *`,[params.id,revision,...nomes.map(n=>campos[n])])).rows[0];

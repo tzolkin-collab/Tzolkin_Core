@@ -182,6 +182,22 @@ const proximaHora = () => { const ms = Date.now(); return ms - (ms % 3600000) + 
  * `inicio`/`fim` (ms) pré-preenchem o horário, vindos de um clique ou arraste na grade.
  * `aoSalvar(atividade)` recebe a atividade já mesclada com o nome da empresa e da contratação.
  */
+// Etiqueta de uma tag. A cor vem do tom (os mesmos tokens dos selos). A sugerida pela IA leva "IA" e a explicação, porque vale
+// na hora mas espera revisão: quem olha precisa saber que ninguém a aprovou ainda.
+function etiquetaDaTag(tag) {
+ const s = el('span', null, 'ag-tag'); s.dataset.tom = tag.tone || 'neutral';
+ s.append(el('span', tag.label, 'ag-tag-nome'));
+ if (tag.origin === 'ai' && !tag.reviewed) { const ia = el('span', 'IA', 'ag-tag-ia'); ia.title = 'Sugerida pela IA — aguardando revisão'; s.append(ia); }
+ return s;
+}
+function etiquetasDe(lista) {
+ if (!lista?.length) return null;
+ const caixa = el('span', null, 'ag-tags-lista'); caixa.append(...lista.map(etiquetaDaTag));
+ return caixa;
+}
+// "Revisão Técnica" e "revisao tecnica" são a mesma tag: a comparação ignora acento, maiúscula e símbolo, como o servidor.
+const chaveDaTag = nome => String(nome).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
 export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = null, inicio = null, fim = null, eventoBaseParaClonar = null, tenantPadrao = '', aoSalvar, aoAbrirPainel = null }) {
  const anterior = document.activeElement;
  const dialog = el('dialog', null, 'tracking-editor');
@@ -235,13 +251,65 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   const contratacao = campo(form, 'Contratação (opcional)', 'text', contratacoesDe(dados, '', GERAL)); contratacao.parentElement.dataset.prop = 'contratacao';
 
   // Responsável: a conta que recebe o aviso desta atividade, e só ela. Sem escolher, o lembrete segue para quem assinou o
-  // tópico, como sempre foi. A lista vem do servidor e já exclui Leitor e conta suspensa. Só aparece com a migração 055.
+  // tópico, como sempre foi. A lista vem do servidor e já exclui Leitor e conta suspensa. Só aparece com a migração 060.
   const comResponsavel = dados.agenda_responsavel === true;
   const responsaveis = dados.responsaveis || [];
   const responsavel = comResponsavel ? campo(form, 'Responsável (opcional)', 'text', [['', 'Sem responsável'], ...responsaveis.map(r => [r.id, r.name || r.email])]) : null;
   if (responsavel) {
    responsavel.parentElement.dataset.prop = 'responsavel';
    responsavel.parentElement.append(el('small', 'O lembrete desta atividade chega só a essa pessoa. Sem responsável, vai para quem assinou os lembretes da agenda.', 'detail'));
+  }
+
+  // Tags (061): classificação livre, além da categoria herdada do cliente. Pessoa e IA criam; a da IA vale na hora e aparece
+  // marcada "IA" até alguém aprovar. Escolher uma que existe só a seleciona; digitar uma nova a cria (Enter). Só com a 061.
+  const comTags = dados.agenda_tags === true;
+  let catalogoTags = [...(dados.tags || [])];
+  let tagsAtuais = comTags && evento ? [...(dados.activity_tags?.[evento.id] || [])] : [];
+  const tagsIniciais = tagsAtuais.map(t => t.id);
+  const tagsEntrada = comTags ? campo(form, 'Tags (opcional)', 'text') : null;
+  const erroDeTags = el('p', null, 'form-error'); erroDeTags.setAttribute('role', 'alert');
+  let desenharTags = () => {};
+  let adicionarPendente = async () => {};
+  if (tagsEntrada) {
+   const rotuloTags = tagsEntrada.parentElement; rotuloTags.dataset.prop = 'tags';
+   const caixa = el('div', null, 'ag-tags-caixa'), chips = el('span', null, 'ag-tags-lista');
+   const lista = el('datalist'); lista.id = 'ag-tags-' + Math.random().toString(36).slice(2, 8);
+   tagsEntrada.setAttribute('list', lista.id); tagsEntrada.placeholder = 'Buscar ou criar…'; tagsEntrada.maxLength = 40; tagsEntrada.autocomplete = 'off';
+   caixa.append(chips, tagsEntrada, lista); rotuloTags.append(caixa, erroDeTags);
+   const trocar = nova => { catalogoTags = catalogoTags.map(t => (t.id === nova.id ? nova : t)); tagsAtuais = tagsAtuais.map(t => (t.id === nova.id ? nova : t)); };
+   desenharTags = () => {
+    chips.replaceChildren(...tagsAtuais.map(tag => {
+     const s = etiquetaDaTag(tag);
+     // A IA pode ter criado a tag; aprovar é um clique, aqui mesmo, sem sair do formulário.
+     // preventDefault nos dois botões: o campo vive num <label>, e como o clique redesenha a lista antes de subir, o label
+     // deixa de ver o botão como alvo e "clica" no primeiro botão que sobrou (tirava a tag errada).
+     if (tag.origin === 'ai' && !tag.reviewed) {
+      const ok = el('button', '✓', 'ag-tag-botao'); ok.type = 'button'; ok.title = 'Aprovar esta tag'; ok.setAttribute('aria-label', 'Aprovar a tag ' + tag.label);
+      ok.addEventListener('click', async ev => { ev.preventDefault(); try { erroDeTags.textContent = ''; trocar((await api('/api/tags/' + tag.id, 'PUT', { revision: tag.revision, reviewed: true })).tag); desenharTags(); } catch (falha) { erroDeTags.textContent = falha.message; } });
+      s.append(ok);
+     }
+     const fora = el('button', '×', 'ag-tag-botao'); fora.type = 'button'; fora.title = 'Tirar esta tag'; fora.setAttribute('aria-label', 'Tirar a tag ' + tag.label);
+     fora.addEventListener('click', ev => { ev.preventDefault(); tagsAtuais = tagsAtuais.filter(t => t.id !== tag.id); desenharTags(); });
+     s.append(fora);
+     return s;
+    }));
+    lista.replaceChildren(...catalogoTags.filter(t => !tagsAtuais.some(x => x.id === t.id)).map(t => Object.assign(el('option'), { value: t.label })));
+   };
+   adicionarPendente = async () => {
+    const nome = tagsEntrada.value.trim();
+    if (nome.length < 2) return;
+    erroDeTags.textContent = '';
+    try {
+     let tag = catalogoTags.find(t => chaveDaTag(t.label) === chaveDaTag(nome));
+     if (!tag) { tag = (await api('/api/tags', 'POST', { label: nome })).tag; catalogoTags.push(tag); }
+     if (!tagsAtuais.some(t => t.id === tag.id)) tagsAtuais.push(tag);
+     tagsEntrada.value = ''; desenharTags();
+    } catch (falha) { erroDeTags.textContent = falha.message; }
+   };
+   tagsEntrada.addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); adicionarPendente(); } });
+   // Escolher da lista sugerida dispara "change" com o nome inteiro de uma tag que existe: seleciona na hora.
+   tagsEntrada.addEventListener('change', () => { if (catalogoTags.some(t => t.label === tagsEntrada.value)) adicionarPendente(); });
+   desenharTags();
   }
 
   const contratacaoEscolhida = () => (dados.engagements || []).find(e => e.id === contratacao.value) || null;
@@ -711,6 +779,11 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
   const comRegistro = dados.agenda_registro === true || aba === 'registro';
   function sincronizarAba() {
    // A série ainda não guarda responsável: oferecer o campo e perder a escolha nas ocorrências seria pior do que não oferecer.
+   if (tagsEntrada) {
+    const repete = Boolean(repeticao?.escolhida?.());
+    tagsEntrada.disabled = repete;
+    tagsEntrada.parentElement.title = repete ? 'Atividades que se repetem ainda não têm tags.' : '';
+   }
    if (responsavel) {
     const repete = Boolean(repeticao?.escolhida?.());
     responsavel.disabled = repete;
@@ -744,6 +817,16 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
    label: 'Tipo da atividade', prefix: prefixo, panelId: form.id,
    onChange: chave => { aba = chave; sincronizarAba(); },
   });
+  // Atividade com conteúdo não troca de tipo (o servidor também recusa): as outras abas ficam desativadas e dizem por quê.
+  const conteudoDoTipo = evento ? M.conteudoDaAtividade(evento, { logs: (dados.logs || []).filter(l => l.activity_id === evento.id), links: (dados.links || []).filter(l => l.activity_id === evento.id) }) : [];
+  if (conteudoDoTipo.length) {
+   const motivo = `O tipo não muda depois que a atividade tem conteúdo (${conteudoDoTipo.join(', ')}). Crie outra atividade do tipo que você quer.`;
+   for (const b of abasHost.querySelectorAll('[role="tab"]')) {
+    if (b.getAttribute('aria-selected') === 'true') continue;
+    b.disabled = true; b.setAttribute('aria-disabled', 'true'); b.title = motivo; b.dataset.travada = '';
+   }
+   abasHost.append(el('p', motivo, 'detail ag-tipo-travado'));
+  }
   if (!comRegistro) abasHost.append(el('p', 'Registro fica disponível quando a atualização do banco (migração 054) for aplicada.', 'detail'));
 
   // Valores iniciais
@@ -913,6 +996,17 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     try { await api(`/api/tracking/${atividade.id}/links`, 'POST', { system: linkSistema.value, external_id: linkId.value, url: linkUrl.value }); }
     catch (falha) { extra = { aviso: `A atividade foi salva, mas o vínculo não foi criado: ${falha.message}` }; }
    }
+   // Tags: depois de a atividade estar gravada. Se falhar, a atividade fica e a pessoa é avisada (não cria duas vezes).
+   if (tagsEntrada && !tagsEntrada.disabled) {
+    try {
+     await adicionarPendente();
+     const ids = tagsAtuais.map(t => t.id);
+     if (ids.length !== tagsIniciais.length || ids.some(id => !tagsIniciais.includes(id))) {
+      const res = await api(`/api/tracking/${atividade.id}/tags`, 'PUT', { tags: ids, revision: atividade.revision });
+      if (res.activity?.revision) { atividade = { ...atividade, ...res.activity }; if (evento) Object.assign(evento, res.activity); }
+     }
+    } catch (falha) { if (!extra) extra = {}; extra.aviso = (extra.aviso ? extra.aviso + ' ' : '') + `A atividade foi salva, mas as tags não foram gravadas: ${falha.message}`; }
+   }
    // Sala do Meet: depois de a atividade estar gravada. Se o Google falhar, a atividade fica e a pessoa é avisada (sem criar duas vezes).
    if (M.abaComMeet(aba) && meet?.value === 'meet') {
     try { atividade = (await api(`/api/tracking/${atividade.id}/meet`, 'POST', { convidados: convidados.value.trim() })).activity; }
@@ -968,6 +1062,7 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
    { rotulo: 'Cliente', valor: clienteLink(e) },
    { rotulo: 'Contratação', valor: e.engagement_label || 'Geral da empresa' },
    { rotulo: 'Categoria', valor: selo(M.ROTULOS[e.category], M.TOM_DA_CATEGORIA[e.category]) },
+   { rotulo: 'Tags', valor: etiquetasDe(dados.activity_tags?.[e.id]) },
    { rotulo: 'Responsável', valor: e.responsible_id ? ((dados.responsaveis || []).find(r => r.id === e.responsible_id)?.name || (dados.responsaveis || []).find(r => r.id === e.responsible_id)?.email || 'Conta suspensa ou removida') : null },
    { rotulo: 'Tipo', valor: textoDoTipo(e.kind) },
    { rotulo: 'Situação', valor: selo(M.ROTULOS[e.status], TOM_DA_SITUACAO[e.status] || 'neutral') },

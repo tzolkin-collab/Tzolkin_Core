@@ -30,11 +30,11 @@
 .ag-busca { position: relative; display: block; width: 220px; }
 .ag-busca svg { position: absolute; left: 10px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); color: var(--faint); pointer-events: none; }
 #view-tracking .ag-busca input { height: 34px; min-height: 34px; padding: 0 10px 0 32px; font-size: 13px; }
-.ag-visoes { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
-#view-tracking .ag-visoes button { height: 32px; min-height: 32px; padding: 0 12px; border: 0; border-right: 1px solid var(--line-strong); border-radius: 0; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 500; }
-#view-tracking .ag-visoes button:last-child { border-right: 0; }
-#view-tracking .ag-visoes button:hover { background: var(--surface-hover); color: var(--text); }
-#view-tracking .ag-visoes button[aria-pressed="true"] { background: var(--surface-hover); color: var(--text); font-weight: 600; }
+.ag-visoes, .ag-alcances { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+#view-tracking .ag-visoes button, #view-tracking .ag-alcances button { height: 32px; min-height: 32px; padding: 0 12px; border: 0; border-right: 1px solid var(--line-strong); border-radius: 0; background: var(--surface); color: var(--muted); font-size: 13px; font-weight: 500; }
+#view-tracking .ag-visoes button:last-child, #view-tracking .ag-alcances button:last-child { border-right: 0; }
+#view-tracking .ag-visoes button:hover, #view-tracking .ag-alcances button:hover { background: var(--surface-hover); color: var(--text); }
+#view-tracking .ag-visoes button[aria-pressed="true"], #view-tracking .ag-alcances button[aria-pressed="true"] { background: var(--surface-hover); color: var(--text); font-weight: 600; }
 #view-tracking .ag-acoes .primary { height: 34px; min-height: 34px; padding: 0 14px; font-size: 13px; }
 
 /* ---------- corpo: lateral + principal ---------- */
@@ -219,8 +219,8 @@
  .ag-titulo { font-size: 17px; }
  .ag-acoes { width: 100%; }
  .ag-busca { flex: 1 1 100%; width: auto; }
- .ag-visoes { flex: 1 1 100%; }
- #view-tracking .ag-visoes button { flex: 1; height: 40px; }
+ .ag-visoes, .ag-alcances { flex: 1 1 100%; }
+ #view-tracking .ag-visoes button, #view-tracking .ag-alcances button { flex: 1; height: 40px; }
  #view-tracking .ag-acoes .primary { flex: 1 1 100%; height: 44px; }
  #view-tracking :is(input, select, textarea) { font-size: 16px; }
  .ag-rolagem { --gutter: 44px; height: clamp(380px, calc(100dvh - 330px), 800px); }
@@ -1150,6 +1150,16 @@ dialog.tracking-editor {
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E") !important;
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='12' cy='7' r='4'/%3E%3C/svg%3E") !important;
 }
+/* Ícones de Responsável e Tags. O rótulo só ganha ícone se houver máscara PARA O NOME da propriedade; sem ela o ::before vira um
+   quadrado cinza. */
+.tracking-form [data-prop="responsavel"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='8.5' cy='7' r='4'/%3E%3Cpolyline points='17 11 19 13 23 9'/%3E%3C/svg%3E") !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='8.5' cy='7' r='4'/%3E%3Cpolyline points='17 11 19 13 23 9'/%3E%3C/svg%3E") !important;
+}
+.tracking-form [data-prop="tags"]::before {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z'/%3E%3Cline x1='7' y1='7' x2='7.01' y2='7'/%3E%3C/svg%3E") !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z'/%3E%3Cline x1='7' y1='7' x2='7.01' y2='7'/%3E%3C/svg%3E") !important;
+}
 .tracking-form [data-prop="contratacao"]::before {
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='20' height='14' x='2' y='7' rx='2'/%3E%3Cpath d='M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16'/%3E%3C/svg%3E") !important;
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='20' height='14' x='2' y='7' rx='2'/%3E%3Cpath d='M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16'/%3E%3C/svg%3E") !important;
@@ -1748,6 +1758,16 @@ dialog.tracking-editor {
 }
 
 
+/* ---------- tags ---------- */
+.ag-tags-lista { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+.ag-tags-caixa { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+.ag-tags-caixa input { flex: 1 1 140px; min-width: 120px; }
+.ag-tag { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 2px 8px; border-radius: 999px; font-size: 12px; line-height: 1.4; background: var(--ev-bg); color: var(--ev-fg); }
+.ag-tag-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-tag-ia { padding: 0 4px; border: 1px dashed currentColor; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.ag-tag-botao { display: inline-grid; place-items: center; width: 20px; height: 20px; min-height: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; font-size: 14px; line-height: 1; cursor: pointer; }
+.ag-tag-botao:hover, .ag-tag-botao:focus-visible { background: color-mix(in srgb, currentColor 20%, transparent); }
+
 /* ======================================================================================================================
    CELULAR (até 700px) — bloco final, de propósito depois de tudo: as regras de cima foram escritas em camadas (barra do
    Notion, janelas, !important) e remendar no meio só criava o próximo erro. Cada regra abaixo corrige algo que se via na
@@ -1806,7 +1826,13 @@ dialog.tracking-editor {
   flex: 1 1 100%; min-width: 0; max-width: 100%; box-sizing: border-box;
  }
  .tracking-form > label :is(input, select):not([type="checkbox"]):not([type="radio"]) { min-height: 44px; }
+ /* As tags ocupam a largura toda, com o campo embaixo das etiquetas; o toque nos botões das etiquetas tem 28px. */
+ .tracking-form label > .ag-tags-caixa { flex: 1 1 100%; }
+ .ag-tag-botao { width: 28px; height: 28px; }
  /* Data e hora: o seletor nativo do celular é largo; sem isto o ícone passava da borda direita. */
  .tracking-form input[type="datetime-local"], .tracking-form input[type="date"], .tracking-form input[type="time"] {
   flex: 1 1 100% !important; min-width: 0 !important; width: 100% !important; max-width: 100% !important; text-align: left; }
 }
+/* Seletor "quantos dias" da lista: só aparece na visão Agenda. O atributo hidden perderia para o display do .ag-visoes. */
+#view-tracking .ag-alcances[hidden] { display: none; }
+#view-tracking .ag-limpar-filtros { align-self: flex-start; margin-top: 8px; }

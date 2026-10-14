@@ -36,6 +36,32 @@ const kindsDa = aba => KINDS_DA_ABA[aba] || KINDS_DA_ABA.task;
 export const abaDoKind = kind => ABAS.find(aba => KINDS_DA_ABA[aba].includes(kind)) || 'task';
 /** Tipo que a aba grava. Mantém o tipo atual quando ele já pertence à aba, para não reescrever 'entregavel' como 'tarefa'. */
 export const kindDaAba = (aba, kindAtual = null) => (kindsDa(aba).includes(kindAtual) ? kindAtual : kindsDa(aba)[0]);
+/**
+ * Depois que a atividade tem conteúdo, o tipo (Call, Task, Registro) deixa de poder mudar: cada tipo mostra campos próprios e trocar
+ * esconderia o que já está lá. MESMA definição do servidor (apps/api/src/platform/agenda-tipo.mjs), que é quem de fato recusa; aqui
+ * só se avisa antes. `logs`/`links`: os da atividade já carregados (a janela da tela pode não trazer todos; o servidor confere).
+ */
+export const descricaoVazia = d => {
+ if (d == null) return true;
+ const t = String(d).trim();
+ if (!t) return true;
+ try { const j = JSON.parse(t); if (j && Array.isArray(j.blocks)) return j.blocks.length === 0; } catch { /* texto antigo */ }
+ return false;
+};
+export const MOTIVOS_DO_TIPO_TRAVADO = Object.freeze([
+ ['description', 'descrição'], ['location', 'local'], ['meeting_url', 'link da reunião'], ['google_event_id', 'evento no Google Agenda'],
+]);
+/** Lista, em palavras, o que já existe na atividade e impede trocar o tipo. Vazia = o tipo ainda pode mudar. */
+export function conteudoDaAtividade(a, { logs = [], links = [] } = {}) {
+ if (!a) return [];
+ const tem = [];
+ if (!descricaoVazia(a.description)) tem.push('descrição');
+ for (const [campo, nome] of MOTIVOS_DO_TIPO_TRAVADO.slice(1)) if (a[campo] != null && String(a[campo]).trim() !== '') tem.push(nome);
+ if (logs.length) tem.push('apontamentos');
+ if (links.length) tem.push('vínculos');
+ return tem;
+}
+export const tipoTravado = (a, extra) => conteudoDaAtividade(a, extra).length > 0;
 /** Videoconferência é coisa de Call: em Task e Registro o bloco do Meet não aparece. */
 export const abaComMeet = aba => aba === 'call';
 /** Call e Task têm hora; Task exige também o prazo — é a diferença dela para Registro, que pode não ter data nenhuma. */
@@ -121,27 +147,33 @@ export function gradeDoMes(dia) {
 export function intervalo(a, b) { if (b < a) [a, b] = [b, a]; const r = []; for (let d = a; d <= b && r.length < 366; d = somarDias(d, 1)) r.push(d); return r; }
 /** Período livre escolhido no mini-calendário: de `dia` até `fim` (inclusive). Até 7 dias vira grade; mais que isso, lista. */
 export const MAX_PERIODO = 62;
-export function janela(visao, dia, ate = dia) {
+// Quantos dias a visão Agenda (lista) mostra a partir do dia escolhido. 1 = só aquele dia (o "Hoje" certo); 31 é o que sempre foi.
+export const ALCANCES = Object.freeze([1, 7, 31]);
+export const ALCANCE_PADRAO = 31;
+export const ROTULO_DO_ALCANCE = Object.freeze({ 1: 'Dia', 7: '7 dias', 31: '31 dias' });
+export const alcanceValido = n => (ALCANCES.includes(Number(n)) ? Number(n) : ALCANCE_PADRAO);
+export function janela(visao, dia, ate = dia, alcance = ALCANCE_PADRAO) {
  if (visao === 'periodo') return { from: dia, to: somarDias(ate, 1) };
  if (visao === 'dia') return { from: dia, to: somarDias(dia, 1) };
  if (visao === 'semana') { const seg = segundaDe(dia); return { from: seg, to: somarDias(seg, 7) }; }
- if (visao === 'agenda') return { from: dia, to: somarDias(dia, 31) };
+ if (visao === 'agenda') return { from: dia, to: somarDias(dia, alcanceValido(alcance)) };
  const g = gradeDoMes(dia); return { from: g[0][0], to: somarDias(g[g.length - 1][6], 1) };
 }
 /** Dia que vira o foco ao andar para trás/frente na visão. No mês mantém o dia, ajustado ao tamanho do mês de chegada. */
-export function navegar(visao, dia, sentido) {
+export function navegar(visao, dia, sentido, alcance = ALCANCE_PADRAO) {
  if (visao === 'dia') return somarDias(dia, sentido);
  if (visao === 'semana') return somarDias(dia, 7 * sentido);
- if (visao === 'agenda') return somarDias(dia, 30 * sentido);
+ if (visao === 'agenda') return somarDias(dia, (alcanceValido(alcance) === ALCANCE_PADRAO ? 30 : alcanceValido(alcance)) * sentido);
  const [a, m, d] = dia.split('-').map(Number), alvo = new Date(Date.UTC(a, m - 1 + sentido, 1)), ult = new Date(Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, 0)).getUTCDate();
  return `${alvo.getUTCFullYear()}-${pad(alvo.getUTCMonth() + 1)}-${pad(Math.min(d, ult))}`;
 }
 const fmt = (opcoes, dia) => new Intl.DateTimeFormat('pt-BR', { timeZone: 'UTC', ...opcoes }).format(new Date(dia + 'T12:00:00Z'));
-export function titulo(visao, dia, ate = dia) {
+export function titulo(visao, dia, ate = dia, alcance = ALCANCE_PADRAO) {
  if (visao === 'periodo') return `${fmt({ day: 'numeric', month: 'short' }, dia)} – ${fmt({ day: 'numeric', month: 'short', year: 'numeric' }, ate)}`;
  if (visao === 'dia') return fmt({ weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }, dia);
  if (visao === 'mes') return fmt({ month: 'long', year: 'numeric' }, dia);
- const j = janela(visao, dia), ini = j.from, fim = somarDias(j.to, -1);
+ if (visao === 'agenda' && alcanceValido(alcance) === 1) return titulo('dia', dia);
+ const j = janela(visao, dia, dia, alcance), ini = j.from, fim = somarDias(j.to, -1);
  if (visao === 'agenda') return `${fmt({ day: 'numeric', month: 'short' }, ini)} – ${fmt({ day: 'numeric', month: 'short', year: 'numeric' }, fim)}`;
  if (mesmoMes(ini, fim)) return `${fmt({ day: 'numeric' }, ini)} – ${fmt({ day: 'numeric', month: 'long', year: 'numeric' }, fim)}`;
  if (ini.slice(0, 4) === fim.slice(0, 4)) return `${fmt({ day: 'numeric', month: 'short' }, ini)} – ${fmt({ day: 'numeric', month: 'short', year: 'numeric' }, fim)}`;
@@ -240,13 +272,24 @@ export function redimensionar(e, novoFim, minimo = 15) {
 }
 const semAcento = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
 /** Filtros da barra lateral e da busca. `categorias` é um Set com as visíveis (vazio ou ausente = todas). */
-export function filtrar(eventos, { texto = '', categorias = null, status = '', tenant = '' } = {}) {
+/**
+ * Filtros da agenda, todos somados (E). Vazio = não filtra. `aba` é o tipo (call/task/registro); `responsavel` e `tag` aceitam
+ * SEM_VALOR para "só as sem responsável / sem tag". `tagsDe(e)` devolve os ids das tags da atividade e `textoExtra(e)` o que mais a
+ * busca de texto deve olhar (nome do responsável, nomes das tags): a regra não conhece a tela, quem chama conta o que tem.
+ */
+export const SEM_VALOR = '__nenhum';
+export function filtrar(eventos, { texto = '', categorias = null, status = '', tenant = '', aba = '', engagement = '', responsavel = '', tag = '', tagsDe = () => [], textoExtra = () => '' } = {}) {
  const q = semAcento(texto).trim();
- return eventos.filter(e =>
-  (!categorias || !categorias.size || categorias.has(e.category)) &&
-  (!status || e.status === status) &&
-  (!tenant || e.tenant_id === tenant) &&
-  (!q || semAcento([e.title, e.tenant_name, e.engagement_label, e.location, ROTULOS[e.category], ROTULOS[e.kind]].join(' ')).includes(q)));
+ return eventos.filter(e => {
+  if (categorias && categorias.size && !categorias.has(e.category)) return false;
+  if (status && e.status !== status) return false;
+  if (tenant && e.tenant_id !== tenant) return false;
+  if (aba && abaDoKind(e.kind) !== aba) return false;
+  if (engagement && (engagement === SEM_VALOR ? e.engagement_id : e.engagement_id !== engagement)) return false;
+  if (responsavel && (responsavel === SEM_VALOR ? e.responsible_id : e.responsible_id !== responsavel)) return false;
+  if (tag) { const ids = tagsDe(e) || []; if (tag === SEM_VALOR ? ids.length : !ids.includes(tag)) return false; }
+  return !q || semAcento([e.title, e.tenant_name, e.engagement_label, e.location, ROTULOS[e.category], ROTULOS[e.kind], ROTULO_DA_ABA[abaDoKind(e.kind)], ROTULOS[e.status], textoExtra(e)].join(' ')).includes(q);
+ });
 }
 /** Dias da janela que têm evento, com os eventos de cada um (visão Agenda). */
 export function agruparPorDia(eventos, de, ate) {
