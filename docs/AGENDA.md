@@ -186,3 +186,33 @@ nascem sem dono): a tela desativa o campo em vez de perder a escolha. Atividades
 até o MCP aprender o campo.
 
 **Sem a migração 060** o campo não aparece, a API responde 409 com texto claro e o lembrete segue para quem assinou o tópico.
+
+## Tags da atividade (migração 061)
+
+Além da categoria — que continua vindo da contratação ou do cliente, automática e separada —, a atividade pode ter **tags**:
+classificação livre, até **12 por atividade**, que aparecem sempre (no formulário e como etiquetas na visualização).
+
+**Como se usa na tela.** No campo "Tags (opcional)": escolher uma da lista sugerida só a seleciona; digitar um nome novo e dar
+Enter a cria na hora. "Revisão técnica" e "revisao tecnica" são a mesma tag (a comparação ignora acento, maiúscula e símbolo,
+no servidor e na tela). Tirar uma tag da atividade é o × da etiqueta.
+
+**Tag criada pela IA** (pelo MCP) **vale na hora**, mas leva o selo "IA" e a explicação "aguardando revisão" até alguém aprovar:
+o ✓ da etiqueta, no formulário, aprova. Renomear, trocar a cor e arquivar existem na API e no MCP; ainda não há tela de catálogo.
+
+**Nada se apaga.** Arquivar uma tag grava `archived_at`; tirar uma tag de uma atividade grava `removed_at`. O código das tags nunca
+emite `DELETE` (há teste que confere).
+
+| Onde | O quê |
+|---|---|
+| `GET /api/tags` | catálogo (`?arquivadas=1` inclui as arquivadas) e os tons disponíveis |
+| `POST /api/tags` | cria; idempotente: nome que já existe devolve a tag existente (`created: false`) |
+| `PUT /api/tags/:id` | aprova, renomeia, troca a cor, arquiva ou reativa; a revisão lida é obrigatória |
+| `PUT /api/tracking/:id/tags` | define as tags da atividade (lista de ids; revisão obrigatória) |
+| MCP | `listar_tags`, `criar_tag`, `revisar_tag`; parâmetro `tags` (lista de nomes) em `criar_atividade` e `editar_atividade` |
+
+Ler é para qualquer operador logado; escrever exige Administrador ou Membro (Leitor lê, não cria nem muda).
+
+**Limites conhecidos.** Atividade que se **repete** não tem tags (a tela desativa o campo); não há filtro por tag na agenda; falta a
+tela para revisar o catálogo em bloco.
+
+**Sem a migração 061** o campo não aparece, a leitura responde "indisponível" e a escrita responde 409 com texto claro.
