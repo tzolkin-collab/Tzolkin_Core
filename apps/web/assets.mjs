@@ -27,6 +27,10 @@ const FILES = {
  '/stage-requirements.js':['stage-requirements.js','text/javascript'],
  '/media.css':['media.css','text/css'],
  '/': ['index.html', 'text/html'],
+ // Páginas públicas exigidas pelo Google para publicar o app OAuth (links do Branding da tela de consentimento).
+ '/privacidade': ['privacidade.html', 'text/html'],
+ '/termos': ['termos.html', 'text/html'],
+ '/legal.css': ['legal.css', 'text/css'],
  // O favicon precisa de uma rota própria e estável. Não depender de
  // /logo.svg aqui: navegadores, crawlers e instaladores PWA procuram
  // /favicon.svg ou /favicon.ico diretamente.

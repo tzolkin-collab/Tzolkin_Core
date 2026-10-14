@@ -1,0 +1,12 @@
+/* Páginas públicas de Privacidade e Termos (exigidas pelo Google para publicar o app OAuth). Sem JS, sem dependência do painel. */
+:root { color-scheme: light dark; --fundo: #ffffff; --texto: #1c1c1e; --suave: #5f6368; --link: #1a56db; }
+@media (prefers-color-scheme: dark) { :root { --fundo: #141416; --texto: #ececee; --suave: #a0a3a8; --link: #7aa7ff; } }
+body { margin: 0; background: var(--fundo); color: var(--texto); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.legal { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; }
+.legal h1 { font-size: 1.75rem; line-height: 1.25; margin: 0 0 4px; }
+.legal h2 { font-size: 1.1rem; margin: 28px 0 6px; }
+.legal p, .legal ul { margin: 8px 0; }
+.legal li { margin: 4px 0; }
+.legal a { color: var(--link); }
+.legal-data { color: var(--suave); font-size: .9rem; }
+.legal-rodape { margin-top: 36px; padding-top: 16px; border-top: 1px solid color-mix(in srgb, var(--texto) 15%, transparent); }
