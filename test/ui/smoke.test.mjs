@@ -1961,7 +1961,7 @@ test('agenda: tags só com a migração 056; escolhe as que existem, cria as nov
  await RECARREGAR_AGENDA();   // a tela guarda a listagem anterior: as tags novas só chegam num novo GET
  await pagina.avaliar(`document.querySelector('#view-tracking .ag-evento[data-id="00000000-0000-4000-8000-000000000005"]').click()`);
  await pagina.esperar(PAINEL_ABERTO);
- const painel = await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda .ag-tag')].map(t => t.textContent.replace(/\\s+/g, ' ').trim())`);
+ const painel = await pagina.avaliar(`[...document.querySelectorAll('#peek-agenda .ag-tag')].map(t => t.querySelector('.ag-tag-nome').textContent + (t.querySelector('.ag-tag-ia') ? ' IA' : ''))`);
  assert.deepEqual(painel, ['Revisão Técnica', 'Pendente IA']);
  await FECHAR_TUDO();
  await pagina.avaliar(`${NO_AGENDA}.tagsEstado = false; ${NO_AGENDA}.tags = []; ${NO_AGENDA}.activityTags = {}`); await RECARREGAR_AGENDA();

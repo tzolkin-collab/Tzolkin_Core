@@ -281,13 +281,15 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     chips.replaceChildren(...tagsAtuais.map(tag => {
      const s = etiquetaDaTag(tag);
      // A IA pode ter criado a tag; aprovar é um clique, aqui mesmo, sem sair do formulário.
+     // preventDefault nos dois botões: o campo vive num <label>, e como o clique redesenha a lista antes de subir, o label
+     // deixa de ver o botão como alvo e "clica" no primeiro botão que sobrou (tirava a tag errada).
      if (tag.origin === 'ai' && !tag.reviewed) {
       const ok = el('button', '✓', 'ag-tag-botao'); ok.type = 'button'; ok.title = 'Aprovar esta tag'; ok.setAttribute('aria-label', 'Aprovar a tag ' + tag.label);
-      ok.addEventListener('click', async () => { try { erroDeTags.textContent = ''; trocar((await api('/api/tags/' + tag.id, 'PUT', { revision: tag.revision, reviewed: true })).tag); desenharTags(); } catch (falha) { erroDeTags.textContent = falha.message; } });
+      ok.addEventListener('click', async ev => { ev.preventDefault(); try { erroDeTags.textContent = ''; trocar((await api('/api/tags/' + tag.id, 'PUT', { revision: tag.revision, reviewed: true })).tag); desenharTags(); } catch (falha) { erroDeTags.textContent = falha.message; } });
       s.append(ok);
      }
      const fora = el('button', '×', 'ag-tag-botao'); fora.type = 'button'; fora.title = 'Tirar esta tag'; fora.setAttribute('aria-label', 'Tirar a tag ' + tag.label);
-     fora.addEventListener('click', () => { tagsAtuais = tagsAtuais.filter(t => t.id !== tag.id); desenharTags(); });
+     fora.addEventListener('click', ev => { ev.preventDefault(); tagsAtuais = tagsAtuais.filter(t => t.id !== tag.id); desenharTags(); });
      s.append(fora);
      return s;
     }));
