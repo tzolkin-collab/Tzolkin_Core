@@ -20,19 +20,23 @@ const SUPPORT = {
  asaas:  { card: ['brl'], pix: ['brl'], boleto: ['brl'] },
 };
 
-export function methodAvailable(provider, method, currency) {
+export const asaasCardEnabled = (env = process.env) =>
+ String(env?.ASAAS_CARD_ENABLED ?? '').trim().toLowerCase() === 'true';
+
+export function methodAvailable(provider, method, currency, env = process.env) {
+ if (provider === 'asaas' && method === 'card' && !asaasCardEnabled(env)) return false;
  const moedas = SUPPORT[provider]?.[method];
  if (moedas === undefined) return false;
  return moedas === null || moedas.includes(String(currency).toLowerCase());
 }
 
-export const availableMethods = (provider, currency) =>
- METHODS.filter(method => methodAvailable(provider, method, currency));
+export const availableMethods = (provider, currency, env = process.env) =>
+ METHODS.filter(method => methodAvailable(provider, method, currency, env));
 
 // Recusa no momento de salvar, não na hora de pagar: o operador descobre o erro
 // enquanto edita, e não pelo comprador que não conseguiu concluir.
-export function assertMethods(provider, currency, methods) {
- const invalido = methods.find(method => !methodAvailable(provider, method, currency));
+export function assertMethods(provider, currency, methods, env = process.env) {
+ const invalido = methods.find(method => !methodAvailable(provider, method, currency, env));
  if (invalido) throw fail(400, `${invalido} não está disponível para ${provider} em ${String(currency).toUpperCase()}.`);
  return methods;
 }

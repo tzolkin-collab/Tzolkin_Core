@@ -21,6 +21,9 @@ test('disponibilidade de método respeita provedor e moeda', () => {
  assert.equal(methodAvailable('stripe', 'boleto', 'usd'), false);
  // O Asaas é BRL e só BRL, o que billing.mjs já impõe na oferta.
  assert.equal(methodAvailable('asaas', 'card', 'usd'), false);
+ assert.equal(methodAvailable('asaas', 'card', 'brl'), false, 'cartão no Asaas fica bloqueado enquanto ASAAS_CARD_ENABLED não for true');
+ assert.equal(methodAvailable('asaas', 'card', 'brl', { ASAAS_CARD_ENABLED: 'false' }), false);
+ assert.equal(methodAvailable('asaas', 'card', 'brl', { ASAAS_CARD_ENABLED: 'true' }), true);
  assert.equal(methodAvailable('asaas', 'pix', 'brl'), true);
  // Carteira anda sobre cartão na Stripe; no Asaas não existe.
  assert.equal(methodAvailable('asaas', 'wallet', 'brl'), false);
@@ -28,13 +31,16 @@ test('disponibilidade de método respeita provedor e moeda', () => {
  assert.equal(methodAvailable('paypal', 'card', 'brl'), false);
 
  assert.deepEqual(availableMethods('stripe', 'usd'), ['card', 'wallet']);
- assert.deepEqual(availableMethods('asaas', 'brl'), ['card', 'pix', 'boleto']);
+ assert.deepEqual(availableMethods('asaas', 'brl'), ['pix', 'boleto']);
+ assert.deepEqual(availableMethods('asaas', 'brl', { ASAAS_CARD_ENABLED: 'true' }), ['card', 'pix', 'boleto']);
 });
 
 test('método impossível é recusado ao salvar, nomeando o culpado', () => {
  assert.deepEqual(assertMethods('stripe', 'brl', ['card', 'pix']), ['card', 'pix']);
  erro(() => assertMethods('stripe', 'usd', ['card', 'pix']), 400, /pix não está disponível para stripe em USD/);
  erro(() => assertMethods('asaas', 'brl', ['wallet']), 400, /wallet/);
+ erro(() => assertMethods('asaas', 'brl', ['card']), 400, /card não está disponível para asaas em BRL/);
+ assert.deepEqual(assertMethods('asaas', 'brl', ['card', 'pix'], { ASAAS_CARD_ENABLED: 'true' }), ['card', 'pix']);
 });
 
 test('total soma bumps e aplica cupom em aritmética inteira', () => {

@@ -198,3 +198,72 @@ test('a migração 060 só acrescenta uma coluna, com chave para a conta, sem ap
  assert.doesNotMatch(codigo, /\bDROP\b|\bDELETE\b|\bTRUNCATE\b/i, 'nada é apagado');
  assert.doesNotMatch(codigo, /responsible_id uuid[^;]*NOT NULL/i, 'a coluna não é obrigatória: toda atividade que existe fica sem responsável');
 });
+
+test('MCP: criar_atividade, editar_atividade e listar_atividades aceitam responsible_id por UUID ou e-mail e auditam troca', async () => {
+ const { mcpRoutes, _internals: mcp } = await import('../../apps/api/src/modules/mcp.mjs');
+ for (const n of ['listar_atividades', 'criar_atividade', 'editar_atividade']) {
+  assert.ok(mcp.TOOLS.find(t => t.name === n).inputSchema.properties.responsible_id, `${n} expõe responsible_id`);
+ }
+ const rotas = new Map();
+ const router = { get: (p, h) => rotas.set(`GET ${p}`, h), post: (p, h) => rotas.set(`POST ${p}`, h), delete: (p, h) => rotas.set(`DELETE ${p}`, h) };
+ const auditoria = [];
+ let gravada = { ...base, revision: 1, responsible_id: null };
+ const query = async (sql, params = []) => {
+  if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return {};
+  if (sql.includes('FROM operator_accounts')) {
+   const alvo = String(params[0]).toLowerCase();
+   return { rows: CONTAS.filter(c => c.id === alvo || c.email.toLowerCase() === alvo) };
+  }
+  if (sql.includes('INSERT INTO service_activities')) {
+   const cols = sql.match(/INSERT INTO service_activities\(([^)]+)\)/)[1].split(',').map(s => s.trim());
+   gravada = { revision: 1 };
+   cols.forEach((c, i) => { gravada[c] = params[i]; });
+   return { rows: [gravada] };
+  }
+  if (sql.includes('SELECT * FROM service_activities WHERE id = $1')) return { rows: [gravada] };
+  if (sql.includes('UPDATE service_activities SET')) {
+   gravada = { ...gravada, responsible_id: params[2], revision: gravada.revision + 1 };
+   return { rows: [gravada] };
+  }
+  if (sql.includes('INSERT INTO service_activity_audit')) {
+   auditoria.push({ acao: params[1], detalhes: JSON.parse(params[3]) });
+   return {};
+  }
+  return { rows: [] };
+ };
+ const pool = { query, connect: async () => ({ query, release() {} }) };
+ mcpRoutes(router, { pool, env: { SPARK_MCP_TOKEN: 'token-mcp-1234567890123' }, responsavel: async () => true, tags: async () => false });
+ const chamar = async (name, args) => {
+  let out;
+  await rotas.get('POST /api/mcp')({
+   pool,
+   req: {
+    headers: { authorization: 'Bearer token-mcp-1234567890123', 'content-type': 'application/json' },
+    async *[Symbol.asyncIterator]() { yield Buffer.from(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } })); },
+   },
+   reply: (st, b) => { out = b; },
+  });
+  return out;
+ };
+
+ // Criar informando e-mail da Ana -> resolve para ANA.id
+ const rCriar = await chamar('criar_atividade', {
+  tenant_id: TENANT, kind: 'tarefa', title: 'Revisar escopo', starts_at: '2026-10-10 10:00', ends_at: '2026-10-10 11:00', responsible_id: 'ANA@tzolkin.test',
+ });
+ assert.equal(rCriar.result.isError, false);
+ assert.equal(JSON.parse(rCriar.result.content[0].text).activity.responsible_id, ANA.id);
+
+ // Editar trocando de Ana para Bia -> grava responsible_changed na trilha
+ const rEditar = await chamar('editar_atividade', { id: gravada.id, responsible_id: BIA.id });
+ assert.equal(rEditar.result.isError, false);
+ assert.equal(JSON.parse(rEditar.result.content[0].text).activity.responsible_id, BIA.id);
+ const trilhaResp = auditoria.find(a => a.acao === 'responsible_changed');
+ assert.ok(trilhaResp, 'registrou responsible_changed');
+ assert.equal(trilhaResp.detalhes.de, ANA.id);
+ assert.equal(trilhaResp.detalhes.para, BIA.id);
+
+ // Leitor recusado
+ const rInvalido = await chamar('editar_atividade', { id: gravada.id, responsible_id: LEITOR.email });
+ assert.equal(rInvalido.result.isError, true);
+ assert.match(rInvalido.result.content[0].text, /conta ativa de Administrador ou Membro/);
+});

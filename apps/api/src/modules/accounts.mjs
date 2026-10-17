@@ -175,19 +175,34 @@ export function accountRoutes(router, { env = process.env } = {}) {
   const teamId = time.rows[0].id;
 
   if (body.members) {
-   // Substitui a composição inteira: enviar a lista é declarar quem é o time.
-   // Remover por omissão é mais previsível que acumular membros esquecidos.
-   await client.query('DELETE FROM team_members WHERE team_id=$1', [teamId]);
+   // Substitui a composição declarada sem apagar quem continua no time:
+   // faz upsert dos membros atuais e só emite DELETE se alguém realmente saiu.
+   const resolvidos = [];
    for (const m of body.members) {
     if (!m || typeof m.email !== 'string') throw fail(400, 'Membro inválido.');
     const papel = m.role ?? 'member';
     if (!PAPEL_TIME.includes(papel)) throw fail(400, 'Papel de time inválido.');
-    const conta = await client.query('SELECT id FROM operator_accounts WHERE email=$1', [m.email.trim().toLowerCase()]);
+    const emailMembro = m.email.trim().toLowerCase();
+    const conta = await client.query('SELECT id FROM operator_accounts WHERE email=$1', [emailMembro]);
     // Não cria conta implicitamente: um membro sem conta é erro de cadastro,
     // não motivo para inventar um operador.
     if (!conta.rowCount) throw fail(400, `Conta não cadastrada: ${m.email}`);
-    await client.query('INSERT INTO team_members(team_id,account_id,role) VALUES($1,$2,$3)',
-     [teamId, conta.rows[0].id, papel]);
+    resolvidos.push({ id: conta.rows[0].id, email: emailMembro, role: papel });
+   }
+   const emailsMantidos = new Set(resolvidos.map(r => r.email));
+   const alguemSaiu = membrosAntes.some(m => !emailsMantidos.has(m.email.toLowerCase()));
+   if (alguemSaiu) {
+    if (resolvidos.length) {
+     await client.query('DELETE FROM team_members WHERE team_id=$1 AND NOT (account_id = ANY($2::uuid[]))', [teamId, resolvidos.map(r => r.id)]);
+    } else {
+     await client.query('DELETE FROM team_members WHERE team_id=$1', [teamId]);
+    }
+   }
+   for (const r of resolvidos) {
+    await client.query(
+     `INSERT INTO team_members(team_id,account_id,role) VALUES($1,$2,$3)
+      ON CONFLICT(team_id,account_id) DO UPDATE SET role=EXCLUDED.role WHERE team_members.role<>EXCLUDED.role`,
+     [teamId, r.id, r.role]);
    }
   }
   const descricao = body.description == null ? null : text(body.description, 1, 500);

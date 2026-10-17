@@ -7,6 +7,7 @@ import { digest } from '../platform/session.mjs';
 import { CATEGORIES, KINDS, activityInput, activityUpdateInput, opcional, lembretes } from '../platform/tracking-model.mjs';
 import { markdownParaEditorJs, editorJsParaMarkdown } from '../platform/markdown-editorjs.mjs';
 import { exigirTipoLivre } from '../platform/agenda-tipo.mjs';
+import { criarDetectorResponsavel, MENSAGEM_060 } from '../platform/agenda-recursos.mjs';
 import { criarDetectorTags, garantirTag, revisarTag, listarTags, definirTagsDaAtividade, tagsDasAtividades, tagPublica, autorDaIa, MENSAGEM_061 } from '../platform/agenda-tags.mjs';
 
 const MCP_PROTOCOL_VERSION = '2024-11-05';
@@ -31,11 +32,12 @@ Ao preencher o campo 'description', você DEVE formatar o texto utilizando Markd
 - Tópicos organizados com marcadores ('- ').
 - Citações ('> ') para observações críticas ou definições de alinhamento.
 
-## 2b. TAGS
-Atividades podem ter tags: classificação livre, além da categoria que vem do cliente. Use 'listar_tags' ANTES de criar uma tag nova e reaproveite as que existem:
+## 2b. TAGS E RESPONSÁVEL
+- **Tags:** Atividades podem ter tags: classificação livre, além da categoria que vem do cliente. Use 'listar_tags' ANTES de criar uma tag nova e reaproveite as que existem:
 "Revisão Técnica" e "revisao tecnica" são a mesma tag, e pedir um nome que já existe devolve a tag que está lá. Tag criada por você vale na hora, mas
 aparece como "sugerida pela IA" até uma pessoa (ou 'revisar_tag') aprovar, renomear ou arquivar. Envie 'tags' como lista de nomes em 'criar_atividade' e 'editar_atividade'.
 Elas importam sobretudo quando a atividade não tem cliente ou é da própria Tzolkin, onde não há categoria para herdar.
+- **Responsável ('responsible_id'):** Atividades podem ter um operador responsável (conta ativa de Administrador ou Membro). Você pode informar o UUID ou o e-mail do operador em 'responsible_id' ao criar, editar ou filtrar atividades ('null' ou vazio remove o responsável).
 
 ## 3. HORÁRIOS E FUSO
 - O Core opera no fuso horário de Brasília (UTC-3). Sempre envie horários em formato ISO 8601 (ex.: '2026-10-08T14:00:00-03:00') ou 'YYYY-MM-DDTHH:mm:ss-03:00'.
@@ -85,6 +87,7 @@ const TOOLS = [
     to: { type: 'string', description: 'Data final no formato YYYY-MM-DD ou ISO 8601 (padrão: 30 dias à frente)' },
     tenant_id: { type: 'string', description: 'UUID da empresa para filtrar' },
     engagement_id: { type: 'string', description: 'UUID da contratação para filtrar' },
+    responsible_id: { type: 'string', description: 'UUID ou e-mail do operador responsável para filtrar' },
     kind: { type: 'string', enum: ['sessao', 'tarefa', 'registro', 'entregavel', 'feature'], description: 'Tipo da atividade' },
     status: { type: 'string', enum: ['planned', 'done', 'cancelled'], description: 'Situação da atividade' },
     busca: { type: 'string', description: 'Termo para busca em título ou descrição' },
@@ -112,6 +115,7 @@ const TOOLS = [
     kind: { type: 'string', enum: ['sessao', 'tarefa', 'registro'], description: 'Tipo: sessao (Call), tarefa (Task), registro (Registro/Apontamento)' },
     tenant_id: { type: 'string', description: 'UUID da empresa vinculada' },
     engagement_id: { type: 'string', description: 'UUID da contratação vinculada (opcional, herda a categoria)' },
+    responsible_id: { type: 'string', description: 'UUID ou e-mail do operador responsável (conta ativa de Administrador ou Membro)' },
     category: { type: 'string', enum: ['mentoria', 'consultoria', 'assessoria', 'software', 'educacional', 'outro'], description: 'Categoria (se omitida, herda da contratação)' },
     starts_at: { type: 'string', description: 'Data/hora de início no fuso local (ISO 8601 ou YYYY-MM-DDTHH:mm:ss-03:00)' },
     ends_at: { type: 'string', description: 'Data/hora de término/prazo no fuso local (obrigatório para sessao e tarefa)' },
@@ -125,7 +129,7 @@ const TOOLS = [
  },
  {
   name: 'editar_atividade',
-  description: 'Edita uma atividade existente no Core (título, horários, tipo, status, descrição .md, local).',
+  description: 'Edita uma atividade existente no Core (título, horários, tipo, status, descrição .md, local, responsável, tags).',
   inputSchema: {
    type: 'object',
    properties: {
@@ -139,6 +143,7 @@ const TOOLS = [
     description: { type: 'string', description: 'Nova descrição estruturada em Markdown (.md)' },
     location: { type: 'string', description: 'Novo local' },
     engagement_id: { type: 'string', description: 'Novo UUID de contratação vinculada' },
+    responsible_id: { type: ['string', 'null'], description: 'UUID ou e-mail do novo operador responsável (null ou vazio remove o responsável)' },
     tags: { type: 'array', items: { type: 'string' }, description: 'Lista COMPLETA de tags da atividade (substitui as atuais); [] tira todas. Nomes, até 12.' },
    },
    required: ['id'],
@@ -249,7 +254,7 @@ async function resolverAutenticacaoMcp({ pool, req, env = process.env, operator 
  return null;
 }
 
-export function mcpRoutes(router, { pool, clock = Date.now, env = process.env } = {}) {
+export function mcpRoutes(router, { pool, clock = Date.now, env = process.env, responsavel = criarDetectorResponsavel(), tags = criarDetectorTags() } = {}) {
  // 1. Gestão de tokens MCP para Configurações (requer sessão de operador)
  router.get('/api/mcp/tokens', async ({ pool, reply, operator }) => {
   if (!operator) throw fail(401, 'Entre para continuar.');
@@ -634,8 +639,25 @@ button:hover { background: #388bfd; }
   { webhook: true, auth: 'public' }
  );
 
+ // Responsável (060): conta de operador ativa (Administrador ou Membro), localizada por UUID ou e-mail.
+ const detectorResponsavel = responsavel;
+ const exigirResponsavel = async () => { if (!(await detectorResponsavel(pool))) throw new Error(MENSAGEM_060); };
+ const resolverResponsavel = async (db, valor) => {
+  if (valor === null || valor === '') return null;
+  const s = String(valor).trim();
+  if (!s) return null;
+  const sql = isUuid(s)
+   ? 'SELECT id, email, name, role, status FROM operator_accounts WHERE id = $1'
+   : 'SELECT id, email, name, role, status FROM operator_accounts WHERE lower(email) = lower($1)';
+  const r = (await db.query(sql, [s])).rows[0];
+  if (!r || r.status !== 'active' || !['owner', 'member'].includes(r.role)) {
+   throw new Error('Responsável inválido: escolha uma conta ativa de Administrador ou Membro.');
+  }
+  return r.id;
+ };
+
  // Tags (061). Chamar pelo MCP é sempre ação da IA: a tag criada por aqui nasce "sugerida" e vale na hora.
- const detectorTags = criarDetectorTags();
+ const detectorTags = tags;
  const exigirTags = async () => { if (!(await detectorTags(pool))) throw new Error(MENSAGEM_061); };
  const nomesDeTags = lista => (lista || []).map(t => ({ label: t.label, sugerida_pela_ia: t.origin === 'ai' && !t.reviewed_at }));
  // Nomes que a IA mandou -> ids, criando os que faltam. Dentro da transação de quem chama: se algo falhar, nenhuma tag nasce.
@@ -756,9 +778,11 @@ button:hover { background: #388bfd; }
     const fromStr = args.from ? String(args.from).slice(0, 10) : dePadrao;
     const toStr = args.to ? String(args.to).slice(0, 10) : atePadrao;
 
+    if (args.responsible_id !== undefined) await exigirResponsavel();
+    const temResp = await detectorResponsavel(pool);
     const params = [fromStr, toStr];
     let sql = `SELECT a.id, a.tenant_id, t.name AS tenant_name, a.engagement_id, e.label AS engagement_label,
-       a.category, a.kind, a.title, a.status, a.starts_at, a.ends_at, a.description, a.location, a.meeting_url, a.revision
+       a.category, a.kind, a.title, a.status, a.starts_at, a.ends_at, a.description, a.location, a.meeting_url, a.revision${temResp ? ', a.responsible_id' : ''}
        FROM service_activities a
        JOIN tenants t ON t.id = a.tenant_id
        LEFT JOIN client_engagements e ON e.id = a.engagement_id
@@ -773,6 +797,15 @@ button:hover { background: #388bfd; }
     if (args.engagement_id && isUuid(args.engagement_id)) {
      params.push(args.engagement_id);
      sql += ` AND a.engagement_id = $${params.length}`;
+    }
+    if (args.responsible_id !== undefined) {
+     if (args.responsible_id === null || args.responsible_id === '' || args.responsible_id === 'sem') {
+      sql += ' AND a.responsible_id IS NULL';
+     } else {
+      const respId = isUuid(args.responsible_id) ? args.responsible_id : await resolverResponsavel(pool, args.responsible_id);
+      params.push(respId);
+      sql += ` AND a.responsible_id = $${params.length}`;
+     }
     }
     if (args.kind && KINDS.includes(args.kind)) {
      params.push(args.kind);
@@ -829,8 +862,13 @@ button:hover { background: #388bfd; }
      }
     }
 
-    // Sem a migração das tags, recusa ANTES de gravar: criar a atividade e perder as tags em silêncio seria pior.
+    // Sem a migração das tags ou do responsável, recusa ANTES de gravar: criar a atividade e perder campos em silêncio seria pior.
     if (args.tags !== undefined) await exigirTags();
+    let responsibleId;
+    if (args.responsible_id !== undefined && args.responsible_id !== null && args.responsible_id !== '') {
+     await exigirResponsavel();
+     responsibleId = await resolverResponsavel(pool, args.responsible_id);
+    }
     let engagementId = args.engagement_id && isUuid(args.engagement_id) ? args.engagement_id : null;
     let categoria = args.category;
 
@@ -854,6 +892,7 @@ button:hover { background: #388bfd; }
      description: descricaoParaCore(args.description),
      location: opcional('location', args.location),
      reminders: args.reminders,
+     ...(responsibleId ? { responsible_id: responsibleId } : {}),
     });
 
     const client = await pool.connect();
@@ -909,9 +948,9 @@ button:hover { background: #388bfd; }
      camposParaValidar.ends_at = normalizarDataFuso(args.ends_at) || new Date(existente.ends_at).toISOString();
     }
 
-    // activityUpdateInput recusa "nada para alterar" quando só há a revisão. Mas status, contratação e tags mudam por fora dele:
-    // sem este desvio, editar SÓ o status (ou só as tags) devolvia erro, embora houvesse o que gravar.
-    const mudaPorFora = args.status !== undefined || args.engagement_id !== undefined || args.tags !== undefined;
+    // activityUpdateInput recusa "nada para alterar" quando só há a revisão. Mas status, contratação, responsável e tags mudam por fora dele:
+    // sem este desvio, editar SÓ o status (ou só o responsável, ou só as tags) devolvia erro, embora houvesse o que gravar.
+    const mudaPorFora = args.status !== undefined || args.engagement_id !== undefined || args.tags !== undefined || args.responsible_id !== undefined;
     let revision = existente.revision, campos = {};
     if (Object.keys(camposParaValidar).length > 1 || !mudaPorFora) ({ revision, campos } = activityUpdateInput(camposParaValidar));
     if (args.status && ['planned', 'done', 'cancelled'].includes(args.status)) {
@@ -919,6 +958,10 @@ button:hover { background: #388bfd; }
     }
     if (args.engagement_id !== undefined) {
      campos.engagement_id = args.engagement_id && isUuid(args.engagement_id) ? args.engagement_id : null;
+    }
+    if (args.responsible_id !== undefined) {
+     await exigirResponsavel();
+     campos.responsible_id = await resolverResponsavel(pool, args.responsible_id);
     }
 
     const nomes = Object.keys(campos);
@@ -937,6 +980,12 @@ button:hover { background: #388bfd; }
       'INSERT INTO service_activity_audit(activity_id, action, actor, details) VALUES($1, $2, $3, $4)',
       [args.id, 'updated_via_mcp', auth.ator || 'spark-bot', JSON.stringify({ campos, ...(args.tags !== undefined ? { tags: args.tags } : {}), via: 'mcp' })]
      );
+     if (args.responsible_id !== undefined && (existente.responsible_id ?? null) !== campos.responsible_id) {
+      await client.query(
+       'INSERT INTO service_activity_audit(activity_id, action, actor, details) VALUES($1, $2, $3, $4)',
+       [args.id, 'responsible_changed', auth.ator || 'spark-bot', JSON.stringify({ de: existente.responsible_id ?? null, para: campos.responsible_id, revision, via: 'mcp' })]
+      );
+     }
      if (args.tags !== undefined) {
       const autorIa = autorDaIa(auth.ator);
       await definirTagsDaAtividade(client, { atividadeId: args.id, tagIds: await resolverTags(client, args.tags, autorIa), autor: autorIa });
