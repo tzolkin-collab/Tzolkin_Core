@@ -202,12 +202,14 @@ input:user-invalid:focus, select:user-invalid:focus, textarea:user-invalid:focus
 .cfg-nota { display: grid; gap: 6px; margin-top: 8px; padding: 14px 0 0; border-top: 1px solid var(--line-soft); font-size: 13px; color: var(--muted); }
 .cfg-nota p { margin: 0; }
 .cfg-nota strong { color: var(--text); font-weight: 600; }
+.cfg-nav-mobile { display: none; }
 @media (max-width: 700px) {
  .cfg { grid-template-columns: minmax(0, 1fr); gap: 16px; }
- .cfg-nav { position: static; }
- .cfg-grupo { grid-auto-flow: column; grid-auto-columns: max-content; overflow-x: auto; gap: 6px; }
- .cfg-grupo-titulo { display: none; }
- .cfg-item { width: auto; border: 1px solid var(--line-strong); border-radius: 999px; min-height: 40px; padding: 0 14px; }
+ .cfg-nav { position: static; gap: 0; padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); }
+ .cfg-grupo { display: none; }
+ .cfg-nav-mobile { display: grid; gap: 6px; width: 100%; }
+ .cfg-nav-mobile-rotulo { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+ .cfg-select-mobile { width: 100%; min-height: 42px; font-size: 15px; font-weight: 500; }
  .cfg-linha { flex-wrap: wrap; }
 }
 .cfg-cab-bloco { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }

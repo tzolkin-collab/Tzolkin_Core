@@ -21,20 +21,34 @@ export function montarConfiguracoes(raiz, { api, secao, aoMudar, abrirTela, reto
  raiz.replaceChildren(casca);
  let ticket = 0;
 
+ const seletorMobile = no('label', undefined, 'cfg-nav-mobile');
+ seletorMobile.append(no('span', 'Seção', 'cfg-nav-mobile-rotulo'));
+ const select = document.createElement('select');
+ select.className = 'cfg-select-mobile';
+ select.setAttribute('aria-label', 'Seção de Configurações');
  for (const grupo of GRUPOS) {
+  const optgroup = document.createElement('optgroup');
+  optgroup.label = grupo;
   const bloco = no('div', undefined, 'cfg-grupo');
   bloco.append(no('h2', grupo, 'cfg-grupo-titulo'));
   for (const s of SECOES.filter(x => x.grupo === grupo)) {
    const b = no('button', s.titulo, 'cfg-item'); b.type = 'button'; b.dataset.secao = s.id;
    b.onclick = () => abrir(s.id, true);
    bloco.append(b);
+   const opt = no('option', s.titulo); opt.value = s.id;
+   optgroup.append(opt);
   }
+  select.append(optgroup);
   nav.append(bloco);
  }
+ select.onchange = () => abrir(select.value, true);
+ seletorMobile.append(select);
+ nav.prepend(seletorMobile);
 
  async function abrir(id, avisar = false) {
   const s = secaoPorId(id) || secaoPorId(SECAO_PADRAO);
   const meu = ++ticket;
+  select.value = s.id;
   for (const b of nav.querySelectorAll('.cfg-item')) { if (b.dataset.secao === s.id) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); }
   const cab = no('header', undefined, 'cfg-cab');
   const titulo = no('h2', s.titulo, 'cfg-titulo-secao'); titulo.tabIndex = -1;
