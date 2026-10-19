@@ -1368,6 +1368,51 @@ test('agenda: arrastar move, esticar muda a duração, Esc cancela e recusa do s
  semExcecoes();
 });
 
+test('agenda: arrastar tasks de dia todo na faixa superior ou para a grade horária e atalhos de teclado', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ const ID_INTEIRO = '00000000-0000-4000-8000-000000000006';
+ const SEL = `document.querySelector('#view-tracking .ag-diainteiro .ag-chip-dia[data-id="${ID_INTEIRO}"]')`;
+ const medirChip = () => pagina.avaliar(`(() => { const b = ${SEL}; if (!b) return null; const r = b.getBoundingClientRect(), c = b.parentElement.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, dia: b.parentElement.dataset.dia, coluna: c.width }; })()`);
+ const mouse = (tipo, x, y, alvo = 'document') => pagina.avaliar(`${alvo}.dispatchEvent(new PointerEvent('${tipo}', { bubbles: true, clientX: ${x}, clientY: ${y}, button: 0, pointerType: 'mouse', pointerId: 11 }))`);
+ const aguardarPut = async n => pagina.esperar(`${NO_AGENDA}.puts.length === ${n}`, { descricao: `PUT nº ${n}` });
+ const ultimoPut = () => pagina.avaliar(`${NO_AGENDA}.puts.at(-1)`);
+ const puts0 = await pagina.avaliar(`${NO_AGENDA}.puts.length`);
+ const segunda = AM.segundaDe(AM.diaDe(Date.now()));
+
+ // 1. Mover chip de dia todo para a coluna seguinte (+1 dia) dentro da faixa de dia todo
+ let c = await medirChip();
+ assert.ok(c, 'encontra o chip de dia todo');
+ await mouse('pointerdown', c.x, c.y, SEL);
+ await mouse('pointermove', c.x + c.coluna, c.y);
+ await mouse('pointerup', c.x + c.coluna, c.y);
+ await aguardarPut(puts0 + 1);
+ let put = await ultimoPut();
+ assert.equal(put.corpo.starts_at, new Date(`${AM.somarDias(segunda, 2)}T00:00:00-03:00`).toISOString(), 'moveu para quarta');
+ await new Promise(r => setTimeout(r, 100));
+
+ // 2. Mover chip de dia todo com setas do teclado (ArrowLeft move de volta para terça)
+ await pagina.avaliar(`${SEL}.focus()`);
+ await pagina.avaliar(`${SEL}.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))`);
+ await aguardarPut(puts0 + 2);
+ put = await ultimoPut();
+ assert.equal(put.corpo.starts_at, new Date(`${AM.somarDias(segunda, 1)}T00:00:00-03:00`).toISOString(), 'voltou para terça pelo teclado');
+ await new Promise(r => setTimeout(r, 100));
+
+ // 3. Arrastar chip de dia todo para a grade horária (soltando na coluna abaixo da faixa)
+ c = await medirChip();
+ const faixaBottom = await pagina.avaliar(`(() => { const r = document.querySelector('#view-tracking .ag-diainteiro').getBoundingClientRect(); return Math.round(r.bottom); })()`);
+ const yGrade = faixaBottom + 120;
+ await mouse('pointerdown', c.x, c.y, SEL);
+ await mouse('pointermove', c.x, yGrade);
+ await mouse('pointerup', c.x, yGrade);
+ await aguardarPut(puts0 + 3);
+ put = await ultimoPut();
+ assert.ok(put.corpo.starts_at, 'ganhou horário na grade');
+ assert.ok(put.corpo.ends_at, 'tem término com duração');
+
+ semExcecoes();
+});
+
 test('agenda: no toque, arrastar exige segurar; mexer antes de segurar é rolagem e a alça estica de imediato', { skip: PULAR }, async () => {
  await SEMANA_DE_HOJE();
  const ID = '00000000-0000-4000-8000-000000000001';

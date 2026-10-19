@@ -80,7 +80,10 @@
 #view-tracking .ag-dia-cab[data-hoje] .ag-dia-num { background: var(--brand); color: var(--on-brand); }
 .ag-diainteiro { border-top: 1px solid var(--line-soft); padding-block: 4px; max-height: 110px; overflow-y: auto; scrollbar-width: thin; overscroll-behavior: contain; }
 .ag-di-celula { display: grid; gap: 2px; align-content: start; min-width: 0; padding: 0 3px; border-left: 1px solid var(--line-soft); }
-#view-tracking .ag-chip-dia { height: 22px; min-height: 22px; padding: 0 6px; font-size: 11px; white-space: nowrap; line-height: 22px; }
+#view-tracking .ag-chip-dia { height: 22px; min-height: 22px; padding: 0 6px; font-size: 11px; white-space: nowrap; line-height: 22px; cursor: grab; }
+#view-tracking .ag-chip-dia.ag-arrastando { opacity: .4; cursor: grabbing; }
+.ag-di-celula.ag-alvo-drop { background: color-mix(in srgb, var(--focus-ring) 15%, transparent); border-radius: 4px; }
+.ag-chip-fantasma { cursor: grabbing !important; }
 .ag-corpo-grade { position: relative; z-index: 1; isolation: isolate; }
 .ag-horas { display: grid; grid-auto-rows: var(--ag-hora); }
 .ag-hora { padding-right: 8px; text-align: right; font-size: 11px; color: var(--faint); transform: translateY(-7px); }
@@ -104,7 +107,7 @@
 .ag-alca { position: absolute; left: 0; right: 0; bottom: 0; height: 7px; cursor: ns-resize; }
 /* Toque: alça grande (alvo de dedo), com um pegador visível, e sem seleção nem menu de pressão longa nos eventos. */
 @media (pointer: coarse) {
- .ag-evento { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+ .ag-evento, .ag-chip-dia { -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
  .ag-alca { height: 22px; touch-action: none; }
  .ag-alca::after { content: ""; position: absolute; left: 50%; bottom: 4px; width: 28px; height: 4px; margin-left: -14px; border-radius: 2px; background: currentColor; opacity: .45; }
 }

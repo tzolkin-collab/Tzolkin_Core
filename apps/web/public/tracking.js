@@ -654,8 +654,9 @@ export function setupTracking({ api, openTenant }) {
   fixo.append(cab);
   // Faixa "dia todo": prazos e eventos de um dia ou mais não ocupam a grade de horas.
   const inteiros = dias.map(d => M.eventosDoDia(lista, d).filter(M.diaInteiro));
+  let faixa = null;
   if (inteiros.some(l => l.length)) {
-   const faixa = el('div', null, 'ag-diainteiro'); faixa.append(el('span', 'dia todo', 'ag-canto'));
+   faixa = el('div', null, 'ag-diainteiro'); faixa.append(el('span', 'dia todo', 'ag-canto'));
    inteiros.forEach((doDia, i) => {
     const celula = el('div', null, 'ag-di-celula'); celula.dataset.dia = dias[i];
     for (const e of doDia) celula.append(chip(e, true));
@@ -679,7 +680,7 @@ export function setupTracking({ api, openTenant }) {
    for (const e of doDia) col.append(eventoNaGrade(e, d, porId.get(e.id), lay.get(e.id)));
    colunas.push(col); corpo.append(col);
   }
-  ligarInteracao(corpo, colunas, dias, lista);
+  ligarInteracao(corpo, colunas, dias, lista, faixa);
   const agora = dias.indexOf(hojeDia);
   if (agora >= 0) {
    const linha = el('div', null, 'ag-agora'); linha.setAttribute('aria-hidden', 'true');
@@ -701,7 +702,7 @@ export function setupTracking({ api, openTenant }) {
  }
 
  // ---------- interação na grade: criar arrastando, mover e esticar ----------
- function ligarInteracao(corpo, colunas, dias, lista) {
+ function ligarInteracao(corpo, colunas, dias, lista, faixa) {
   const diaDoX = x => { const i = colunas.findIndex(c => { const r = c.getBoundingClientRect(); return x >= r.left && x < r.right; }); return i < 0 ? (x < colunas[0].getBoundingClientRect().left ? 0 : colunas.length - 1) : i; };
   const minutoDoY = (col, y) => limitar((y - col.getBoundingClientRect().top) / ALTURA_HORA * 60, 0, 1440);
   const principal = ev => ev.button === 0;
@@ -757,6 +758,7 @@ export function setupTracking({ api, openTenant }) {
    const larg = colunas[0].getBoundingClientRect().width;
    const x0 = ev.clientX, y0 = ev.clientY, altura0 = botaoEvento.getBoundingClientRect().height;
    let arrastando = false, deltaMin = 0, deltaDias = 0;
+   let ultimoClientX = x0, ultimoClientY = y0;
    const toque = ev.pointerType === 'touch';
    let pego = !toque || esticar, timer = null, destravar = null;   // a alça já nasce "pega" (touch-action: none); o corpo só depois de segurar
    if (toque && esticar) destravar = travarRolagem();
@@ -790,6 +792,116 @@ export function setupTracking({ api, openTenant }) {
    if (esticar) ev.preventDefault();
    if (toque) botaoEvento.addEventListener('contextmenu', c => c.preventDefault(), { once: true });
   });
+
+  if (faixa) {
+   faixa.addEventListener('pointerdown', ev => {
+    const botaoChip = ev.target.closest('.ag-chip-dia');
+    if (!botaoChip || !principal(ev)) return;
+    const evento = eventos.find(x => x.id === botaoChip.dataset.id);
+    if (!evento || salvando.has(evento.id)) return;
+
+    const celulaInicial = botaoChip.closest('.ag-di-celula');
+    const diaInicial = celulaInicial?.dataset.dia || dias[diaDoX(ev.clientX)];
+    const x0 = ev.clientX, y0 = ev.clientY;
+    const r0 = botaoChip.getBoundingClientRect();
+    let arrastando = false, deltaDias = 0;
+    const toque = ev.pointerType === 'touch';
+    let pego = !toque, timer = null, destravar = null;
+    let cloneFlutuante = null, fantasmaGrade = null, destinoGrade = null;
+
+    if (toque) timer = setTimeout(() => { pego = true; destravar = travarRolagem(); vibrar(); }, SEGURAR_MS);
+
+    const limparEfeitos = () => {
+     cloneFlutuante?.remove(); cloneFlutuante = null;
+     fantasmaGrade?.remove(); fantasmaGrade = null;
+     faixa.querySelectorAll('.ag-di-celula.ag-alvo-drop').forEach(c => c.classList.remove('ag-alvo-drop'));
+     botaoChip.classList.remove('ag-arrastando');
+    };
+
+    const mover = m => {
+     if (!pego) { if (Math.hypot(m.clientX - x0, m.clientY - y0) > TOLERANCIA_TOQUE) cancelar(); return; }
+     if (!arrastando && Math.hypot(m.clientX - x0, m.clientY - y0) < LIMIAR) return;
+     if (!arrastando) {
+      arrastando = true;
+      botaoChip.classList.add('ag-arrastando');
+      cloneFlutuante = botaoChip.cloneNode(true);
+      cloneFlutuante.classList.add('ag-chip-fantasma');
+      estilo(cloneFlutuante, {
+       position: 'fixed',
+       left: m.clientX + 'px',
+       top: m.clientY + 'px',
+       width: r0.width + 'px',
+       transform: 'translate(-50%, -50%)',
+       pointerEvents: 'none',
+       zIndex: '9999',
+       opacity: '0.9',
+       boxShadow: 'var(--shadow-pop)',
+      });
+      document.body.append(cloneFlutuante);
+     }
+     if (cloneFlutuante) {
+      cloneFlutuante.style.left = m.clientX + 'px';
+      cloneFlutuante.style.top = m.clientY + 'px';
+     }
+
+     const faixaRect = faixa.getBoundingClientRect();
+     const naFaixa = m.clientY >= faixaRect.top && m.clientY <= faixaRect.bottom;
+     const colIdx = diaDoX(m.clientX);
+     const diaAlvo = dias[colIdx];
+
+     if (!naFaixa && m.clientY > faixaRect.bottom) {
+      faixa.querySelectorAll('.ag-di-celula.ag-alvo-drop').forEach(c => c.classList.remove('ag-alvo-drop'));
+      const col = colunas[colIdx];
+      const duracaoMin = duracaoPadraoMin() || 60;
+      const min = limitar(M.arredondar(minutoDoY(col, m.clientY), PASSO), 0, 1440 - duracaoMin);
+      if (!fantasmaGrade) fantasmaGrade = el('div', null, 'ag-fantasma');
+      if (fantasmaGrade.parentElement !== col) col.append(fantasmaGrade);
+      estilo(fantasmaGrade, {
+       top: (min / 60 * ALTURA_HORA) + 'px',
+       height: (duracaoMin / 60 * ALTURA_HORA) + 'px',
+       display: 'block',
+      });
+      destinoGrade = { dia: diaAlvo, min, duracaoMin };
+     } else {
+      if (fantasmaGrade) { fantasmaGrade.remove(); fantasmaGrade = null; }
+      destinoGrade = null;
+      const celulaAlvo = faixa.querySelector(`.ag-di-celula[data-dia="${diaAlvo}"]`);
+      faixa.querySelectorAll('.ag-di-celula').forEach(c => c.classList.toggle('ag-alvo-drop', c === celulaAlvo));
+      deltaDias = colIdx - dias.indexOf(diaInicial);
+     }
+    };
+
+    const limpar = () => {
+     clearTimeout(timer); destravar?.();
+     document.removeEventListener('pointermove', mover);
+     document.removeEventListener('pointerup', soltar);
+     document.removeEventListener('pointercancel', cancelar);
+     document.removeEventListener('keydown', tecla, true);
+    };
+
+    const soltar = () => {
+     limpar();
+     if (!arrastando) return;
+     suprimirClique = true; setTimeout(() => { suprimirClique = false; }, 0);
+     limparEfeitos();
+     if (destinoGrade) {
+      const ini = M.inicioDoDia(destinoGrade.dia) + destinoGrade.min * 60000;
+      const fim = ini + destinoGrade.duracaoMin * 60000;
+      gravarHorario(evento, { starts_at: new Date(ini).toISOString(), ends_at: new Date(fim).toISOString() });
+     } else if (deltaDias !== 0) {
+      gravarHorario(evento, M.mover(evento, deltaDias * 1440));
+     }
+    };
+
+    const cancelar = () => { limpar(); limparEfeitos(); };
+    const tecla = k => { if (k.key === 'Escape') { k.stopPropagation(); cancelar(); } };
+    document.addEventListener('pointermove', mover);
+    document.addEventListener('pointerup', soltar);
+    document.addEventListener('pointercancel', cancelar);
+    document.addEventListener('keydown', tecla, true);
+    if (toque) botaoChip.addEventListener('contextmenu', c => c.preventDefault(), { once: true });
+   });
+  }
  }
 
  // ---------- visão Mês ----------
@@ -800,8 +912,23 @@ export function setupTracking({ api, openTenant }) {
   if (!inteiro && !M.diaInteiro(e)) b.append(el('span', M.hora(e.ini), 'ag-chip-hora'));
   if (e.series_id) b.append(marca(e));
   b.append(el('span', e.title, 'ag-chip-titulo'));
+  if (inteiro) {
+   b.addEventListener('keydown', k => {
+    if (k.altKey || k.ctrlKey || k.metaKey) return;
+    const dias = { ArrowLeft: -1, ArrowRight: 1 }[k.key];
+    if (!dias) return;
+    const atual = eventos.find(x => x.id === e.id);
+    k.preventDefault(); k.stopPropagation();
+    if (!atual || salvando.has(e.id)) return;
+    const campos = k.shiftKey ? M.redimensionar(atual, atual.fim + dias * 1440 * 60000, 1440) : M.mover(atual, dias * 1440);
+    gravarHorario(atual, campos).then(() => {
+     document.querySelector(`#view-tracking .ag-chip-dia[data-id="${e.id}"]`)?.focus();
+    });
+   });
+  }
   b.onclick = (ev) => {
     ev.stopPropagation();
+    if (suprimirClique) { suprimirClique = false; return; }
     if (ev.ctrlKey || ev.metaKey) { ev.preventDefault(); if (selecionados.has(e.id)) selecionados.delete(e.id); else { selecionados.add(e.id); ultimaSelecaoId = e.id; } atualizarSelecaoVisual(); return; }
     if (ev.shiftKey && ultimaSelecaoId) { ev.preventDefault(); selecionarFaixa(ultimaSelecaoId, e.id); return; }
     if (selecionados.size > 0) { selecionados.clear(); ultimaSelecaoId = null; atualizarSelecaoVisual(); }
