@@ -14,6 +14,7 @@
 [data-tom="warning"] { --ev-bg: var(--badge-warning-bg); --ev-fg: var(--badge-warning-fg); --ev-borda: var(--badge-warning-dot); }
 [data-tom="danger"]  { --ev-bg: var(--badge-danger-bg);  --ev-fg: var(--badge-danger-fg);  --ev-borda: var(--badge-danger-dot); }
 [data-tom="neutral"] { --ev-bg: var(--badge-neutral-bg); --ev-fg: var(--badge-neutral-fg); --ev-borda: var(--badge-neutral-dot); }
+[data-tom="primary"] { --ev-bg: var(--badge-primary-bg); --ev-fg: var(--badge-primary-fg); --ev-borda: var(--badge-primary-dot); }
 .ag-cor { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--ev-borda); }
 
 /* ---------- topo ---------- */
@@ -1837,3 +1838,296 @@ dialog.tracking-editor {
 /* Seletor "quantos dias" da lista: só aparece na visão Agenda. O atributo hidden perderia para o display do .ag-visoes. */
 #view-tracking .ag-alcances[hidden] { display: none; }
 #view-tracking .ag-limpar-filtros { align-self: flex-start; margin-top: 8px; }
+
+/* Alternador de modo de cor (Categorias vs Situação) e personalização */
+.ag-cores-cab {
+ display: flex;
+ align-items: center;
+ justify-content: space-between;
+ gap: 8px;
+ margin-bottom: 8px;
+ min-width: 0;
+}
+.ag-modo-cor {
+ display: inline-flex;
+ align-items: center;
+ background: var(--surface-hover);
+ padding: 2px;
+ border-radius: 6px;
+ border: 1px solid var(--line-soft);
+ gap: 2px;
+}
+#view-tracking .ag-modo-btn {
+ height: 24px;
+ min-height: 24px;
+ padding: 0 8px;
+ border: 0;
+ border-radius: 4px;
+ background: transparent;
+ color: var(--muted);
+ font-size: 11px;
+ font-weight: 500;
+ cursor: pointer;
+ transition: all 0.15s ease;
+ line-height: 24px;
+}
+#view-tracking .ag-modo-btn:hover {
+ color: var(--text);
+}
+#view-tracking .ag-modo-btn[aria-pressed="true"] {
+ background: var(--surface);
+ color: var(--text);
+ font-weight: 600;
+ box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 8%, transparent);
+}
+#view-tracking .ag-btn-editar-cores {
+ display: inline-grid;
+ place-items: center;
+ width: 26px;
+ height: 26px;
+ min-height: 26px;
+ padding: 0;
+ border-radius: 5px;
+ color: var(--muted);
+ border: 1px solid transparent;
+}
+#view-tracking .ag-btn-editar-cores:hover {
+ background: var(--surface-hover);
+ color: var(--text);
+ border-color: var(--line-soft);
+}
+#view-tracking .ag-btn-editar-cores svg {
+ width: 14px;
+ height: 14px;
+}
+
+/* Modal refinado de personalização de categorias e situações */
+#view-tracking dialog.ag-modal-personalizar,
+dialog.ag-modal-personalizar {
+ box-sizing: border-box;
+ width: min(560px, calc(100vw - 32px));
+ max-width: 560px;
+ max-height: 88dvh;
+ padding: 0;
+ overflow: hidden;
+ display: flex;
+ flex-direction: column;
+ border: 1px solid var(--line);
+ background: var(--surface);
+ color: var(--text);
+ box-shadow: var(--shadow-pop);
+ border-radius: 12px;
+}
+dialog.ag-modal-personalizar[open] {
+ display: flex;
+}
+.ag-pers-cab {
+ display: flex;
+ align-items: flex-start;
+ justify-content: space-between;
+ gap: 12px;
+ padding: 20px 24px 14px;
+ border-bottom: 1px solid var(--line-soft);
+}
+.ag-pers-cab h2 {
+ margin: 0 0 4px;
+ font-size: 18px;
+ letter-spacing: -.01em;
+}
+.ag-pers-cab p {
+ margin: 0;
+ font-size: 13px;
+ color: var(--muted);
+ line-height: 1.4;
+}
+.ag-pers-fechar {
+ display: inline-grid;
+ place-items: center;
+ width: 32px;
+ height: 32px;
+ min-height: 32px;
+ padding: 0;
+ border-radius: 6px;
+ border: 0;
+ background: transparent;
+ color: var(--muted);
+ cursor: pointer;
+}
+.ag-pers-fechar:hover {
+ background: var(--surface-hover);
+ color: var(--text);
+}
+.ag-pers-fechar svg {
+ width: 18px;
+ height: 18px;
+}
+.ag-pers-abas {
+ display: flex;
+ padding: 12px 24px 0;
+ gap: 4px;
+ background: var(--surface);
+ border-bottom: 1px solid var(--line-soft);
+}
+.ag-pers-aba {
+ padding: 6px 14px;
+ border: 0;
+ border-bottom: 2px solid transparent;
+ background: transparent;
+ color: var(--muted);
+ font-size: 13px;
+ font-weight: 500;
+ cursor: pointer;
+ border-radius: 4px 4px 0 0;
+ transition: all 0.15s ease;
+}
+.ag-pers-aba:hover {
+ color: var(--text);
+}
+.ag-pers-aba[aria-selected="true"] {
+ color: var(--text);
+ font-weight: 600;
+ border-bottom-color: var(--brand);
+}
+.ag-pers-corpo {
+ padding: 16px 24px;
+ overflow-y: auto;
+ overscroll-behavior: contain;
+ flex: 1 1 auto;
+ display: flex;
+ flex-direction: column;
+ gap: 16px;
+}
+.ag-pers-lista {
+ display: grid;
+ gap: 8px;
+}
+.ag-pers-linha {
+ display: grid;
+ grid-template-columns: auto minmax(100px, 1fr) 140px auto;
+ align-items: center;
+ gap: 10px;
+ padding: 6px 8px;
+ border: 1px solid var(--line-soft);
+ border-radius: 8px;
+ background: var(--surface);
+ transition: border-color 0.15s ease;
+}
+.ag-pers-linha:hover {
+ border-color: var(--line);
+}
+.ag-pers-linha .ag-cor {
+ width: 14px;
+ height: 14px;
+ border-radius: 4px;
+}
+.ag-pers-linha input[type="text"] {
+ height: 34px;
+ min-height: 34px;
+ padding: 0 10px;
+ border: 1px solid var(--line);
+ border-radius: 6px;
+ background: var(--surface);
+ color: var(--text);
+ font-size: 13px;
+}
+.ag-pers-linha input[type="text"]:focus {
+ border-color: var(--focus-ring);
+ outline: 2px solid var(--focus-ring);
+ outline-offset: -1px;
+}
+.ag-pers-linha select {
+ height: 34px;
+ min-height: 34px;
+ padding: 0 8px;
+ border: 1px solid var(--line);
+ border-radius: 6px;
+ background: var(--surface);
+ color: var(--text);
+ font-size: 13px;
+ cursor: pointer;
+}
+.ag-pers-remover {
+ display: inline-grid;
+ place-items: center;
+ width: 32px;
+ height: 32px;
+ min-height: 32px;
+ padding: 0;
+ border: 0;
+ border-radius: 6px;
+ background: transparent;
+ color: var(--muted);
+ cursor: pointer;
+}
+.ag-pers-remover:hover {
+ background: color-mix(in srgb, var(--badge-danger-bg) 60%, transparent);
+ color: var(--badge-danger-fg);
+}
+.ag-pers-remover svg {
+ width: 16px;
+ height: 16px;
+}
+.ag-pers-novo-bloco {
+ padding: 14px;
+ border: 1px dashed var(--line);
+ border-radius: 8px;
+ background: var(--surface-muted);
+ display: flex;
+ flex-direction: column;
+ gap: 10px;
+}
+.ag-pers-novo-bloco h4 {
+ margin: 0;
+ font-size: 13px;
+ font-weight: 600;
+ color: var(--text);
+}
+.ag-pers-novo-form {
+ display: grid;
+ grid-template-columns: minmax(100px, 1fr) 140px auto;
+ align-items: center;
+ gap: 10px;
+}
+.ag-pers-novo-form input[type="text"],
+.ag-pers-novo-form select {
+ height: 36px;
+ min-height: 36px;
+ padding: 0 10px;
+ border: 1px solid var(--line);
+ border-radius: 6px;
+ background: var(--surface);
+ color: var(--text);
+ font-size: 13px;
+}
+.ag-pers-novo-form button {
+ height: 36px;
+ min-height: 36px;
+ padding: 0 14px;
+ font-size: 13px;
+ white-space: nowrap;
+}
+.ag-pers-rodape {
+ display: flex;
+ align-items: center;
+ justify-content: space-between;
+ gap: 12px;
+ padding: 14px 24px;
+ border-top: 1px solid var(--line-soft);
+ background: var(--surface);
+}
+.ag-pers-rodape button {
+ height: 36px;
+ min-height: 36px;
+}
+@media (max-width: 540px) {
+ .ag-pers-linha {
+  grid-template-columns: auto 1fr auto;
+ }
+ .ag-pers-linha select {
+  grid-column: 2;
+ }
+ .ag-pers-novo-form {
+  grid-template-columns: 1fr;
+ }
+}
+

@@ -59,3 +59,159 @@ export function janelaDoEvento() {
  return JANELAS.some(([k]) => k === v) ? v : JANELA_PADRAO;
 }
 export const definirJanelaDoEvento = chave => gravar(CHAVE_JANELA, JANELAS.some(([k]) => k === chave) && chave !== JANELA_PADRAO ? chave : null);
+
+// ---------- modo de coloração e personalização de categorias e situações ----------
+const CHAVE_MODO_COR = 'tzolkin-agenda-modo-cor';
+const CHAVE_CONFIG_CATEGORIAS = 'tzolkin-agenda-config-categorias';
+const CHAVE_CONFIG_STATUS = 'tzolkin-agenda-config-status';
+
+export const TONS_DISPONIVEIS = Object.freeze([
+ ['neutral', 'Neutra'],
+ ['accent', 'Destaque'],
+ ['info', 'Informação'],
+ ['success', 'Sucesso'],
+ ['warning', 'Atenção'],
+ ['danger', 'Urgente'],
+ ['primary', 'Primária'],
+]);
+
+export const CATEGORIAS_PADRAO = Object.freeze({
+ mentoria:    { rotulo: 'Mentoria',    tom: 'accent',  padrao: true },
+ consultoria: { rotulo: 'Consultoria', tom: 'info',    padrao: true },
+ software:    { rotulo: 'Software',    tom: 'success', padrao: true },
+ educacional: { rotulo: 'Educacional', tom: 'warning', padrao: true },
+ assessoria:  { rotulo: 'Assessoria',  tom: 'primary', padrao: true },
+ outro:       { rotulo: 'Outro',       tom: 'neutral', padrao: true },
+});
+
+export const STATUS_PADRAO = Object.freeze({
+ planned:   { rotulo: 'Planejado', tom: 'neutral', padrao: true },
+ done:      { rotulo: 'Concluído', tom: 'success', padrao: true },
+ cancelled: { rotulo: 'Cancelado', tom: 'danger',  padrao: true },
+});
+
+/** 'categoria' ou 'status'. 'categoria' é o padrão. */
+export function modoDeCor() {
+ const v = ler(CHAVE_MODO_COR);
+ return v === 'status' ? 'status' : 'categoria';
+}
+export function definirModoDeCor(modo) {
+ const m = modo === 'status' ? 'status' : 'categoria';
+ gravar(CHAVE_MODO_COR, m === 'categoria' ? null : m);
+ try { window.dispatchEvent(new CustomEvent('agenda-cores-mudaram', { detail: { tipo: 'modo', modo: m } })); } catch {}
+}
+
+const lerJson = chave => {
+ try {
+  const t = ler(chave);
+  return t ? JSON.parse(t) : null;
+ } catch {
+  return null;
+ }
+};
+
+/** Retorna o dicionário de categorias configuradas com mesclagem segura sobre os padrões. */
+export function obterConfigCategorias() {
+ const guardado = lerJson(CHAVE_CONFIG_CATEGORIAS) || {};
+ const res = {};
+ for (const [id, padrao] of Object.entries(CATEGORIAS_PADRAO)) {
+  const g = guardado[id];
+  res[id] = {
+   rotulo: (g?.rotulo && typeof g.rotulo === 'string' ? g.rotulo.trim() : null) || padrao.rotulo,
+   tom: TONS_DISPONIVEIS.some(([t]) => t === g?.tom) ? g.tom : padrao.tom,
+   padrao: true,
+  };
+ }
+ for (const [id, g] of Object.entries(guardado)) {
+  if (res[id] || !g || typeof g !== 'object') continue;
+  const rotulo = typeof g.rotulo === 'string' ? g.rotulo.trim() : '';
+  if (!rotulo) continue;
+  res[id] = {
+   rotulo,
+   tom: TONS_DISPONIVEIS.some(([t]) => t === g.tom) ? g.tom : 'neutral',
+   padrao: false,
+  };
+ }
+ return res;
+}
+
+export function salvarConfigCategorias(config) {
+ try {
+  gravar(CHAVE_CONFIG_CATEGORIAS, JSON.stringify(config));
+  window.dispatchEvent(new CustomEvent('agenda-cores-mudaram', { detail: { tipo: 'categorias' } }));
+ } catch {}
+}
+
+export function restaurarCategoriasPadrao() {
+ try {
+  gravar(CHAVE_CONFIG_CATEGORIAS, null);
+  window.dispatchEvent(new CustomEvent('agenda-cores-mudaram', { detail: { tipo: 'categorias' } }));
+ } catch {}
+}
+
+/** Retorna o dicionário de status configurados com mesclagem segura sobre os padrões. */
+export function obterConfigStatus() {
+ const guardado = lerJson(CHAVE_CONFIG_STATUS) || {};
+ const res = {};
+ for (const [id, padrao] of Object.entries(STATUS_PADRAO)) {
+  const g = guardado[id];
+  res[id] = {
+   rotulo: (g?.rotulo && typeof g.rotulo === 'string' ? g.rotulo.trim() : null) || padrao.rotulo,
+   tom: TONS_DISPONIVEIS.some(([t]) => t === g?.tom) ? g.tom : padrao.tom,
+   padrao: true,
+  };
+ }
+ for (const [id, g] of Object.entries(guardado)) {
+  if (res[id] || !g || typeof g !== 'object') continue;
+  const rotulo = typeof g.rotulo === 'string' ? g.rotulo.trim() : '';
+  if (!rotulo) continue;
+  res[id] = {
+   rotulo,
+   tom: TONS_DISPONIVEIS.some(([t]) => t === g.tom) ? g.tom : 'neutral',
+   padrao: false,
+  };
+ }
+ return res;
+}
+
+export function salvarConfigStatus(config) {
+ try {
+  gravar(CHAVE_CONFIG_STATUS, JSON.stringify(config));
+  window.dispatchEvent(new CustomEvent('agenda-cores-mudaram', { detail: { tipo: 'status' } }));
+ } catch {}
+}
+
+export function restaurarStatusPadrao() {
+ try {
+  gravar(CHAVE_CONFIG_STATUS, null);
+  window.dispatchEvent(new CustomEvent('agenda-cores-mudaram', { detail: { tipo: 'status' } }));
+ } catch {}
+}
+
+export function tomDaCategoria(cat) {
+ const c = obterConfigCategorias();
+ return c[cat]?.tom || CATEGORIAS_PADRAO[cat]?.tom || 'neutral';
+}
+
+export function rotuloDaCategoria(cat) {
+ const c = obterConfigCategorias();
+ return c[cat]?.rotulo || CATEGORIAS_PADRAO[cat]?.rotulo || cat || 'Outro';
+}
+
+export function tomDoStatus(st) {
+ const s = obterConfigStatus();
+ return s[st]?.tom || STATUS_PADRAO[st]?.tom || 'neutral';
+}
+
+export function rotuloDoStatus(st) {
+ const s = obterConfigStatus();
+ return s[st]?.rotulo || STATUS_PADRAO[st]?.rotulo || st || 'Planejado';
+}
+
+/** Devolve o tom a ser pintado no evento segundo o modo ativo (categoria ou status). */
+export function tomDoEvento(evento) {
+ if (!evento) return 'neutral';
+ if (modoDeCor() === 'status') return tomDoStatus(evento.status);
+ return tomDaCategoria(evento.category);
+}
+

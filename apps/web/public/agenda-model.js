@@ -282,7 +282,7 @@ export function filtrar(eventos, { texto = '', categorias = null, status = '', t
  const q = semAcento(texto).trim();
  return eventos.filter(e => {
   if (categorias && categorias.size && !categorias.has(e.category)) return false;
-  if (status && e.status !== status) return false;
+  if (status) { if (status instanceof Set) { if (status.size && !status.has(e.status)) return false; } else if (e.status !== status) return false; }
   if (tenant && e.tenant_id !== tenant) return false;
   if (aba && abaDoKind(e.kind) !== aba) return false;
   if (engagement && (engagement === SEM_VALOR ? e.engagement_id : e.engagement_id !== engagement)) return false;
