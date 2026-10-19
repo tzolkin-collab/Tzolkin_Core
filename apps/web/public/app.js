@@ -49,7 +49,7 @@ const connections=setupConnections({api,openTenant:id=>openClient(id),openProduc
  if(state.overview)renderGeneral();
 }});
 const $ = id => document.getElementById(id);
-fetch('/api/auth/mode').then(r=>r.ok?r.json():null).then(auth=>{const oidc=auth?.mode==='google-oidc';$('login-form').hidden=oidc;$('google-login').hidden=!oidc;if(oidc&&new URLSearchParams(location.search).has('auth_error'))$('login-notice').textContent='Conta Google não autorizada ou login expirado.';}).catch(()=>{$('login-notice').textContent='Não foi possível verificar o modo de acesso. Atualize a página.';});
+fetch('/api/auth/mode').then(r=>r.ok?r.json():null).then(auth=>{const temGoogle=Boolean(auth?.google||auth?.mode==='google-oidc');if($('google-login'))$('google-login').hidden=!temGoogle;if($('login-divider'))$('login-divider').hidden=!temGoogle;if($('login-form'))$('login-form').hidden=false;if(temGoogle&&new URLSearchParams(location.search).has('auth_error'))$('login-notice').textContent='Conta Google não autorizada ou login expirado.';}).catch(()=>{$('login-notice').textContent='Não foi possível verificar o modo de acesso. Atualize a página.';});
 $('plan-help').textContent='Use o slug de uma oferta deste produto. Ele identifica as condições comerciais copiadas para o contrato.';
 
 
@@ -2223,7 +2223,7 @@ function bindForm(id, handler) {
  });
 }
 
-bindForm('login-form', body => api('/api/login', 'POST', { password: body.password }));
+bindForm('login-form', body => api('/api/login', 'POST', { email: body.email || null, password: body.password }));
 // Espaço do portfólio: criar (POST) ou editar (PUT, com a revisão que a tela leu). O
 // identificador não muda depois de criado; o servidor confere tipo, tags e revisão.
 bindForm('space-form', body => {

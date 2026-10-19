@@ -107,9 +107,12 @@ export function criarPeek({ raiz, id, prefixo, rotulo = 'Ficha', corpoId, aoFech
   if (aberto) return;
   aberto = true;
   abertos.push(controle);
+  const baseZ = 70 + (abertos.length - 1) * 2;
+  aside.style.zIndex = String(baseZ);
   focoAnterior = document.activeElement;
   if (!raiz) document.body.append(aside);
   scrim = el('div', undefined, 'peek-scrim');
+  scrim.style.zIndex = String(baseZ - 1);
   scrim.onclick = pedirFechar;
   document.body.append(scrim);
   document.addEventListener('keydown', aoTeclar);
@@ -119,6 +122,7 @@ export function criarPeek({ raiz, id, prefixo, rotulo = 'Ficha', corpoId, aoFech
  function fechar() {
   if (!aberto) return;
   aberto = false;
+  aside.style.removeProperty('z-index');
   const posicao = abertos.indexOf(controle);
   if (posicao >= 0) abertos.splice(posicao, 1);
   document.removeEventListener('keydown', aoTeclar);

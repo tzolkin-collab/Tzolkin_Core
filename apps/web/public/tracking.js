@@ -378,7 +378,9 @@ export function setupTracking({ api, openTenant }) {
   queueMicrotask(() => {
    if (rolagem !== null) { rolar.scrollTop = rolagem; return; }
    const primeiro = lista.filter(e => !M.diaInteiro(e)).map(e => M.recorteDoDia(e, dias.find(d => M.recorteDoDia(e, d)) || dias[0])).filter(Boolean).map(r => r.ini);
-   const alvo = agora >= 0 ? M.minutosDoDia(Date.now()) - 90 : primeiro.length ? Math.min(...primeiro) - 60 : 7 * 60;
+   const diurnos = primeiro.filter(m => m >= 6 * 60);
+   const primeiroMin = diurnos.length ? Math.min(...diurnos) - 60 : (primeiro.length ? Math.min(...primeiro) : 7 * 60);
+   const alvo = agora >= 0 ? Math.max(7 * 60, M.minutosDoDia(Date.now()) - 90) : Math.max(7 * 60, primeiroMin);
    rolar.scrollTop = Math.max(0, alvo / 60 * ALTURA_HORA);
   });
   return raiz;

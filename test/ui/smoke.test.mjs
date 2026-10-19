@@ -3096,7 +3096,7 @@ test('configurações: ligar, escolher assuntos, testar e desligar as notificaç
  await pagina.ir(origem + '/');
  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
  await IR_PARA_CONFIG();
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-sub')].map(h => h.textContent)`), ['Neste aparelho', 'Quando avisar']);
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-sub')].map(h => h.textContent)`), ['Neste aparelho', 'Som da notificação', 'Quando avisar']);
  // ainda não assinado: só o botão de ativar
  assert.ok(await pagina.avaliar(`!!${BOTAO_CONFIG('Ativar neste aparelho')}`));
  assert.ok(await pagina.avaliar(`!${BOTAO_CONFIG('Enviar teste')}`));

@@ -24,16 +24,33 @@ export function createSessionStore({ adminPassword, clock }) {
    if (clock() > attemptReset) { attempts = 0; attemptReset = clock() + WINDOW_MS; }
    return ++attempts <= MAX_ATTEMPTS;
   },
-  verifyPassword: password => timingSafeEqual(scryptSync(password, SALT, 32), passwordHash),
-  issue() {
-   for (const [key, expires] of sessions) if (expires < clock()) sessions.delete(key);
+  verifyPassword: (password, _email) => {
+   try { return timingSafeEqual(scryptSync(password, SALT, 32), passwordHash); } catch { return false; }
+  },
+  issue({ email } = {}) {
+   for (const [key, sess] of sessions) {
+    const expires = typeof sess === 'number' ? sess : sess.expires;
+    if (expires < clock()) sessions.delete(key);
+   }
    const token = randomBytes(32).toString('base64url');
-   sessions.set(digest(token), clock() + TTL_MS);
+   sessions.set(digest(token), { expires: clock() + TTL_MS, email: email || null });
    return { token, maxAge: TTL_MS / 1000 };
   },
-  isValid: token => Boolean(token) && (sessions.get(digest(token)) || 0) > clock(),
+  isValid: token => {
+   if (!token) return false;
+   const sess = sessions.get(digest(token));
+   const expires = typeof sess === 'number' ? sess : sess?.expires;
+   return (expires || 0) > clock();
+  },
   revoke: token => sessions.delete(digest(token)),
-  resolve: async (_req,token)=>Boolean(token)&&(sessions.get(digest(token))||0)>clock()?{subject:'local-bootstrap',email:null}:null,
+  resolve: async (_req,token) => {
+   if (!token) return null;
+   const sess = sessions.get(digest(token));
+   const expires = typeof sess === 'number' ? sess : sess?.expires;
+   if ((expires || 0) <= clock()) return null;
+   const email = typeof sess === 'object' && sess?.email ? sess.email : null;
+   return { subject: 'local-bootstrap', email };
+  },
   loginDisabled:()=>false,
  };
 }

@@ -1,4 +1,4 @@
-import {createHash,randomBytes} from 'node:crypto';
+import {createHash,randomBytes,scryptSync,timingSafeEqual} from 'node:crypto';
 import {createRemoteJWKSet,jwtVerify} from 'jose';
 import {digest} from './session.mjs';
 
@@ -6,17 +6,50 @@ const GOOGLE_ISSUERS=['https://accounts.google.com','accounts.google.com'];
 const GOOGLE_JWKS=createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'),{timeoutDuration:5000,cooldownDuration:30000});
 const emailPattern=/^[^\s@]{1,128}@[^\s@]{1,190}$/;
 const b64=value=>value.toString('base64url');
+const SALT='tzolkin-core-admin-v1';
+const WINDOW_MS=60000;
+const MAX_ATTEMPTS=10;
+
 // `isAllowed` deixa o painel conceder acesso sem editar o ambiente.
 // A lista do ambiente continua valendo SEMPRE, como quebra-vidro: erro no
 // cadastro nunca pode trancar todo mundo para fora da producao.
-export function createGoogleIdentity({pool,clientId,clientSecret,publicOrigin,allowedEmails='',isAllowed=async()=>false,clock=Date.now,keySet=GOOGLE_JWKS,fetcher=fetch}={}){
+export function createGoogleIdentity({pool,clientId,clientSecret,publicOrigin,allowedEmails='',isAllowed=async()=>false,clock=Date.now,keySet=GOOGLE_JWKS,fetcher=fetch,adminPassword}={}){
  let origin;try{origin=new URL(publicOrigin);}catch{throw Error('PUBLIC_ORIGIN must be an HTTPS origin.');}
  if(origin.protocol!=='https:'||origin.pathname!=='/'||origin.search||origin.hash)throw Error('PUBLIC_ORIGIN must be an HTTPS origin.');
  if(!/^[0-9]+-[a-z0-9_-]+\.apps\.googleusercontent\.com$/i.test(clientId||'')||typeof clientSecret!=='string'||clientSecret.length<16)throw Error('Google OAuth credentials are required.');
  const emails=new Set(allowedEmails.split(',').map(value=>value.trim().toLowerCase()).filter(Boolean));if(!emails.size||[...emails].some(email=>!emailPattern.test(email)))throw Error('CORE_ALLOWED_EMAILS is required.');
  const redirectUri=origin.origin+'/api/auth/google/callback';
+
+ const passwordHash = adminPassword ? scryptSync(adminPassword, SALT, 32) : null;
+ let attempts = 0;
+ let attemptReset = 0;
+
  return{
-  mode:'google-oidc',secure:true,loginDisabled:()=>true,
+  mode:'google-oidc',secure:true,loginDisabled:()=>!passwordHash,
+  throttleLogin(){
+   if(!passwordHash) return false;
+   if(clock()>attemptReset){attempts=0;attemptReset=clock()+WINDOW_MS;}
+   return ++attempts<=MAX_ATTEMPTS;
+  },
+  async verifyPassword(password,email){
+   if(!passwordHash) return false;
+   let validPass = false;
+   try { validPass = timingSafeEqual(scryptSync(password, SALT, 32), passwordHash); } catch { return false; }
+   if(!validPass) return false;
+   if(email){
+    const norm = String(email).trim().toLowerCase();
+    let liberado = emails.has(norm);
+    if(!liberado){try{liberado=await isAllowed(norm)===true;}catch{liberado=false;}}
+    return liberado;
+   }
+   return true;
+  },
+  async issue({email}={}){
+   const token=b64(randomBytes(32)),maxAge=28800;
+   const finalEmail = (email && String(email).trim().toLowerCase()) || [...emails][0] || 'operador';
+   await pool.query(`INSERT INTO operator_sessions(token_hash,subject,email,expires_at) VALUES($1,$2,$3,now()+interval '8 hours')`,[digest(token),'password-auth',finalEmail]);
+   return{token,maxAge};
+  },
   async resolve(_req,token){if(!token)return null;const result=await pool.query(`SELECT subject,email FROM operator_sessions WHERE token_hash=$1 AND revoked_at IS NULL AND expires_at>now()`,[digest(token)]);return result.rows[0]||null;},
   async begin(){const state=b64(randomBytes(32)),verifier=b64(randomBytes(48)),nonce=b64(randomBytes(32)),challenge=b64(createHash('sha256').update(verifier).digest());
    await pool.query(`INSERT INTO operator_auth_flows(state_hash,code_verifier,nonce,expires_at) VALUES($1,$2,$3,now()+interval '10 minutes')`,[digest(state),verifier,nonce]);

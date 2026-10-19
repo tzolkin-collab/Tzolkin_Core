@@ -1069,7 +1069,7 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
    { rotulo: 'Local', valor: e.location || null },
    { rotulo: 'Link da reunião', valor: e.meeting_url ? linkExterno(e.meeting_url) : null },
    { rotulo: 'Google Agenda', valor: e.google_event_id ? 'Evento criado e sincronizado' : null },
-   { rotulo: 'Descrição', valor: renderDescricao(e.description, salvarDescricao) },
+   { rotulo: 'Descrição', valor: renderDescricao(e.description, salvarDescricao), largo: true },
    ...(dados.agenda_lembretes ? [
     { rotulo: 'Repete', valor: serie ? (serie.ended_at ? `${serie.descricao} (encerrada)` : serie.descricao) : null },
     { rotulo: 'Lembrete', valor: `${M.textoDosLembretes(efetivo.minutos)}${efetivo.origem === 'padrao' && efetivo.minutos.length ? ' (padrão da agenda)' : ''}` },
