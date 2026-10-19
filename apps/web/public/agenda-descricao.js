@@ -197,7 +197,7 @@ export function paraOEditor(dados) {
 }
 
 /** Markdown em texto puro -> `{ blocks }`, ou null quando não há o que converter (vazio, ou a conversão falhou). */
-const comoMarkdown = texto => {
+export const comoMarkdown = texto => {
  try { const dados = JSON.parse(markdownParaEditorJs(texto) || 'null'); return Array.isArray(dados?.blocks) && dados.blocks.length ? dados : null; }
  catch { return null; }
 };

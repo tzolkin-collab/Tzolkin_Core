@@ -8,7 +8,7 @@ if (typeof window !== 'undefined' && !window.__editorjs_safeguard) {
 }
 // Agenda: o formulário (criar/editar) e o painel lateral do evento. Não sabe desenhar o calendário; recebe os dados e avisa quando algo mudou.
 import { el, botao, campo, preencher } from './agenda-dom.js';
-import { renderDescricao, paraOEditor } from './agenda-descricao.js';
+import { renderDescricao, paraOEditor, comoMarkdown } from './agenda-descricao.js';
 import { createIcon } from './icons.js';
 import { criarPeek } from './peek.js';
 import { pares } from './inline-edit.js';
@@ -589,8 +589,14 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     if (!raw && descricao.value) raw = descricao.value;
     let initialData = {};
     if (raw) {
-      try { initialData = JSON.parse(raw); } 
-      catch { initialData = { blocks: [{ type: 'paragraph', data: { text: raw } }] }; }
+      try { 
+        const parsed = JSON.parse(raw);
+        if (parsed && Array.isArray(parsed.blocks)) initialData = parsed;
+        else initialData = comoMarkdown(raw) || { blocks: [{ type: 'paragraph', data: { text: raw } }] };
+      } 
+      catch { 
+        initialData = comoMarkdown(raw) || { blocks: [{ type: 'paragraph', data: { text: raw } }] }; 
+      }
     }
     window.__editor = editorInstance = new EditorJS({
       holder: areaDescricao,
