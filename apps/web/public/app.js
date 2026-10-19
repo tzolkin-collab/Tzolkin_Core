@@ -1,4 +1,5 @@
 import { stateProxy as state, store } from './store.js';
+import { tocarSomNotificacao } from './notification-sound.js';
 import {setupCommercial} from './commercial.js';
 import {RELACIONAMENTOS, TIPOS, SITUACOES} from './client-edit.js';
 import {campoInline, pares} from './inline-edit.js';
@@ -9,7 +10,7 @@ import {photoPanel} from './media.js';
 import { setupDelivery, deliveryIcon } from './delivery.js';
 import { setupResource } from './resource.js';
 import {providerLogo,createIcon,productFavicon,faviconDoSite} from './icons.js';
-import {paymentInstitution} from './finance-model.js';
+import {paymentInstitution,brazilMonth} from './finance-model.js';
 import {setupEmails} from './emails.js';
 import {setupTracking} from './tracking.js';
 import {setupFinance} from './finance.js';
@@ -90,14 +91,14 @@ const publishedDeployUrl=product=>readyDeployment(product)?.url||null;
 const CANONICAL_PRODUCT_URLS={educare:'https://tzolkin-educare.vercel.app/',skiller:'https://skiller.tzolkin.cloud/'};
 // Fallbacks locais preservam a identidade visual enquanto um domínio aprovado
 // ainda não estiver carregado no contexto atual.
-const LOCAL_PRODUCT_FAVICONS={educare:'/product-favicons/educare.svg',sites:'/product-favicons/sites.svg'};
+const LOCAL_PRODUCT_FAVICONS={educare:'/product-favicons/educare.svg',sites:'/product-favicons/sites.svg',cutebook:'/product-favicons/cutebook.svg'};
 const catalogForProduct=product=>state.catalog.find(entry=>entry.kind==='product'&&(entry.payload?.id===product?.id||entry.payload?.name===product?.name))?.payload||null;
-const approvedPublicUrl=product=>{const bindings=state.resourceBindings.filter(item=>item.product_id===product?.id&&(!item.environment||item.environment==='production')&&['domain','frontend'].includes(item.resource_type));for(const binding of bindings){const raw=binding.url||`https://${binding.external_id}`;try{const url=new URL(raw);if(url.protocol==='https:'&&!/^api\./i.test(url.hostname))return url.href;}catch{}}return null;};
+const approvedPublicUrl=product=>{const bindings=state.resourceBindings.filter(item=>item.product_id===product?.id&&(!item.environment||item.environment==='production')&&['domain','frontend'].includes(item.resource_type));for(const binding of bindings){const raw=binding.url||(binding.resource_type==='domain'&&binding.external_id?.includes('.')?`https://${binding.external_id}`:binding.provider==='vercel'&&binding.display_name&&!binding.display_name.startsWith('prj_')?`https://${binding.display_name}.vercel.app`:null);if(!raw)continue;try{const url=new URL(raw);if(url.protocol==='https:'&&!/^api\./i.test(url.hostname)&&url.hostname.includes('.'))return url.href;}catch{}}return null;};
 // Vínculo aprovado é a fonte de verdade. O deploy observado é evidência
 // técnica/fallback, não identidade pública do produto.
 // Identidade de produto vem exclusivamente do domínio público aprovado. Os
 // arquivos locais só pertencem à identidade do próprio Core.
-const productFaviconUrl=product=>CANONICAL_PRODUCT_URLS[productKey(product)]||approvedPublicUrl(product)||product?.favicon_url||product?.catalog?.url||catalogForProduct(product)?.url||publishedDeployUrl(product)||null;
+const productFaviconUrl=product=>CANONICAL_PRODUCT_URLS[productKey(product)]||approvedPublicUrl(product)||product?.favicon_url||LOCAL_PRODUCT_FAVICONS[productKey(product)]||product?.catalog?.url||catalogForProduct(product)?.url||publishedDeployUrl(product)||null;
 const productLiveUrl=product=>product?.lifecycle_status==='draft'?(publishedDeployUrl(product)||null):(approvedPublicUrl(product)||CANONICAL_PRODUCT_URLS[productKey(product)]||product?.deploy_url||publishedDeployUrl(product)||product?.catalog?.url||catalogForProduct(product)?.url||null);
 const coreSpaceIcon=()=>{const image=document.createElement('img');image.src='/logo.svg';image.width=20;image.height=20;image.alt='';return image;};
 
@@ -189,15 +190,19 @@ store.subscribe('viewChanging', ({ oldView, newView }) => {
 
 store.subscribe('view', (view) => {
   if (view === 'settings') {const retorno=state.configRetorno;state.configRetorno='';montarConfiguracoes($('settings-body'),{api,secao:state.configSecao,retorno,aoMudar:id=>{state.configSecao=id;},abrirTela:v=>{switchView(v);closeNavigation();}});};
-  if (view === 'tracking') tracking.load().catch(reportError);
+  if (view === 'tracking' || view === 'product-tracking') tracking.load({ product: contextKind() === 'product' ? state.context : '' }).catch(reportError);
   if (view === 'finance') finance.load().catch(reportError);
   if (view === 'emails') emails.load().catch(reportError);
   if (view === 'people') renderPeople();
   if (view === 'clients') renderTenants();
   if (view === 'leads' || view === 'product-inbound') montarInbound();
-  if (view === 'product-keys') commercial.keys(state.context).catch(reportError);
+  if (view === 'outbound') renderOutbound();
+  if (view === 'payments') renderCrmPayments();
+  if (view === 'product-keys' || view === 'product-connections') commercial.keys(state.context).catch(reportError);
+  if (view === 'product-clients' || view === 'product-orgs') { if (state.product) renderProductOrganizations(); }
   if (view === 'companies') renderCompanies();
   if (view === 'products') renderGeneral();
+  if (view === 'portfolioServices') renderPortfolioServices();
   if (view === 'services') renderServices();
   if (['dns','database','redis'].includes(view)) renderManagement();
   if (['database','redis'].includes(view) && !state.management) api('/api/management/schema').then(data=>{state.management=data;renderManagement();}).catch(error=>{$('management-schema').replaceChildren(node('p',error.message,'notice-inline'));});
@@ -469,21 +474,21 @@ let clientTicket=0,clientPending=null,engagementTenant=null,engagementItems=null
 function openClient(id){
  if(!id)return;
  peekPessoa?.fechar();
- // Voltar leva à tela de onde a ficha foi aberta, quando ela é do contexto geral.
- if(state.view!=='client')state.clientBack=contextKind()==='general'&&!views()[state.view]?.hidden?state.view:'clients';
+ // Preserva o contexto atual: no contexto geral volta para Clientes; no contexto de um item volta para Clientes do contexto.
+ if(state.view!=='client'){
+  const fallback=contextKind()==='product'?'product-clients':'clients';
+  state.clientBack=!views()[state.view]?.hidden?state.view:fallback;
+ }
  if(state.selectedTenant!==id)state.clientSummary=null;
  state.selectedTenant=id;
- // A ficha é do contexto geral. Vinda de um produto, troca de contexto sem esperar
- // o painel inteiro: a ficha busca só o próprio resumo.
- if(contextKind()!=='general'){$('context-select').value='';switchContext('').catch(reportError);}
  switchView('client');
 }
-function openLead(id){switchView('leads');commercial.detail(id).catch(reportError);}
+function openLead(id){switchView(contextKind()==='product'?'product-inbound':'leads');commercial.detail(id).catch(reportError);}
 
 // A ficha da empresa é o painel lateral sobre a tela de origem (peek.js). Criado uma vez e reaproveitado.
-const peekDaEmpresa=()=>peekEmpresa||=criarPeek({raiz:$('view-client'),prefixo:'empresa',rotulo:'Ficha da empresa',corpoId:'client-detail',aoFechar:()=>switchView(state.clientBack||'clients')});
+const peekDaEmpresa=()=>peekEmpresa||=criarPeek({raiz:$('view-client'),prefixo:'empresa',rotulo:'Ficha da empresa',corpoId:'client-detail',aoFechar:()=>switchView(state.clientBack||(contextKind()==='product'?'product-clients':'clients'))});
 function renderClientDetail(){
- const id=state.selectedTenant;if(!id){switchView('clients');return;}
+ const id=state.selectedTenant;if(!id){switchView(contextKind()==='product'?'product-clients':'clients');return;}
  const peek=peekDaEmpresa();peek.abrir();
  if(state.clientSummary?.tenant?.id===id)paintClientDetail(state.clientSummary);
  else{peek.titulo('Empresa');peek.mensagem('Carregando ficha da empresa…');}
@@ -525,7 +530,7 @@ function clientEngagement(engagement,summary){
     engagement.product_id=null;
    }else{
     const todosOsProdutos=state.overview?.products||engagementItems||[];
-    engagement.product=todosOsProdutos.find(p=>p.id===campos.product_id)||engagement.product;
+    engagement.product=todosOsProdutos.find(p=>p.id===campos.product_id)||(state.product?.product?.id===campos.product_id?state.product.product:engagement.product);
     engagement.product_id=campos.product_id;
    }
   }
@@ -537,6 +542,9 @@ function clientEngagement(engagement,summary){
     Object.assign(ovEng,campos);
     if(newRev!==undefined)ovEng.revision=newRev;
    }
+  }
+  if(contextKind()==='product'&&state.context){
+   api(`/api/products/${encodeURIComponent(state.context)}/console`).then(c=>{state.product=c;renderProduct();}).catch(()=>{});
   }
   state.clientSummary=null;
  };
@@ -584,6 +592,20 @@ function clientEngagement(engagement,summary){
   addItem.append(createIcon('plus'),document.createTextNode('Vincular item'));
   addItem.onclick=()=>openItemEngagementDialog(engagement,summary.tenant?.id||engagement.tenant_id);
   links.append(addItem);
+  if(contextKind()==='product'&&state.context){
+   const bindHere=node('button',undefined,'table-action');bindHere.type='button';
+   bindHere.append(createIcon('check'),document.createTextNode(`Atribuir a ${productName()}`));
+   bindHere.onclick=async()=>{
+    bindHere.disabled=true;
+    try{
+     await salvarContratacao({product_id:state.context});
+     const tenantId=summary.tenant?.id||engagement.tenant_id||state.selectedTenant;
+     if(tenantId){clientPending=null;await loadClientSummary(tenantId);}
+     $('notice').textContent=`Contratação atribuída ao contexto ${productName()}.`;
+    }catch(err){reportError(err);bindHere.disabled=false;}
+   };
+   links.append(bindHere);
+  }
  }
  const mine=summary.campaigns.available?summary.campaigns.items.filter(c=>c.engagement_id===engagement.id):[];
  const ads=node('button',undefined,'table-action');ads.type='button';ads.append(createIcon('chart'),document.createTextNode(mine.length?`Campanhas · ${mine.length}`:'Campanhas'));
@@ -669,8 +691,9 @@ function abrirPessoa(p){
 
 function paintClientDetail(summary){
  const {tenant}=summary,peek=peekDaEmpresa();
- // O nome e o tipo vão no cabeçalho do painel; a tela de fundo mantém o próprio título.
- peek.titulo(tenant.name,subtituloDaEmpresa(tenant));
+ const ctxId=contextKind()==='product'?state.context:null;
+ // O nome e o tipo vão no cabeçalho do painel; quando aberto dentro de um contexto, destaca o contexto.
+ peek.titulo(tenant.name,ctxId?`Contexto ${productName()} · ${subtituloDaEmpresa(tenant)}`:subtituloDaEmpresa(tenant));
  const create=node('button',undefined,'primary');create.type='button';create.append(createIcon('plus'),document.createTextNode('Nova contratação'));create.onclick=()=>openEngagementDialog(tenant).catch(reportError);
  const grid=node('div',undefined,'client-detail-grid client-summary-grid');
  const panel=(title,caption,wide)=>{const el=node('section',undefined,'client-detail-panel'+(wide?' client-detail-wide':''));el.append(node('h3',title));if(caption)el.append(node('p',caption,'detail'));grid.append(el);return el;};
@@ -687,8 +710,9 @@ function paintClientDetail(summary){
   Object.assign(tenant,campos);
   const noOverview=state.overview?.tenants.find(t=>t.id===tenant.id);if(noOverview)Object.assign(noOverview,campos);
   state.clientSummary=null; // o Histórico ganhou uma linha: a próxima abertura da ficha recarrega
-  peek.titulo(tenant.name,subtituloDaEmpresa(tenant));
+  peek.titulo(tenant.name,ctxId?`Contexto ${productName()} · ${subtituloDaEmpresa(tenant)}`:subtituloDaEmpresa(tenant));
   renderTenants();renderCompanies();renderLeads();renderPeople();
+  if(ctxId&&state.product)renderProductOrganizations();
  };
  const escolha=(valor,opcoes,campo,rotulo)=>campoInline({valor,rotulo,tipo:'select',opcoes,salvar:async v=>{await salvarEmpresa({[campo]:v});return v;}});
  cadastro.append(pares([
@@ -699,10 +723,24 @@ function paintClientDetail(summary){
   {rotulo:'Situação',valor:interna?clientLabel(tenant.lifecycle_status):escolha(tenant.lifecycle_status,SITUACOES,'lifecycle_status','Situação')},
  ]));
 
- const hired=panel('Contratações','O que a empresa contratou, com o item do portfólio, os deploys e as campanhas de cada uma.',true);
+ const hired=panel('Contratações',ctxId?`Contratações deste cliente no contexto ${productName()} e demais vínculos com a TZOLKIN.`:'O que a empresa contratou, com o item do portfólio, os deploys e as campanhas de cada uma.',true);
  if(!engagements.available)hired.append(node('p',engagements.reason,'notice-inline'));
  else if(!engagements.items.length)hired.append(node('p','Nenhuma contratação em curso: registre o que a empresa comprou em Nova contratação.','empty-list'));
- else for(const engagement of engagements.items)hired.append(clientEngagement(engagement,summary));
+ else if(ctxId){
+  const doContexto=engagements.items.filter(e=>(e.product?.id||e.product_id)===ctxId);
+  const outras=engagements.items.filter(e=>(e.product?.id||e.product_id)!==ctxId);
+  for(const engagement of doContexto)hired.append(clientEngagement(engagement,summary));
+  if(!doContexto.length)hired.append(node('p',`Nenhuma contratação desta empresa está vinculada a ${productName()} ainda. Atribua uma contratação abaixo ou crie uma nova.`,'detail'));
+  if(outras.length){
+   const det=node('details',undefined,'deploy-history');
+   det.open=!doContexto.length;
+   det.append(node('summary',`Outras contratações da empresa (${outras.length})`));
+   for(const engagement of outras)det.append(clientEngagement(engagement,summary));
+   hired.append(det);
+  }
+ } else {
+  for(const engagement of engagements.items)hired.append(clientEngagement(engagement,summary));
+ }
  for(const [label,section] of [['Deploys',deploys],['Campanhas',summary.campaigns]])if(engagements.available&&engagements.items.length&&!section.available)hired.append(node('p',`${label}: ${section.reason}`,'notice-inline'));
 
  // Comercial: sem permissão, as duas seções dizem o mesmo motivo — uma frase basta.
@@ -711,13 +749,15 @@ function paintClientDetail(summary){
   if(!contracts.available)unavailable('Contratos comerciais',contracts);
   else if(contracts.items.length){
    const signed=panel('Contratos comerciais','Escopo e aceite registrados. Contrato ativo não concede acesso sozinho.');
-   for(const c of contracts.items){const lead=c.lead_id?node('button','Abrir lead','table-action'):null;if(lead){lead.type='button';lead.onclick=()=>openLead(c.lead_id);}signed.append(row(c.title,[CONTRACT_LABELS[c.status]||c.status,minorAmount(c.amount_minor,c.currency),c.product_name||c.product_id,c.starts_on?`desde ${dayLabel(c.starts_on)}${c.ends_on?` até ${dayLabel(c.ends_on)}`:''}`:null].filter(Boolean).join(' · '),...(lead?[lead]:[])));}
+   const listaContratos=ctxId?contracts.items.filter(c=>!c.product_id||c.product_id===ctxId):contracts.items;
+   for(const c of (listaContratos.length?listaContratos:contracts.items)){const lead=c.lead_id?node('button','Abrir lead','table-action'):null;if(lead){lead.type='button';lead.onclick=()=>openLead(c.lead_id);}signed.append(row(c.title,[CONTRACT_LABELS[c.status]||c.status,minorAmount(c.amount_minor,c.currency),c.product_name||c.product_id,c.starts_on?`desde ${dayLabel(c.starts_on)}${c.ends_on?` até ${dayLabel(c.ends_on)}`:''}`:null].filter(Boolean).join(' · '),...(lead?[lead]:[])));}
    if(contracts.truncated)signed.append(node('p','Mostrando os 100 contratos mais recentes.','detail'));
   }
   if(!origin.available)unavailable('Origem',origin);
   else if(origin.items.length){
    const source=panel('Origem','Leads da empresa, do primeiro ao mais recente: o primeiro diz de onde ela veio.');
-   for(const l of origin.items){const open=node('button','Abrir lead','table-action');open.type='button';open.onclick=()=>openLead(l.id);source.append(row(l.name||'Lead',[LEAD_LABELS[l.status]||l.status,l.product_name||l.product_id,l.source_system,l.channel,l.utm_source&&`origem ${l.utm_source}`,l.utm_campaign&&`campanha ${l.utm_campaign}`,dayLabel(l.source_created_at||l.created_at)].filter(Boolean).join(' · '),open));}
+   const listaLeads=ctxId?origin.items.filter(l=>!l.product_id||l.product_id===ctxId):origin.items;
+   for(const l of (listaLeads.length?listaLeads:origin.items)){const open=node('button','Abrir lead','table-action');open.type='button';open.onclick=()=>openLead(l.id);source.append(row(l.name||'Lead',[LEAD_LABELS[l.status]||l.status,l.product_name||l.product_id,l.source_system,l.channel,l.utm_source&&`origem ${l.utm_source}`,l.utm_campaign&&`campanha ${l.utm_campaign}`,dayLabel(l.source_created_at||l.created_at)].filter(Boolean).join(' · '),open));}
    if(origin.truncated)source.append(node('p','Mostrando os 50 primeiros leads.','detail'));
   }
  }
@@ -739,7 +779,7 @@ function paintClientDetail(summary){
   time.append(node('strong',hours.minutes?`${workedTime(hours.minutes)} em ${plural(hours.logs,'apontamento','apontamentos')} de ${plural(hours.activities,'atividade','atividades')}`:'Nenhuma hora lançada neste mês.','client-access-count'));
   for(const item of hours.items||[])time.append(node('p',`${item.label||'Sem contratação'} · ${workedTime(item.minutes)}`,'detail'));
   const open=node('button',undefined,'secondary');open.type='button';open.append(createIcon('calendar'),document.createTextNode('Abrir no Acompanhamento'));
-  open.onclick=()=>{tracking.focus(tenant.id);switchView('tracking');};time.append(open);
+  open.onclick=()=>{tracking.focus(tenant.id);switchView(contextKind()==='product'?'product-tracking':'tracking');};time.append(open);
  }
 
  // Fotos da empresa, no R2 privado: o painel monta a própria listagem e o próprio colar/arrastar.
@@ -783,15 +823,23 @@ async function openEngagementDialog(tenant){
  form.elements.tenant_name.value=tenant.name;
  form.elements.service_model.replaceChildren(...SERVICE_MODELS.map(value=>option(value,clientLabel(value))));
  form.elements.status.replaceChildren(...ENGAGEMENT_STATUS.map(value=>option(value,clientLabel(value))));
- fillEngagementProducts();dialog.showModal();
+ if(contextKind()==='product'&&state.product?.product){
+  const kind=state.product.product.portfolio_kind;
+  if(['education','consulting','advisory','on_demand'].includes(kind))form.elements.service_model.value=kind;
+  else if(['saas','product'].includes(kind))form.elements.service_model.value='product';
+ }
+ fillEngagementProducts();
+ if(contextKind()==='product'&&state.context)form.elements.product_id.value=state.context;
+ dialog.showModal();
  // Itens do portfólio: os do painel quando já carregados; senão, a lista do CRUD.
- if(!state.overview?.products&&!engagementItems){try{engagementItems=(await api('/api/portfolio')).items||[];fillEngagementProducts();}catch(error){dialog.querySelector('.dialog-error').textContent=error.message;}}
+ if(!state.overview?.products&&!engagementItems){try{engagementItems=(await api('/api/portfolio')).items||[];fillEngagementProducts();if(contextKind()==='product'&&state.context)form.elements.product_id.value=state.context;}catch(error){dialog.querySelector('.dialog-error').textContent=error.message;}}
 }
 function fillEngagementProducts(){
- const form=$('engagement-form'),select=form.elements.product_id,previous=select.value,model=form.elements.service_model.value;
+ const form=$('engagement-form'),select=form.elements.product_id,previous=select.value||(contextKind()==='product'?state.context:''),model=form.elements.service_model.value;
  // Mesma regra de validarContratacao: item ativo com a capacidade do tipo. O servidor confere de novo.
  const capability=model==='product'?'product_engagement':'commercial';
- const items=(state.overview?.products||engagementItems||[]).filter(item=>item.lifecycle_status==='active'&&hasCapability(item,capability));
+ const baseItems=state.overview?.products||engagementItems||(state.product?.product?[state.product.product]:[]);
+ const items=baseItems.filter(item=>item.lifecycle_status==='active'&&hasCapability(item,capability));
  select.replaceChildren(option('',model==='product'?'Selecione o produto':'Sem item do portfólio'),...items.map(item=>option(item.id,`${item.name} · ${kindLabelOf(item.portfolio_kind)}`)));
  select.required=model==='product';
  if(items.some(item=>item.id===previous))select.value=previous;
@@ -1108,28 +1156,48 @@ function renderGeneral() {
  ]});
  // Abas por tipo, com a contagem: "Todos" e uma aba por tipo do registro. Todos os
  // tipos aparecem, mesmo vazios: quem cadastra precisa ver onde o espaço novo cabe.
- const tipos=kindRegistry(),doTipo=kind=>overview.products.filter(p=>canonKind(p.portfolio_kind)===kind);
- const abas=[{key:'all',label:'Todos',count:overview.products.length},...tipos.map(info=>({key:info.kind,label:info.plural,count:doTipo(info.kind).length}))];
- if(!abas.some(aba=>aba.key===state.portfolioTab))state.portfolioTab='all';
- const pintarPortfolio=()=>{
-  const key=state.portfolioTab,info=key==='all'?null:kindInfo(key),grade=$('product-catalog'),nota=$('portfolio-note');
-  const itens=key==='all'?tipos.flatMap(item=>doTipo(item.kind)):doTipo(key);
-  grade.setAttribute('aria-labelledby',`portfolio-tab-${key}`);
-  // Só numa aba de tipo há o que dizer sobre ele: o que é e o que pode fazer.
-  nota.replaceChildren();
-  if(info){
-   nota.append(node('p',info.what));
-   const podem=(itens[0]?.capabilities||[]).filter(c=>CAPABILITY_LABELS[c]);
-   if(itens.length){const caps=node('div',undefined,'portfolio-kind-caps');caps.append(...(podem.length?podem.map(c=>node('span',CAPABILITY_LABELS[c],'status')):[node('span','Só é operado','status')]));nota.append(caps);}
-  }
-  if(itens.length){grade.replaceChildren(portfolioTable(itens));return;}
-  const vazio=node('div',undefined,'empty-state');
-  const criar=node('button','Novo espaço','primary');criar.type='button';criar.onclick=()=>abrirEspaco(null,info?.kind);
-  vazio.append(node('h3',info?`Nenhum espaço de ${info.label.toLowerCase()} ainda.`:'Nenhum espaço cadastrado ainda.'),node('p','Um espaço é onde a TZOLKIN organiza o que vende ou opera.'),criar);
-  grade.replaceChildren(vazio);
+ const renderPortfolioSection = (isServices = false) => {
+  const hostTabs = isServices ? $('portfolio-services-tabs') : $('portfolio-tabs');
+  const hostNote = isServices ? $('portfolio-services-note') : $('portfolio-note');
+  const hostCatalog = isServices ? $('portfolio-services-catalog') : $('product-catalog');
+  if (!hostTabs || !hostNote || !hostCatalog) return;
+  const isServiceKind = k => ['service_line', 'advisory'].includes(canonKind(k));
+  const tipos = kindRegistry().filter(item => isServices ? isServiceKind(item.kind) : !isServiceKind(item.kind));
+  const doTipo = kind => overview.products.filter(p => canonKind(p.portfolio_kind) === kind);
+  const totalItens = tipos.flatMap(item => doTipo(item.kind));
+  const tabProp = isServices ? 'portfolioServicesTab' : 'portfolioTab';
+  const abas = [{ key: 'all', label: 'Todos', count: totalItens.length }, ...tipos.map(info => ({ key: info.kind, label: info.plural, count: doTipo(info.kind).length }))];
+  if (!abas.some(aba => aba.key === state[tabProp])) state[tabProp] = 'all';
+
+  const pintar = () => {
+   const key = state[tabProp], info = key === 'all' ? null : kindInfo(key);
+   const itens = key === 'all' ? totalItens : doTipo(key);
+   hostCatalog.setAttribute('aria-labelledby', `${isServices ? 'portfolio-services' : 'portfolio'}-tab-${key}`);
+   hostNote.replaceChildren();
+   if (info) {
+    hostNote.append(node('p', info.what));
+    const podem = (itens[0]?.capabilities || []).filter(c => CAPABILITY_LABELS[c]);
+    if (itens.length) {
+     const caps = node('div', undefined, 'portfolio-kind-caps');
+     caps.append(...(podem.length ? podem.map(c => node('span', CAPABILITY_LABELS[c], 'status')) : [node('span', 'Só é operado', 'status')]));
+     hostNote.append(caps);
+    }
+   }
+   if (itens.length) { hostCatalog.replaceChildren(portfolioTable(itens)); return; }
+   const vazio = node('div', undefined, 'empty-state');
+   const criar = node('button', isServices ? 'Novo serviço' : 'Novo produto', 'primary');
+   criar.type = 'button';
+   criar.onclick = () => abrirEspaco(null, info?.kind || (isServices ? 'service_line' : 'platform'));
+   vazio.append(node('h3', info ? `Nenhum espaço de ${info.label.toLowerCase()} ainda.` : (isServices ? 'Nenhum serviço cadastrado ainda.' : 'Nenhum produto cadastrado ainda.')), node('p', 'Um espaço é onde a TZOLKIN organiza o que vende ou opera.'), criar);
+   hostCatalog.replaceChildren(vazio);
+  };
+
+  mountTabs({ host: hostTabs, tabs: abas, active: state[tabProp], label: isServices ? 'Tipos de serviço' : 'Tipos de produto', prefix: isServices ? 'portfolio-services' : 'portfolio', panelId: isServices ? 'portfolio-services-catalog' : 'product-catalog', onChange: key => { state[tabProp] = key; pintar(); } });
+  pintar();
  };
- mountTabs({host:$('portfolio-tabs'),tabs:abas,active:state.portfolioTab,label:'Tipos de espaço',prefix:'portfolio',panelId:'product-catalog',onChange:key=>{state.portfolioTab=key;pintarPortfolio();}});
- pintarPortfolio();
+
+ renderPortfolioSection(false);
+ renderPortfolioSection(true);
 
  $('contracts').replaceChildren(...overview.entitlements.map(entitlement => record(
   names.get(entitlement.tenant_id) || 'Cliente',
@@ -1143,6 +1211,237 @@ function renderGeneral() {
   () => openDialog('member-dialog', membership))));
  if (!overview.entitlements.length) $('contracts').append(node('p', 'Nenhum produto vinculado a um cliente.', 'empty-list'));
  if (!overview.memberships.length) $('members').append(node('p', 'Nenhuma pessoa vinculada a um cliente.', 'empty-list'));
+}
+
+function renderPortfolioServices() {
+ if (!state.overview) return;
+ renderGeneral();
+}
+
+let outboundSearch = '';
+async function renderOutbound() {
+ const host = $('outbound-content');
+ if (!host) return;
+ host.replaceChildren(node('p', 'Carregando oportunidades outbound…', 'detail'));
+ try {
+  const [oppData, pipeData] = await Promise.all([
+   api('/api/commercial/opportunities?limit=100'),
+   api('/api/commercial/pipelines').catch(() => ({ pipelines: [] })),
+  ]);
+  const allOpps = oppData.opportunities || [];
+  const pipelines = pipeData.pipelines || [];
+  const stageMap = new Map();
+  for (const p of pipelines) for (const s of p.stages || []) stageMap.set(s.id, { ...s, pipelineName: p.name });
+
+  const searchInput = $('outbound-search');
+  if (searchInput) {
+   searchInput.oninput = () => {
+    outboundSearch = searchInput.value.toLowerCase().trim();
+    pintar();
+   };
+  }
+
+  const brl = minor => (Number(minor || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const dateStr = v => v ? new Date(v).toLocaleDateString('pt-BR') : '—';
+
+  const pintar = () => {
+   const opps = allOpps.filter(o => {
+    if (!outboundSearch) return true;
+    return (o.title || '').toLowerCase().includes(outboundSearch) ||
+           (o.organization_name || '').toLowerCase().includes(outboundSearch) ||
+           (o.owner_name || '').toLowerCase().includes(outboundSearch);
+   });
+
+   const abertas = opps.filter(o => {
+    const s = stageMap.get(o.stage_id);
+    return !s || (s.kind !== 'WON' && s.kind !== 'LOST');
+   });
+   const valorAberto = abertas.reduce((sum, o) => sum + Number(o.value_minor || 0), 0);
+   const ganhas = opps.filter(o => stageMap.get(o.stage_id)?.kind === 'WON');
+
+   const kpis = node('div', undefined, 'overview-kpis');
+   const card1 = node('article', undefined, 'metric-card');
+   card1.append(node('span', 'Em prospecção ativa'), node('strong', String(abertas.length)), node('small', 'Oportunidades em aberto'));
+   const card2 = node('article', undefined, 'metric-card');
+   card2.append(node('span', 'Pipeline aberto'), node('strong', brl(valorAberto)), node('small', 'Valor potencial estimado'));
+   const card3 = node('article', undefined, 'metric-card');
+   card3.append(node('span', 'Negócios ganhos'), node('strong', String(ganhas.length)), node('small', 'Convertidos em contratações'));
+   kpis.append(card1, card2, card3);
+
+   if (!opps.length) {
+    const vazio = node('div', undefined, 'empty-state');
+    vazio.append(
+     node('span', '◈', 'empty-symbol'),
+     node('p', outboundSearch ? 'Nada com estes filtros.' : 'Ainda não chegou nenhum.', 'empty-list')
+    );
+    host.replaceChildren(kpis, vazio);
+    return;
+   }
+
+   const tabelaOpps = tabela({
+    legenda: 'Prospecção ativa e oportunidades',
+    linhas: opps,
+    colunas: [
+     { titulo: 'Oportunidade', celula: o => celulaNome({ nome: o.title, apoio: o.organization_name }) },
+     { titulo: 'Etapa', celula: o => {
+       const st = stageMap.get(o.stage_id);
+       return selo(st?.name || o.stage_name || 'Aberta', st?.kind === 'WON' ? 'active' : st?.kind === 'LOST' ? 'error' : 'building');
+     }},
+     { titulo: 'Valor', num: true, celula: o => brl(o.value_minor) },
+     { titulo: 'Responsável', celula: o => o.owner_name || 'Não atribuído' },
+     { titulo: 'Previsão', num: true, celula: o => dateStr(o.expected_close_at) },
+     { titulo: 'Origem', celula: o => selo(o.origin === 'OUTBOUND' ? 'Outbound' : (o.origin || 'Direta'), 'tone-info') },
+    ]
+   });
+
+   host.replaceChildren(kpis, tabelaOpps);
+  };
+
+  pintar();
+ } catch (err) {
+  host.replaceChildren(node('p', err.message, 'notice-inline'));
+ }
+}
+
+let crmPaymentsTab = 'vendas';
+let crmSalesData = null;
+
+async function renderCrmPayments() {
+ const tabsHost = $('crm-payments-tabs');
+ const vendasPanel = $('crm-payments-vendas');
+ const gatewaysPanel = $('crm-payments-gateways');
+ if (!tabsHost || !vendasPanel || !gatewaysPanel) return;
+
+ const tabs = [
+  { key: 'vendas', label: 'Vendas e cobranças' },
+  { key: 'gateways', label: 'Gateways e integrações' },
+ ];
+
+ const money = val => (Number(val || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+ const currMonth = brazilMonth(Date.now());
+
+ const mostrarAba = key => {
+  crmPaymentsTab = key;
+  vendasPanel.hidden = key !== 'vendas';
+  gatewaysPanel.hidden = key !== 'gateways';
+  if (key === 'vendas') pintarVendas();
+  else pintarGateways();
+ };
+
+ mountTabs({ host: tabsHost, tabs, active: crmPaymentsTab, label: 'Abas de pagamentos', prefix: 'crm-pay', onChange: mostrarAba });
+
+ async function pintarVendas() {
+  vendasPanel.replaceChildren(node('p', 'Carregando vendas…', 'detail'));
+  try {
+   if (!crmSalesData) crmSalesData = await api('/api/finance/sales?month=' + currMonth);
+   const providers = crmSalesData?.providers || {};
+   const allSales = Object.values(providers).flatMap(p => p.snapshot?.payload?.sales || []).sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
+
+   const gross = allSales.reduce((acc, sale) => acc + (sale.gross || 0), 0);
+   const fees = allSales.reduce((acc, sale) => acc + (sale.fee || 0), 0);
+   const net = allSales.reduce((acc, sale) => acc + (sale.net != null ? sale.net : (sale.gross || 0) - (sale.fee || 0)), 0);
+
+   const toolbar = node('div', undefined, 'section-toolbar');
+   const syncBtn = node('button', 'Sincronizar processadores', 'secondary');
+   syncBtn.type = 'button';
+   syncBtn.onclick = async () => {
+    syncBtn.disabled = true;
+    syncBtn.textContent = 'Sincronizando…';
+    try {
+     await api('/api/finance/sales/sync', 'POST', { month: currMonth });
+     crmSalesData = null;
+     await pintarVendas();
+    } catch (err) {
+     reportError(err);
+    } finally {
+     syncBtn.disabled = false;
+     syncBtn.textContent = 'Sincronizar processadores';
+    }
+   };
+   toolbar.append(node('div', `Mês corrente (${currMonth})`), syncBtn);
+
+   const metrics = node('div', undefined, 'overview-kpis');
+   const cardGross = node('article', undefined, 'metric-card');
+   cardGross.append(node('span', 'Vendas brutas'), node('strong', money(gross)), node('small', 'Confirmadas no período'));
+   const cardFees = node('article', undefined, 'metric-card');
+   cardFees.append(node('span', 'Taxas operacionais'), node('strong', money(fees)), node('small', 'Retidas pelos gateways'));
+   const cardNet = node('article', undefined, 'metric-card');
+   cardNet.append(node('span', 'Líquido recebido'), node('strong', money(net)), node('small', 'Disponível após taxas'));
+   metrics.append(cardGross, cardFees, cardNet);
+
+   if (!allSales.length) {
+    const vazio = node('div', undefined, 'empty-state');
+    vazio.append(
+     node('span', '◈', 'empty-symbol'),
+     node('p', 'Nenhuma venda registrada neste mês.', 'empty-list')
+    );
+    vendasPanel.replaceChildren(toolbar, metrics, vazio);
+    return;
+   }
+
+   const tabelaVendas = tabela({
+    legenda: 'Vendas registradas',
+    linhas: allSales,
+    colunas: [
+     { titulo: 'Data', celula: s => s.date ? new Date(s.date).toLocaleDateString('pt-BR') : '—' },
+     { titulo: 'Processador', celula: s => selo(s.processor === 'stripe' ? 'Stripe' : (s.processor || 'Gateway'), 'tone-info') },
+     { titulo: 'Descrição', celula: s => celulaNome({ nome: s.description || 'Venda', apoio: s.customer_name || s.customer_email || '' }) },
+     { titulo: 'Situação', celula: s => selo(s.status === 'paid' || s.status === 'received' ? 'Pago' : s.status, 'active') },
+     { titulo: 'Bruto', num: true, celula: s => money(s.gross) },
+     { titulo: 'Taxa', num: true, celula: s => money(s.fee) },
+     { titulo: 'Líquido', num: true, celula: s => money(s.net) },
+    ]
+   });
+
+   vendasPanel.replaceChildren(toolbar, metrics, tabelaVendas);
+  } catch (err) {
+   vendasPanel.replaceChildren(node('p', err.message, 'notice-inline'));
+  }
+ }
+
+ async function pintarGateways() {
+  gatewaysPanel.replaceChildren(node('p', 'Consultando conexões de gateway…', 'detail'));
+  try {
+   const status = await api('/api/integrations/status').catch(() => ({}));
+   const stripeOk = Boolean(status.stripe?.configured ?? status.stripe_configured ?? true);
+   const asaasOk = Boolean(status.asaas?.configured ?? status.asaas_configured ?? false);
+
+   const grid = node('div', undefined, 'overview-layout');
+
+   const stripeCard = node('section', undefined, 'overview-panel');
+   const stripeTitle = node('div', undefined, 'overview-panel-title');
+   const stripeHead = node('div');
+   stripeHead.append(node('span', 'PROCESSADOR', 'overview-kicker'), node('h3', 'Stripe'));
+   stripeTitle.append(stripeHead, selo(stripeOk ? 'Ativo' : 'Pendente', stripeOk ? 'active' : 'building'));
+   stripeCard.append(
+    stripeTitle,
+    node('p', 'Processador de checkout transparente, assinaturas recorrentes e links de pagamento.', 'detail'),
+    node('p', 'Suporta cartões de crédito, débito e cobrança internacional com webhooks sincronizados em tempo real.', 'catalog-caption')
+   );
+
+   const asaasCard = node('section', undefined, 'overview-panel');
+   const asaasTitle = node('div', undefined, 'overview-panel-title');
+   const asaasHead = node('div');
+   asaasHead.append(node('span', 'PROCESSADOR', 'overview-kicker'), node('h3', 'Asaas'));
+   asaasTitle.append(asaasHead, selo(asaasOk ? 'Ativo' : 'Configurar', asaasOk ? 'active' : 'building'));
+   asaasCard.append(
+    asaasTitle,
+    node('p', 'Cobranças bancárias via PIX e boletos registrados.', 'detail'),
+    node('p', 'Integração de conciliação e faturamento nacional com emissão direta.', 'catalog-caption')
+   );
+
+   grid.append(stripeCard, asaasCard);
+
+   const infoSec = node('div', undefined, 'section-toolbar');
+   infoSec.append(node('p', 'Para gerenciar chaves de API, webhooks e contas conectadas, acesse Configurações no rodapé.', 'catalog-caption'));
+
+   gatewaysPanel.replaceChildren(grid, infoSec);
+  } catch (err) {
+   gatewaysPanel.replaceChildren(node('p', err.message, 'notice-inline'));
+  }
+ }
+
+ mostrarAba(crmPaymentsTab);
 }
 
 /* ---------- vínculo de recurso a dono, nas abas dos provedores ---------- */
@@ -1407,10 +1706,16 @@ function renderProductArchitecture(product) {
 
 function renderProductRecord(product) {
  const panel = node('div', undefined, 'context-card product-record-card');
- // Linha de serviço: vende por proposta, sem checkout nem acesso de usuários.
  const serviceLine=!hasCapability(product,'checkout')&&hasCapability(product,'commercial');
  const kicker=kindLabelOf(product.portfolio_kind).toUpperCase();
- const recordActions=serviceLine?[['Captação inbound','product-inbound','user-plus'],['Contratações','product-engagements','briefcase'],['Chaves de integração','product-keys','lock'],['E-mails','product-emails','mail']]:hasCapability(product,'checkout')?[['Cobrança','product-payments','wallet'],['E-mails','product-emails','mail']]:[];
+ const recordActions=[
+  ['Acompanhamento','product-tracking','calendar'],
+  ['Clientes','product-clients','people'],
+  ['Pagamentos','product-payments','wallet'],
+  ['E-mails','product-emails','mail'],
+  ['Conexões (SDK & API)','product-connections','branch'],
+  ['Inbound e Funil','product-inbound','user-plus'],
+ ];
  const lifecycle=productLifecycle(product),appearsDraft=productUnproven(product),live=appearsDraft?(publishedDeployUrl(product)||null):productLiveUrl(product);const identity=node('div',undefined,'product-record-identity');identity.append(productFavicon(productFaviconUrl(product)),node('div'));identity.lastChild.append(node('span',kicker,'overview-kicker'),node('h2', product.name), node('p', 'Identificador: ' + product.id, 'detail'));panel.append(identity);
  const actions=node('div',undefined,'product-record-actions');for(const [label,view,icon] of recordActions){const button=node('button',undefined,'secondary');button.type='button';button.append(createIcon(icon),document.createTextNode(label));button.onclick=()=>switchView(view);actions.append(button);}
  // A tela do próprio espaço também edita o espaço: nome, tipo e tags (o cadastro do overview tem a revisão).
@@ -1427,7 +1732,7 @@ function renderProductRecord(product) {
  } else {
   panel.append(node('p', 'Sem ficha no catálogo importado do Notion. Nada foi inferido para preencher este espaço.', 'context-description'));
  }
- const facts=node('div',undefined,'product-record-facts');for(const [label,value] of (serviceLine?[['Tipo',kindLabelOf(product.portfolio_kind)],['Entrada','Formulário inbound ou proposta'],['Cobrança','Fora do checkout']]:[['Tipo',kindLabelOf(product.portfolio_kind)],['Estado operacional',lifecycle.label],['Família',product.brand_family||'TZOLKIN']])){const fact=node('div');fact.append(node('span',label),node('strong',String(value)));facts.append(fact);}panel.append(facts);
+ const facts=node('div',undefined,'product-record-facts');for(const [label,value] of (serviceLine?[['Tipo',kindLabelOf(product.portfolio_kind)],['Entrada','SDK/Formulários ou Proposta'],['Pagamentos','Stripe, Asaas ou Contrato']]:[['Tipo',kindLabelOf(product.portfolio_kind)],['Estado operacional',lifecycle.label],['Família',product.brand_family||'TZOLKIN']])){const fact=node('div');fact.append(node('span',label),node('strong',String(value)));facts.append(fact);}panel.append(facts);
  const connection=node('section',undefined,'product-connection-card'),deployment=readyDeployment(product),project=state.deploys.find(item=>deploymentBelongsToProduct(item,product));connection.append(node('h3','Conexão de deploy'),node('p',deployment?`${project?.project||'Projeto'} · ${project?.provider==='vercel'?'Vercel':'EasyPanel'} · publicado e observado`:'Nenhum deploy READY vinculado a este item.','detail'));const connectionActions=node('div',undefined,'product-connection-actions');if(deployment?.url)connectionActions.append(catalogLink('Abrir produção ↗',deployment.url,'product-live-link'));const openDeploys=node('button','Ver projetos e deploys →','secondary');openDeploys.type='button';openDeploys.onclick=()=>{state.context='';state.view='deploys';clearRenderedData();renderContextChrome();renderNav();load().catch(reportError);};connectionActions.append(openDeploys);connection.append(connectionActions);panel.append(connection);
  panel.append(renderProductArchitecture(product));
  $('product-record').replaceChildren(panel);
@@ -1449,33 +1754,206 @@ function renderProductRights(organizations) {
   'Nenhum direito granular em vigor neste produto.', 'empty-list'));
 }
 
+function renderContextBindPanel(context) {
+ const section = $('view-product-orgs');
+ if (!section) return;
+ let box = document.getElementById('context-bind-engagement-box');
+ if (!box) {
+  box = node('section', undefined, 'panel');
+  box.id = 'context-bind-engagement-box';
+  section.insertBefore(box, section.firstChild);
+ }
+ box.replaceChildren();
+ const head = node('div', undefined, 'section-toolbar');
+ const copy = node('div');
+ copy.append(
+  node('h3', `Clientes e Contratações de ${context.product.name}`),
+  node('p', 'Quando uma contratação é atribuída a este contexto, o cliente e todo o seu histórico passam a fazer parte deste espaço.', 'detail')
+ );
+ const btnBind = node('button', 'Atribuir ou criar contratação neste contexto', 'secondary');
+ btnBind.type = 'button';
+ head.append(copy, btnBind);
+ box.append(head);
+
+ const formWrap = node('div');
+ formWrap.hidden = true;
+ btnBind.onclick = async () => {
+  formWrap.hidden = !formWrap.hidden;
+  if (formWrap.hidden) return;
+  await ensureDirectory();
+  formWrap.replaceChildren();
+  const grid = node('div', undefined, 'pay-connections');
+
+  // Opção A: Atribuir contratação existente a este contexto
+  const cardExisting = node('article', undefined, 'panel');
+  cardExisting.append(node('h4', 'Atribuir contratação existente a este contexto'));
+  const formEx = node('form', undefined, 'form-grid');
+  const selEng = node('select');
+  selEng.required = true;
+  const candidatas = (state.overview?.engagements || []).filter(e => e.product_id !== context.product.id);
+  selEng.append(option('', candidatas.length ? 'Selecione uma contratação…' : 'Todas as contratações já estão neste contexto'));
+  for (const e of candidatas) {
+   const tName = state.overview?.tenants?.find(t => t.id === e.tenant_id)?.name || 'Empresa';
+   selEng.append(option(e.id, `${tName} · ${e.label} (${clientLabel(e.service_model)})`));
+  }
+  const lblEx = node('label', 'Contratação');
+  lblEx.append(selEng);
+  const btnEx = node('button', 'Trazer para este contexto', 'primary');
+  btnEx.type = 'submit';
+  formEx.append(lblEx, btnEx);
+  formEx.onsubmit = async ev => {
+   ev.preventDefault();
+   if (!selEng.value) return;
+   btnEx.disabled = true;
+   try {
+    await api(`/api/products/${encodeURIComponent(context.product.id)}/engagements/bind`, 'POST', { engagement_id: selEng.value });
+    state.product = await api(`/api/products/${encodeURIComponent(context.product.id)}/console`);
+    if (state.overview) state.overview = await api('/api/overview');
+    renderProduct();
+    $('notice').textContent = 'Contratação atribuída ao contexto com sucesso.';
+   } catch (err) {
+    reportError(err);
+    btnEx.disabled = false;
+   }
+  };
+  cardExisting.append(formEx);
+
+  // Opção B: Nova contratação direto neste contexto
+  const cardNew = node('article', undefined, 'panel');
+  cardNew.append(node('h4', 'Nova contratação neste contexto'));
+  const formNew = node('form', undefined, 'form-grid');
+  const selTenant = node('select');
+  selTenant.required = true;
+  selTenant.append(option('', 'Selecione o cliente…'), ...(state.overview?.tenants || []).map(t => option(t.id, t.name)));
+  const inTitle = node('input');
+  inTitle.required = true;
+  inTitle.placeholder = `Ex.: ${context.product.name} · 2026`;
+  const selModel = node('select');
+  for (const m of ['consulting', 'advisory', 'education', 'product', 'on_demand']) {
+   selModel.append(option(m, clientLabel(m)));
+  }
+  if (['education', 'consulting', 'advisory', 'on_demand'].includes(context.product.portfolio_kind)) {
+   selModel.value = context.product.portfolio_kind;
+  } else if (['saas', 'product'].includes(context.product.portfolio_kind)) {
+   selModel.value = 'product';
+  }
+  const lT = node('label', 'Cliente'); lT.append(selTenant);
+  const lN = node('label', 'Título da contratação'); lN.append(inTitle);
+  const lM = node('label', 'Modelo'); lM.append(selModel);
+  const btnNew = node('button', 'Criar contratação no contexto', 'primary');
+  btnNew.type = 'submit';
+  formNew.append(lT, lN, lM, btnNew);
+  formNew.onsubmit = async ev => {
+   ev.preventDefault();
+   btnNew.disabled = true;
+   try {
+    await api(`/api/products/${encodeURIComponent(context.product.id)}/engagements/bind`, 'POST', {
+     tenant_id: selTenant.value,
+     title: inTitle.value.trim(),
+     delivery_model: selModel.value,
+     status: 'active',
+    });
+    state.product = await api(`/api/products/${encodeURIComponent(context.product.id)}/console`);
+    if (state.overview) state.overview = await api('/api/overview');
+    renderProduct();
+    $('notice').textContent = 'Nova contratação criada neste contexto.';
+   } catch (err) {
+    reportError(err);
+    btnNew.disabled = false;
+   }
+  };
+  cardNew.append(formNew);
+
+  grid.append(cardExisting, cardNew);
+  formWrap.append(grid);
+ };
+ box.append(formWrap);
+}
+
 function renderProductOrganizations() {
  const context = state.product;
+ if (!context) return;
+ renderContextBindPanel(context);
+ const allClients = Array.isArray(context.clients)
+  ? context.clients
+  : (context.organizations || []).map(org => ({
+     tenant_id: org.tenant_id,
+     name: org.name,
+     slug: org.slug,
+     status: org.status,
+     lifecycle_status: org.status,
+     access_contract: org,
+     engagements: [],
+     commercial_contracts: [],
+    }));
  const query = $('org-search').value.trim().toLocaleLowerCase('pt-BR');
- const rows = context.organizations.filter(org => (org.name + ' ' + org.slug).toLocaleLowerCase('pt-BR').includes(query));
+ const rows = allClients.filter(c => (c.name + ' ' + c.slug).toLocaleLowerCase('pt-BR').includes(query));
  $('product-orgs').replaceChildren();
- $('product-orgs-empty').hidden = context.organizations.length > 0;
- $('product-orgs-empty-title').textContent = `Nenhuma organização contratou ${context.product.name}.`;
- $('product-orgs-search-empty').hidden = !context.organizations.length || rows.length > 0;
- for (const org of rows) {
-  const row = node('tr');
+ $('product-orgs-empty').hidden = allClients.length > 0;
+ $('product-orgs-empty-title').textContent = `Nenhum cliente vinculado a ${context.product.name} ainda.`;
+ $('product-orgs-search-empty').hidden = !allClients.length || rows.length > 0;
+ for (const client of rows) {
+  const org = client.access_contract;
+  const engs = client.engagements || [];
+  const contracts = client.commercial_contracts || [];
+  const row = node('tr', undefined, 'is-clickable');
   const title = node('td');
-  title.append(node('div', org.name, 'client-name'), node('div', org.slug, 'client-slug'));
+  const openBtn = node('button', client.name, 'tbl-name');
+  openBtn.type = 'button';
+  openBtn.onclick = ev => { ev.stopPropagation(); openClient(client.tenant_id); };
+  title.append(openBtn, node('div', client.slug, 'client-slug'));
+
   const contract = node('td');
-  contract.append(node('span', org.contract_active ? (org.status === 'active' ? 'Ativo' : 'Organização suspensa') : 'Revogado',
-   'status' + (grantsAccess(org) ? ' active' : '')));
-  if (org.rights.length) contract.append(node('div', org.rights.join(', '), 'client-slug'));
+  if (engs.length) {
+   for (const e of engs) {
+    contract.append(
+     node('span', `${e.label} · ${clientLabel(e.status)}`, 'status ' + (['active', 'planned', 'onboarding'].includes(e.status) ? 'active' : 'building'))
+    );
+   }
+  }
+  if (org) {
+   contract.append(node('span', org.contract_active ? (org.status === 'active' ? 'Acesso ativo' : 'Organização suspensa') : 'Acesso revogado',
+    'status' + (grantsAccess(org) ? ' active' : '')));
+   if (org.rights?.length) contract.append(node('div', org.rights.join(', '), 'client-slug'));
+  }
+  if (!engs.length && !org && contracts.length) {
+   contract.append(node('span', `${contracts[0].title} (${CONTRACT_LABELS[contracts[0].status] || contracts[0].status})`, 'status'));
+  }
+
+  const planCell = node('td');
+  const planParts = [
+   org?.plan ? `Plano ${org.plan}` : null,
+   ...engs.map(e => clientLabel(e.service_model)),
+  ].filter(Boolean).filter(semRepetir);
+  planCell.textContent = planParts.join(' · ') || '—';
+
   const people = node('td');
-  people.append(node('div', String(org.active_memberships), 'client-name'));
-  if (org.total_memberships !== org.active_memberships) people.append(node('div', `${org.total_memberships} no total`, 'client-slug'));
+  const mainCount = org ? org.active_memberships : (client.stakeholders_count || 0);
+  people.append(node('div', String(mainCount), 'client-name'));
+  const subParts = [];
+  if (org && org.total_memberships !== org.active_memberships) subParts.push(`${org.total_memberships} acessos`);
+  if (client.activities_count) subParts.push(`${client.activities_count} ativ.`);
+  if (client.hours_minutes) subParts.push(workedTime(client.hours_minutes));
+  if (subParts.length) people.append(node('div', subParts.join(' · '), 'client-slug'));
+
   const action = node('td');
-  const edit = botaoEditar({ texto: 'Editar contrato', aria: `Editar contrato de ${org.name}` });
-  edit.onclick = () => openDialog('entitlement-dialog', {
-   tenant_id: org.tenant_id, product_id: context.product.id, plan: org.plan,
-   rights: org.rights, active: String(org.contract_active),
-  });
-  action.append(edit);
-  row.append(title, contract, node('td', org.plan), people, action);
+  const openFicha = node('button', 'Abrir ficha da empresa', 'table-action');
+  openFicha.type = 'button';
+  openFicha.onclick = ev => { ev.stopPropagation(); openClient(client.tenant_id); };
+  action.append(openFicha);
+  if (org) {
+   const edit = botaoEditar({ texto: 'Editar contrato', aria: `Editar contrato de ${client.name}` });
+   edit.onclick = ev => {
+    ev.stopPropagation();
+    openDialog('entitlement-dialog', {
+     tenant_id: client.tenant_id, product_id: context.product.id, plan: org.plan,
+     rights: org.rights, active: String(org.contract_active),
+    });
+   };
+   action.append(edit);
+  }
+  row.append(title, contract, planCell, people, action);
+  row.onclick = ev => { if (!ev.target.closest('button,a')) openClient(client.tenant_id); };
   $('product-orgs').append(row);
  }
 }
@@ -1496,18 +1974,14 @@ function renderProductEngagements(engagements) {
 
 function renderProduct() {
  const context = state.product, product = context.product, engagements = context.engagements || [];
+ const clients = context.clients || context.organizations || [];
  const access = hasCapability(product, 'access');
- // Contrato de acesso só existe onde o tipo dá acesso; linha de serviço mede contratações.
- renderMetrics(access ? [
-  ['Organizações', context.summary.organizations],
-  ['Contratos de acesso', context.summary.active_contracts],
-  ['Contratos revogados', context.summary.revoked_contracts],
-  ['Pessoas alcançadas', context.summary.reachable_memberships, 'com vínculo neste produto'],
- ] : hasCapability(product, 'commercial') ? [
+ renderMetrics([
+  ['Clientes no contexto', clients.length],
   ['Contratações', engagements.length],
-  ['Em curso', engagements.filter(e => ['planned', 'active', 'paused'].includes(e.status)).length],
-  ['Concluídas', engagements.filter(e => e.status === 'completed').length],
- ] : []);
+  ['Em curso', engagements.filter(e => ['planned', 'active', 'paused', 'onboarding'].includes(e.status)).length],
+  ...(access ? [['Acessos ativos', context.summary.active_contracts]] : []),
+ ]);
  renderProductRecord({...product,deploy_url:publishedDeployUrl(product)});
  $('product-rights-title').hidden = $('product-rights').hidden = !access;
  renderProductRights(context.organizations);
@@ -1636,11 +2110,13 @@ async function load() {
   if(state.view==='product-payments')await productPayments.load(state.product.product);
   if(state.view==='product-receivables')await serviceReceivables.load(state.product.product);
   if(state.view==='product-emails')await productEmails.load({...state.product.product,deploy_url:publishedDeployUrl(state.product.product),favicon_url:productFaviconUrl(state.product.product)});
+  if(state.view==='product-keys'||state.view==='product-connections')await commercial.keys(state.context);
+  if(state.view==='client')renderClientDetail();
  }
  renderContextChrome();
  renderSecurityBanner();
  if(contextKind()==='general') await resource.resume();
- if(state.view==='tracking') await tracking.load();
+ if(state.view==='tracking'||state.view==='product-tracking') await tracking.load({ product: contextKind() === 'product' ? state.context : '' });
  if(state.view==='finance') await finance.load();
  if(state.view==='emails') await emails.load();
  // Entrar, Atualizar e salvar um projeto passam por aqui: sem isto Deploys ficaria com os painéis do GitHub vazios.
@@ -1769,7 +2245,13 @@ $('new-record').onclick = () => {
  const dialog=views()[state.view].action[1];
  // Deploys não usa <dialog> simples: o assistente do cadastro técnico tem fluxo próprio.
  if(dialog==='delivery-new'){delivery.open(null);return;}
- if(dialog==='space-dialog'){abrirEspaco(null,state.portfolioTab==='all'?undefined:state.portfolioTab);return;}
+ if(dialog==='space-dialog'){
+  const initialType = state.view === 'portfolioServices'
+    ? (state.portfolioServicesTab === 'all' ? 'service_line' : state.portfolioServicesTab)
+    : (state.portfolioTab === 'all' ? undefined : state.portfolioTab);
+  abrirEspaco(null, initialType);
+  return;
+ }
  if(dialog==='tenant-dialog'){
   const relationship=$('tenant-form').elements.relationship_kind;
   if(state.view==='leads') relationship.value='prospect';
@@ -1947,4 +2429,9 @@ load().catch(error => { if (error.message !== 'Entre para continuar.') $('login-
 // Falha em silêncio de propósito — sem push o painel funciona igual.
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === '127.0.0.1')) {
  navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+ navigator.serviceWorker.addEventListener('message', event => {
+  if (event.data?.type === 'push-notification-received') {
+   tocarSomNotificacao();
+  }
+ });
 }

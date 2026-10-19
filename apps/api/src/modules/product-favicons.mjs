@@ -2,7 +2,7 @@ import {fail} from '../platform/http.mjs';
 
 // Resolve apenas os hosts que o próprio catálogo/deploy pode publicar. O Core
 // não vira um proxy arbitrário para endereços internos.
-const allowedHost=host=>host.endsWith('.tzolkin.cloud')||host.endsWith('.vercel.app');
+const allowedHost=host=>host==='tzolkin.cloud'||host.endsWith('.tzolkin.cloud')||host.endsWith('.vercel.app');
 const inlineDataIcon=href=>{
  const match=href.match(/^data:(image\/[a-z0-9.+-]+)(;base64)?,([\s\S]*)$/i);if(!match)return null;
  if(match[2])return href;

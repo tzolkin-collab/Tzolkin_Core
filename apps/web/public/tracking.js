@@ -28,7 +28,7 @@ const limitar = (n, a, b) => Math.min(Math.max(n, a), b);
 export function setupTracking({ api, openTenant }) {
  const host = document.getElementById('view-tracking');
  const celular = window.matchMedia('(max-width:700px)');
- const estado = { visao: visaoInicial() || lerVisao() || (celular.matches ? 'dia' : 'semana'), dia: hoje(), miniMes: hoje(), fim: null, tenant: '', texto: '', categorias: new Set(), status: '', alcance: M.ALCANCE_PADRAO, aba: '', engagement: '', responsavel: '', tag: '' };
+ const estado = { visao: visaoInicial() || lerVisao() || (celular.matches ? 'dia' : 'semana'), dia: hoje(), miniMes: hoje(), fim: null, tenant: '', product: '', texto: '', categorias: new Set(), status: '', alcance: M.ALCANCE_PADRAO, aba: '', engagement: '', responsavel: '', tag: '' };
  let dados = null, eventos = [], tenants = [], pessoas = [], geracao = 0, aviso = '', rolagem = null, relogio = 0, suprimirClique = false, filtrosAbertos = false;
  const compacta = window.matchMedia('(max-width:1100px)');   // abaixo disso a lateral some e os filtros viram um bloco recolhível
  const salvando = new Set();
@@ -57,12 +57,15 @@ export function setupTracking({ api, openTenant }) {
  const visiveis = () => M.filtrar(eventos, criterios());
  const filtrosAtivos = () => (estado.tenant ? 1 : 0) + (estado.status ? 1 : 0) + (estado.categorias.size ? 1 : 0) + (estado.aba ? 1 : 0) + (estado.engagement ? 1 : 0) + (estado.responsavel ? 1 : 0) + (estado.tag ? 1 : 0) + (estado.texto.trim() ? 1 : 0);
 
- async function carregar({ silencioso = false } = {}) {
+ async function carregar(opcoes = {}) {
+  const silencioso = typeof opcoes === 'object' && opcoes !== null ? Boolean(opcoes.silencioso) : false;
+  if (typeof opcoes === 'string') estado.product = opcoes;
+  else if (typeof opcoes === 'object' && opcoes !== null && 'product' in opcoes) estado.product = opcoes.product || '';
   const ticket = ++geracao;
   if (!dados) host.replaceChildren(el('p', 'Carregando acompanhamento…', 'empty-list'));
   else if (!silencioso) host.setAttribute('aria-busy', 'true');
   const j = M.janela(estado.visao, estado.dia, estado.fim, estado.alcance);
-  const filtro = new URLSearchParams({ from: j.from, to: j.to, ...(estado.tenant ? { tenant_id: estado.tenant } : {}) });
+  const filtro = new URLSearchParams({ from: j.from, to: j.to, ...(estado.tenant ? { tenant_id: estado.tenant } : {}), ...(estado.product ? { product_id: estado.product } : {}) });
   try {
    const [resposta, diretorio] = await Promise.all([api('/api/tracking?' + filtro), tenants.length ? null : api('/api/overview')]);
    if (ticket !== geracao) return;
@@ -627,7 +630,7 @@ export function setupTracking({ api, openTenant }) {
   geracao++; clearInterval(relogio); painel.fechar(); toast = null; clearTimeout(toastTimer);
   host.replaceChildren();
   dados = null; eventos = []; tenants = []; aviso = ''; rolagem = null;
-  Object.assign(estado, { tenant: '', texto: '', categorias: new Set(), status: '', aba: '', engagement: '', responsavel: '', tag: '', alcance: M.ALCANCE_PADRAO, dia: hoje(), miniMes: hoje() });
+  Object.assign(estado, { tenant: '', product: '', texto: '', categorias: new Set(), status: '', aba: '', engagement: '', responsavel: '', tag: '', alcance: M.ALCANCE_PADRAO, dia: hoje(), miniMes: hoje() });
   for (const k of Object.keys(partes)) partes[k] = null; selecionados.clear(); ultimaSelecaoId = null; hoveredEventId = null;
  };
  // Chegada pela ficha da empresa: semana corrente, filtrada por ela, sem busca nem situação herdadas.

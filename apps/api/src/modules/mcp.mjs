@@ -9,6 +9,7 @@ import { markdownParaEditorJs, editorJsParaMarkdown } from '../platform/markdown
 import { exigirTipoLivre } from '../platform/agenda-tipo.mjs';
 import { criarDetectorResponsavel, MENSAGEM_060 } from '../platform/agenda-recursos.mjs';
 import { criarDetectorTags, garantirTag, revisarTag, listarTags, definirTagsDaAtividade, tagsDasAtividades, tagPublica, autorDaIa, MENSAGEM_061 } from '../platform/agenda-tags.mjs';
+import { lerSdkContexto, salvarSdkContexto, lerStripeContexto, executarAcaoStripeContexto, vincularContratacaoContexto } from './context-operations.mjs';
 
 const MCP_PROTOCOL_VERSION = '2024-11-05';
 const SERVER_INFO = Object.freeze({ name: 'tzolkin-core', version: '1.0.0' });
@@ -191,6 +192,80 @@ const TOOLS = [
     tone: { type: 'string', enum: ['accent', 'info', 'success', 'warning', 'danger', 'neutral'] },
     arquivar: { type: 'boolean', description: 'true = arquiva; false = reativa' },
    },
+  },
+ },
+ {
+  name: 'listar_contextos',
+  description: 'Lista todos os contextos (produtos, mentorias, assessorias, consultorias e serviços) do Core com seus clientes, contratações e status.',
+  inputSchema: {
+   type: 'object',
+   properties: {
+    category: { type: 'string', description: 'Filtrar por categoria (saas, education, consulting, advisory, on_demand)' },
+   },
+  },
+ },
+ {
+  name: 'vincular_contratacao_contexto',
+  description: 'Atribui uma contratação existente a um contexto (product_id) ou cria uma nova contratação de um cliente diretamente dentro daquele contexto.',
+  inputSchema: {
+   type: 'object',
+   properties: {
+    product_id: { type: 'string', description: 'ID do contexto (ex.: skiller, educare, mentoria-individual)' },
+    engagement_id: { type: 'string', description: 'UUID de uma contratação existente para vincular ao contexto (opcional se criar nova)' },
+    tenant_id: { type: 'string', description: 'UUID da empresa cliente (obrigatório ao criar nova contratação)' },
+    title: { type: 'string', description: 'Título da contratação' },
+    delivery_model: { type: 'string', enum: ['product', 'education', 'consulting', 'advisory', 'on_demand'] },
+    status: { type: 'string', enum: ['lead', 'onboarding', 'active', 'paused', 'completed', 'cancelled'] },
+    monthly_value_minor: { type: 'integer', description: 'Valor mensal em centavos' },
+    total_value_minor: { type: 'integer', description: 'Valor total fechado em centavos' },
+   },
+   required: ['product_id'],
+  },
+ },
+ {
+  name: 'configurar_sdk_contexto',
+  description: 'Lê ou configura o SDK/CDN do contexto (UTMs automáticas, captura de formulários, campos personalizados de lead) e retorna o script CDN pronto.',
+  inputSchema: {
+   type: 'object',
+   properties: {
+    product_id: { type: 'string', description: 'ID do contexto' },
+    utm_defaults: { type: 'object', description: 'UTMs padrão do contexto (utm_source, utm_medium, utm_campaign, utm_content, utm_term)' },
+    extra_params: { type: 'object', description: 'Parâmetros extras adicionados automaticamente pelo SDK nos links e formulários' },
+    auto_capture_forms: { type: 'boolean', description: 'Capturar automaticamente todos os formulários do site' },
+    enrich_payment_links: { type: 'boolean', description: 'Injetar UTMs e client_reference_id nos Payment Links da Stripe' },
+    custom_fields: { type: 'array', items: { type: 'string' }, description: 'Chaves de campos personalizados de formulário para cadastrar no Core' },
+   },
+   required: ['product_id'],
+  },
+ },
+ {
+  name: 'gerenciar_stripe_contexto',
+  description: 'Gerencia a Stripe e o gateway de pagamentos de um contexto: consultar visão geral, escolher gateway/conta, conectar nova conta Stripe, criar produto, criar preço/oferta, gerar Payment Link, sincronizar oferta ou cancelar assinatura.',
+  inputSchema: {
+   type: 'object',
+   properties: {
+    product_id: { type: 'string', description: 'ID do contexto' },
+    action: {
+     type: 'string',
+     enum: ['overview', 'select_gateway', 'connect_account', 'create_product', 'update_product', 'create_price', 'create_payment_link', 'sync_offer', 'cancel_subscription'],
+     description: 'Ação a executar (padrão: overview)',
+    },
+    gateway: { type: 'string', enum: ['stripe', 'asaas', 'contract_billing'] },
+    stripe_account_id: { type: 'string', description: 'ID da conta Stripe (default ou acct_<slug>)' },
+    label: { type: 'string', description: 'Nome da conta Stripe (em connect_account)' },
+    slug: { type: 'string', description: 'Identificador da conta ou oferta' },
+    secret_key: { type: 'string', description: 'Chave secreta sk_live_... ou sk_test_... (em connect_account)' },
+    name: { type: 'string', description: 'Nome do produto ou oferta na Stripe' },
+    description: { type: 'string', description: 'Descrição do produto na Stripe' },
+    stripe_product_id: { type: 'string', description: 'ID do produto na Stripe (prod_...)' },
+    price_id: { type: 'string', description: 'ID do preço na Stripe (price_...)' },
+    amount_minor: { type: 'integer', description: 'Valor em centavos (em create_price)' },
+    currency: { type: 'string', enum: ['BRL', 'USD', 'EUR', 'GBP'] },
+    kind: { type: 'string', enum: ['one_time', 'subscription'] },
+    interval: { type: 'string', enum: ['month', 'year'] },
+    subscription_id: { type: 'string', description: 'ID da assinatura na Stripe (sub_...)' },
+   },
+   required: ['product_id'],
   },
  },
 ];
@@ -1075,6 +1150,77 @@ button:hover { background: #388bfd; }
      mensagem: `Atividade '${r.rows[0].title}' cancelada no Acompanhamento.`,
      activity: r.rows[0],
     };
+   }
+
+   case 'listar_contextos': {
+    const r = await pool.query(
+     `SELECT p.id, p.name, p.portfolio_kind, p.brand_family, p.lifecycle_status,
+             COUNT(DISTINCT e.id)::int AS engagements_count,
+             COUNT(DISTINCT e.tenant_id)::int AS engagement_clients_count,
+             COUNT(DISTINCT en.tenant_id)::int AS access_clients_count
+      FROM products p
+      LEFT JOIN client_engagements e ON e.product_id = p.id
+      LEFT JOIN entitlements en ON en.product_id = p.id
+      WHERE ($1::text IS NULL OR p.portfolio_kind = $1)
+      GROUP BY p.id, p.name, p.portfolio_kind, p.brand_family, p.lifecycle_status
+      ORDER BY p.name`,
+     [args.portfolio_kind || args.category || null]
+    );
+    return { total: r.rows.length, contexts: r.rows };
+   }
+
+   case 'vincular_contratacao_contexto': {
+    const client = await pool.connect();
+    try {
+     await client.query('BEGIN');
+     const res = await vincularContratacaoContexto(client, args.product_id, args);
+     await client.query('COMMIT');
+     return { ok: true, ...res };
+    } catch (e) {
+     await client.query('ROLLBACK');
+     throw e;
+    } finally {
+     client.release();
+    }
+   }
+
+   case 'configurar_sdk_contexto': {
+    const payload = {
+     ...args,
+     ...(args.default_utms && !args.utm_defaults ? { utm_defaults: args.default_utms } : {}),
+     ...(args.auto_register_forms !== undefined && args.auto_capture_forms === undefined ? { auto_capture_forms: args.auto_register_forms } : {}),
+    };
+    const temAlteracao = ['utm_defaults', 'extra_params', 'auto_capture_forms', 'enrich_payment_links', 'custom_fields'].some(k => payload[k] !== undefined);
+    if (!temAlteracao) return lerSdkContexto(pool, args.product_id);
+    const client = await pool.connect();
+    try {
+     await client.query('BEGIN');
+     const res = await salvarSdkContexto(client, args.product_id, payload);
+     await client.query('COMMIT');
+     return { ok: true, sdk_config: res.config, ...res };
+    } catch (e) {
+     await client.query('ROLLBACK');
+     throw e;
+    } finally {
+     client.release();
+    }
+   }
+
+   case 'gerenciar_stripe_contexto': {
+    const action = args.action || 'overview';
+    if (action === 'overview') return lerStripeContexto(pool, args.product_id, { env });
+    const client = await pool.connect();
+    try {
+     await client.query('BEGIN');
+     const res = await executarAcaoStripeContexto(client, args.product_id, { ...args, action }, { env, operator: { email: auth.ator } });
+     await client.query('COMMIT');
+     return res;
+    } catch (e) {
+     await client.query('ROLLBACK');
+     throw e;
+    } finally {
+     client.release();
+    }
    }
 
    default:

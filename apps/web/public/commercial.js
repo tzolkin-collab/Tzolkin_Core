@@ -179,8 +179,12 @@ export function setupCommercial({api,openTenant}) {
  }
  async function keys(p){
   const ticket=++epoch,r=document.getElementById('view-product-keys');
-  r.replaceChildren(el('div','Carregando credenciais…','keys-loading'));
-  const d=await api('/api/app-clients?product_id='+encodeURIComponent(p));if(ticket!==epoch)return;
+  r.replaceChildren(el('div','Carregando conexões, SDK e credenciais…','keys-loading'));
+  const [d, sdkData] = await Promise.all([
+   api('/api/app-clients?product_id='+encodeURIComponent(p)).catch(()=>({keys:[],audit:[],allowed_scopes:['commercial:intake','commercial:read','context:read']})),
+   api('/api/products/'+encodeURIComponent(p)+'/sdk').catch(()=>null),
+  ]);
+  if(ticket!==epoch)return;
   const scopeInfo={
    'commercial:intake':{label:'Enviar leads',description:'Recebe novos contatos e oportunidades deste produto.'},
    'commercial:read':{label:'Consultar leads',description:'Consulta a fila comercial e seus detalhes.'},
@@ -190,20 +194,120 @@ export function setupCommercial({api,openTenant}) {
   const statusOf=k=>!k.active||k.revoked_at?'revoked':k.expires_at&&new Date(k.expires_at)<=new Date()?'expired':'active';
   const daysLeft=value=>Math.max(0,Math.ceil((new Date(value)-new Date())/86400000));
   const shortId=id=>id?`${id.slice(0,8)}…${id.slice(-4)}`:'—';
-  const copy=async(value,trigger)=>{await navigator.clipboard.writeText(value);const old=trigger.textContent;trigger.textContent='Copiada';setTimeout(()=>{trigger.textContent=old;},1800);};
+  const copy=async(value,trigger)=>{await navigator.clipboard.writeText(value);const old=trigger.textContent;trigger.textContent='Copiado';setTimeout(()=>{trigger.textContent=old;},1800);};
 
-  const productName=document.getElementById('crumb-context')?.textContent||'produto';
+  const productName=sdkData?.product?.name||document.getElementById('crumb-context')?.textContent||'contexto';
   const allowedScopes=Array.isArray(d.allowed_scopes)?d.allowed_scopes:['commercial:intake','commercial:read','context:read'];
   const active=d.keys.filter(k=>statusOf(k)==='active'),used=active.filter(k=>k.last_used_at);
   const header=el('header',null,'keys-hero'),headerCopy=el('div');
-  headerCopy.append(el('span','ACESSO DE SERVIDOR','keys-eyebrow'),el('h2','Chaves de integração'),el('p',`Credenciais que conectam sistemas ao ${productName}. Cada chave deve ter uma função, o menor acesso possível e uma data para expirar.`));
-  const createToggle=el('button','Nova chave','primary keys-create-toggle');createToggle.type='button';
+  headerCopy.append(el('span','CONEXÕES DO CONTEXTO · SDK, UTMS E API','keys-eyebrow'),el('h2',`Conexões · ${productName}`),el('p',`Script CDN auto-configurável (UTMs, formulários e enriquecimento de links da Stripe) e chaves de API de ${productName}.`));
+  const createToggle=el('button','Nova chave de API','primary keys-create-toggle');createToggle.type='button';
   header.append(headerCopy,createToggle);
   const stats=el('div',null,'keys-stats');
-  for(const [value,label,detail]of [[active.length,'ativas','podem autenticar agora'],[used.length,'em uso','já fizeram uma chamada'],[d.keys.length-active.length,'encerradas','expiradas ou revogadas']]){const item=el('article');item.append(el('strong',String(value)),el('span',label),el('small',detail));stats.append(item);}
+  for(const [value,label,detail]of [[active.length,'chaves ativas','podem autenticar agora'],[(sdkData?.config?.forms||[]).length,'formulários','auto-registrados pelo SDK'],[(sdkData?.lead_fields||[]).length,'campos extras','habilitados na ingestão']]){const item=el('article');item.append(el('strong',String(value)),el('span',label),el('small',detail));stats.append(item);}
+
+  // Seção 1: SDK CDN, UTMs Adicionais do Core (sem substituir UTMs de anúncio) e Auto-cadastro de Formulários
+  const sdkSection=el('section',null,'panel');
+  if(sdkData){
+   const cfg=sdkData.config||{},pipes=sdkData.pipelines||[];
+   const sdkHead=el('div',null,'keys-section-head');
+   const btnCopySdk=el('button','Copiar script CDN','secondary');btnCopySdk.type='button';
+   btnCopySdk.onclick=()=>copy(sdkData.snippet,btnCopySdk);
+   sdkHead.append(el('div'),btnCopySdk);
+   sdkHead.firstChild.append(
+    el('h3','Script CDN / SDK do Contexto'),
+    el('p','Cole este script no site ou microsserviço. Ele preserva intactos todos os UTMs vindos dos anúncios (utm_source, utm_medium, utm_campaign, utm_content, utm_term, meta_*_id, fbclid, gclid) e soma automaticamente os UTMs adicionais do Core deste contexto (utm_tzolkin e parâmetros de oferta/rota), além de enriquecer links da Stripe e auto-cadastrar formulários.')
+   );
+   const codeBox=el('code',sdkData.snippet,'keys-secret-value');
+   sdkSection.append(sdkHead,codeBox);
+
+   if(sdkData.ad_url_template){
+    const adHead=el('div',null,'keys-section-head');
+    const btnCopyAd=el('button','Copiar parâmetros para Anúncio','secondary');btnCopyAd.type='button';
+    btnCopyAd.onclick=()=>copy(sdkData.ad_url_template,btnCopyAd);
+    adHead.append(el('div'),btnCopyAd);
+    adHead.firstChild.append(
+     el('h4','Parâmetros adicionais para URL de Anúncios (Meta Ads / Google Ads)'),
+     el('small','Use junto aos UTMs da sua campanha no gerenciador de anúncios para amarrar o ID da campanha e o funil deste contexto:')
+    );
+    const adCode=el('code',sdkData.ad_url_template,'keys-secret-value');
+    sdkSection.append(adHead,adCode);
+   }
+
+   const corePairs=Object.entries(cfg.core_params||{}).map(([k,v])=>`${k}=${v}`).join(', ');
+   const rulesText=(cfg.route_rules||[]).map(r=>`${r.path_prefix}:${r.niche}${r.offer_label?'='+r.offer_label:''}`).join(', ');
+   const nicheOpts=pipes.length
+    ? pipes.map(pl=>[pl.slug,`${pl.name} (${p}.${pl.slug})${pl.is_default?' · padrão':''}`])
+    : [[cfg.default_niche||'padrao',`Funil padrão (${p}.${cfg.default_niche||'padrao'})`]];
+
+   const utmForm=el('form',null,'commercial-form');
+   const fNiche=select('Funil / Nicho padrão do contexto (utm_tzolkin)',nicheOpts,cfg.default_niche||'padrao');
+   const fCoreParams=field('UTMs adicionais do Core para o microsserviço (chave=valor separados por vírgula — nunca sobrescreve utm_source/medium/campaign do anúncio)','text',corePairs);
+   fCoreParams.input.placeholder='Ex.: utm_offer=plano-anual, utm_funnel=corretor, utm_microservice=checkout';
+   const fRules=field('Regras de rota do site → nicho/funil (caminho:nicho=oferta separados por vírgula)','text',rulesText);
+   fRules.input.placeholder='Ex.: /corretores:corretor=site-corretor, /advogados:advogado=site-juridico';
+   const fCustom=field('Campos próprios deste contexto em formulários (space_fields separados por vírgula)','text',(sdkData.lead_fields||[]).map(f=>f.key).join(', '));
+   fCustom.input.placeholder='Ex.: porte, funcionarios, instagram, site, creci';
+
+   const chkForms=el('label',null,'keys-scope-option'),inForms=el('input');inForms.type='checkbox';inForms.checked=cfg.auto_capture_forms!==false;
+   const chkFormsCopy=el('span');chkFormsCopy.append(el('strong','Auto-cadastrar formulários e capturar leads'),el('small','Detecta formulários do site, cria automaticamente os campos extras neste contexto (space_fields) e envia submissões para o Inbound preservando os UTMs do anúncio + utm_tzolkin.'));
+   chkForms.append(inForms,chkFormsCopy);
+
+   const chkStripe=el('label',null,'keys-scope-option'),inStripe=el('input');inStripe.type='checkbox';inStripe.checked=cfg.enrich_payment_links!==false;
+   const chkStripeCopy=el('span');chkStripeCopy.append(el('strong','Enriquecer Payment Links da Stripe'),el('small','Propaga os UTMs do anúncio + utm_tzolkin + client_reference_id para links buy.stripe.com da página.'));
+   chkStripe.append(inStripe,chkStripeCopy);
+
+   utmForm.append(fNiche.wrap,fCoreParams.wrap,fRules.wrap,fCustom.wrap,chkForms,chkStripe);
+   submit(utmForm,'Salvar configuração do SDK e UTMs do Core',async()=>{
+    const core_params={};
+    for(const item of fCoreParams.input.value.split(',').map(s=>s.trim()).filter(Boolean)){
+     const eq=item.indexOf('=');
+     if(eq>0){
+      const k=item.slice(0,eq).trim(),v=item.slice(eq+1).trim();
+      if(k&&v)core_params[k]=v;
+     }
+    }
+    const route_rules=[];
+    for(const item of fRules.input.value.split(',').map(s=>s.trim()).filter(Boolean)){
+     const [pathPart,rest='']=item.split(':');
+     if(pathPart&&rest){
+      const [nichePart,offerPart]=rest.split('=');
+      route_rules.push({path_prefix:pathPart.trim(),niche:nichePart.trim(),offer_label:offerPart?offerPart.trim():null});
+     }
+    }
+    const customFields=fCustom.input.value.split(',').map(s=>s.trim()).filter(Boolean);
+    const chosenNiche=fNiche.input.value||'padrao';
+    await api('/api/products/'+encodeURIComponent(p)+'/sdk','PUT',{
+     default_niche:chosenNiche,
+     utm_tzolkin:`${p}.${chosenNiche}`,
+     core_params,
+     route_rules,
+     auto_capture_forms:inForms.checked,
+     enrich_payment_links:inStripe.checked,
+     custom_fields:customFields,
+    });
+    await keys(p);
+   });
+   sdkSection.append(utmForm);
+
+   if((cfg.forms||[]).length){
+    const formsList=el('div',null,'tracking-list');
+    sdkSection.append(el('h4','Formulários auto-cadastrados pelo SDK neste contexto'));
+    for(const fm of cfg.forms){
+     const row=el('article',null,'tracking-row');
+     row.append(
+      el('strong',`${fm.name||fm.form_id}`),
+      el('span',`Campos: ${(fm.fields||[]).map(x=>x.key).join(', ')||'padrão'}${fm.niche?` · funil ${p}.${fm.niche}`:''}`),
+      el('span',fm.page_url||'site','detail mono')
+     );
+     formsList.append(row);
+    }
+    sdkSection.append(formsList);
+   }
+  }
 
   const composer=el('section',null,'keys-composer');composer.hidden=true;
-  const composerHead=el('div',null,'keys-section-head');composerHead.append(el('div'),el('button','Fechar','quiet'));composerHead.firstChild.append(el('h3','Emitir uma chave'),el('p','O segredo será mostrado uma única vez. Salve-o somente no servidor que fará a integração.'));
+  const composerHead=el('div',null,'keys-section-head');composerHead.append(el('div'),el('button','Fechar','quiet'));composerHead.firstChild.append(el('h3','Emitir uma chave'),el('p','O segredo será mostrado uma única vez. Use no atributo data-tzolkin-key do SDK ou no servidor.'));
   composerHead.lastChild.type='button';composerHead.lastChild.onclick=()=>{composer.hidden=true;createToggle.focus();};composer.append(composerHead);
   const form=el('form',null,'keys-form'),label=field('Nome da integração'),expires=field('Expira em','date',new Date(Date.now()+90*86400000).toISOString().slice(0,10));
   label.input.placeholder='Ex.: Site institucional — produção';label.input.required=expires.input.required=true;
@@ -216,9 +320,9 @@ export function setupCommercial({api,openTenant}) {
   submit(form,'Emitir chave',async()=>{const selected=[...scopes.querySelectorAll('input:checked')].map(i=>i.value);if(!selected.length)throw Error('Escolha pelo menos uma permissão.');const data=await api('/api/app-clients','POST',{product_id:p,label:label.input.value,scopes:selected,expires_at:new Date(expires.input.value+'T23:59:59Z').toISOString()});await keys(p);reveal(data);});composer.append(form);
   createToggle.onclick=()=>{composer.hidden=false;label.input.focus();};
 
-  const inventory=el('section',null,'keys-section'),inventoryHead=el('div',null,'keys-section-head');inventoryHead.append(el('div'),el('span',`${d.keys.length} no histórico`,'keys-count'));inventoryHead.firstChild.append(el('h3','Credenciais deste produto'),el('p','Último uso e validade ajudam a identificar integrações abandonadas antes de removê-las.'));inventory.append(inventoryHead);
+  const inventory=el('section',null,'keys-section'),inventoryHead=el('div',null,'keys-section-head');inventoryHead.append(el('div'),el('span',`${d.keys.length} no histórico`,'keys-count'));inventoryHead.firstChild.append(el('h3','Chaves de API deste contexto'),el('p','Último uso e validade ajudam a identificar integrações abandonadas antes de removê-las.'));inventory.append(inventoryHead);
   const list=el('div',null,'keys-list');
-  if(!d.keys.length){const empty=el('div',null,'keys-empty');empty.append(el('span','⌁','keys-empty-icon'),el('h3','Nenhuma chave emitida'),el('p','Crie uma credencial quando um servidor precisar enviar leads, consultar o comercial ou validar acessos.'),el('button','Criar primeira chave','secondary'));empty.lastChild.type='button';empty.lastChild.onclick=()=>createToggle.click();list.append(empty);}
+  if(!d.keys.length){const empty=el('div',null,'keys-empty');empty.append(el('span','⌁','keys-empty-icon'),el('h3','Nenhuma chave emitida'),el('p','Crie uma credencial quando um site ou servidor precisar enviar leads, consultar o comercial ou validar acessos.'),el('button','Criar primeira chave','secondary'));empty.lastChild.type='button';empty.lastChild.onclick=()=>createToggle.click();list.append(empty);}
   for(const k of d.keys){const state=statusOf(k),card=el('article',null,`key-card key-${state}`),head=el('header',null,'key-card-head'),identity=el('div');identity.append(el('h4',k.label),el('code',shortId(k.id),'key-id'));head.append(identity,el('span',state==='active'?'Ativa':state==='expired'?'Expirada':'Revogada',`key-status ${state}`));card.append(head);
    const permissions=el('div',null,'key-permissions');for(const scope of k.scopes)permissions.append(el('span',scopeInfo[scope]?.label||scope));card.append(permissions);
    const facts=el('dl',null,'key-facts');for(const [term,value]of [['Criada',date(k.created_at)],['Expira',k.expires_at?`${date(k.expires_at)}${state==='active'?` · ${daysLeft(k.expires_at)} dias`:''}`:'Sem data'],['Último uso',k.last_used_at?date(k.last_used_at):'Nunca utilizada']]){const fact=el('div');fact.append(el('dt',term),el('dd',value));facts.append(fact);}card.append(facts);
@@ -229,7 +333,7 @@ export function setupCommercial({api,openTenant}) {
   const audit=el('details',null,'keys-audit'),auditSummary=el('summary',null);auditSummary.append(el('span','Histórico de segurança'),el('small',`${d.audit.length} eventos`));audit.append(auditSummary);const events=el('ol',null,'keys-audit-list');
   if(!d.audit.length)events.append(el('li','Nenhum evento registrado.'));
   for(const a of d.audit){const item=el('li'),marker=el('span','',`audit-marker audit-${a.action}`),content=el('div');content.append(el('strong',actionNames[a.action]||a.action),el('span',`${date(a.created_at)} · ${a.actor_email||a.actor_subject||'Operador'}`),el('code',shortId(a.key_id)));item.append(marker,content);events.append(item);}audit.append(events);
-  r.replaceChildren(header,stats,composer,inventory,audit);
+  r.replaceChildren(header,stats,sdkSection,composer,inventory,audit);
  }
  return{load,keys,clear,detail};
 }

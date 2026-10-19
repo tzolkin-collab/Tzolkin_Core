@@ -62,6 +62,7 @@ import { commercialFieldRoutes } from './modules/commercial-fields.mjs';
 import { commercialAutomationRoutes } from './modules/commercial-automations.mjs';
 import { commercialGateRoutes } from './modules/commercial-gates.mjs';
 import { mcpRoutes } from './modules/mcp.mjs';
+import { contextOperationsRoutes } from './modules/context-operations.mjs';
 
 const MODULES = [
  identityRoutes, workspaceRoutes, catalogRoutes, billingRoutes, emailRoutes, emailTemplateRoutes, productFaviconRoutes, productDeployBindingRoutes, productResourceBindingRoutes, serviceDeployBindingRoutes, managementRoutes, productPaymentRoutes, productTopologyRoutes,
@@ -119,6 +120,8 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  commercialGateRoutes(router);
  // Ficha da empresa: leitura transversal por tenant, com o relógio do Core para o mês corrente.
  tenantSummaryRoutes(router,{clock});
+ // Operações de contexto: SDK/CDN auto-configurável, formulários, contratações por contexto e gestão multi-conta Stripe.
+ contextOperationsRoutes(router, { vivo, ...(webhookEnv ? { env: webhookEnv } : {}) });
  // Servidor MCP (Model Context Protocol) para bots externos (ex.: Google Spark).
  mcpRoutes(router, { pool, clock, env: webhookEnv || process.env });
 

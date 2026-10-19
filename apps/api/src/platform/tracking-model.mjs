@@ -78,9 +78,10 @@ const dia=v=>typeof v==='string'&&/^20\d{2}-\d{2}-\d{2}$/.test(v)&&Number.isFini
 // Janela da consulta: um mês (`month=2026-08`) ou um intervalo livre (`from=2026-08-24&to=2026-08-31`, `to` exclusivo, até 62 dias).
 // O intervalo existe porque a agenda mostra semana e dia, que atravessam a virada do mês.
 export function trackingRange(p){
- const chaves=['month','from','to','tenant_id','engagement_id'];
+ const chaves=['month','from','to','tenant_id','engagement_id','product_id'];
  if(![...p.keys()].every(k=>chaves.includes(k))||chaves.some(k=>p.getAll(k).length>1))throw fail(400,'Filtros inválidos.');
- const month=p.get('month'),from=p.get('from'),to=p.get('to');
+ const month=p.get('month'),from=p.get('from'),to=p.get('to'),prod=p.get('product_id');
+ if(prod!==null&&!/^[a-z][a-z0-9-]{1,63}$/.test(prod))throw fail(400,'Produto inválido.');
  let start,end;
  if(month!==null){
   if(from!==null||to!==null)throw fail(400,'Use o mês ou o intervalo, não os dois.');
@@ -92,7 +93,7 @@ export function trackingRange(p){
   if(dias<1||dias>MAX_JANELA_DIAS)throw fail(400,'Intervalo inválido: de 1 a '+MAX_JANELA_DIAS+' dias.');
   start=from;end=to;
  }
- return {start,end,tenant:p.get('tenant_id')?uuid(p.get('tenant_id')):null,engagement:p.get('engagement_id')?uuid(p.get('engagement_id')):null};
+ return {start,end,tenant:p.get('tenant_id')?uuid(p.get('tenant_id')):null,engagement:p.get('engagement_id')?uuid(p.get('engagement_id')):null,...(prod?{product:prod}:{})};
 }
 
 // ---------- séries (atividades recorrentes) ----------

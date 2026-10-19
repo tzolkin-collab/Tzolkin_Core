@@ -19,7 +19,12 @@ import { BLOCOS } from '../../apps/api/src/platform/markdown-editorjs.mjs';
 const PULAR = acharNavegador() ? false : 'Chrome/Edge não encontrado (defina CHROME_PATH)';
 const ARTEFATOS = fileURLToPath(new URL('./artifacts/', import.meta.url));
 
-const MENU_ESPERADO = ['Visão geral', 'Financeiro', 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'E-mails', 'Portfólio', 'Contratações', 'Acompanhamento', 'Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS', 'Banco de dados'];
+const MENU_ESPERADO = [
+ 'Visão geral', 'Financeiro', 'Acompanhamento',
+ 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Outbound', 'E-mails', 'Pagamentos',
+ 'Produtos', 'Serviços', 'Contratações',
+ 'Conexões', 'Vercel', 'EasyPanel', 'DNS', 'GitHub', 'Banco de dados'
+];
 const SECAO = `[...document.querySelectorAll('main section')].find(s => !s.hidden && s.offsetParent)`;
 /**
  * Lê, de dentro da página, os defeitos de uma tela: título, estouro de largura, texto com valor
@@ -2450,7 +2455,7 @@ test('configurações → Agenda: lembrete padrão (espaço) e preferências des
  await pagina.esperar(`document.querySelector('#settings-body .config-chip')`, { descricao: 'lembrete padrão carregado' });
  assert.equal(await pagina.avaliar(`document.querySelectorAll('#settings-body .cfg-cab .cfg-escopo').length`), 0, 'seção de escopo misto não tem selo no título');
  assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-bloco')].map(b => b.querySelector('.config-sub').textContent + ' | ' + b.querySelector('.cfg-escopo').textContent)`),
-  ['Lembrete padrão | Todo o espaço', 'Ao abrir a agenda | Só neste navegador', 'Atividade nova | Só neste navegador', 'Videoconferência | Só neste navegador']);
+  ['Lembrete padrão | Todo o espaço', 'Catálogo de tags | Todo o espaço', 'Ao abrir a agenda | Só neste navegador', 'Atividade nova | Só neste navegador', 'Videoconferência | Só neste navegador']);
  // lembrete padrão: 15 min vem marcado; marcar 1 h grava a lista (maior primeiro) com a revisão lida
  assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-chip input')].filter(c => c.checked).map(c => c.parentElement.textContent)`), ['15 minutos antes']);
  await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-chip')].find(l => l.textContent === '1 hora antes').querySelector('input').click()`);

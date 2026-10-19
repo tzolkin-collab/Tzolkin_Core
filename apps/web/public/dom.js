@@ -38,7 +38,14 @@ export function el(tag, props = {}, ...children) {
   else if (key === 'dataset' && typeof val === 'object') Object.assign(element.dataset, val);
   else if (key.startsWith('on') && typeof val === 'function') element[key] = val;
   else if (typeof val === 'boolean') { if (val) element.setAttribute(key, ''); }
-  else element.setAttribute(key, String(val));
+  else {
+   // Previne injeção de script via javascript: em links ou fontes externas
+   if ((key === 'href' || key === 'src') && String(val).trim().toLowerCase().startsWith('javascript:')) {
+    element.setAttribute(key, '#');
+   } else {
+    element.setAttribute(key, String(val));
+   }
+  }
  }
  for (const child of children.flat()) {
   if (child === null || child === undefined || child === false) continue;

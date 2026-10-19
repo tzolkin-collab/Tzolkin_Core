@@ -2,6 +2,8 @@
 // Tudo que depende do navegador (permissão, service worker, PushManager) é perguntado na hora, e cada impedimento
 // vira uma frase clara em vez de um botão que não faz nada. `api` é a mesma função do app (lança Error com a mensagem do servidor).
 
+import { SONS_NOTIFICACAO, obterSomEscolhido, definirSomEscolhido, tocarSomNotificacao } from './notification-sound.js';
+
 export const ASSUNTOS = Object.freeze([
  ['commercial.lead', 'Lead novo', 'Quando alguém preenche um formulário de contato.'],
  ['agenda.lembrete', 'Lembretes da agenda', 'Antes de cada atividade, no tempo escolhido abaixo ou na própria atividade.'],
@@ -58,8 +60,48 @@ export function montarNotificacoes(raiz, { api, irPara }) {
    if (!pode.ok) frag.push(no('p', pode.motivo, 'config-ajuda'));
    else frag.push(await blocoDoAparelho(cfg));
   }
+  frag.push(blocoDoSom());
   frag.push(await blocoDaAgenda());
   corpo.replaceChildren(...frag.filter(Boolean));
+ }
+
+ function blocoDoSom() {
+  const bloco = no('div', undefined, 'config-bloco');
+  bloco.append(no('h3', 'Som da notificação', 'config-sub'));
+  bloco.append(no('p', 'Escolha o som reproduzido quando um aviso chegar neste navegador.', 'config-ajuda'));
+
+  const somAtual = obterSomEscolhido();
+  for (const [id, som] of Object.entries(SONS_NOTIFICACAO)) {
+   const l = no('label', undefined, 'config-opcao');
+   const r = document.createElement('input');
+   r.type = 'radio';
+   r.name = 'notif-som';
+   r.value = id;
+   r.checked = id === somAtual;
+   r.onchange = () => {
+    definirSomEscolhido(id);
+    if (id !== 'none') tocarSomNotificacao(id);
+    dizer('Som salvo.');
+   };
+
+   const t = no('span', undefined, 'config-opcao-texto');
+   t.append(no('strong', som.nome), no('small', som.descricao));
+   l.append(r, t);
+
+   if (id !== 'none') {
+    const btnOuvir = no('button', 'Ouvir', 'secondary mini');
+    btnOuvir.type = 'button';
+    btnOuvir.onclick = ev => {
+     ev.preventDefault();
+     tocarSomNotificacao(id);
+    };
+    l.append(btnOuvir);
+   }
+
+   bloco.append(l);
+  }
+
+  return bloco;
  }
 
  async function blocoDoAparelho(cfg) {

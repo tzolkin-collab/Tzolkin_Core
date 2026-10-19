@@ -21,13 +21,24 @@ self.addEventListener('push', event => {
  const tag = typeof dados.tag === 'string' ? dados.tag.slice(0, 80) : 'core';
  const view = typeof dados.view === 'string' ? dados.view.slice(0, 60) : null;
 
- event.waitUntil(self.registration.showNotification(titulo, {
+ const promessaNotificacao = self.registration.showNotification(titulo, {
   body: corpo,
   tag,
   icon: '/icon-192.png',
   badge: '/icon-192.png',
   data: { view },
- }));
+ });
+
+ const avisarClientes = (async () => {
+  try {
+   const abas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+   for (const aba of abas) {
+    aba.postMessage({ type: 'push-notification-received', title: titulo, tag });
+   }
+  } catch (_) {}
+ })();
+
+ event.waitUntil(Promise.all([promessaNotificacao, avisarClientes]));
 });
 
 // Abrir a aba que já existe em vez de criar outra a cada toque.
