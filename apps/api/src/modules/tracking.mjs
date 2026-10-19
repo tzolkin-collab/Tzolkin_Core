@@ -44,19 +44,19 @@ export function trackingRoutes(router,{detector=criarDetector(),registro=criarDe
  // oferece a aba e quem insistir recebe 409 com texto claro, nunca a violação do CHECK vinda do Postgres.
  const exigirRegistro=async(db,kind)=>{if(kind==='registro'&&!(await registro(db)))throw fail(409,MENSAGEM_054);};
  router.get('/api/tracking',async({pool,url,reply,operator})=>{
-  const {start,end,tenant,engagement}=trackingRange(url.searchParams);
+  const {start,end,tenant,engagement,product=null}=trackingRange(url.searchParams);
   const rec=await detector(pool);
-  const params=[start,end,tenant,engagement];
+  const params=product?[start,end,tenant,engagement,product]:[start,end,tenant,engagement];
   // Série encerrada arquiva as ocorrências futuras (a role do Core não apaga linha): arquivada não aparece.
-  const visivel=rec.lembretes?' AND a.archived_at IS NULL':'';
+  const visivel=(rec.lembretes?' AND a.archived_at IS NULL':'')+(product?' AND (e.product_id=$5 OR EXISTS (SELECT 1 FROM entitlements ent WHERE ent.tenant_id=a.tenant_id AND ent.product_id=$5 AND ent.active))':'');
   const activities=await pool.query(`SELECT a.*,t.name AS tenant_name,e.label AS engagement_label,e.service_model AS engagement_service_model
    FROM service_activities a JOIN tenants t ON t.id=a.tenant_id LEFT JOIN client_engagements e ON e.id=a.engagement_id
    WHERE a.starts_at < ($2::date::timestamp AT TIME ZONE 'America/Sao_Paulo') AND a.ends_at > ($1::date::timestamp AT TIME ZONE 'America/Sao_Paulo')
    AND ($3::uuid IS NULL OR a.tenant_id=$3) AND ($4::uuid IS NULL OR a.engagement_id=$4)${visivel} ORDER BY a.starts_at LIMIT 501`,params);
-  const logs=await pool.query(`SELECT l.*,a.title,a.tenant_id,a.engagement_id FROM service_time_logs l JOIN service_activities a ON a.id=l.activity_id
-   WHERE l.worked_on >= $1::date AND l.worked_on < $2::date AND ($3::uuid IS NULL OR a.tenant_id=$3) AND ($4::uuid IS NULL OR a.engagement_id=$4) ORDER BY l.worked_on DESC,l.created_at DESC LIMIT 501`,params);
+  const logs=await pool.query(`SELECT l.*,a.title,a.tenant_id,a.engagement_id FROM service_time_logs l JOIN service_activities a ON a.id=l.activity_id${product?' LEFT JOIN client_engagements e ON e.id=a.engagement_id':''}
+   WHERE l.worked_on >= $1::date AND l.worked_on < $2::date AND ($3::uuid IS NULL OR a.tenant_id=$3) AND ($4::uuid IS NULL OR a.engagement_id=$4)${product?' AND e.product_id=$5':''} ORDER BY l.worked_on DESC,l.created_at DESC LIMIT 501`,params);
   // Contratações em curso para o formulário escolher (arquivadas não recebem atividade nova).
-  const engagements=await pool.query('SELECT id,tenant_id,label,service_model,status,product_id FROM client_engagements WHERE archived_at IS NULL ORDER BY label,id LIMIT 500');
+  const engagements=product?await pool.query('SELECT id,tenant_id,label,service_model,status,product_id FROM client_engagements WHERE archived_at IS NULL AND product_id=$1 ORDER BY label,id LIMIT 500',[product]):await pool.query('SELECT id,tenant_id,label,service_model,status,product_id FROM client_engagements WHERE archived_at IS NULL ORDER BY label,id LIMIT 500');
   // Com a 048: as regras das séries que aparecem na janela (para a tela dizer "toda segunda e quarta") e o padrão de lembrete da agenda.
   let series=[],prefs=null;
   if(rec.lembretes){

@@ -7,7 +7,15 @@ import { el, botao, campo, estilo } from './agenda-dom.js';
 import * as M from './agenda-model.js';
 import { abrirEditor, criarPainel } from './agenda-evento.js';
 import { listaDeAtalhos } from './agenda-atalhos.js';
-import { duracaoPadraoMin, visaoInicial } from './agenda-prefs.js';
+import {
+ duracaoPadraoMin, visaoInicial,
+ modoDeCor, definirModoDeCor,
+ obterConfigCategorias, salvarConfigCategorias, restaurarCategoriasPadrao,
+ obterConfigStatus, salvarConfigStatus, restaurarStatusPadrao,
+ tomDaCategoria, rotuloDaCategoria,
+ tomDoStatus, rotuloDoStatus,
+ tomDoEvento, TONS_DISPONIVEIS
+} from './agenda-prefs.js';
 
 const ALTURA_HORA = 48;   // px por hora na grade; o CSS usa o mesmo valor em --ag-hora
 const PASSO = 15;         // minutos: arrastar e esticar grudam de 15 em 15
@@ -28,7 +36,7 @@ const limitar = (n, a, b) => Math.min(Math.max(n, a), b);
 export function setupTracking({ api, openTenant }) {
  const host = document.getElementById('view-tracking');
  const celular = window.matchMedia('(max-width:700px)');
- const estado = { visao: visaoInicial() || lerVisao() || (celular.matches ? 'dia' : 'semana'), dia: hoje(), miniMes: hoje(), fim: null, tenant: '', texto: '', categorias: new Set(), status: '', alcance: M.ALCANCE_PADRAO, aba: '', engagement: '', responsavel: '', tag: '' };
+ const estado = { visao: visaoInicial() || lerVisao() || (celular.matches ? 'dia' : 'semana'), dia: hoje(), miniMes: hoje(), fim: null, tenant: '', product: '', texto: '', categorias: new Set(), status: '', statusFiltro: new Set(), alcance: M.ALCANCE_PADRAO, aba: '', engagement: '', responsavel: '', tag: '' };
  let dados = null, eventos = [], tenants = [], pessoas = [], geracao = 0, aviso = '', rolagem = null, relogio = 0, suprimirClique = false, filtrosAbertos = false;
  const compacta = window.matchMedia('(max-width:1100px)');   // abaixo disso a lateral some e os filtros viram um bloco recolhível
  const salvando = new Set();
@@ -45,24 +53,37 @@ export function setupTracking({ api, openTenant }) {
   recarregar: () => carregar({ silencioso: true }),
  });
 
+ // Ouvinte global de mudanças de cores/modo feitas em outras abas ou telas
+ window.addEventListener('agenda-cores-mudaram', () => {
+  if (dados && partes.principal?.isConnected) {
+   desenharPrincipal();
+   desenharLateral();
+  }
+ });
+
  // ---------- dados ----------
  // Todos os filtros somados (E). `sem` tira um deles: a contagem de cada categoria ignora o filtro de categoria, como sempre foi.
  const nomeDoResponsavel = id => (dados?.responsaveis || []).find(r => r.id === id)?.name || (dados?.responsaveis || []).find(r => r.id === id)?.email || '';
  const criterios = (sem = '') => ({
-  texto: estado.texto, status: estado.status, aba: estado.aba, engagement: estado.engagement, responsavel: estado.responsavel, tag: estado.tag,
+  texto: estado.texto,
+  status: sem === 'status' ? null : (estado.status || (estado.statusFiltro?.size ? estado.statusFiltro : '')),
+  aba: estado.aba, engagement: estado.engagement, responsavel: estado.responsavel, tag: estado.tag,
   categorias: sem === 'categorias' ? null : estado.categorias,
   tagsDe: e => (dados?.activity_tags?.[e.id] || []).map(t => t.id),
   textoExtra: e => [nomeDoResponsavel(e.responsible_id), ...(dados?.activity_tags?.[e.id] || []).map(t => t.label)].join(' '),
  });
  const visiveis = () => M.filtrar(eventos, criterios());
- const filtrosAtivos = () => (estado.tenant ? 1 : 0) + (estado.status ? 1 : 0) + (estado.categorias.size ? 1 : 0) + (estado.aba ? 1 : 0) + (estado.engagement ? 1 : 0) + (estado.responsavel ? 1 : 0) + (estado.tag ? 1 : 0) + (estado.texto.trim() ? 1 : 0);
+ const filtrosAtivos = () => (estado.tenant ? 1 : 0) + (estado.status || estado.statusFiltro?.size ? 1 : 0) + (estado.categorias.size ? 1 : 0) + (estado.aba ? 1 : 0) + (estado.engagement ? 1 : 0) + (estado.responsavel ? 1 : 0) + (estado.tag ? 1 : 0) + (estado.texto.trim() ? 1 : 0);
 
- async function carregar({ silencioso = false } = {}) {
+ async function carregar(opcoes = {}) {
+  const silencioso = typeof opcoes === 'object' && opcoes !== null ? Boolean(opcoes.silencioso) : false;
+  if (typeof opcoes === 'string') estado.product = opcoes;
+  else if (typeof opcoes === 'object' && opcoes !== null && 'product' in opcoes) estado.product = opcoes.product || '';
   const ticket = ++geracao;
   if (!dados) host.replaceChildren(el('p', 'Carregando acompanhamento…', 'empty-list'));
   else if (!silencioso) host.setAttribute('aria-busy', 'true');
   const j = M.janela(estado.visao, estado.dia, estado.fim, estado.alcance);
-  const filtro = new URLSearchParams({ from: j.from, to: j.to, ...(estado.tenant ? { tenant_id: estado.tenant } : {}) });
+  const filtro = new URLSearchParams({ from: j.from, to: j.to, ...(estado.tenant ? { tenant_id: estado.tenant } : {}), ...(estado.product ? { product_id: estado.product } : {}) });
   try {
    const [resposta, diretorio] = await Promise.all([api('/api/tracking?' + filtro), tenants.length ? null : api('/api/overview')]);
    if (ticket !== geracao) return;
@@ -176,7 +197,7 @@ export function setupTracking({ api, openTenant }) {
  /** Zera todos os filtros (inclusive a busca de texto) e recarrega: o Cliente é o único que muda o que vem do servidor. */
  function limparFiltros() {
   const mudouCliente = Boolean(estado.tenant);
-  Object.assign(estado, { tenant: '', texto: '', categorias: new Set(), status: '', aba: '', engagement: '', responsavel: '', tag: '' });
+  Object.assign(estado, { tenant: '', texto: '', categorias: new Set(), status: '', statusFiltro: new Set(), aba: '', engagement: '', responsavel: '', tag: '' });
   if (partes.entrada) partes.entrada.value = '';
   if (mudouCliente) carregar(); else { desenharPrincipal(); desenharLateral(); }
  }
@@ -194,6 +215,249 @@ export function setupTracking({ api, openTenant }) {
    document.addEventListener('pointermove', mover); document.addEventListener('pointerup', soltar); document.addEventListener('pointercancel', sair);
   });
  }
+
+ function abrirModalPersonalizarCores() {
+  const dlg = el('dialog', null, 'ag-modal-personalizar');
+  dlg.setAttribute('aria-labelledby', 'ag-pers-titulo');
+
+  let categorias = structuredClone(obterConfigCategorias());
+  let status = structuredClone(obterConfigStatus());
+  let abaAtiva = modoDeCor() === 'status' ? 'status' : 'categoria';
+
+  const cab = el('div', null, 'ag-pers-cab');
+  const info = el('div');
+  const tit = el('h2', 'Personalizar categorias e situações', null);
+  tit.id = 'ag-pers-titulo';
+  const desc = el('p', 'Altere nomes e cores ou crie novas opções para a agenda neste navegador.', null);
+  info.append(tit, desc);
+  const fecharBtn = el('button', null, 'ag-pers-fechar');
+  fecharBtn.type = 'button';
+  fecharBtn.setAttribute('aria-label', 'Fechar');
+  fecharBtn.append(createIcon('close'));
+  fecharBtn.onclick = () => dlg.close();
+  cab.append(info, fecharBtn);
+
+  const abasNav = el('div', null, 'ag-pers-abas');
+  abasNav.setAttribute('role', 'tablist');
+
+  const abaCatBtn = el('button', 'Categorias', 'ag-pers-aba');
+  abaCatBtn.type = 'button';
+  abaCatBtn.setAttribute('role', 'tab');
+
+  const abaStBtn = el('button', 'Situação', 'ag-pers-aba');
+  abaStBtn.type = 'button';
+  abaStBtn.setAttribute('role', 'tab');
+
+  abasNav.append(abaCatBtn, abaStBtn);
+
+  const corpo = el('div', null, 'ag-pers-corpo');
+
+  function renderCorpo() {
+   corpo.replaceChildren();
+   abaCatBtn.setAttribute('aria-selected', String(abaAtiva === 'categoria'));
+   abaStBtn.setAttribute('aria-selected', String(abaAtiva === 'status'));
+
+   if (abaAtiva === 'categoria') {
+    const lista = el('div', null, 'ag-pers-lista');
+    for (const [id, item] of Object.entries(categorias)) {
+     const linha = el('div', null, 'ag-pers-linha');
+     const corPrev = el('span', null, 'ag-cor');
+     corPrev.dataset.tom = item.tom;
+
+     const inNome = el('input');
+     inNome.type = 'text';
+     inNome.value = item.rotulo;
+     inNome.maxLength = 40;
+     inNome.setAttribute('aria-label', `Nome da categoria ${item.rotulo}`);
+     inNome.oninput = () => { categorias[id].rotulo = inNome.value.trim() || item.rotulo; };
+
+     const selTom = el('select');
+     selTom.setAttribute('aria-label', `Tom da categoria ${item.rotulo}`);
+     for (const [val, rot] of TONS_DISPONIVEIS) {
+      const opt = el('option', rot);
+      opt.value = val;
+      selTom.append(opt);
+     }
+     selTom.value = item.tom;
+     selTom.onchange = () => {
+      categorias[id].tom = selTom.value;
+      corPrev.dataset.tom = selTom.value;
+     };
+
+     linha.append(corPrev, inNome, selTom);
+
+     if (!item.padrao) {
+      const btnRemover = el('button', null, 'ag-pers-remover');
+      btnRemover.type = 'button';
+      btnRemover.setAttribute('aria-label', `Remover categoria ${item.rotulo}`);
+      btnRemover.title = 'Remover categoria';
+      btnRemover.append(createIcon('close'));
+      btnRemover.onclick = () => {
+       delete categorias[id];
+       renderCorpo();
+      };
+      linha.append(btnRemover);
+     } else {
+      linha.append(el('span'));
+     }
+     lista.append(linha);
+    }
+    corpo.append(lista);
+
+    const novoBloco = el('div', null, 'ag-pers-novo-bloco');
+    novoBloco.append(el('h4', 'Adicionar nova categoria'));
+    const formNovo = el('form', null, 'ag-pers-novo-form');
+    formNovo.noValidate = true;
+
+    const inNovoNome = el('input');
+    inNovoNome.type = 'text';
+    inNovoNome.placeholder = 'Nome da categoria (ex.: Workshop)';
+    inNovoNome.maxLength = 40;
+    inNovoNome.setAttribute('aria-label', 'Nome da nova categoria');
+
+    const selNovoTom = el('select');
+    selNovoTom.setAttribute('aria-label', 'Tom da nova categoria');
+    for (const [val, rot] of TONS_DISPONIVEIS) {
+     const opt = el('option', rot);
+     opt.value = val;
+     selNovoTom.append(opt);
+    }
+    selNovoTom.value = 'accent';
+
+    const btnAdd = el('button', 'Adicionar', 'secondary');
+    btnAdd.type = 'submit';
+
+    formNovo.append(inNovoNome, selNovoTom, btnAdd);
+    formNovo.onsubmit = ev => {
+     ev.preventDefault();
+     const nome = inNovoNome.value.trim();
+     if (nome.length < 2) return;
+     const id = 'custom-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+     categorias[id] = { rotulo: nome, tom: selNovoTom.value, padrao: false };
+     renderCorpo();
+    };
+    novoBloco.append(formNovo);
+    corpo.append(novoBloco);
+
+   } else {
+    const lista = el('div', null, 'ag-pers-lista');
+    for (const [id, item] of Object.entries(status)) {
+     const linha = el('div', null, 'ag-pers-linha');
+     const corPrev = el('span', null, 'ag-cor');
+     corPrev.dataset.tom = item.tom;
+
+     const inNome = el('input');
+     inNome.type = 'text';
+     inNome.value = item.rotulo;
+     inNome.maxLength = 40;
+     inNome.setAttribute('aria-label', `Nome da situação ${item.rotulo}`);
+     inNome.oninput = () => { status[id].rotulo = inNome.value.trim() || item.rotulo; };
+
+     const selTom = el('select');
+     selTom.setAttribute('aria-label', `Tom da situação ${item.rotulo}`);
+     for (const [val, rot] of TONS_DISPONIVEIS) {
+      const opt = el('option', rot);
+      opt.value = val;
+      selTom.append(opt);
+     }
+     selTom.value = item.tom;
+     selTom.onchange = () => {
+      status[id].tom = selTom.value;
+      corPrev.dataset.tom = selTom.value;
+     };
+
+     linha.append(corPrev, inNome, selTom);
+
+     if (!item.padrao) {
+      const btnRemover = el('button', null, 'ag-pers-remover');
+      btnRemover.type = 'button';
+      btnRemover.setAttribute('aria-label', `Remover situação ${item.rotulo}`);
+      btnRemover.title = 'Remover situação';
+      btnRemover.append(createIcon('close'));
+      btnRemover.onclick = () => {
+       delete status[id];
+       renderCorpo();
+      };
+      linha.append(btnRemover);
+     } else {
+      linha.append(el('span'));
+     }
+     lista.append(linha);
+    }
+    corpo.append(lista);
+
+    const novoBloco = el('div', null, 'ag-pers-novo-bloco');
+    novoBloco.append(el('h4', 'Adicionar nova situação'));
+    const formNovo = el('form', null, 'ag-pers-novo-form');
+    formNovo.noValidate = true;
+
+    const inNovoNome = el('input');
+    inNovoNome.type = 'text';
+    inNovoNome.placeholder = 'Nome da situação (ex.: Em andamento)';
+    inNovoNome.maxLength = 40;
+    inNovoNome.setAttribute('aria-label', 'Nome da nova situação');
+
+    const selNovoTom = el('select');
+    selNovoTom.setAttribute('aria-label', 'Tom da nova situação');
+    for (const [val, rot] of TONS_DISPONIVEIS) {
+     const opt = el('option', rot);
+     opt.value = val;
+     selNovoTom.append(opt);
+    }
+    selNovoTom.value = 'info';
+
+    const btnAdd = el('button', 'Adicionar', 'secondary');
+    btnAdd.type = 'submit';
+
+    formNovo.append(inNovoNome, selNovoTom, btnAdd);
+    formNovo.onsubmit = ev => {
+     ev.preventDefault();
+     const nome = inNovoNome.value.trim();
+     if (nome.length < 2) return;
+     const id = 'custom-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+     status[id] = { rotulo: nome, tom: selNovoTom.value, padrao: false };
+     renderCorpo();
+    };
+    novoBloco.append(formNovo);
+    corpo.append(novoBloco);
+   }
+  }
+
+  abaCatBtn.onclick = () => { abaAtiva = 'categoria'; renderCorpo(); };
+  abaStBtn.onclick = () => { abaAtiva = 'status'; renderCorpo(); };
+
+  const rodape = el('div', null, 'ag-pers-rodape');
+  const btnRestaurar = el('button', 'Restaurar padrões', 'quiet');
+  btnRestaurar.type = 'button';
+  btnRestaurar.onclick = () => {
+   if (confirm('Deseja restaurar as cores e nomes padrão? Suas personalizações serão removidas.')) {
+    restaurarCategoriasPadrao();
+    restaurarStatusPadrao();
+    dlg.close();
+    desenharPrincipal();
+    desenharLateral();
+   }
+  };
+
+  const btnSalvar = el('button', 'Salvar e fechar', 'primary');
+  btnSalvar.type = 'button';
+  btnSalvar.onclick = () => {
+   salvarConfigCategorias(categorias);
+   salvarConfigStatus(status);
+   dlg.close();
+   desenharPrincipal();
+   desenharLateral();
+  };
+
+  rodape.append(btnRestaurar, btnSalvar);
+
+  dlg.append(cab, abasNav, corpo, rodape);
+  dlg.addEventListener('close', () => dlg.remove());
+  document.body.append(dlg);
+  renderCorpo();
+  dlg.showModal();
+ }
+
  function desenharLateral() {
   const lateral = partes.lateral; lateral.replaceChildren();
   const mini = el('section', null, 'ag-mini'); mini.setAttribute('aria-label', 'Mini calendário');
@@ -223,7 +487,8 @@ export function setupTracking({ api, openTenant }) {
   const filtros = el('section', null, 'ag-filtros'); filtros.setAttribute('aria-label', 'Filtros');
   const cliente = campo(filtros, 'Cliente', 'text', [['', 'Todos os clientes'], ...tenants.map(t => [t.id, t.name])]); cliente.value = estado.tenant;
   cliente.onchange = () => { estado.tenant = cliente.value; estado.engagement = ''; carregar(); };   // a contratação escolhida era de outro cliente
-  const situacao = campo(filtros, 'Situação', 'text', [['', 'Todas'], ['planned', M.ROTULOS.planned], ['done', M.ROTULOS.done], ['cancelled', M.ROTULOS.cancelled]]); situacao.value = estado.status;
+  const configSt = obterConfigStatus();
+  const situacao = campo(filtros, 'Situação', 'text', [['', 'Todas'], ...Object.entries(configSt).map(([k, v]) => [k, v.rotulo])]); situacao.value = estado.status;
   situacao.onchange = () => { estado.status = situacao.value; desenharPrincipal(); desenharLateral(); };
   // Um filtro para cada coluna/atributo da atividade. Todos locais: filtram o que já foi carregado (só o Cliente vai ao servidor).
   const aoMudar = (chave, controle) => { controle.onchange = () => { estado[chave] = controle.value; desenharPrincipal(); desenharLateral(); }; };
@@ -237,22 +502,74 @@ export function setupTracking({ api, openTenant }) {
    const qual = campo(filtros, 'Tag', 'text', [['', 'Todas'], [M.SEM_VALOR, 'Sem tag'], ...(dados.tags || []).filter(t => !t.archived).map(t => [t.id, t.label])]); qual.value = estado.tag; aoMudar('tag', qual);
   }
 
-  const cats = el('fieldset', null, 'ag-categorias'); cats.append(el('legend', 'Categorias'));
-  const contagem = {};
-  for (const e of M.filtrar(eventos, criterios('categorias'))) contagem[e.category] = (contagem[e.category] || 0) + 1;
-  for (const c of M.CATEGORIAS) {
-   const linha = el('label', null, 'ag-categoria');
-   const caixa = el('input'); caixa.type = 'checkbox'; caixa.checked = !estado.categorias.size || estado.categorias.has(c); caixa.dataset.categoria = c;
-   caixa.onchange = () => {
-    // Todas marcadas = sem filtro (conjunto vazio); desmarcar uma passa a listar só as marcadas.
-    const marcadas = new Set([...cats.querySelectorAll('input:checked')].map(i => i.dataset.categoria));
-    estado.categorias = marcadas.size === M.CATEGORIAS.length ? new Set() : marcadas;
-    desenharPrincipal(); desenharLateral();
-   };
-   const cor = el('span', null, 'ag-cor'); cor.dataset.tom = M.TOM_DA_CATEGORIA[c];
-   linha.append(caixa, cor, el('span', M.ROTULOS[c]), el('small', String(contagem[c] || 0)));
-   cats.append(linha);
+  const modoCor = modoDeCor();
+  const cats = el('fieldset', null, 'ag-categorias');
+  cats.setAttribute('aria-label', 'Filtro e legenda de cores');
+
+  const cabCores = el('div', null, 'ag-cores-cab');
+  const modoPill = el('div', null, 'ag-modo-cor');
+  modoPill.setAttribute('role', 'group');
+  modoPill.setAttribute('aria-label', 'Colorir por');
+
+  const btnCat = el('button', 'Categorias', 'ag-modo-btn');
+  btnCat.type = 'button';
+  btnCat.setAttribute('aria-pressed', String(modoCor === 'categoria'));
+  btnCat.onclick = () => { definirModoDeCor('categoria'); desenharPrincipal(); desenharLateral(); };
+
+  const btnSt = el('button', 'Situação', 'ag-modo-btn');
+  btnSt.type = 'button';
+  btnSt.setAttribute('aria-pressed', String(modoCor === 'status'));
+  btnSt.onclick = () => { definirModoDeCor('status'); desenharPrincipal(); desenharLateral(); };
+
+  modoPill.append(btnCat, btnSt);
+
+  const btnEditarCores = el('button', null, 'quiet ag-btn-editar-cores');
+  btnEditarCores.type = 'button';
+  btnEditarCores.setAttribute('aria-label', 'Personalizar cores e opções');
+  btnEditarCores.title = 'Personalizar categorias, situações e cores';
+  btnEditarCores.append(createIcon('settings'));
+  btnEditarCores.onclick = () => abrirModalPersonalizarCores();
+
+  cabCores.append(modoPill, btnEditarCores);
+  cats.append(cabCores);
+
+  if (modoCor === 'categoria') {
+   const configCats = obterConfigCategorias();
+   const listaCats = Object.keys(configCats);
+   const contagem = {};
+   for (const e of M.filtrar(eventos, criterios('categorias'))) contagem[e.category] = (contagem[e.category] || 0) + 1;
+   for (const c of listaCats) {
+    const item = configCats[c];
+    const linha = el('label', null, 'ag-categoria');
+    const caixa = el('input'); caixa.type = 'checkbox'; caixa.checked = !estado.categorias.size || estado.categorias.has(c); caixa.dataset.categoria = c;
+    caixa.onchange = () => {
+     const marcadas = new Set([...cats.querySelectorAll('input:checked')].map(i => i.dataset.categoria));
+     estado.categorias = marcadas.size === listaCats.length ? new Set() : marcadas;
+     desenharPrincipal(); desenharLateral();
+    };
+    const cor = el('span', null, 'ag-cor'); cor.dataset.tom = item.tom;
+    linha.append(caixa, cor, el('span', item.rotulo), el('small', String(contagem[c] || 0)));
+    cats.append(linha);
+   }
+  } else {
+   const listaSt = Object.keys(configSt);
+   const contagem = {};
+   for (const e of M.filtrar(eventos, criterios('status'))) contagem[e.status] = (contagem[e.status] || 0) + 1;
+   for (const s of listaSt) {
+    const item = configSt[s];
+    const linha = el('label', null, 'ag-categoria');
+    const caixa = el('input'); caixa.type = 'checkbox'; caixa.checked = !estado.statusFiltro.size || estado.statusFiltro.has(s); caixa.dataset.status = s;
+    caixa.onchange = () => {
+     const marcados = new Set([...cats.querySelectorAll('input:checked')].map(i => i.dataset.status));
+     estado.statusFiltro = marcados.size === listaSt.length ? new Set() : marcados;
+     desenharPrincipal(); desenharLateral();
+    };
+    const cor = el('span', null, 'ag-cor'); cor.dataset.tom = item.tom;
+    linha.append(caixa, cor, el('span', item.rotulo), el('small', String(contagem[s] || 0)));
+    cats.append(linha);
+   }
   }
+
   filtros.append(cats);
   // Telas pequenas: os filtros ficam recolhidos para o calendário aparecer logo. No desktop o bloco fica aberto e sem título.
   const ativos = filtrosAtivos();
@@ -284,12 +601,12 @@ export function setupTracking({ api, openTenant }) {
  }
 
  // Texto acessível do evento: o que o olho lê na grade, em uma frase.
- const descricao = e => [e.title, M.diaInteiro(e) ? 'dia inteiro' : M.intervaloTexto(e.ini, e.fim), e.tenant_name, M.ROTULOS[e.status], e.series_id ? 'repete' : null].filter(Boolean).join(', ');
+ const descricao = e => [e.title, M.diaInteiro(e) ? 'dia inteiro' : M.intervaloTexto(e.ini, e.fim), e.tenant_name, rotuloDoStatus(e.status), e.series_id ? 'repete' : null].filter(Boolean).join(', ');
  const marca = e => (e.series_id ? el('span', '↻', 'ag-repete') : null);   // série: a mesma atividade em outras datas
 
  function eventoNaGrade(e, dia, recorte, lay) {
   const b = el('button', null, 'ag-evento'); b.type = 'button';
-  b.dataset.id = e.id; b.dataset.tom = M.TOM_DA_CATEGORIA[e.category]; b.dataset.status = e.status;
+  b.dataset.id = e.id; b.dataset.tom = tomDoEvento(e); b.dataset.status = e.status;
   b.setAttribute('aria-label', descricao(e)); b.title = descricao(e);
   if (recorte.fim - recorte.ini <= MINIMO) b.classList.add('ag-curto');
   // Teclado: setas movem (↑↓ 15 min, ←→ 1 dia), Shift+↑↓ esticam o fim. Enter abre (é um botão).
@@ -337,8 +654,9 @@ export function setupTracking({ api, openTenant }) {
   fixo.append(cab);
   // Faixa "dia todo": prazos e eventos de um dia ou mais não ocupam a grade de horas.
   const inteiros = dias.map(d => M.eventosDoDia(lista, d).filter(M.diaInteiro));
+  let faixa = null;
   if (inteiros.some(l => l.length)) {
-   const faixa = el('div', null, 'ag-diainteiro'); faixa.append(el('span', 'dia todo', 'ag-canto'));
+   faixa = el('div', null, 'ag-diainteiro'); faixa.append(el('span', 'dia todo', 'ag-canto'));
    inteiros.forEach((doDia, i) => {
     const celula = el('div', null, 'ag-di-celula'); celula.dataset.dia = dias[i];
     for (const e of doDia) celula.append(chip(e, true));
@@ -362,7 +680,7 @@ export function setupTracking({ api, openTenant }) {
    for (const e of doDia) col.append(eventoNaGrade(e, d, porId.get(e.id), lay.get(e.id)));
    colunas.push(col); corpo.append(col);
   }
-  ligarInteracao(corpo, colunas, dias, lista);
+  ligarInteracao(corpo, colunas, dias, lista, faixa);
   const agora = dias.indexOf(hojeDia);
   if (agora >= 0) {
    const linha = el('div', null, 'ag-agora'); linha.setAttribute('aria-hidden', 'true');
@@ -375,14 +693,16 @@ export function setupTracking({ api, openTenant }) {
   queueMicrotask(() => {
    if (rolagem !== null) { rolar.scrollTop = rolagem; return; }
    const primeiro = lista.filter(e => !M.diaInteiro(e)).map(e => M.recorteDoDia(e, dias.find(d => M.recorteDoDia(e, d)) || dias[0])).filter(Boolean).map(r => r.ini);
-   const alvo = agora >= 0 ? M.minutosDoDia(Date.now()) - 90 : primeiro.length ? Math.min(...primeiro) - 60 : 7 * 60;
+   const diurnos = primeiro.filter(m => m >= 6 * 60);
+   const primeiroMin = diurnos.length ? Math.min(...diurnos) - 60 : (primeiro.length ? Math.min(...primeiro) : 7 * 60);
+   const alvo = agora >= 0 ? Math.max(7 * 60, M.minutosDoDia(Date.now()) - 90) : Math.max(7 * 60, primeiroMin);
    rolar.scrollTop = Math.max(0, alvo / 60 * ALTURA_HORA);
   });
   return raiz;
  }
 
  // ---------- interação na grade: criar arrastando, mover e esticar ----------
- function ligarInteracao(corpo, colunas, dias, lista) {
+ function ligarInteracao(corpo, colunas, dias, lista, faixa) {
   const diaDoX = x => { const i = colunas.findIndex(c => { const r = c.getBoundingClientRect(); return x >= r.left && x < r.right; }); return i < 0 ? (x < colunas[0].getBoundingClientRect().left ? 0 : colunas.length - 1) : i; };
   const minutoDoY = (col, y) => limitar((y - col.getBoundingClientRect().top) / ALTURA_HORA * 60, 0, 1440);
   const principal = ev => ev.button === 0;
@@ -438,6 +758,7 @@ export function setupTracking({ api, openTenant }) {
    const larg = colunas[0].getBoundingClientRect().width;
    const x0 = ev.clientX, y0 = ev.clientY, altura0 = botaoEvento.getBoundingClientRect().height;
    let arrastando = false, deltaMin = 0, deltaDias = 0;
+   let ultimoClientX = x0, ultimoClientY = y0;
    const toque = ev.pointerType === 'touch';
    let pego = !toque || esticar, timer = null, destravar = null;   // a alça já nasce "pega" (touch-action: none); o corpo só depois de segurar
    if (toque && esticar) destravar = travarRolagem();
@@ -471,18 +792,143 @@ export function setupTracking({ api, openTenant }) {
    if (esticar) ev.preventDefault();
    if (toque) botaoEvento.addEventListener('contextmenu', c => c.preventDefault(), { once: true });
   });
+
+  if (faixa) {
+   faixa.addEventListener('pointerdown', ev => {
+    const botaoChip = ev.target.closest('.ag-chip-dia');
+    if (!botaoChip || !principal(ev)) return;
+    const evento = eventos.find(x => x.id === botaoChip.dataset.id);
+    if (!evento || salvando.has(evento.id)) return;
+
+    const celulaInicial = botaoChip.closest('.ag-di-celula');
+    const diaInicial = celulaInicial?.dataset.dia || dias[diaDoX(ev.clientX)];
+    const x0 = ev.clientX, y0 = ev.clientY;
+    const r0 = botaoChip.getBoundingClientRect();
+    let arrastando = false, deltaDias = 0;
+    const toque = ev.pointerType === 'touch';
+    let pego = !toque, timer = null, destravar = null;
+    let cloneFlutuante = null, fantasmaGrade = null, destinoGrade = null;
+
+    if (toque) timer = setTimeout(() => { pego = true; destravar = travarRolagem(); vibrar(); }, SEGURAR_MS);
+
+    const limparEfeitos = () => {
+     cloneFlutuante?.remove(); cloneFlutuante = null;
+     fantasmaGrade?.remove(); fantasmaGrade = null;
+     faixa.querySelectorAll('.ag-di-celula.ag-alvo-drop').forEach(c => c.classList.remove('ag-alvo-drop'));
+     botaoChip.classList.remove('ag-arrastando');
+    };
+
+    const mover = m => {
+     if (!pego) { if (Math.hypot(m.clientX - x0, m.clientY - y0) > TOLERANCIA_TOQUE) cancelar(); return; }
+     if (!arrastando && Math.hypot(m.clientX - x0, m.clientY - y0) < LIMIAR) return;
+     if (!arrastando) {
+      arrastando = true;
+      botaoChip.classList.add('ag-arrastando');
+      cloneFlutuante = botaoChip.cloneNode(true);
+      cloneFlutuante.classList.add('ag-chip-fantasma');
+      estilo(cloneFlutuante, {
+       position: 'fixed',
+       left: m.clientX + 'px',
+       top: m.clientY + 'px',
+       width: r0.width + 'px',
+       transform: 'translate(-50%, -50%)',
+       pointerEvents: 'none',
+       zIndex: '9999',
+       opacity: '0.9',
+       boxShadow: 'var(--shadow-pop)',
+      });
+      document.body.append(cloneFlutuante);
+     }
+     if (cloneFlutuante) {
+      cloneFlutuante.style.left = m.clientX + 'px';
+      cloneFlutuante.style.top = m.clientY + 'px';
+     }
+
+     const faixaRect = faixa.getBoundingClientRect();
+     const naFaixa = m.clientY >= faixaRect.top && m.clientY <= faixaRect.bottom;
+     const colIdx = diaDoX(m.clientX);
+     const diaAlvo = dias[colIdx];
+
+     if (!naFaixa && m.clientY > faixaRect.bottom) {
+      faixa.querySelectorAll('.ag-di-celula.ag-alvo-drop').forEach(c => c.classList.remove('ag-alvo-drop'));
+      const col = colunas[colIdx];
+      const duracaoMin = duracaoPadraoMin() || 60;
+      const min = limitar(M.arredondar(minutoDoY(col, m.clientY), PASSO), 0, 1440 - duracaoMin);
+      if (!fantasmaGrade) fantasmaGrade = el('div', null, 'ag-fantasma');
+      if (fantasmaGrade.parentElement !== col) col.append(fantasmaGrade);
+      estilo(fantasmaGrade, {
+       top: (min / 60 * ALTURA_HORA) + 'px',
+       height: (duracaoMin / 60 * ALTURA_HORA) + 'px',
+       display: 'block',
+      });
+      destinoGrade = { dia: diaAlvo, min, duracaoMin };
+     } else {
+      if (fantasmaGrade) { fantasmaGrade.remove(); fantasmaGrade = null; }
+      destinoGrade = null;
+      const celulaAlvo = faixa.querySelector(`.ag-di-celula[data-dia="${diaAlvo}"]`);
+      faixa.querySelectorAll('.ag-di-celula').forEach(c => c.classList.toggle('ag-alvo-drop', c === celulaAlvo));
+      deltaDias = colIdx - dias.indexOf(diaInicial);
+     }
+    };
+
+    const limpar = () => {
+     clearTimeout(timer); destravar?.();
+     document.removeEventListener('pointermove', mover);
+     document.removeEventListener('pointerup', soltar);
+     document.removeEventListener('pointercancel', cancelar);
+     document.removeEventListener('keydown', tecla, true);
+    };
+
+    const soltar = () => {
+     limpar();
+     if (!arrastando) return;
+     suprimirClique = true; setTimeout(() => { suprimirClique = false; }, 0);
+     limparEfeitos();
+     if (destinoGrade) {
+      const ini = M.inicioDoDia(destinoGrade.dia) + destinoGrade.min * 60000;
+      const fim = ini + destinoGrade.duracaoMin * 60000;
+      gravarHorario(evento, { starts_at: new Date(ini).toISOString(), ends_at: new Date(fim).toISOString() });
+     } else if (deltaDias !== 0) {
+      gravarHorario(evento, M.mover(evento, deltaDias * 1440));
+     }
+    };
+
+    const cancelar = () => { limpar(); limparEfeitos(); };
+    const tecla = k => { if (k.key === 'Escape') { k.stopPropagation(); cancelar(); } };
+    document.addEventListener('pointermove', mover);
+    document.addEventListener('pointerup', soltar);
+    document.addEventListener('pointercancel', cancelar);
+    document.addEventListener('keydown', tecla, true);
+    if (toque) botaoChip.addEventListener('contextmenu', c => c.preventDefault(), { once: true });
+   });
+  }
  }
 
  // ---------- visão Mês ----------
  function chip(e, inteiro = false) {
-  const b = el('button', null, 'ag-chip'); b.type = 'button'; b.dataset.id = e.id; b.dataset.tom = M.TOM_DA_CATEGORIA[e.category]; b.dataset.status = e.status;
+  const b = el('button', null, 'ag-chip'); b.type = 'button'; b.dataset.id = e.id; b.dataset.tom = tomDoEvento(e); b.dataset.status = e.status;
   if (inteiro) b.classList.add('ag-chip-dia');
   b.setAttribute('aria-label', descricao(e)); b.title = descricao(e);
   if (!inteiro && !M.diaInteiro(e)) b.append(el('span', M.hora(e.ini), 'ag-chip-hora'));
   if (e.series_id) b.append(marca(e));
   b.append(el('span', e.title, 'ag-chip-titulo'));
+  if (inteiro) {
+   b.addEventListener('keydown', k => {
+    if (k.altKey || k.ctrlKey || k.metaKey) return;
+    const dias = { ArrowLeft: -1, ArrowRight: 1 }[k.key];
+    if (!dias) return;
+    const atual = eventos.find(x => x.id === e.id);
+    k.preventDefault(); k.stopPropagation();
+    if (!atual || salvando.has(e.id)) return;
+    const campos = k.shiftKey ? M.redimensionar(atual, atual.fim + dias * 1440 * 60000, 1440) : M.mover(atual, dias * 1440);
+    gravarHorario(atual, campos).then(() => {
+     document.querySelector(`#view-tracking .ag-chip-dia[data-id="${e.id}"]`)?.focus();
+    });
+   });
+  }
   b.onclick = (ev) => {
     ev.stopPropagation();
+    if (suprimirClique) { suprimirClique = false; return; }
     if (ev.ctrlKey || ev.metaKey) { ev.preventDefault(); if (selecionados.has(e.id)) selecionados.delete(e.id); else { selecionados.add(e.id); ultimaSelecaoId = e.id; } atualizarSelecaoVisual(); return; }
     if (ev.shiftKey && ultimaSelecaoId) { ev.preventDefault(); selecionarFaixa(ultimaSelecaoId, e.id); return; }
     if (selecionados.size > 0) { selecionados.clear(); ultimaSelecaoId = null; atualizarSelecaoVisual(); }
@@ -540,9 +986,9 @@ export function setupTracking({ api, openTenant }) {
    sec.append(cab);
    for (const e of g.eventos) {
     const b = el('button', null, 'ag-linha'); b.type = 'button'; b.dataset.id = e.id; b.dataset.status = e.status; b.setAttribute('aria-label', descricao(e));
-    const cor = el('span', null, 'ag-cor'); cor.dataset.tom = M.TOM_DA_CATEGORIA[e.category];
+    const cor = el('span', null, 'ag-cor'); cor.dataset.tom = tomDoEvento(e);
     const quando = M.diaInteiro(e) ? 'Dia todo' : `${M.hora(e.ini)} – ${M.hora(e.fim)}`;
-    b.append(el('span', quando, 'ag-linha-hora'), cor, el('strong', e.title, 'ag-linha-titulo'), el('span', [e.tenant_name, e.engagement_label].filter(Boolean).join(' · '), 'ag-linha-empresa'), el('span', M.ROTULOS[e.status], 'ag-linha-situacao'));
+    b.append(el('span', quando, 'ag-linha-hora'), cor, el('strong', e.title, 'ag-linha-titulo'), el('span', [e.tenant_name, e.engagement_label].filter(Boolean).join(' · '), 'ag-linha-empresa'), el('span', rotuloDoStatus(e.status), 'ag-linha-situacao'));
     b.onclick = () => abrirEvento(e);
     sec.append(b);
    }
@@ -627,7 +1073,7 @@ export function setupTracking({ api, openTenant }) {
   geracao++; clearInterval(relogio); painel.fechar(); toast = null; clearTimeout(toastTimer);
   host.replaceChildren();
   dados = null; eventos = []; tenants = []; aviso = ''; rolagem = null;
-  Object.assign(estado, { tenant: '', texto: '', categorias: new Set(), status: '', aba: '', engagement: '', responsavel: '', tag: '', alcance: M.ALCANCE_PADRAO, dia: hoje(), miniMes: hoje() });
+  Object.assign(estado, { tenant: '', product: '', texto: '', categorias: new Set(), status: '', aba: '', engagement: '', responsavel: '', tag: '', alcance: M.ALCANCE_PADRAO, dia: hoje(), miniMes: hoje() });
   for (const k of Object.keys(partes)) partes[k] = null; selecionados.clear(); ultimaSelecaoId = null; hoveredEventId = null;
  };
  // Chegada pela ficha da empresa: semana corrente, filtrada por ela, sem busca nem situação herdadas.

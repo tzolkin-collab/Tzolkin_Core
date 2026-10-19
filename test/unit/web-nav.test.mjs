@@ -18,12 +18,10 @@ const fonte = nome => readFileSync(new URL(nome, PUBLIC), 'utf8') + (nome === 'a
 
 // A navegação do contexto geral, como foi decidida: grupo e, dentro dele, ordem.
 const NAVEGACAO = [
- ['Hoje', ['Visão geral', 'Financeiro']],
- ['Relacionamentos', ['Empresas', 'Pessoas', 'Clientes', 'Inbound', 'E-mails']],
- ['Portfólio', ['Portfólio']],
- ['Entrega', ['Contratações', 'Acompanhamento']],
- ['Tecnologia', ['Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS']],
- ['Bases de dados', ['Banco de dados']],
+ ['Hoje', ['Visão geral', 'Financeiro', 'Acompanhamento']],
+ ['CRM', ['Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Outbound', 'E-mails', 'Pagamentos']],
+ ['Portfólio', ['Produtos', 'Serviços', 'Contratações']],
+ ['Tecnologia', ['Conexões', 'Vercel', 'EasyPanel', 'DNS', 'GitHub', 'Banco de dados']],
 ];
 
 test('Configurações continua acessível pelo botão fixo do rodapé', () => {

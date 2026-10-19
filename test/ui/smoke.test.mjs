@@ -19,7 +19,12 @@ import { BLOCOS } from '../../apps/api/src/platform/markdown-editorjs.mjs';
 const PULAR = acharNavegador() ? false : 'Chrome/Edge não encontrado (defina CHROME_PATH)';
 const ARTEFATOS = fileURLToPath(new URL('./artifacts/', import.meta.url));
 
-const MENU_ESPERADO = ['Visão geral', 'Financeiro', 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'E-mails', 'Portfólio', 'Contratações', 'Acompanhamento', 'Conexões', 'Vercel', 'GitHub', 'EasyPanel', 'DNS', 'Banco de dados'];
+const MENU_ESPERADO = [
+ 'Visão geral', 'Financeiro', 'Acompanhamento',
+ 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Outbound', 'E-mails', 'Pagamentos',
+ 'Produtos', 'Serviços', 'Contratações',
+ 'Conexões', 'Vercel', 'EasyPanel', 'DNS', 'GitHub', 'Banco de dados'
+];
 const SECAO = `[...document.querySelectorAll('main section')].find(s => !s.hidden && s.offsetParent)`;
 /**
  * Lê, de dentro da página, os defeitos de uma tela: título, estouro de largura, texto com valor
@@ -1363,6 +1368,51 @@ test('agenda: arrastar move, esticar muda a duração, Esc cancela e recusa do s
  semExcecoes();
 });
 
+test('agenda: arrastar tasks de dia todo na faixa superior ou para a grade horária e atalhos de teclado', { skip: PULAR }, async () => {
+ await SEMANA_DE_HOJE();
+ const ID_INTEIRO = '00000000-0000-4000-8000-000000000006';
+ const SEL = `document.querySelector('#view-tracking .ag-diainteiro .ag-chip-dia[data-id="${ID_INTEIRO}"]')`;
+ const medirChip = () => pagina.avaliar(`(() => { const b = ${SEL}; if (!b) return null; const r = b.getBoundingClientRect(), c = b.parentElement.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, dia: b.parentElement.dataset.dia, coluna: c.width }; })()`);
+ const mouse = (tipo, x, y, alvo = 'document') => pagina.avaliar(`${alvo}.dispatchEvent(new PointerEvent('${tipo}', { bubbles: true, clientX: ${x}, clientY: ${y}, button: 0, pointerType: 'mouse', pointerId: 11 }))`);
+ const aguardarPut = async n => pagina.esperar(`${NO_AGENDA}.puts.length === ${n}`, { descricao: `PUT nº ${n}` });
+ const ultimoPut = () => pagina.avaliar(`${NO_AGENDA}.puts.at(-1)`);
+ const puts0 = await pagina.avaliar(`${NO_AGENDA}.puts.length`);
+ const segunda = AM.segundaDe(AM.diaDe(Date.now()));
+
+ // 1. Mover chip de dia todo para a coluna seguinte (+1 dia) dentro da faixa de dia todo
+ let c = await medirChip();
+ assert.ok(c, 'encontra o chip de dia todo');
+ await mouse('pointerdown', c.x, c.y, SEL);
+ await mouse('pointermove', c.x + c.coluna, c.y);
+ await mouse('pointerup', c.x + c.coluna, c.y);
+ await aguardarPut(puts0 + 1);
+ let put = await ultimoPut();
+ assert.equal(put.corpo.starts_at, new Date(`${AM.somarDias(segunda, 2)}T00:00:00-03:00`).toISOString(), 'moveu para quarta');
+ await new Promise(r => setTimeout(r, 100));
+
+ // 2. Mover chip de dia todo com setas do teclado (ArrowLeft move de volta para terça)
+ await pagina.avaliar(`${SEL}.focus()`);
+ await pagina.avaliar(`${SEL}.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))`);
+ await aguardarPut(puts0 + 2);
+ put = await ultimoPut();
+ assert.equal(put.corpo.starts_at, new Date(`${AM.somarDias(segunda, 1)}T00:00:00-03:00`).toISOString(), 'voltou para terça pelo teclado');
+ await new Promise(r => setTimeout(r, 100));
+
+ // 3. Arrastar chip de dia todo para a grade horária (soltando na coluna abaixo da faixa)
+ c = await medirChip();
+ const faixaBottom = await pagina.avaliar(`(() => { const r = document.querySelector('#view-tracking .ag-diainteiro').getBoundingClientRect(); return Math.round(r.bottom); })()`);
+ const yGrade = faixaBottom + 120;
+ await mouse('pointerdown', c.x, c.y, SEL);
+ await mouse('pointermove', c.x, yGrade);
+ await mouse('pointerup', c.x, yGrade);
+ await aguardarPut(puts0 + 3);
+ put = await ultimoPut();
+ assert.ok(put.corpo.starts_at, 'ganhou horário na grade');
+ assert.ok(put.corpo.ends_at, 'tem término com duração');
+
+ semExcecoes();
+});
+
 test('agenda: no toque, arrastar exige segurar; mexer antes de segurar é rolagem e a alça estica de imediato', { skip: PULAR }, async () => {
  await SEMANA_DE_HOJE();
  const ID = '00000000-0000-4000-8000-000000000001';
@@ -2450,7 +2500,7 @@ test('configurações → Agenda: lembrete padrão (espaço) e preferências des
  await pagina.esperar(`document.querySelector('#settings-body .config-chip')`, { descricao: 'lembrete padrão carregado' });
  assert.equal(await pagina.avaliar(`document.querySelectorAll('#settings-body .cfg-cab .cfg-escopo').length`), 0, 'seção de escopo misto não tem selo no título');
  assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-bloco')].map(b => b.querySelector('.config-sub').textContent + ' | ' + b.querySelector('.cfg-escopo').textContent)`),
-  ['Lembrete padrão | Todo o espaço', 'Ao abrir a agenda | Só neste navegador', 'Atividade nova | Só neste navegador', 'Videoconferência | Só neste navegador']);
+  ['Lembrete padrão | Todo o espaço', 'Catálogo de tags | Todo o espaço', 'Ao abrir a agenda | Só neste navegador', 'Atividade nova | Só neste navegador', 'Videoconferência | Só neste navegador']);
  // lembrete padrão: 15 min vem marcado; marcar 1 h grava a lista (maior primeiro) com a revisão lida
  assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-chip input')].filter(c => c.checked).map(c => c.parentElement.textContent)`), ['15 minutos antes']);
  await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-chip')].find(l => l.textContent === '1 hora antes').querySelector('input').click()`);
@@ -3091,7 +3141,7 @@ test('configurações: ligar, escolher assuntos, testar e desligar as notificaç
  await pagina.ir(origem + '/');
  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`);
  await IR_PARA_CONFIG();
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-sub')].map(h => h.textContent)`), ['Neste aparelho', 'Quando avisar']);
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#settings-body .config-sub')].map(h => h.textContent)`), ['Neste aparelho', 'Som da notificação', 'Quando avisar']);
  // ainda não assinado: só o botão de ativar
  assert.ok(await pagina.avaliar(`!!${BOTAO_CONFIG('Ativar neste aparelho')}`));
  assert.ok(await pagina.avaliar(`!${BOTAO_CONFIG('Enviar teste')}`));

@@ -43,6 +43,10 @@ test('MCP: protocolo, ferramentas e instruções para bots', () => {
   'listar_tags',
   'criar_tag',
   'revisar_tag',
+  'listar_contextos',
+  'vincular_contratacao_contexto',
+  'configurar_sdk_contexto',
+  'gerenciar_stripe_contexto',
  ]);
 
  for (const f of _internals.TOOLS) {
@@ -159,6 +163,7 @@ test('MCP: rotas registradas e método POST /api/mcp responde initialize, ping e
  // 1. initialize
  const init = await chamarMcp({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} });
  assert.equal(init.codigo, 200);
+ assert.equal(init.resposta.protocolVersion, undefined);
  assert.equal(init.resposta.result.protocolVersion, '2024-11-05');
  assert.equal(init.resposta.result.serverInfo.name, 'tzolkin-core');
  assert.ok(init.resposta.result.instructions.includes('MARKDOWN'));
@@ -171,7 +176,7 @@ test('MCP: rotas registradas e método POST /api/mcp responde initialize, ping e
  // 3. tools/list
  const lista = await chamarMcp({ jsonrpc: '2.0', id: 3, method: 'tools/list' });
  assert.equal(lista.codigo, 200);
- assert.equal(lista.resposta.result.tools.length, 11);
+ assert.equal(lista.resposta.result.tools.length, 15);
 
  // 4. Método desconhecido
  const desconhecido = await chamarMcp({ jsonrpc: '2.0', id: 4, method: 'inexistente' });
@@ -540,7 +545,7 @@ test('MCP: gestão de tokens de bots para Configurações (gerar, listar, revoga
  assert.equal(resStatus.st, 200);
  assert.equal(resStatus.dados.tokens_ativos, 1);
  assert.equal(resStatus.dados.protocolo, '2024-11-05');
- assert.equal(resStatus.dados.ferramentas_count, 11);
+ assert.equal(resStatus.dados.ferramentas_count, 15);
 
  // 4. Revogar chave (DELETE /api/mcp/tokens/:id)
  let resRevogar = null;
@@ -825,4 +830,114 @@ test('MCP: OAuth 2.0 Authorize e Token Exchange (code e client_credentials)', as
   e => e.status === 401
  );
 });
+
+test('MCP: ferramentas de Contexto (listar_contextos, configurar_sdk_contexto, vincular_contratacao_contexto, gerenciar_stripe_contexto)', async () => {
+ const segredo = 'mcp_live_contextos_1234567890abcdef';
+ const tokenHash = createHash('sha256').update(segredo).digest('hex');
+ const consultas = [];
+ const ecossistema = new Map();
+
+ const responderQuery = async (sql, params) => {
+  consultas.push({ sql, params });
+  if (sql.includes('FROM mcp_tokens')) {
+   if (params?.[0] === tokenHash) {
+    return { rows: [{ id: ID_TOKEN, label: 'Bot Contexto', scopes: ['activities:read', 'activities:write'] }] };
+   }
+   return { rows: [] };
+  }
+  if (sql.includes('UPDATE mcp_tokens')) return { rowCount: 1, rows: [] };
+  if (sql.includes('FROM products p') && sql.includes('ORDER BY p.name')) {
+   return {
+    rows: [
+     { id: 'crm-saas', name: 'CRM SaaS', portfolio_kind: 'platform', brand_family: 'tzolkin', lifecycle_status: 'active', engagements_count: 2, engagement_clients_count: 2, access_clients_count: 3 },
+    ],
+   };
+  }
+  if (sql.includes('FROM products WHERE id = $1')) {
+   return { rows: [{ id: 'crm-saas', name: 'CRM SaaS', portfolio_kind: 'platform', lifecycle_status: 'active' }] };
+  }
+  if (sql.includes('INSERT INTO ecosystem_entries')) {
+   ecossistema.set(params[0], JSON.parse(params[2]));
+   return { rows: [] };
+  }
+  if (sql.includes('FROM ecosystem_entries WHERE id = $1')) {
+   const p = ecossistema.get(params?.[0]);
+   return { rows: p ? [{ payload: p, imported_at: '2026-10-17' }] : [] };
+  }
+  if (sql.includes('SELECT id, name FROM tenants WHERE id = $1')) {
+   return { rows: [{ id: ID_EMPRESA, name: 'Acme Corp' }] };
+  }
+  if (sql.includes('INSERT INTO client_engagements')) {
+   return { rows: [{ id: ID_CONTRATO, tenant_id: ID_EMPRESA, product_id: 'crm-saas', service_model: 'product', status: 'active', label: 'CRM Enterprise', revision: 1 }] };
+  }
+  return { rows: [] };
+ };
+
+ const pool = {
+  query: responderQuery,
+  async connect() {
+   return {
+    query: responderQuery,
+    release() {},
+   };
+  },
+ };
+
+ const rotas = new Map();
+ const router = {
+  get: (p, h) => rotas.set(`GET ${p}`, h),
+  post: (p, h) => rotas.set(`POST ${p}`, h),
+  delete: (p, h) => rotas.set(`DELETE ${p}`, h),
+ };
+ mcpRoutes(router, { pool });
+
+ const chamar = async (name, args) => {
+  let resp = null;
+  await rotas.get('POST /api/mcp')({
+   pool,
+   operator: OPERADOR,
+   req: corpoReq({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }),
+   reply: (st, dados) => { resp = { st, dados }; },
+  });
+  assert.equal(resp.st, 200);
+  assert.equal(resp.dados.result.isError, false, resp.dados.result.content?.[0]?.text);
+  return JSON.parse(resp.dados.result.content[0].text);
+ };
+
+ const ctxList = await chamar('listar_contextos', {});
+ assert.equal(ctxList.total, 1);
+ assert.equal(ctxList.contexts[0].id, 'crm-saas');
+
+ const sdkRes = await chamar('configurar_sdk_contexto', {
+  product_id: 'crm-saas',
+  default_niche: 'enterprise',
+  core_params: { plano_default: 'anual' },
+  auto_capture_forms: true,
+ });
+ assert.equal(sdkRes.ok, true);
+ assert.equal(sdkRes.config.utm_tzolkin, 'crm-saas.enterprise');
+ assert.equal(sdkRes.config.core_params.plano_default, 'anual');
+ assert.equal(sdkRes.config.preserve_ad_utms, true);
+
+ const bindRes = await chamar('vincular_contratacao_contexto', {
+  product_id: 'crm-saas',
+  tenant_id: ID_EMPRESA,
+  label: 'CRM Enterprise',
+  service_model: 'product',
+  grant_access: true,
+  plan_code: 'pro',
+ });
+ assert.equal(bindRes.ok, true);
+ assert.equal(bindRes.engagement.product_id, 'crm-saas');
+
+ const gwRes = await chamar('gerenciar_stripe_contexto', {
+  product_id: 'crm-saas',
+  action: 'select_gateway',
+  gateway: 'contract_billing',
+ });
+ assert.equal(gwRes.ok, true);
+ assert.equal(gwRes.config.gateway, 'contract_billing');
+});
+
+
 

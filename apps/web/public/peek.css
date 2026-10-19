@@ -51,6 +51,35 @@
 .ficha-dl dt, .ficha-dl dd { margin: 0; padding: 10px 0; border-bottom: 1px solid var(--line-soft, #efeff2); font-size: 14px; line-height: 1.5; }
 .ficha-dl dt { padding-top: 12px; color: var(--muted, #646469); }
 .ficha-dl dd { min-width: 0; color: var(--text); overflow-wrap: anywhere; }
+.ficha-dl dt.ficha-largo,
+.ficha-dl dd.ficha-largo,
+.ficha-dl dt:has(+ dd > .ag-descricao),
+.ficha-dl dt:has(+ dd > .ag-notion-view),
+.ficha-dl dt:has(+ dd > #editorjs-container),
+.ficha-dl dd:has(> .ag-descricao),
+.ficha-dl dd:has(> .ag-notion-view),
+.ficha-dl dd:has(> #editorjs-container) {
+  grid-column: 1 / -1;
+}
+.ficha-dl dt.ficha-largo,
+.ficha-dl dt:has(+ dd > .ag-descricao),
+.ficha-dl dt:has(+ dd > .ag-notion-view),
+.ficha-dl dt:has(+ dd > #editorjs-container) {
+  padding-top: 18px;
+  padding-bottom: 4px;
+  font-weight: 600;
+  border-bottom: 0;
+  color: var(--text);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.ficha-dl dd.ficha-largo,
+.ficha-dl dd:has(> .ag-descricao),
+.ficha-dl dd:has(> .ag-notion-view),
+.ficha-dl dd:has(> #editorjs-container) {
+  padding-top: 0;
+}
 .ficha-section-title { margin: 28px 0 0; padding-bottom: 12px; border-bottom: 1px solid var(--line, #e4e4e7); font-size: var(--fs-lg, 16px); }
 .ficha-section-title + .ficha-dl { border-top: 0; }
 

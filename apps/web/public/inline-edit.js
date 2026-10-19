@@ -127,16 +127,18 @@ export function campoInline({ valor, rotulo, tipo = 'texto', opcoes = [], vazio 
 }
 
 /**
- * Lista de pares rótulo e valor ("Cadastro"): <dl class="ficha-dl">. Cada linha: { rotulo, valor: Node|string }.
+ * Lista de pares rótulo e valor ("Cadastro"): <dl class="ficha-dl">. Cada linha: { rotulo, valor: Node|string, largo?: boolean }.
  * Linha sem valor nenhum (null) não aparece; para mostrar "Vazio", passe um campoInline sem valor.
  */
 export function pares(linhas) {
  const dl = el('dl', undefined, 'ficha-dl');
- for (const { rotulo, valor } of linhas) {
+ for (const { rotulo, valor, largo } of linhas) {
   if (valor == null) continue;
+  const dt = el('dt', rotulo);
   const dd = el('dd');
+  if (largo) { dt.classList.add('ficha-largo'); dd.classList.add('ficha-largo'); }
   if (valor instanceof Node) dd.append(valor); else dd.textContent = valor;
-  dl.append(el('dt', rotulo), dd);
+  dl.append(dt, dd);
  }
  return dl;
 }

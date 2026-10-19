@@ -38,7 +38,7 @@ catch(error){
 }
 const warning=transportWarning(security);if(warning){console.error(`[boot] ${warning}`);console.error('[boot] TLS verificado é obrigatório em produção.');process.exit(1);}
 await manterPoolQuente(pool);
-const identity=createGoogleIdentity({pool,clientId:process.env.GOOGLE_CLIENT_ID,clientSecret:process.env.GOOGLE_CLIENT_SECRET,publicOrigin:origin.href,allowedEmails:process.env.CORE_ALLOWED_EMAILS,isAllowed:createAccountGate(pool)});
+const identity=createGoogleIdentity({pool,clientId:process.env.GOOGLE_CLIENT_ID,clientSecret:process.env.GOOGLE_CLIENT_SECRET,publicOrigin:origin.href,allowedEmails:process.env.CORE_ALLOWED_EMAILS,isAllowed:createAccountGate(pool),adminPassword:process.env.CORE_ADMIN_PASSWORD});
 const server=createCore({pool,identity,security,webOrigin:origin.origin,serveAsset});
 // Lembretes da agenda (push) e extensão das séries sem fim. Sem chaves VAPID os lembretes ficam desligados; as séries seguem.
 const pararAgenda=iniciarJobsDaAgenda({pool});

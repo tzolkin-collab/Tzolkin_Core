@@ -40,14 +40,14 @@
 <div class="login-box">
 <div class="brand login-brand"><img src="/logo.svg" width="46" height="46" alt=""><span>TZOLKIN<span class="brand-product">CORE</span></span></div>
 <h1>Entrar</h1>
-<a id="google-login" class="primary login-submit" href="/api/auth/google/start" hidden>Continuar com Google <span aria-hidden="true">↗</span></a><form id="login-form" hidden><label for="password">Senha</label><div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required aria-describedby="login-notice"><button id="show-password" class="reveal" type="button" aria-pressed="false">Mostrar</button></div><button class="primary login-submit" type="submit">Entrar <span aria-hidden="true">↗</span></button></form><p id="login-notice" class="form-error" role="alert"></p>
+<a id="google-login" class="primary login-submit" href="/api/auth/google/start" hidden>Continuar com Google <span aria-hidden="true">↗</span></a><div id="login-divider" class="login-divider" hidden><span>ou</span></div><form id="login-form"><label for="login-email">E-mail</label><input id="login-email" name="email" type="email" autocomplete="username" placeholder="seu@email.com"><label for="password">Senha</label><div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required aria-describedby="login-notice"><button id="show-password" class="reveal" type="button" aria-pressed="false">Mostrar</button></div><button class="primary login-submit" type="submit">Entrar <span aria-hidden="true">↗</span></button></form><p id="login-notice" class="form-error" role="alert"></p>
 </div><span class="login-signature">TZOLKIN</span>
 </main>
 <div id="workspace" class="app-shell" hidden>
 <header class="mobile-shellbar"><button id="nav-toggle" class="mobile-menu" type="button" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span><span class="sr-only">Abrir menu</span></button><div class="mobile-identity"><img src="/logo.svg" width="30" height="30" alt=""><span id="mobile-page-title">Visão geral</span></div><button id="mobile-refresh" class="mobile-refresh" type="button" aria-label="Atualizar dados">↻</button></header>
 <aside id="sidebar" class="sidebar" aria-label="Navegação do Core">
-<div class="context-switch"><span class="context-label">ESPAÇO</span><details id="context-picker" class="context-picker"><summary><span id="context-current-icon" class="context-current-icon" aria-hidden="true"></span><span id="context-current-copy" class="context-current-copy"><strong>TZOLKIN</strong><small>Gestão geral</small></span><span class="context-chevron" aria-hidden="true">⌄</span></summary><div id="context-options" class="context-options" role="group" aria-label="Selecionar espaço"></div></details><select id="context-select" hidden tabindex="-1" aria-hidden="true"><option value="">TZOLKIN · Geral</option></select></div>
-<p class="nav-label" id="nav-label">ESPAÇO DE TRABALHO</p>
+<div class="context-switch" hidden><span class="context-label">ESPAÇO</span><details id="context-picker" class="context-picker"><summary><span id="context-current-icon" class="context-current-icon" aria-hidden="true"></span><span id="context-current-copy" class="context-current-copy"><strong>TZOLKIN</strong><small>Gestão geral</small></span><span class="context-chevron" aria-hidden="true">⌄</span></summary><div id="context-options" class="context-options" role="group" aria-label="Selecionar espaço"></div></details><select id="context-select" hidden tabindex="-1" aria-hidden="true"><option value="">TZOLKIN · Geral</option></select></div>
+<p class="nav-label" id="nav-label">TZOLKIN</p>
 <nav id="nav" aria-label="Principal"></nav>
 <div class="sidebar-bottom"><button id="open-settings" class="sign-out settings-link" type="button">Configurações</button><button id="logout" class="sign-out">Sair da conta <span aria-hidden="true">↗</span></button></div>
 </aside>
@@ -83,6 +83,11 @@
 <div id="leads"></div><p id="leads-empty" class="empty-list" hidden>Nenhum lead encontrado.</p>
 </section>
 
+<section id="view-outbound" class="view" hidden aria-label="Outbound">
+<div class="tbl-bar"><label class="search-label"><span class="sr-only">Buscar prospecção</span><input id="outbound-search" type="search" placeholder="Buscar oportunidade ou empresa…"></label></div>
+<div id="outbound-content"></div>
+</section>
+
 <section id="view-companies" class="view" hidden aria-label="Empresas">
 <div class="tbl-bar"><label class="search-label"><span class="sr-only">Buscar empresa</span><input id="company-search" type="search" placeholder="Buscar empresa…"></label></div>
 <div id="companies"></div><p id="companies-empty" class="empty-list" hidden>Nenhuma empresa encontrada.</p>
@@ -92,7 +97,20 @@
 
 <section id="view-people" class="view" hidden aria-label="Pessoas"><div class="tbl-bar"><label class="search-label"><span class="sr-only">Buscar pessoa</span><input id="people-search" type="search" placeholder="Buscar pessoa ou empresa…"></label></div><div id="stakeholder-directory"></div><p id="people-empty" class="empty-list" hidden>Nenhum stakeholder encontrado.</p></section>
 
+<section id="view-payments" class="view" hidden aria-label="Pagamentos">
+<div id="crm-payments-tabs"></div>
+<div id="crm-payments-vendas" class="tab-panel" role="tabpanel"></div>
+<div id="crm-payments-gateways" class="tab-panel" role="tabpanel" hidden></div>
+</section>
+
 <section id="view-products" class="view" hidden><div class="section-toolbar tbl-bar-end"><button id="products-services-link" class="secondary" type="button">Serviços contratados →</button></div><div id="portfolio-tabs"></div><div id="portfolio-note" class="portfolio-note"></div><div id="product-catalog" role="tabpanel"></div><h2 class="section-title contracts-title">Clientes vinculados</h2><div id="contracts" class="list-panel"></div></section>
+
+<section id="view-portfolio-services" class="view" hidden aria-label="Serviços">
+<div id="portfolio-services-tabs"></div>
+<div id="portfolio-services-note" class="portfolio-note"></div>
+<div id="portfolio-services-catalog" role="tabpanel"></div>
+</section>
+
 <section id="view-services" class="view" hidden aria-label="Contratações"><div class="tbl-bar"><label class="search-label"><span class="sr-only">Filtrar por tipo de serviço</span><select id="services-filter"></select></label><div id="services-summary" aria-label="Resumo dos serviços"></div></div><div id="services-list"></div></section>
 
 <section id="view-access" class="view" hidden><p class="catalog-caption">Quem tem acesso a qual produto, separado do cadastro de pessoas.</p><div id="members" class="list-panel"></div></section>

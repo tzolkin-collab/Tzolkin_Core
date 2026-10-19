@@ -15,7 +15,7 @@ import { pares } from './inline-edit.js';
 import { selo } from './data-table.js';
 import { mountTabs } from './tabs.js';
 import * as M from './agenda-model.js';
-import { duracaoPadraoMin, meetAutomatico, localDoMeet, convidarContatoPrincipal, JANELAS, janelaDoEvento, definirJanelaDoEvento } from './agenda-prefs.js';
+import { duracaoPadraoMin, meetAutomatico, localDoMeet, convidarContatoPrincipal, JANELAS, janelaDoEvento, definirJanelaDoEvento, tomDaCategoria, rotuloDaCategoria, tomDoStatus, rotuloDoStatus } from './agenda-prefs.js';
 import { blocoDeLembrete, blocoDeRepeticao } from './agenda-repeticao.js';
 import EditorJS from 'https://esm.sh/@editorjs/editorjs@2.30.6';
 import Header from 'https://esm.sh/@editorjs/header@2.8.1';
@@ -331,10 +331,11 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     linhaDaCategoria.hidden = false;
     linhaDaCategoria.style.display = 'flex';
     linhaDaCategoria.replaceChildren();
-    const tom = M.TOM_DA_CATEGORIA[cat] || (cat === 'assessoria' ? 'primary' : 'neutral');
-    const badge = el('span', M.ROTULOS[cat] || cat, 'badge ' + (tom === 'primary' ? 'primary' : tom));
+    const tom = tomDaCategoria(cat);
+    const rot = rotuloDaCategoria(cat);
+    const badge = el('span', rot, 'badge ' + (tom === 'primary' ? 'primary' : tom));
     linhaDaCategoria.append(badge);
-    if (escolhida?.label && escolhida.label.trim().toLowerCase() !== (M.ROTULOS[cat] || cat).trim().toLowerCase()) {
+    if (escolhida?.label && escolhida.label.trim().toLowerCase() !== rot.trim().toLowerCase()) {
       const detalhe = el('span', '· ' + escolhida.label, 'ag-notion-cat-detalhe');
       linhaDaCategoria.append(detalhe);
     }
@@ -1061,15 +1062,15 @@ export function criarPainel({ api, openTenant, aoEditar, recarregar }) {
    { rotulo: 'Quando', valor: quandoTexto(e) },
    { rotulo: 'Cliente', valor: clienteLink(e) },
    { rotulo: 'Contratação', valor: e.engagement_label || 'Geral da empresa' },
-   { rotulo: 'Categoria', valor: selo(M.ROTULOS[e.category], M.TOM_DA_CATEGORIA[e.category]) },
+   { rotulo: 'Categoria', valor: selo(rotuloDaCategoria(e.category), tomDaCategoria(e.category)) },
    { rotulo: 'Tags', valor: etiquetasDe(dados.activity_tags?.[e.id]) },
    { rotulo: 'Responsável', valor: e.responsible_id ? ((dados.responsaveis || []).find(r => r.id === e.responsible_id)?.name || (dados.responsaveis || []).find(r => r.id === e.responsible_id)?.email || 'Conta suspensa ou removida') : null },
    { rotulo: 'Tipo', valor: textoDoTipo(e.kind) },
-   { rotulo: 'Situação', valor: selo(M.ROTULOS[e.status], TOM_DA_SITUACAO[e.status] || 'neutral') },
+   { rotulo: 'Situação', valor: selo(rotuloDoStatus(e.status), tomDoStatus(e.status)) },
    { rotulo: 'Local', valor: e.location || null },
    { rotulo: 'Link da reunião', valor: e.meeting_url ? linkExterno(e.meeting_url) : null },
    { rotulo: 'Google Agenda', valor: e.google_event_id ? 'Evento criado e sincronizado' : null },
-   { rotulo: 'Descrição', valor: renderDescricao(e.description, salvarDescricao) },
+   { rotulo: 'Descrição', valor: renderDescricao(e.description, salvarDescricao), largo: true },
    ...(dados.agenda_lembretes ? [
     { rotulo: 'Repete', valor: serie ? (serie.ended_at ? `${serie.descricao} (encerrada)` : serie.descricao) : null },
     { rotulo: 'Lembrete', valor: `${M.textoDosLembretes(efetivo.minutos)}${efetivo.origem === 'padrao' && efetivo.minutos.length ? ' (padrão da agenda)' : ''}` },
