@@ -83,6 +83,11 @@ export function montarNotificacoes(raiz, { api, irPara }) {
   bloco.append(no('h3', 'Som da notificação', 'config-sub'));
   bloco.append(no('p', 'Escolha os sons reproduzidos neste navegador ou adicione barulhos personalizados do seu computador.', 'config-ajuda'));
 
+  const ehIos = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent || '');
+  if (ehIos) {
+   bloco.append(no('p', 'No iPhone, lembre-se de desativar a chave de modo silencioso na lateral do aparelho para ouvir os sons.', 'config-ajuda'));
+  }
+
   const customSom = obterSomCustomizado();
   const somAtual = obterSomEscolhido();
 

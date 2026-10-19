@@ -26,6 +26,7 @@ self.addEventListener('push', event => {
   tag,
   icon: '/icon-192.png',
   badge: '/icon-192.png',
+  silent: false,
   data: { view },
  });
 

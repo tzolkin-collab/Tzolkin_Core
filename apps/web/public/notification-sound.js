@@ -1,5 +1,6 @@
 // Sons para notificações do Core via Web Audio API e áudio personalizado.
 // Oferece sons sintetizados leves, sem dependência externa, e suporte a som enviado pelo operador.
+// Compatível com navegadores desktop e móveis (incluindo destrave de áudio do iOS/Safari).
 
 export const SOM_PADRAO = 'chime';
 export const CHAVE_STORAGE_SOM = 'tzolkin-notificacao-som';
@@ -144,10 +145,33 @@ function obterAudioContext() {
  if (!audioCtx || audioCtx.state === 'closed') {
   audioCtx = new AudioClass();
  }
- if (audioCtx.state === 'suspended') {
-  audioCtx.resume().catch(() => {});
- }
  return audioCtx;
+}
+
+// No iOS Safari, o AudioContext precisa de um primeiro toque na tela para sair de "suspended".
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+ const destravarIos = () => {
+  const ctx = obterAudioContext();
+  if (ctx) {
+   if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+   }
+   // Buffer de 1 frame de silêncio para acordar a camada de áudio do WebKit
+   try {
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+   } catch (_) {}
+  }
+  window.removeEventListener('click', destravarIos, true);
+  window.removeEventListener('touchstart', destravarIos, true);
+  window.removeEventListener('touchend', destravarIos, true);
+ };
+ window.addEventListener('click', destravarIos, true);
+ window.addEventListener('touchstart', destravarIos, true);
+ window.addEventListener('touchend', destravarIos, true);
 }
 
 function tocarTom(ctx, freq, inicio, duracao, ganhoMax = 0.2, tipo = 'sine') {
@@ -196,8 +220,14 @@ function tocarPitchSweep(ctx, freqInicio, freqFim, inicio, duracao, ganhoMax = 0
 export function tocarAudioDataUrl(dataUrl) {
  if (!dataUrl || typeof Audio === 'undefined') return;
  try {
-  const audio = new Audio(dataUrl);
-  audio.play().catch(() => {});
+  const audio = new Audio();
+  audio.src = dataUrl;
+  audio.preload = 'auto';
+  audio.playsInline = true;
+  const promessa = audio.play();
+  if (promessa && typeof promessa.catch === 'function') {
+   promessa.catch(() => {});
+  }
  } catch (_) {}
 }
 
@@ -230,7 +260,7 @@ export function obterSomEscolhido() {
   const salvo = localStorage.getItem(CHAVE_STORAGE_SOM);
   if (salvo && salvo in SONS_NOTIFICACAO) return salvo;
  } catch (_) {}
- return SOM_PADRAO;
+  return SOM_PADRAO;
 }
 
 export function definirSomEscolhido(somId) {
@@ -285,6 +315,14 @@ export function tocarSomNotificacao(somId = obterSomEscolhido()) {
  if (!config || config.id === 'none') return;
  const ctx = obterAudioContext();
  if (!ctx) return;
+ if (ctx.state === 'suspended') {
+  ctx.resume().then(() => {
+   try { config.tocar(ctx); } catch (_) {}
+  }).catch(() => {
+   try { config.tocar(ctx); } catch (_) {}
+  });
+  return;
+ }
  try {
   config.tocar(ctx);
  } catch (_) {}
