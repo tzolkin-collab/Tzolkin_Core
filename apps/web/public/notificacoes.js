@@ -2,7 +2,20 @@
 // Tudo que depende do navegador (permissão, service worker, PushManager) é perguntado na hora, e cada impedimento
 // vira uma frase clara em vez de um botão que não faz nada. `api` é a mesma função do app (lança Error com a mensagem do servidor).
 
-import { SONS_NOTIFICACAO, obterSomEscolhido, definirSomEscolhido, tocarSomNotificacao } from './notification-sound.js';
+import {
+ SONS_NOTIFICACAO,
+ SOM_PADRAO,
+ CHAVE_STORAGE_SOM_LEAD,
+ CHAVE_STORAGE_SOM_AGENDA,
+ obterSomEscolhido,
+ definirSomEscolhido,
+ obterSomPorTopico,
+ definirSomPorTopico,
+ obterSomCustomizado,
+ salvarSomCustomizado,
+ removerSomCustomizado,
+ tocarSomNotificacao,
+} from './notification-sound.js';
 
 export const ASSUNTOS = Object.freeze([
  ['commercial.lead', 'Lead novo', 'Quando alguém preenche um formulário de contato.'],
@@ -68,10 +81,18 @@ export function montarNotificacoes(raiz, { api, irPara }) {
  function blocoDoSom() {
   const bloco = no('div', undefined, 'config-bloco');
   bloco.append(no('h3', 'Som da notificação', 'config-sub'));
-  bloco.append(no('p', 'Escolha o som reproduzido quando um aviso chegar neste navegador.', 'config-ajuda'));
+  bloco.append(no('p', 'Escolha os sons reproduzidos neste navegador ou adicione barulhos personalizados do seu computador.', 'config-ajuda'));
 
+  const customSom = obterSomCustomizado();
   const somAtual = obterSomEscolhido();
+
+  // 1. Som padrão
+  const titPadrao = no('h4', 'Som padrão');
+  titPadrao.style.cssText = 'margin-top: 8px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted);';
+  bloco.append(titPadrao);
+
   for (const [id, som] of Object.entries(SONS_NOTIFICACAO)) {
+   if (id === 'custom' && !customSom) continue;
    const l = no('label', undefined, 'config-opcao');
    const r = document.createElement('input');
    r.type = 'radio';
@@ -81,11 +102,12 @@ export function montarNotificacoes(raiz, { api, irPara }) {
    r.onchange = () => {
     definirSomEscolhido(id);
     if (id !== 'none') tocarSomNotificacao(id);
-    dizer('Som salvo.');
+    dizer('Som padrão salvo.');
    };
 
    const t = no('span', undefined, 'config-opcao-texto');
-   t.append(no('strong', som.nome), no('small', som.descricao));
+   const nomeExibido = id === 'custom' ? `Personalizado (${customSom?.nome || 'áudio'})` : som.nome;
+   t.append(no('strong', nomeExibido), no('small', som.descricao));
    l.append(r, t);
 
    if (id !== 'none') {
@@ -100,6 +122,135 @@ export function montarNotificacoes(raiz, { api, irPara }) {
 
    bloco.append(l);
   }
+
+  // 2. Barulho personalizado (upload)
+  const areaCustom = no('div', undefined, 'config-bloco');
+  areaCustom.style.cssText = 'border-top: 1px solid var(--line-soft); margin-top: 12px; padding-top: 12px;';
+  const titCustom = no('h4', 'Adicionar outro barulho (personalizado)');
+  titCustom.style.cssText = 'font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted);';
+  areaCustom.append(titCustom);
+  areaCustom.append(no('p', 'Envie um arquivo de som (MP3, WAV, OGG) para tocar nas notificações deste aparelho.', 'config-ajuda'));
+
+  const inputArquivo = document.createElement('input');
+  inputArquivo.type = 'file';
+  inputArquivo.accept = 'audio/*';
+  inputArquivo.style.display = 'none';
+
+  inputArquivo.onchange = () => {
+   const file = inputArquivo.files?.[0];
+   if (!file) return;
+   if (file.size > 2 * 1024 * 1024) {
+    dizer('Arquivo muito grande. Escolha um áudio de até 2 MB.', true);
+    inputArquivo.value = '';
+    return;
+   }
+   const reader = new FileReader();
+   reader.onload = e => {
+    const dataUrl = e.target?.result;
+    if (dataUrl && typeof dataUrl === 'string') {
+     salvarSomCustomizado(dataUrl, file.name);
+     definirSomEscolhido('custom');
+     tocarSomNotificacao('custom');
+     dizer(`Som "${file.name}" salvo e definido como padrão.`);
+     desenhar();
+    }
+   };
+   reader.onerror = () => {
+    dizer('Não foi possível ler o arquivo de áudio.', true);
+   };
+   reader.readAsDataURL(file);
+  };
+
+  const acoesCustom = no('div', undefined, 'config-acoes');
+  const btnUpload = no('button', customSom ? 'Trocar arquivo de som' : 'Escolher arquivo de áudio', 'secondary');
+  btnUpload.type = 'button';
+  btnUpload.onclick = () => inputArquivo.click();
+  acoesCustom.append(inputArquivo, btnUpload);
+
+  if (customSom) {
+   const btnOuvirCustom = no('button', 'Ouvir som personalizado', 'secondary');
+   btnOuvirCustom.type = 'button';
+   btnOuvirCustom.onclick = () => tocarSomNotificacao('custom');
+
+   const btnRemoverCustom = no('button', 'Remover som personalizado', 'secondary');
+   btnRemoverCustom.type = 'button';
+   btnRemoverCustom.onclick = () => {
+    removerSomCustomizado();
+    if (obterSomEscolhido() === 'custom') definirSomEscolhido(SOM_PADRAO);
+    dizer('Som personalizado removido.');
+    desenhar();
+   };
+
+   acoesCustom.append(btnOuvirCustom, btnRemoverCustom);
+  }
+
+  areaCustom.append(acoesCustom);
+  bloco.append(areaCustom);
+
+  // 3. Sons específicos por assunto
+  const areaTopicos = no('div', undefined, 'config-bloco');
+  areaTopicos.style.cssText = 'border-top: 1px solid var(--line-soft); margin-top: 12px; padding-top: 12px;';
+  const titAssunto = no('h4', 'Som específico por assunto');
+  titAssunto.style.cssText = 'font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted);';
+  areaTopicos.append(titAssunto);
+  areaTopicos.append(no('p', 'Diferencie o toque de novos contatos e de compromissos da agenda.', 'config-ajuda'));
+
+  const criarLinhaTopico = (titulo, topico, somRecomendado) => {
+   const linha = no('div', undefined, 'config-linha-seletor');
+   linha.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line-soft); flex-wrap: wrap;';
+
+   const info = no('div', undefined, 'config-opcao-texto');
+   info.append(no('strong', titulo));
+
+   const controles = no('div', undefined, 'config-acoes');
+   controles.style.cssText = 'margin: 0; align-items: center;';
+
+   const select = document.createElement('select');
+   select.className = 'field-input';
+   select.style.cssText = 'padding: 5px 8px; font-size: 13px;';
+
+   const opPadrao = document.createElement('option');
+   opPadrao.value = 'padrao';
+   opPadrao.textContent = 'Mesmo som do padrão';
+   select.append(opPadrao);
+
+   const somSalvo = localStorage.getItem(topico === 'commercial.lead' ? CHAVE_STORAGE_SOM_LEAD : CHAVE_STORAGE_SOM_AGENDA);
+
+   for (const [id, som] of Object.entries(SONS_NOTIFICACAO)) {
+    if (id === 'custom' && !customSom) continue;
+    const op = document.createElement('option');
+    op.value = id;
+    let label = id === 'custom' ? `Personalizado (${customSom?.nome || 'áudio'})` : som.nome;
+    if (id === somRecomendado) label += ' (Sugerido)';
+    op.textContent = label;
+    select.append(op);
+   }
+
+   select.value = somSalvo || 'padrao';
+
+   select.onchange = () => {
+    definirSomPorTopico(topico, select.value);
+    const somTocar = obterSomPorTopico(topico);
+    if (somTocar !== 'none') tocarSomNotificacao(somTocar);
+    dizer('Som por assunto salvo.');
+   };
+
+   const btnOuvir = no('button', 'Ouvir', 'secondary mini');
+   btnOuvir.type = 'button';
+   btnOuvir.onclick = () => {
+    const s = select.value === 'padrao' ? obterSomEscolhido() : select.value;
+    tocarSomNotificacao(s);
+   };
+
+   controles.append(select, btnOuvir);
+   linha.append(info, controles);
+   return linha;
+  };
+
+  areaTopicos.append(criarLinhaTopico('Lead novo (Comercial)', 'commercial.lead', 'fanfare'));
+  areaTopicos.append(criarLinhaTopico('Lembretes da agenda', 'agenda.lembrete', 'digital'));
+
+  bloco.append(areaTopicos);
 
   return bloco;
  }

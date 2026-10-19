@@ -1,5 +1,5 @@
 import { stateProxy as state, store } from './store.js';
-import { tocarSomNotificacao } from './notification-sound.js';
+import { tocarSomNotificacao, tocarSomNotificacaoPorTag } from './notification-sound.js';
 import {setupCommercial} from './commercial.js';
 import {RELACIONAMENTOS, TIPOS, SITUACOES} from './client-edit.js';
 import {campoInline, pares} from './inline-edit.js';
@@ -2431,7 +2431,7 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
  navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
  navigator.serviceWorker.addEventListener('message', event => {
   if (event.data?.type === 'push-notification-received') {
-   tocarSomNotificacao();
+   tocarSomNotificacaoPorTag(event.data?.tag);
   }
  });
 }
