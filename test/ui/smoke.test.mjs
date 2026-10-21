@@ -96,7 +96,7 @@ const semExcecoes = () => assert.deepEqual(pagina.problemas.excecoes, [], 'a tel
 
 test('senha errada não entra e avisa', { skip: PULAR }, async () => {
  await pagina.ir(origem + '/');
- await pagina.esperar(`!!document.getElementById('password')`);
+ await pagina.esperar(`!!window.TzolkinInstalar && !!document.getElementById('password')`);
  await pagina.avaliar(`(() => { document.getElementById('password').value = 'errada'; document.getElementById('login-form').requestSubmit(); })()`);
  await pagina.esperar(`document.getElementById('login-notice').textContent.trim().length > 0`, { descricao: 'aviso de senha errada' });
  assert.equal(await pagina.avaliar(`document.getElementById('workspace').hidden`), true);

@@ -916,7 +916,7 @@ export function abrirEditor({ host, api, dados, tenants, pessoas = [], evento = 
     if (comCampos && editorInstance) {
       if (editorInstance.isReady) await editorInstance.isReady;
       const descData = await editorInstance.save();
-      const isEmpty = descData.blocks.length === 0 || (descData.blocks.length === 1 && descData.blocks[0].type === 'paragraph' && !descData.blocks[0].data.text.trim());
+      const isEmpty = descData.blocks.length === 0 || (descData.blocks.length === 1 && descData.blocks[0].type === 'paragraph' && !(descData.blocks[0].data?.text || '').trim());
       if (!isEmpty) descValue = JSON.stringify(descData);
     } else if (descricao.value) {
       descValue = descricao.value.trim();
