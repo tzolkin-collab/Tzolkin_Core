@@ -148,30 +148,22 @@ function obterAudioContext() {
  return audioCtx;
 }
 
-// No iOS Safari, o AudioContext precisa de um primeiro toque na tela para sair de "suspended".
+// No iOS e Android, o AudioContext precisa de toques para sair de "suspended" e pode suspender ao alternar abas.
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
- const destravarIos = () => {
+ const acordarAudio = () => {
   const ctx = obterAudioContext();
-  if (ctx) {
-   if (ctx.state === 'suspended') {
-    ctx.resume().catch(() => {});
-   }
-   // Buffer de 1 frame de silêncio para acordar a camada de áudio do WebKit
-   try {
-    const buffer = ctx.createBuffer(1, 1, 22050);
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.start(0);
-   } catch (_) {}
+  if (ctx && ctx.state === 'suspended') {
+   ctx.resume().catch(() => {});
   }
-  window.removeEventListener('click', destravarIos, true);
-  window.removeEventListener('touchstart', destravarIos, true);
-  window.removeEventListener('touchend', destravarIos, true);
  };
- window.addEventListener('click', destravarIos, true);
- window.addEventListener('touchstart', destravarIos, true);
- window.addEventListener('touchend', destravarIos, true);
+ window.addEventListener('click', acordarAudio, { passive: true });
+ window.addEventListener('touchstart', acordarAudio, { passive: true });
+ window.addEventListener('touchend', acordarAudio, { passive: true });
+ if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+  document.addEventListener('visibilitychange', () => {
+   if (document.visibilityState === 'visible') acordarAudio();
+  });
+ }
 }
 
 function tocarTom(ctx, freq, inicio, duracao, ganhoMax = 0.2, tipo = 'sine') {
