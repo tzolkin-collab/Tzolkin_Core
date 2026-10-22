@@ -3490,6 +3490,49 @@ test('WhatsApp: abrir uma conversa mostra a troca, marca como lida e a resposta 
  semExcecoes();
 });
 
+// Conexões do espaço: abas do Core, configuração do site em linhas editáveis (nada de "a=b, c=d" num campo) e a gravação monta o corpo certo.
+// O banco falso não monta o console, as chaves nem o SDK do espaço: as rotas respondem por fora.
+test('Conexões do espaço: abas, regras e UTMs em linhas, e o que é salvo', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 900);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`, { descricao: 'painel aberto' });
+ await pagina.avaliar(`(() => {
+  window.__puts = [];
+  const f = window.fetch;
+  const resp = dados => Promise.resolve(new Response(JSON.stringify(dados), { status: 200, headers: { 'content-type': 'application/json' } }));
+  const produto = { id: 'plataforma-a', name: 'Plataforma A', portfolio_kind: 'platform', lifecycle_status: 'active', capabilities: ['access', 'checkout', 'commercial'] };
+  window.fetch = (url, init = {}) => {
+   const u = String(url);
+   if (u.includes('/api/products/plataforma-a/console')) return resp({ product: produto, engagements: [], clients: [], organizations: [], summary: { active_contracts: 0 } });
+   if (u.startsWith('/api/app-clients?')) return resp({ keys: [], audit: [], allowed_scopes: ['commercial:intake', 'commercial:read', 'context:read'] });
+   if (u === '/api/products/plataforma-a/sdk' && init.method === 'PUT') { window.__puts.push(JSON.parse(init.body)); return resp({ ok: true }); }
+   if (u === '/api/products/plataforma-a/sdk') return resp({ product: produto, snippet: '<script src="https://core.tzolkin.cloud/sdk.js" data-tzolkin-key="SUA_CHAVE" defer></script>', ad_url_template: 'utm_tzolkin=plataforma-a.padrao&meta_campaign_id={{campaign.id}}', lead_fields: [{ key: 'porte' }],
+    pipelines: [{ slug: 'padrao', name: 'Funil padrão', is_default: true }, { slug: 'corretor', name: 'Corretor', is_default: false }],
+    config: { default_niche: 'padrao', core_params: { utm_offer: 'plano-anual' }, route_rules: [{ path_prefix: '/corretores', niche: 'corretor', offer_label: 'site-corretor' }], auto_capture_forms: true, enrich_payment_links: false, forms: [{ form_id: 'contato', name: 'Contato', fields: [{ key: 'porte' }], page_url: 'https://exemplo.com/contato' }] } });
+   return f(url, init);
+  };
+ })()`);
+ await pagina.avaliar(`[...document.querySelectorAll('.context-option')].find(x => x.textContent.includes('Plataforma A')).click()`);
+ await pagina.esperar(`document.querySelectorAll('#product-tabs [role=tab]').length > 0`, { descricao: 'espaço aberto' });
+ await pagina.avaliar(CLICAR_NO_MENU('Conexões'));
+ await pagina.esperar(`document.querySelector('#conexoes-tabs [role=tab]')`, { descricao: 'abas das conexões' });
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#conexoes-tabs [role=tab]')].map(t => t.firstChild.textContent)`), ['Site e UTMs', 'Chaves de API', 'Formulários']);
+ // sem campos de texto com "chave=valor, chave=valor": as regras e os UTMs são linhas
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#view-product-keys .sdk-linhas').length`), 2);
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#view-product-keys .sdk-linha').length`), 2, 'uma regra e um UTM fixo');
+ assert.doesNotMatch(await pagina.avaliar(`document.getElementById('view-product-keys').innerText`), /separados por vírgula \(chave=valor|caminho:nicho=oferta/);
+ if (process.env.UI_SCREENSHOTS) { await pagina.tela(1280, 2300); await new Promise(r => setTimeout(r, 300)); await pagina.imagem(join(ARTEFATOS, '1280-Conexoes_do_espaco.png')); await pagina.tela(1280, 900); }
+ // adicionar uma regra, tirar o UTM fixo e salvar: o corpo sai estruturado
+ await pagina.avaliar(`(() => { const b = [...document.querySelectorAll('.sdk-linhas .secondary')].find(x => x.textContent === 'Adicionar regra'); b.click(); const l = document.querySelectorAll('.sdk-linhas')[0].querySelectorAll('.sdk-linha'); const nova = l[l.length - 1]; nova.querySelector('input').value = '/advogados'; nova.querySelector('select').value = 'padrao'; document.querySelectorAll('.sdk-linhas')[1].querySelector('.quiet').click(); })()`);
+ await pagina.avaliar(`document.querySelector('.sdk-form').requestSubmit()`);
+ await pagina.esperar(`window.__puts.length === 1`, { descricao: 'configuração salva' });
+ const salvo = await pagina.avaliar(`window.__puts[0]`);
+ assert.deepEqual(salvo.route_rules, [{ path_prefix: '/corretores', niche: 'corretor', offer_label: 'site-corretor' }, { path_prefix: '/advogados', niche: 'padrao', offer_label: null }]);
+ assert.deepEqual(salvo.core_params, {});
+ assert.equal(salvo.utm_tzolkin, 'plataforma-a.padrao'); assert.equal(salvo.enrich_payment_links, false); assert.deepEqual(salvo.custom_fields, ['porte']);
+ semExcecoes();
+});
+
 test('nenhuma requisição crítica falhou durante a sessão', { skip: PULAR }, async () => {
  pagina.limparProblemas();
  await pagina.ir(origem + '/');
