@@ -1,6 +1,7 @@
 import { $, node } from './dom.js';
 import { stateProxy as state, store } from './store.js';
 import { createIcon } from './icons.js';
+import { registrarTela } from './espacos-nav.js';
 
 export const CONTEXTS = {
   general: {
@@ -43,19 +44,21 @@ export const CONTEXTS = {
    label: 'GESTÃO DO PRODUTO',
    views: {
     product: { title: 'Visão geral', section: 'view-product' },
-    'product-tracking': { title: 'Acompanhamento', section: 'view-tracking', metrics:false },
+    // Inbound, Contratações e Recebimentos eram só atalhos da visão geral: quem trabalha no espaço precisava voltar a ela
+    // para chegar ao funil. Agora estão no menu; cada um só aparece se o tipo do espaço tem a capacidade (VIEW_CAPABILITIES).
+    'product-inbound': { title: 'Inbound', section: 'view-commercial', metrics:false },
     'product-clients': { title: 'Clientes', section: 'view-product-orgs', action: ['Vincular cliente', 'entitlement-dialog'], metrics:false },
+    'product-engagements': { title: 'Contratações', section: 'view-product-engagements', metrics:false },
+    'product-receivables': { title: 'Recebimentos', section: 'view-product-receivables', metrics:false },
     'product-payments': { title: 'Pagamentos', section: 'view-product-payments', metrics:false },
     'product-emails': { title: 'E-mails', section: 'view-product-emails', metrics:false },
+    'product-tracking': { title: 'Acompanhamento', section: 'view-tracking', metrics:false },
     'product-connections': { title: 'Conexões', section: 'view-product-keys', metrics:false },
-    'product-inbound': { title: 'Inbound', section: 'view-commercial', metrics:false, hidden:true },
     'product-keys': { title: 'Chaves de integração', section: 'view-product-keys', metrics:false, hidden:true },
     // "Clientes" aqui nunca foi a carteira: é quem tem acesso a ESTE item, que é o
     // que a tela mostra e o que o botão vincula. No contexto geral, Clientes é a
     // carteira — duas telas com o mesmo nome e conteúdos diferentes ensinavam errado.
     'product-orgs': { title: 'Acessos', section: 'view-product-orgs', action: ['Vincular cliente', 'entitlement-dialog'], hidden:true },
-    'product-engagements': { title: 'Contratações', section: 'view-product-engagements', metrics:false, hidden:true },
-    'product-receivables': { title: 'Recebimentos', section: 'view-product-receivables', metrics:false, hidden:true },
     client: { title: 'Cliente', section: 'view-client', hidden:true, metrics:false },
     // Campanhas do item mora dentro de Inbound, como uma aba (montarInbound).
     // Oculta do menu; o botão Configurações do rodapé abre em qualquer contexto.
@@ -148,6 +151,7 @@ export function switchView(view) {
   if (active.action && $('new-record-label')) $('new-record-label').textContent = active.action[0];
  }
  if ($('notice')) $('notice').textContent = '';
+ if (!active.hidden) registrarTela(state.context, view);
  renderNav();
 }
 

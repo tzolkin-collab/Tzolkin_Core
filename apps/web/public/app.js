@@ -24,6 +24,7 @@ import {setupConnections, casaConexao} from './connections.js';
 import {achatar} from './owner-suggestions.js';
 import {vinculoNaLista} from './owner-link.js';
 import {mountTabs} from './tabs.js';
+import {lerEndereco, telaLembrada, semHistorico, filtrarEspacos} from './espacos-nav.js';
 import {tabela, celulaNome, selo, resumo, botaoEditar, tomDoEstado} from './data-table.js';
 import {criarPeek} from './peek.js';
 import {montarConfiguracoes} from './settings.js';
@@ -243,12 +244,14 @@ function renderContextChrome() {
  renderContextPicker(state.overview?.products || []);
 }
 
-async function switchContext(contextId) {
+async function switchContext(contextId, telaPedida) {
  if(state.view==='resource')history.replaceState(null,'',location.pathname+location.search);
  state.context = contextId;
  state.overview = contextId ? state.overview : null;
  state.product = null;
- state.view = Object.keys(views())[0];
+ // Volta para onde se estava neste espaço (ou para a tela do endereço); só cai na primeira se a tela não existe mais.
+ const candidata = telaPedida || telaLembrada(contextId);
+ state.view = candidata && views()[candidata] && !views()[candidata].hidden ? candidata : Object.keys(views())[0];
  clearRenderedData();          // dado antigo sai da tela antes de qualquer requisição
  renderContextChrome();
  renderNav();
@@ -2027,6 +2030,7 @@ function fillContextSelect(products) {
  renderContextPicker(products);
 }
 
+let consultaEspaco='';
 function renderContextPicker(products) {
  const picker=$('context-picker'),currentIcon=$('context-current-icon'),currentCopy=$('context-current-copy'),options=$('context-options');
  if(!picker||!currentIcon||!currentCopy||!options)return;
@@ -2037,7 +2041,37 @@ function renderContextPicker(products) {
  const choice=(id,label,detail,icon)=>{const button=node('button',undefined,'context-option'+(id===state.context?' active':''));button.type='button';button.setAttribute('aria-current',id===state.context?'true':'false');const mark=node('span',undefined,'context-option-icon');mark.append(icon);const copy=node('span',undefined,'context-option-copy');copy.append(node('strong',label),node('small',detail));button.append(mark,copy);button.onclick=()=>{picker.open=false;if(id!==state.context)switchContext(id).catch(reportError);};return button;};
  const general=choice('','TZOLKIN','Gestão geral',coreSpaceIcon());
  const productChoices=byKind(products).flatMap(({kind,items})=>[node('span',kindInfo(kind).plural,'context-group-label'),...items.map(product=>choice(product.id,product.name,productLifecycle(product).label,productFavicon(productFaviconUrl(product))))]);
- options.replaceChildren(general,...productChoices);
+ // Busca (só quando a lista é longa) e teclado: seta move entre os espaços, Enter abre o primeiro que sobrou, Esc fecha.
+ const busca=node('input',undefined,'context-search');busca.type='search';busca.placeholder='Buscar espaço';busca.setAttribute('aria-label','Buscar espaço');busca.autocomplete='off';busca.value=consultaEspaco;
+ busca.hidden=products.length<7;
+ const itens=[general,...productChoices.filter(item=>item.tagName==='BUTTON')];
+ const textos=itens.map(item=>({texto:item.textContent}));
+ const aplicarFiltro=()=>{
+  consultaEspaco=busca.value;
+  const ficam=new Set(filtrarEspacos(textos,consultaEspaco));
+  itens.forEach((item,i)=>{item.hidden=!ficam.has(i);});
+  // Rótulo de grupo some quando nenhum espaço dele sobra.
+  let rotulo=null,algum=false;
+  for(const filho of options.children){
+   if(filho.classList.contains('context-group-label')){if(rotulo)rotulo.hidden=!algum;rotulo=filho;algum=false;}
+   else if(filho.tagName==='BUTTON'&&!filho.hidden)algum=true;
+  }
+  if(rotulo)rotulo.hidden=!algum;
+  vazio.hidden=ficam.size>0;
+ };
+ const vazio=node('p','Nenhum espaço com esse nome.','context-empty');vazio.hidden=true;
+ busca.oninput=aplicarFiltro;
+ options.replaceChildren(busca,general,...productChoices,vazio);
+ aplicarFiltro();
+ options.onkeydown=event=>{
+  const visiveis=itens.filter(item=>!item.hidden);
+  const i=visiveis.indexOf(document.activeElement);
+  if(event.key==='ArrowDown'||event.key==='ArrowUp'){
+   event.preventDefault();
+   const proximo=event.key==='ArrowDown'?visiveis[Math.min(visiveis.length-1,i+1)]:(i<=0?busca:visiveis[i-1]);
+   (proximo&&!proximo.hidden?proximo:visiveis[0])?.focus();
+  }else if(event.key==='Enter'&&document.activeElement===busca&&visiveis[0]){event.preventDefault();visiveis[0].click();}
+ };
 }
 
 // O contexto geral é o único que carrega o cadastro completo.
@@ -2212,6 +2246,7 @@ function bindForm(id, handler) {
    if (dialog) dialog.close();
    form.reset();
    await load();
+   if (id === 'login-form') await aplicarPedido();
    if (id === 'login-form') {
     $('password').type = 'password';
     $('show-password').textContent = 'Mostrar';
@@ -2259,6 +2294,13 @@ $('new-record').onclick = () => {
  }
  openDialog(dialog);
 };
+{
+ // O seletor fecha ao clicar fora e com Esc (devolvendo o foco ao botão); ao abrir, foca a busca ou o espaço atual.
+ const picker=$('context-picker');
+ addEventListener('pointerdown',event=>{if(picker.open&&!picker.contains(event.target))picker.open=false;});
+ picker.addEventListener('keydown',event=>{if(event.key==='Escape'&&picker.open){event.stopPropagation();picker.open=false;picker.querySelector('summary')?.focus();}});
+ picker.addEventListener('toggle',()=>{if(!picker.open)return;const busca=picker.querySelector('.context-search');(busca&&!busca.hidden?busca:picker.querySelector('.context-option.active')||picker.querySelector('.context-option'))?.focus();});
+}
 $('context-select').addEventListener('change', event => switchContext(event.target.value).catch(reportError));
 $('client-search').addEventListener('input', () => { state.clientPage = 0; renderTenants(); });
 $('client-pagesize').addEventListener('change', () => { state.clientPage = 0; renderTenants(); });
@@ -2391,6 +2433,10 @@ const delivery = setupDelivery({ api,openResource:resource.open,onSaved:()=>load
 // escolhe a tela inicial e `?meta=` traz o resultado da conexão. Os dois saem
 // da barra de endereço em seguida, para um recarregar não repetir o aviso.
 let inicial = 'overview';
+// Endereço pedido na abertura (`#/espaco/sites/product-inbound`). Só vale depois da entrada e do primeiro carregamento:
+// o espaço precisa existir no cadastro. Ver aplicarPedido.
+let pedido = lerEndereco(location.hash);
+if (pedido && !pedido.espaco && pedido.tela && Object.hasOwn(CONTEXTS.general.views, pedido.tela) && !CONTEXTS.general.views[pedido.tela].hidden) inicial = pedido.tela;
 {
  const params = new URLSearchParams(location.search);
  const pedida = params.get('view');
@@ -2411,9 +2457,27 @@ let inicial = 'overview';
 }
 renderNav();
 setupShell();
-switchView(inicial);
+semHistorico(() => switchView(inicial));
 renderContextChrome();
-load().catch(error => { if (error.message !== 'Entre para continuar.') $('login-notice').textContent = error.message; });
+load().then(aplicarPedido).catch(error => { if (error.message !== 'Entre para continuar.') $('login-notice').textContent = error.message; });
+
+// Abre o espaço e a tela do endereço. Espaço que não existe (apagado, arquivado ou sem permissão) não derruba nada:
+// fica no geral. Roda uma vez, depois do primeiro carregamento com sessão — logo, também depois do login.
+async function irPara(alvo) {
+ if (alvo.espaco && !state.overview?.products?.some(p => p.id === alvo.espaco)) return;
+ if (alvo.espaco !== state.context) await switchContext(alvo.espaco, alvo.tela);
+ else if (alvo.tela && views()[alvo.tela] && !views()[alvo.tela].hidden) switchView(alvo.tela);
+}
+async function aplicarPedido() {
+ const alvo = pedido; pedido = null;
+ if (!alvo || (!alvo.espaco && !alvo.tela)) return;
+ await semHistorico(() => irPara(alvo));
+}
+// Voltar e avançar do navegador percorrem os espaços e telas já visitados.
+addEventListener('popstate', () => {
+ const alvo = lerEndereco(location.hash);
+ if (alvo && state.overview) semHistorico(() => irPara(alvo)).catch(reportError);
+});
 
 // Instalar como aplicativo: o Chrome dispara `beforeinstallprompt` logo ao carregar, bem antes de alguém abrir Configurações → Aplicativo.
 // Guarda o evento aqui para a seção poder oferecer o botão. Sem o evento (já instalado, ou navegador sem suporte) a seção só explica.
