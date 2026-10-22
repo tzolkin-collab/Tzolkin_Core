@@ -19,6 +19,7 @@ export const CONTEXTS = {
     leads: { title: 'Inbound', desc: "Oportunidades em prospecção, por etapa.", section: 'view-commercial', metrics: false },
     outbound: { title: 'Outbound', desc: "Prospecção ativa e abordagem direta.", section: 'view-outbound', metrics: false },
     emails: { title: 'E-mails', section: 'view-emails', metrics: false },
+    whatsapp: { title: 'WhatsApp', section: 'view-whatsapp', metrics: false },
     payments: { title: 'Pagamentos', desc: "Vendas, cobranças e gateways.", section: 'view-payments', metrics: false },
     // PORTFÓLIO
     products: { title: 'Produtos', desc: "O que a TZOLKIN desenvolve e opera.", section: 'view-products', action: ['Novo produto', 'space-dialog'], metrics: false },
@@ -73,7 +74,7 @@ export const SECTIONS = [
   'view-connections', 'view-access', 'view-database', 'view-redis', 'view-settings', 'view-security', 'view-vercel', 
   'view-github', 'view-easypanel', 'view-dns', 'view-server-metrics', 'view-product', 'view-product-orgs', 
   'view-product-engagements', 'view-product-payments', 'view-product-receivables', 'view-product-emails', 
-  'view-service-campaigns', 'view-finance','view-emails', 'view-outbound', 'view-payments', 'view-portfolio-services'
+  'view-service-campaigns', 'view-finance','view-emails','view-whatsapp', 'view-outbound', 'view-payments', 'view-portfolio-services'
 ];
 
 export const contextKind = () => (state.context ? 'product' : 'general');
@@ -109,7 +110,7 @@ export function renderNav() {
  // teste de navegação pega antes de virar dois cabeçalhos "Tecnologia" na tela.
  const groups=contextKind()==='general'?{
   overview:'Hoje',finance:'Hoje',tracking:'Hoje',
-  companies:'CRM',people:'CRM',clients:'CRM',client:'CRM',leads:'CRM',outbound:'CRM',emails:'CRM',payments:'CRM',
+  companies:'CRM',people:'CRM',clients:'CRM',client:'CRM',leads:'CRM',outbound:'CRM',emails:'CRM',whatsapp:'CRM',payments:'CRM',
   products:'Portfólio',portfolioServices:'Portfólio',services:'Portfólio',serviceCampaigns:'Portfólio',
   connections:'Tecnologia',vercel:'Tecnologia',easypanel:'Tecnologia',dns:'Tecnologia',github:'Tecnologia',database:'Tecnologia',resource:'Tecnologia',serverMetrics:'Tecnologia',redis:'Tecnologia',access:'Tecnologia',settings:'Tecnologia',security:'Tecnologia',
  }:Object.fromEntries(Object.keys(context.views).map(key=>[key,contextKindLabel()]));
@@ -119,7 +120,7 @@ export function renderNav() {
   const atual = state.view === 'client' ? state.clientBack : state.view;
   const button = node('button', undefined, 'nav-item' + (key === atual ? ' active' : ''));
   button.type = 'button'; button.dataset.view = key;
-  const icon = createIcon(({overview:'layers',finance:'wallet',tracking:'calendar',companies:'building',people:'people',clients:'building',leads:'user-plus',outbound:'chart',emails:'mail',payments:'wallet',products:'package',portfolioServices:'briefcase',services:'briefcase',connections:'branch',vercel:'cloud',easypanel:'server',dns:'globe',github:'repo',database:'database',access:'shield',redis:'cache',settings:'sliders',security:'lock',serverMetrics:'activity',product:'package','product-tracking':'calendar','product-clients':'people','product-connections':'branch','product-inbound':'user-plus','product-keys':'lock','product-orgs':'people','product-engagements':'briefcase','product-payments':'wallet','product-receivables':'calendar','product-emails':'mail',campaigns:'chart','product-campaigns':'chart',serviceCampaigns:'chart'})[key]);
+  const icon = createIcon(({overview:'layers',finance:'wallet',tracking:'calendar',companies:'building',people:'people',clients:'building',leads:'user-plus',outbound:'chart',emails:'mail',whatsapp:'message-circle',payments:'wallet',products:'package',portfolioServices:'briefcase',services:'briefcase',connections:'branch',vercel:'cloud',easypanel:'server',dns:'globe',github:'repo',database:'database',access:'shield',redis:'cache',settings:'sliders',security:'lock',serverMetrics:'activity',product:'package','product-tracking':'calendar','product-clients':'people','product-connections':'branch','product-inbound':'user-plus','product-keys':'lock','product-orgs':'people','product-engagements':'briefcase','product-payments':'wallet','product-receivables':'calendar','product-emails':'mail',campaigns:'chart','product-campaigns':'chart',serviceCampaigns:'chart'})[key]);
   icon.classList.add('nav-icon'); button.append(icon, document.createTextNode(view.title));
   if (key === atual) button.setAttribute('aria-current', 'page');
   button.onclick = () => {switchView(key);closeNavigation();};

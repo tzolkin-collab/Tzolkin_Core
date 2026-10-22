@@ -10,3 +10,8 @@
 .email-outbox-acoes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .email-outbox-acoes button { min-height: 32px; padding: 0 12px; font-size: 13px; }
 .email-note:empty { display: none; }
+
+/* WhatsApp: conexão com a Evolution e envio automático, uma linha cada, antes da atividade da fila. */
+.whatsapp-estado { display: grid; gap: 8px; max-width: 520px; margin: 16px 0 20px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.whatsapp-estado > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; font-size: 14px; }
+.whatsapp-estado .email-help { margin: 4px 0 0; }

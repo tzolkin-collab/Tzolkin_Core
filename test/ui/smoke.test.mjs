@@ -21,7 +21,7 @@ const ARTEFATOS = fileURLToPath(new URL('./artifacts/', import.meta.url));
 
 const MENU_ESPERADO = [
  'Visão geral', 'Financeiro', 'Acompanhamento',
- 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Outbound', 'E-mails', 'Pagamentos',
+ 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Outbound', 'E-mails', 'WhatsApp', 'Pagamentos',
  'Produtos', 'Serviços', 'Contratações',
  'Conexões', 'Vercel', 'EasyPanel', 'DNS', 'GitHub', 'Banco de dados'
 ];
@@ -3378,10 +3378,22 @@ test('navegação por espaço: endereço, voltar, memória da tela e recarregar'
  await pagina.avaliar(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
  assert.equal(await pagina.avaliar(`document.getElementById('context-picker').open`), false, 'Esc fecha o seletor');
 
+ // O banco falso não monta o console do espaço: responde por fora, só para a página do espaço ter o que desenhar.
+ await pagina.avaliar(`(() => { const f = window.fetch; window.fetch = (url, ...r) => String(url).includes('/api/products/plataforma-a/console') ? Promise.resolve(new Response(JSON.stringify({ product: { id: 'plataforma-a', name: 'Plataforma A', portfolio_kind: 'platform', lifecycle_status: 'active', capabilities: ['access', 'checkout', 'commercial'] }, engagements: [], clients: [], organizations: [{ id: 'o1', name: 'Org', contract_active: true, status: 'active', rights: [] }], summary: { active_contracts: 1 } }), { status: 200, headers: { 'content-type': 'application/json' } })) : f(url, ...r); })()`);
+
  // Trocar de espaço: primeira tela do espaço, no endereço dele
  await trocarEspaco('Plataforma A');
  await pagina.esperar(`location.hash.startsWith('#/espaco/plataforma-a')`, { descricao: 'endereço do espaço' });
  await pagina.esperar(`document.querySelector('nav button.active')?.textContent.trim() === 'Visão geral'`, { descricao: 'espaço abre na visão geral' });
+ // A página do espaço usa as abas do Core: Resumo, Conexões e Direitos (o tipo tem acesso), e só o painel da aba ativa aparece
+ await pagina.esperar(`document.querySelectorAll('#product-tabs [role=tab]').length === 3`, { descricao: 'abas do espaço' });
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#product-tabs [role=tab]')].map(t => t.firstChild.textContent)`), ['Resumo', 'Conexões', 'Direitos']);
+ assert.equal(await pagina.avaliar(`document.getElementById('product-panel-conexoes').hidden`), true);
+ await pagina.avaliar(`document.getElementById('product-tab-conexoes').click()`);
+ assert.equal(await pagina.avaliar(`document.getElementById('product-panel-conexoes').hidden || !document.getElementById('product-panel-resumo').hidden`), false, 'a aba Conexões troca o painel');
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('.product-record-actions .secondary').length`), 0, 'sem os atalhos que repetiam o menu');
+ await pagina.avaliar(`document.getElementById('product-tab-resumo').click()`);
+ if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-Espaco_com_abas.png'));
  const menu = await pagina.avaliar(`[...document.querySelectorAll('nav button')].map(b => b.textContent.trim())`);
  assert.ok(menu.includes('Clientes') && menu.includes('Conexões'), `menu do espaço: ${menu}`);
  if (process.env.UI_SCREENSHOTS) {
@@ -3416,6 +3428,65 @@ test('navegação por espaço: endereço, voltar, memória da tela e recarregar'
  await pagina.avaliar(`location.reload()`);
  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`, { descricao: 'painel aberto' });
  assert.notEqual(await pagina.avaliar(`document.body.dataset.context`), 'product');
+ semExcecoes();
+});
+
+// WhatsApp: a tela de atividade explica a conexão e a fila, mesmo sem a Evolution configurada e sem a migração 062.
+test('WhatsApp: a tela abre, diz que a Evolution não está configurada e que o envio está desligado', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 800);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`, { descricao: 'painel aberto' });
+ await pagina.avaliar(CLICAR_NO_MENU('WhatsApp'));
+ await pagina.esperar(`location.hash === '#/geral/whatsapp'`, { descricao: 'endereço do WhatsApp' });
+ await pagina.esperar(`document.querySelector('#view-whatsapp .whatsapp-estado')?.textContent.includes('Não configurada')`, { descricao: 'estado da Evolution' });
+ const texto = await pagina.avaliar(`document.getElementById('view-whatsapp').innerText`);
+ assert.match(texto, /Envio automático/);
+ assert.match(texto, /Desligado/);
+ // Abas do Core: Conversas (abre primeiro) e Atividade; sem a migração 063 a caixa de entrada explica, e a Atividade tem o histórico
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#whatsapp-tabs [role=tab]')].map(t => t.firstChild.textContent)`), ['Conversas', 'Atividade']);
+ assert.match(await pagina.avaliar(`document.getElementById('whatsapp-panel-conversas').innerText`), /Caixa de entrada|Nenhuma resposta recebida/);
+ await pagina.avaliar(`document.getElementById('whatsapp-tab-atividade').click()`);
+ await pagina.esperar(`document.getElementById('whatsapp-panel-atividade')`, { descricao: 'aba Atividade' });
+ assert.match(await pagina.avaliar(`document.getElementById('whatsapp-panel-atividade').innerText`), /Histórico de mensagens|Nenhuma mensagem na fila/);
+ const defeitos = await pagina.avaliar(leituraDe(SECAO));
+ assert.equal(defeitos.titulo, 'WhatsApp'); assert.deepEqual(defeitos.vazamento, []); assert.equal(defeitos.estouro, 0); assert.equal(defeitos.botoesSemNome, 0);
+ if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-WhatsApp_atividade.png'));
+ semExcecoes();
+});
+
+// WhatsApp, caixa de entrada: lista de conversas, conversa aberta (o que veio e o que saiu), marcar como lida e responder pela fila.
+// O banco falso não tem a caixa de entrada: as rotas respondem por fora, só para a tela ter o que desenhar.
+test('WhatsApp: abrir uma conversa mostra a troca, marca como lida e a resposta vai para a fila', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 800);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`, { descricao: 'painel aberto' });
+ await pagina.avaliar(`(() => {
+  window.__chamadas = [];
+  const f = window.fetch;
+  const resp = dados => Promise.resolve(new Response(JSON.stringify(dados), { status: 200, headers: { 'content-type': 'application/json' } }));
+  window.fetch = (url, init = {}) => {
+   const u = String(url);
+   if (u.startsWith('/api/whatsapp/')) window.__chamadas.push((init.method || 'GET') + ' ' + u);
+   if (u === '/api/whatsapp/conversations') return resp({ disponivel: true, nao_lidas: 2, conversas: [{ number: '5531997599216', name: 'Maria', lead_name: 'Maria Souza', last_at: '2026-10-22T14:00:00Z', unread: 2, last_text: 'Quanto custa o site?', lead_id: 'l1' }] });
+   if (u === '/api/whatsapp/conversations/5531997599216') return resp({ number: '5531997599216', name: 'Maria', lead_id: 'l1', bloqueado: false, mensagens: [
+    { id: 'o1', direcao: 'out', texto: 'Oi Maria! Recebemos seu contato.', em: '2026-10-22T13:00:00Z', status: 'sent', erro: null },
+    { id: 'i1', direcao: 'in', texto: 'Oi! Quanto custa o site?', em: '2026-10-22T13:59:00Z', status: null, erro: null }] });
+   if (u.endsWith('/lida') || u.endsWith('/responder')) return resp({ ok: true });
+   return f(url, init);
+  };
+ })()`);
+ await pagina.avaliar(CLICAR_NO_MENU('WhatsApp'));
+ await pagina.esperar(`document.querySelectorAll('.wa-conversa').length === 1`, { descricao: 'conversa listada' });
+ assert.equal(await pagina.avaliar(`document.querySelector('.wa-nao-lida').textContent`), '2');
+ assert.match(await pagina.avaliar(`document.querySelector('#whatsapp-tab-conversas .tab-count').textContent`), /2/);
+ await pagina.avaliar(`document.querySelector('.wa-conversa').click()`);
+ await pagina.esperar(`document.querySelectorAll('.wa-msg').length === 2`, { descricao: 'conversa aberta' });
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('.wa-msg')].map(m => m.dataset.direcao)`), ['out', 'in']);
+ await pagina.esperar(`window.__chamadas.includes('POST /api/whatsapp/conversations/5531997599216/lida')`, { descricao: 'marcada como lida' });
+ await pagina.esperar(`!document.querySelector('.wa-nao-lida')`, { descricao: 'contador zerado' });
+ if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-WhatsApp_conversa.png'));
+ await pagina.avaliar(`(() => { const t = document.querySelector('.wa-resposta textarea'); t.value = 'R$ 4.900, em 3 semanas.'; document.querySelector('.wa-resposta').requestSubmit(); })()`);
+ await pagina.esperar(`window.__chamadas.includes('POST /api/whatsapp/conversations/5531997599216/responder')`, { descricao: 'resposta enviada para a fila' });
  semExcecoes();
 });
 
