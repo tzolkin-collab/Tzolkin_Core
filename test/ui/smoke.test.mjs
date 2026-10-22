@@ -3378,10 +3378,22 @@ test('navegação por espaço: endereço, voltar, memória da tela e recarregar'
  await pagina.avaliar(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
  assert.equal(await pagina.avaliar(`document.getElementById('context-picker').open`), false, 'Esc fecha o seletor');
 
+ // O banco falso não monta o console do espaço: responde por fora, só para a página do espaço ter o que desenhar.
+ await pagina.avaliar(`(() => { const f = window.fetch; window.fetch = (url, ...r) => String(url).includes('/api/products/plataforma-a/console') ? Promise.resolve(new Response(JSON.stringify({ product: { id: 'plataforma-a', name: 'Plataforma A', portfolio_kind: 'platform', lifecycle_status: 'active', capabilities: ['access', 'checkout', 'commercial'] }, engagements: [], clients: [], organizations: [{ id: 'o1', name: 'Org', contract_active: true, status: 'active', rights: [] }], summary: { active_contracts: 1 } }), { status: 200, headers: { 'content-type': 'application/json' } })) : f(url, ...r); })()`);
+
  // Trocar de espaço: primeira tela do espaço, no endereço dele
  await trocarEspaco('Plataforma A');
  await pagina.esperar(`location.hash.startsWith('#/espaco/plataforma-a')`, { descricao: 'endereço do espaço' });
  await pagina.esperar(`document.querySelector('nav button.active')?.textContent.trim() === 'Visão geral'`, { descricao: 'espaço abre na visão geral' });
+ // A página do espaço usa as abas do Core: Resumo, Conexões e Direitos (o tipo tem acesso), e só o painel da aba ativa aparece
+ await pagina.esperar(`document.querySelectorAll('#product-tabs [role=tab]').length === 3`, { descricao: 'abas do espaço' });
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#product-tabs [role=tab]')].map(t => t.firstChild.textContent)`), ['Resumo', 'Conexões', 'Direitos']);
+ assert.equal(await pagina.avaliar(`document.getElementById('product-panel-conexoes').hidden`), true);
+ await pagina.avaliar(`document.getElementById('product-tab-conexoes').click()`);
+ assert.equal(await pagina.avaliar(`document.getElementById('product-panel-conexoes').hidden || !document.getElementById('product-panel-resumo').hidden`), false, 'a aba Conexões troca o painel');
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('.product-record-actions .secondary').length`), 0, 'sem os atalhos que repetiam o menu');
+ await pagina.avaliar(`document.getElementById('product-tab-resumo').click()`);
+ if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-Espaco_com_abas.png'));
  const menu = await pagina.avaliar(`[...document.querySelectorAll('nav button')].map(b => b.textContent.trim())`);
  assert.ok(menu.includes('Clientes') && menu.includes('Conexões'), `menu do espaço: ${menu}`);
  if (process.env.UI_SCREENSHOTS) {

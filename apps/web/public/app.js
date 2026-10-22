@@ -1711,16 +1711,8 @@ function renderProductRecord(product) {
  const panel = node('div', undefined, 'context-card product-record-card');
  const serviceLine=!hasCapability(product,'checkout')&&hasCapability(product,'commercial');
  const kicker=kindLabelOf(product.portfolio_kind).toUpperCase();
- const recordActions=[
-  ['Acompanhamento','product-tracking','calendar'],
-  ['Clientes','product-clients','people'],
-  ['Pagamentos','product-payments','wallet'],
-  ['E-mails','product-emails','mail'],
-  ['Conexões (SDK & API)','product-connections','branch'],
-  ['Inbound e Funil','product-inbound','user-plus'],
- ];
  const lifecycle=productLifecycle(product),appearsDraft=productUnproven(product),live=appearsDraft?(publishedDeployUrl(product)||null):productLiveUrl(product);const identity=node('div',undefined,'product-record-identity');identity.append(productFavicon(productFaviconUrl(product)),node('div'));identity.lastChild.append(node('span',kicker,'overview-kicker'),node('h2', product.name), node('p', 'Identificador: ' + product.id, 'detail'));panel.append(identity);
- const actions=node('div',undefined,'product-record-actions');for(const [label,view,icon] of recordActions){const button=node('button',undefined,'secondary');button.type='button';button.append(createIcon(icon),document.createTextNode(label));button.onclick=()=>switchView(view);actions.append(button);}
+ const actions=node('div',undefined,'product-record-actions');
  // A tela do próprio espaço também edita o espaço: nome, tipo e tags (o cadastro do overview tem a revisão).
  const editarEspaco=botaoEditar({texto:'Editar espaço',grande:true});editarEspaco.onclick=()=>abrirEspaco(state.overview?.products?.find(p=>p.id===product.id)||product);actions.append(editarEspaco);
  const detach=node('button','Desatrelar conexões','quiet');detach.type='button';detach.onclick=async()=>{if(!window.confirm(`Desatrelar domínios, bancos e deploys de ${product.name}? Nenhum dado externo será apagado.`))return;detach.disabled=true;try{await api(`/api/products/${encodeURIComponent(product.id)}/attachments`,'DELETE');state.resourceBindings=state.resourceBindings.filter(item=>item.product_id!==product.id);state.topology=await api('/api/products/topology').catch(()=>null);renderProductRecord(product);}catch(error){detach.disabled=false;reportError(error);}};actions.append(detach);panel.append(actions);
@@ -1737,7 +1729,7 @@ function renderProductRecord(product) {
  }
  const facts=node('div',undefined,'product-record-facts');for(const [label,value] of (serviceLine?[['Tipo',kindLabelOf(product.portfolio_kind)],['Entrada','SDK/Formulários ou Proposta'],['Pagamentos','Stripe, Asaas ou Contrato']]:[['Tipo',kindLabelOf(product.portfolio_kind)],['Estado operacional',lifecycle.label],['Família',product.brand_family||'TZOLKIN']])){const fact=node('div');fact.append(node('span',label),node('strong',String(value)));facts.append(fact);}panel.append(facts);
  const connection=node('section',undefined,'product-connection-card'),deployment=readyDeployment(product),project=state.deploys.find(item=>deploymentBelongsToProduct(item,product));connection.append(node('h3','Conexão de deploy'),node('p',deployment?`${project?.project||'Projeto'} · ${project?.provider==='vercel'?'Vercel':'EasyPanel'} · publicado e observado`:'Nenhum deploy READY vinculado a este item.','detail'));const connectionActions=node('div',undefined,'product-connection-actions');if(deployment?.url)connectionActions.append(catalogLink('Abrir produção ↗',deployment.url,'product-live-link'));const openDeploys=node('button','Ver projetos e deploys →','secondary');openDeploys.type='button';openDeploys.onclick=()=>{state.context='';state.view='deploys';clearRenderedData();renderContextChrome();renderNav();load().catch(reportError);};connectionActions.append(openDeploys);connection.append(connectionActions);panel.append(connection);
- panel.append(renderProductArchitecture(product));
+ $('product-architecture-host').replaceChildren(renderProductArchitecture(product));
  $('product-record').replaceChildren(panel);
 }
 
@@ -1990,6 +1982,17 @@ function renderProduct() {
  renderProductRights(context.organizations);
  renderProductOrganizations();
  renderProductEngagements(engagements);
+ montarAbasDoEspaco(access, (context.organizations||[]).length);
+}
+
+// A página do espaço em abas (mesmo componente de Inbound e Clientes): o resumo, as conexões técnicas e, onde o tipo tem acesso, os direitos.
+let abaDoEspaco='resumo';
+function montarAbasDoEspaco(access, direitos) {
+ const abas=[{key:'resumo',label:'Resumo'},{key:'conexoes',label:'Conexões'},...(access?[{key:'direitos',label:'Direitos',count:direitos}]:[])];
+ if(!abas.some(aba=>aba.key===abaDoEspaco))abaDoEspaco='resumo';
+ const mostrar=()=>['resumo','conexoes','direitos'].forEach(key=>{const painel=$('product-panel-'+key);if(painel)painel.hidden=key!==abaDoEspaco||!abas.some(aba=>aba.key===key);});
+ mountTabs({host:$('product-tabs'),tabs:abas,active:abaDoEspaco,label:'Seções do espaço',prefix:'product',onChange:key=>{abaDoEspaco=key;mostrar();}});
+ mostrar();
 }
 
 /* ---------- carregamento ---------- */
