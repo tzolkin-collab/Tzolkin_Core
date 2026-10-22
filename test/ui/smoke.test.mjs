@@ -3530,6 +3530,20 @@ test('Conexões do espaço: abas, regras e UTMs em linhas, e o que é salvo', { 
  assert.deepEqual(salvo.route_rules, [{ path_prefix: '/corretores', niche: 'corretor', offer_label: 'site-corretor' }, { path_prefix: '/advogados', niche: 'padrao', offer_label: null }]);
  assert.deepEqual(salvo.core_params, {});
  assert.equal(salvo.utm_tzolkin, 'plataforma-a.padrao'); assert.equal(salvo.enrich_payment_links, false); assert.deepEqual(salvo.custom_fields, ['porte']);
+ // Emitir uma chave: o segredo aparece uma única vez, no alto da aba de chaves (já quebrou: ficava sem aparecer).
+ await pagina.avaliar(`(() => {
+  const f = window.fetch;
+  window.fetch = (url, init = {}) => String(url) === '/api/app-clients' && init.method === 'POST'
+   ? Promise.resolve(new Response(JSON.stringify({ api_key: 'tzk_segredo_de_teste_123', id: 'k1' }), { status: 200, headers: { 'content-type': 'application/json' } }))
+   : f(url, init);
+ })()`);
+ await pagina.avaliar(`document.getElementById('conexoes-tab-chaves').click()`);
+ await pagina.avaliar(`document.querySelector('.keys-create-toggle').click()`);
+ await pagina.avaliar(`(() => { const form = document.querySelector('.keys-form'); form.querySelector('input').value = 'Site institucional'; form.requestSubmit(); })()`);
+ await pagina.esperar(`document.querySelector('.keys-secret .keys-secret-value')?.textContent === 'tzk_segredo_de_teste_123'`, { descricao: 'chave recém-emitida visível' });
+ assert.equal(await pagina.avaliar(`document.querySelector('#conexoes-tab-chaves').getAttribute('aria-selected')`), 'true');
+ await pagina.avaliar(`[...document.querySelectorAll('.keys-secret button')].find(b => b.textContent.includes('ocultar')).click()`);
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('.keys-secret').length`), 0, 'ocultar remove o segredo da tela');
  semExcecoes();
 });
 
