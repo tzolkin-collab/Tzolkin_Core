@@ -54,6 +54,7 @@ export function commercialAutomationRoutes(router) {
 
  // "Enviar e-mail" só faz sentido onde há um lead com e-mail, e o template precisa existir NESTE espaço (ou o erro só apareceria na hora de rodar).
  async function checkEmails(client, spaceId, evento, actions) {
+  if (actions.some(x => x.action.startsWith('whatsapp.')) && !EVENTOS_COM_LEAD.includes(evento)) throw fail(400, 'WhatsApp só funciona em eventos de lead (criado, mudou de etapa, qualificado, descartado, restaurado).');
   for (const a of actions.filter(x => x.action === 'email.enviar')) {
    if (!EVENTOS_COM_LEAD.includes(evento)) throw fail(400, 'Enviar e-mail só funciona em eventos de lead (criado, mudou de etapa, qualificado, descartado, restaurado).');
    const tpl = (await client.query('SELECT payload FROM email_templates WHERE product_id=$1 AND slug=$2', [spaceId, a.template])).rows[0]?.payload;

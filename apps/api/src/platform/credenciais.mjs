@@ -227,6 +227,7 @@ export const PROVEDORES = Object.freeze({
    { nome: 'EVOLUTION_INSTANCE', rotulo: 'Nome da instância', secreto: false, obrigatorio: true, validar: instanciaEvolution, ajuda: 'A instância conectada ao número da TZOLKIN, no manager da Evolution.' },
    { nome: 'EVOLUTION_API_KEY', rotulo: 'Chave da API', secreto: true, obrigatorio: true, validar: segredo, ajuda: 'A chave da instância (ou a global) da Evolution.' },
    { nome: 'EVOLUTION_WEBHOOK_SECRET', rotulo: 'Segredo do webhook', secreto: true, validar: segredo, ajuda: 'Segredo que a Evolution manda ao Core ao avisar mensagem recebida. Sem ele, o Core só envia.' },
+   { nome: 'WHATSAPP_ENVIO', rotulo: 'Envio automático', secreto: false, validar: v => (['ligado', 'desligado'].includes(String(v).trim().toLowerCase()) ? null : 'Use ligado ou desligado.'), ajuda: 'Só com "ligado" a fila envia mensagens. Desligado, elas ficam esperando.' },
    { nome: 'WHATSAPP_TEAM_NUMBERS', rotulo: 'Números da equipe', secreto: false, validar: numerosDaEquipe, ajuda: 'Quem recebe o aviso de lead novo, com DDD, separados por vírgula.' },
   ],
   async testar(v, fetchImpl) {
