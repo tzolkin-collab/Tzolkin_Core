@@ -3359,6 +3359,66 @@ test('controle: o detector de defeitos de tela enxerga o que deve enxergar', { s
  assert.ok(defeitos.estouro > 1, 'o estouro de largura não foi detectado');
 });
 
+// Navegação por espaço: o endereço acompanha a tela, o Voltar do navegador funciona, o espaço lembra onde se estava e o
+// recarregar abre no mesmo lugar. Roda no fim para não mexer no estado das telas anteriores.
+test('navegação por espaço: endereço, voltar, memória da tela e recarregar', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 800);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`, { descricao: 'painel aberto' });
+ const hash = () => pagina.avaliar(`location.hash`);
+ const trocarEspaco = id => pagina.avaliar(`(() => { const b = [...document.querySelectorAll('.context-option')].find(x => x.textContent.includes(${JSON.stringify(id)})); b.click(); })()`);
+ const titulo = () => pagina.avaliar(`document.getElementById('page-title').textContent.trim()`);
+
+ await pagina.avaliar(CLICAR_NO_MENU('Inbound'));
+ await pagina.esperar(`location.hash === '#/geral/leads'`, { descricao: 'endereço do Inbound' });
+
+ // Abrir o seletor: o espaço atual ganha o foco e Esc fecha devolvendo o foco ao botão
+ await pagina.avaliar(`document.getElementById('context-picker').open = true`);
+ await pagina.esperar(`document.activeElement?.classList.contains('context-option')`, { descricao: 'foco no espaço atual' });
+ await pagina.avaliar(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+ assert.equal(await pagina.avaliar(`document.getElementById('context-picker').open`), false, 'Esc fecha o seletor');
+
+ // Trocar de espaço: primeira tela do espaço, no endereço dele
+ await trocarEspaco('Plataforma A');
+ await pagina.esperar(`location.hash.startsWith('#/espaco/plataforma-a')`, { descricao: 'endereço do espaço' });
+ await pagina.esperar(`document.querySelector('nav button.active')?.textContent.trim() === 'Visão geral'`, { descricao: 'espaço abre na visão geral' });
+ const menu = await pagina.avaliar(`[...document.querySelectorAll('nav button')].map(b => b.textContent.trim())`);
+ assert.ok(menu.includes('Clientes') && menu.includes('Conexões'), `menu do espaço: ${menu}`);
+ if (process.env.UI_SCREENSHOTS) {
+  await pagina.avaliar(`document.getElementById('context-picker').open = true`);
+  await new Promise(r => setTimeout(r, 300));
+  await pagina.imagem(join(ARTEFATOS, '1280-Navegacao_seletor_de_espaco.png'));
+  await pagina.avaliar(`document.getElementById('context-picker').open = false`);
+ }
+
+ // Ir a outra tela do espaço e voltar ao geral; ao reabrir o espaço, volta onde estava
+ await pagina.avaliar(CLICAR_NO_MENU('Clientes'));
+ await pagina.esperar(`location.hash === '#/espaco/plataforma-a/product-clients'`, { descricao: 'endereço da tela do espaço' });
+ await trocarEspaco('Gestão geral');
+ await pagina.esperar(`location.hash === '#/geral/leads'`, { descricao: 'o geral lembra o Inbound' });
+ await trocarEspaco('Plataforma A');
+ await pagina.esperar(`location.hash === '#/espaco/plataforma-a/product-clients'`, { descricao: 'o espaço lembra Clientes' });
+
+ // Voltar do navegador percorre o que foi visitado, sem criar passos novos
+ await pagina.avaliar(`history.back()`);
+ await pagina.esperar(`location.hash === '#/geral/leads'`, { descricao: 'voltar ao geral' });
+ await pagina.esperar(`!document.body.dataset.context || document.body.dataset.context === 'general'`, { descricao: 'contexto geral' });
+ assert.equal(await titulo(), 'Inbound');
+
+ // Recarregar abre no mesmo lugar, inclusive dentro de um espaço
+ await pagina.avaliar(`location.hash = '#/espaco/plataforma-a/product-clients'`);
+ await pagina.avaliar(`location.reload()`);
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.body.dataset.context === 'product'`, { descricao: 'reabriu dentro do espaço' });
+ await pagina.esperar(`document.querySelector('nav button.active')?.textContent.trim() === 'Clientes'`, { descricao: 'reabriu em Clientes' });
+
+ // Endereço de espaço inexistente não derruba: fica no geral
+ await pagina.avaliar(`location.hash = '#/espaco/nao-existe/leads'`);
+ await pagina.avaliar(`location.reload()`);
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`, { descricao: 'painel aberto' });
+ assert.notEqual(await pagina.avaliar(`document.body.dataset.context`), 'product');
+ semExcecoes();
+});
+
 test('nenhuma requisição crítica falhou durante a sessão', { skip: PULAR }, async () => {
  pagina.limparProblemas();
  await pagina.ir(origem + '/');

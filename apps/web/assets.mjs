@@ -49,6 +49,7 @@ const FILES = {
  '/data-table.js': ['data-table.js', 'text/javascript'],
  '/controls.css': ['controls.css', 'text/css'],
  '/peek.js': ['peek.js', 'text/javascript'],
+ '/espacos-nav.js': ['espacos-nav.js', 'text/javascript'],
  '/inline-edit.js': ['inline-edit.js', 'text/javascript'],
  '/peek.css': ['peek.css', 'text/css'],
  '/badge.css': ['badge.css', 'text/css'],

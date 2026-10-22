@@ -90,7 +90,7 @@ test('só campos conhecidos, não vazios, no formato certo', () => {
  recusa('vercel', {}, /Nada para salvar/);
  recusa('hostinger', { HOSTINGER_DNS_ZONE: 'não é domínio' }, /domínio/);
  recusa('inexistente', { X: 'y' }, /Provedor desconhecido/);
- assert.deepEqual(Object.keys(PROVEDORES), ['vercel', 'github', 'easypanel', 'pluggy', 'push', 'stripe', 'asaas', 'meta', 'email', 'hostinger']);
+ assert.deepEqual(Object.keys(PROVEDORES), ['vercel', 'github', 'easypanel', 'pluggy', 'push', 'stripe', 'asaas', 'meta', 'email', 'hostinger', 'evolution']);
  for (const p of Object.values(PROVEDORES)) for (const c of p.campos) assert.match(c.nome, /^[A-Z][A-Z0-9_]{2,63}$/, 'cabe na CHECK da migração');
 });
 
