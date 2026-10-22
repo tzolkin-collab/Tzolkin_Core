@@ -26,6 +26,7 @@
 <link rel="stylesheet" href="/campaigns.css">
 <link rel="stylesheet" href="/billing.css">
 <link rel="stylesheet" href="/emails.css">
+<link rel="stylesheet" href="/whatsapp-conversas.css">
 <link rel="stylesheet" href="/projects.css">
 <link rel="stylesheet" href="/product-emails.css">
 <link rel="stylesheet" href="/checkout-editor.css">
@@ -40,13 +41,13 @@
 <div class="login-box">
 <div class="brand login-brand"><img src="/logo.svg" width="46" height="46" alt=""><span>TZOLKIN<span class="brand-product">CORE</span></span></div>
 <h1>Entrar</h1>
-<a id="google-login" class="primary login-submit" href="/api/auth/google/start" hidden>Continuar com Google <span aria-hidden="true">↗</span></a><div id="login-divider" class="login-divider" hidden><span>ou</span></div><form id="login-form"><label for="login-email">E-mail</label><input id="login-email" name="email" type="email" autocomplete="username" placeholder="seu@email.com"><label for="password">Senha</label><div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required aria-describedby="login-notice"><button id="show-password" class="reveal" type="button" aria-pressed="false">Mostrar</button></div><button class="primary login-submit" type="submit">Entrar <span aria-hidden="true">↗</span></button></form><p id="login-notice" class="form-error" role="alert"></p>
+<a id="google-login" class="primary login-submit" href="/api/auth/google/start">Continuar com Google <span aria-hidden="true">↗</span></a><div id="login-divider" class="login-divider"><span>ou</span></div><form id="login-form"><label for="login-email">E-mail</label><input id="login-email" name="email" type="email" autocomplete="username" placeholder="seu@email.com"><label for="password">Senha</label><div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required aria-describedby="login-notice"><button id="show-password" class="reveal" type="button" aria-pressed="false">Mostrar</button></div><button class="primary login-submit" type="submit">Entrar <span aria-hidden="true">↗</span></button></form><p id="login-notice" class="form-error" role="alert"></p>
 </div><span class="login-signature">TZOLKIN</span>
 </main>
 <div id="workspace" class="app-shell" hidden>
 <header class="mobile-shellbar"><button id="nav-toggle" class="mobile-menu" type="button" aria-controls="sidebar" aria-expanded="false"><span></span><span></span><span></span><span class="sr-only">Abrir menu</span></button><div class="mobile-identity"><img src="/logo.svg" width="30" height="30" alt=""><span id="mobile-page-title">Visão geral</span></div><button id="mobile-refresh" class="mobile-refresh" type="button" aria-label="Atualizar dados">↻</button></header>
 <aside id="sidebar" class="sidebar" aria-label="Navegação do Core">
-<div class="context-switch" hidden><span class="context-label">ESPAÇO</span><details id="context-picker" class="context-picker"><summary><span id="context-current-icon" class="context-current-icon" aria-hidden="true"></span><span id="context-current-copy" class="context-current-copy"><strong>TZOLKIN</strong><small>Gestão geral</small></span><span class="context-chevron" aria-hidden="true">⌄</span></summary><div id="context-options" class="context-options" role="group" aria-label="Selecionar espaço"></div></details><select id="context-select" hidden tabindex="-1" aria-hidden="true"><option value="">TZOLKIN · Geral</option></select></div>
+<div class="context-switch"><span class="context-label">ESPAÇO</span><details id="context-picker" class="context-picker"><summary><span id="context-current-icon" class="context-current-icon" aria-hidden="true"></span><span id="context-current-copy" class="context-current-copy"><strong>TZOLKIN</strong><small>Gestão geral</small></span><span class="context-chevron" aria-hidden="true">⌄</span></summary><div id="context-options" class="context-options" role="group" aria-label="Selecionar espaço"></div></details><select id="context-select" hidden tabindex="-1" aria-hidden="true"><option value="">TZOLKIN · Geral</option></select></div>
 <p class="nav-label" id="nav-label">TZOLKIN</p>
 <nav id="nav" aria-label="Principal"></nav>
 <div class="sidebar-bottom"><button id="open-settings" class="sign-out settings-link" type="button">Configurações</button><button id="logout" class="sign-out">Sair da conta <span aria-hidden="true">↗</span></button></div>
@@ -123,6 +124,8 @@
 <section id="view-finance" class="view" hidden aria-label="Financeiro"></section>
 <section id="view-emails" class="view" hidden aria-label="E-mails"></section>
 
+<section id="view-whatsapp" class="view" hidden aria-label="WhatsApp"></section>
+
 <section id="view-resource" class="view" hidden aria-label="Recurso da plataforma"></section>
 
 <!-- Conexões: o registro único de "de quem é este recurso" (migração 034). Substitui
@@ -183,9 +186,13 @@
 <section id="view-commercial" class="view" hidden aria-label="Inbound"><div id="inbound-tabs"></div><div id="inbound-panel-leads" class="tab-panel" role="tabpanel" aria-labelledby="inbound-tab-leads"></div><div id="inbound-panel-campaigns" class="tab-panel" role="tabpanel" aria-labelledby="inbound-tab-campaigns" hidden></div></section>
 <section id="view-product-keys" class="view" hidden aria-label="Chaves de integração"></section>
 <section id="view-product" class="view" hidden>
-<div id="product-record" class="context-panel"></div>
+<div id="product-tabs"></div>
+<div id="product-panel-resumo" role="tabpanel" aria-labelledby="product-tab-resumo"><div id="product-record" class="context-panel"></div></div>
+<div id="product-panel-conexoes" role="tabpanel" aria-labelledby="product-tab-conexoes" hidden><div id="product-architecture-host"></div></div>
+<div id="product-panel-direitos" role="tabpanel" aria-labelledby="product-tab-direitos" hidden>
 <h2 id="product-rights-title" class="section-title contracts-title">Direitos contratados</h2>
 <div id="product-rights" class="list-panel"></div>
+</div>
 </section>
 
 <section id="view-product-orgs" class="view" hidden>

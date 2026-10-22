@@ -1,5 +1,5 @@
 import { stateProxy as state, store } from './store.js';
-import { tocarSomNotificacao } from './notification-sound.js';
+import { tocarSomNotificacao, tocarSomNotificacaoPorTag } from './notification-sound.js';
 import {setupCommercial} from './commercial.js';
 import {RELACIONAMENTOS, TIPOS, SITUACOES} from './client-edit.js';
 import {campoInline, pares} from './inline-edit.js';
@@ -12,6 +12,7 @@ import { setupResource } from './resource.js';
 import {providerLogo,createIcon,productFavicon,faviconDoSite} from './icons.js';
 import {paymentInstitution,brazilMonth} from './finance-model.js';
 import {setupEmails} from './emails.js';
+import {setupWhatsapp} from './whatsapp.js';
 import {setupTracking} from './tracking.js';
 import {setupFinance} from './finance.js';
 import {setupBilling} from './billing.js';
@@ -24,6 +25,7 @@ import {setupConnections, casaConexao} from './connections.js';
 import {achatar} from './owner-suggestions.js';
 import {vinculoNaLista} from './owner-link.js';
 import {mountTabs} from './tabs.js';
+import {lerEndereco, telaLembrada, semHistorico, filtrarEspacos} from './espacos-nav.js';
 import {tabela, celulaNome, selo, resumo, botaoEditar, tomDoEstado} from './data-table.js';
 import {criarPeek} from './peek.js';
 import {montarConfiguracoes} from './settings.js';
@@ -35,6 +37,7 @@ const billing=setupBilling({api});
 const productPayments=setupProductPayments({api,billing});
 const serviceReceivables=setupServiceReceivables({api});
 const emails=setupEmails({api,configure:product=>openProductModule(product,'product-emails')});
+const whatsapp=setupWhatsapp({api});
 const productEmails=setupProductEmails({api});
 const campaigns=setupCampaigns({api,onError:reportError});
 const finance=setupFinance({api});
@@ -131,6 +134,7 @@ function clearRenderedData() {
  tracking.clear();
  finance.clear();
  emails.clear();
+ whatsapp.clear();
  billing.clear();
  productPayments.clear();
  resource.clear();
@@ -193,6 +197,7 @@ store.subscribe('view', (view) => {
   if (view === 'tracking' || view === 'product-tracking') tracking.load({ product: contextKind() === 'product' ? state.context : '' }).catch(reportError);
   if (view === 'finance') finance.load().catch(reportError);
   if (view === 'emails') emails.load().catch(reportError);
+  if (view === 'whatsapp') whatsapp.load().catch(reportError);
   if (view === 'people') renderPeople();
   if (view === 'clients') renderTenants();
   if (view === 'leads' || view === 'product-inbound') montarInbound();
@@ -243,12 +248,14 @@ function renderContextChrome() {
  renderContextPicker(state.overview?.products || []);
 }
 
-async function switchContext(contextId) {
+async function switchContext(contextId, telaPedida) {
  if(state.view==='resource')history.replaceState(null,'',location.pathname+location.search);
  state.context = contextId;
  state.overview = contextId ? state.overview : null;
  state.product = null;
- state.view = Object.keys(views())[0];
+ // Volta para onde se estava neste espaço (ou para a tela do endereço); só cai na primeira se a tela não existe mais.
+ const candidata = telaPedida || telaLembrada(contextId);
+ state.view = candidata && views()[candidata] && !views()[candidata].hidden ? candidata : Object.keys(views())[0];
  clearRenderedData();          // dado antigo sai da tela antes de qualquer requisição
  renderContextChrome();
  renderNav();
@@ -1708,16 +1715,8 @@ function renderProductRecord(product) {
  const panel = node('div', undefined, 'context-card product-record-card');
  const serviceLine=!hasCapability(product,'checkout')&&hasCapability(product,'commercial');
  const kicker=kindLabelOf(product.portfolio_kind).toUpperCase();
- const recordActions=[
-  ['Acompanhamento','product-tracking','calendar'],
-  ['Clientes','product-clients','people'],
-  ['Pagamentos','product-payments','wallet'],
-  ['E-mails','product-emails','mail'],
-  ['Conexões (SDK & API)','product-connections','branch'],
-  ['Inbound e Funil','product-inbound','user-plus'],
- ];
  const lifecycle=productLifecycle(product),appearsDraft=productUnproven(product),live=appearsDraft?(publishedDeployUrl(product)||null):productLiveUrl(product);const identity=node('div',undefined,'product-record-identity');identity.append(productFavicon(productFaviconUrl(product)),node('div'));identity.lastChild.append(node('span',kicker,'overview-kicker'),node('h2', product.name), node('p', 'Identificador: ' + product.id, 'detail'));panel.append(identity);
- const actions=node('div',undefined,'product-record-actions');for(const [label,view,icon] of recordActions){const button=node('button',undefined,'secondary');button.type='button';button.append(createIcon(icon),document.createTextNode(label));button.onclick=()=>switchView(view);actions.append(button);}
+ const actions=node('div',undefined,'product-record-actions');
  // A tela do próprio espaço também edita o espaço: nome, tipo e tags (o cadastro do overview tem a revisão).
  const editarEspaco=botaoEditar({texto:'Editar espaço',grande:true});editarEspaco.onclick=()=>abrirEspaco(state.overview?.products?.find(p=>p.id===product.id)||product);actions.append(editarEspaco);
  const detach=node('button','Desatrelar conexões','quiet');detach.type='button';detach.onclick=async()=>{if(!window.confirm(`Desatrelar domínios, bancos e deploys de ${product.name}? Nenhum dado externo será apagado.`))return;detach.disabled=true;try{await api(`/api/products/${encodeURIComponent(product.id)}/attachments`,'DELETE');state.resourceBindings=state.resourceBindings.filter(item=>item.product_id!==product.id);state.topology=await api('/api/products/topology').catch(()=>null);renderProductRecord(product);}catch(error){detach.disabled=false;reportError(error);}};actions.append(detach);panel.append(actions);
@@ -1734,7 +1733,7 @@ function renderProductRecord(product) {
  }
  const facts=node('div',undefined,'product-record-facts');for(const [label,value] of (serviceLine?[['Tipo',kindLabelOf(product.portfolio_kind)],['Entrada','SDK/Formulários ou Proposta'],['Pagamentos','Stripe, Asaas ou Contrato']]:[['Tipo',kindLabelOf(product.portfolio_kind)],['Estado operacional',lifecycle.label],['Família',product.brand_family||'TZOLKIN']])){const fact=node('div');fact.append(node('span',label),node('strong',String(value)));facts.append(fact);}panel.append(facts);
  const connection=node('section',undefined,'product-connection-card'),deployment=readyDeployment(product),project=state.deploys.find(item=>deploymentBelongsToProduct(item,product));connection.append(node('h3','Conexão de deploy'),node('p',deployment?`${project?.project||'Projeto'} · ${project?.provider==='vercel'?'Vercel':'EasyPanel'} · publicado e observado`:'Nenhum deploy READY vinculado a este item.','detail'));const connectionActions=node('div',undefined,'product-connection-actions');if(deployment?.url)connectionActions.append(catalogLink('Abrir produção ↗',deployment.url,'product-live-link'));const openDeploys=node('button','Ver projetos e deploys →','secondary');openDeploys.type='button';openDeploys.onclick=()=>{state.context='';state.view='deploys';clearRenderedData();renderContextChrome();renderNav();load().catch(reportError);};connectionActions.append(openDeploys);connection.append(connectionActions);panel.append(connection);
- panel.append(renderProductArchitecture(product));
+ $('product-architecture-host').replaceChildren(renderProductArchitecture(product));
  $('product-record').replaceChildren(panel);
 }
 
@@ -1987,6 +1986,17 @@ function renderProduct() {
  renderProductRights(context.organizations);
  renderProductOrganizations();
  renderProductEngagements(engagements);
+ montarAbasDoEspaco(access, (context.organizations||[]).length);
+}
+
+// A página do espaço em abas (mesmo componente de Inbound e Clientes): o resumo, as conexões técnicas e, onde o tipo tem acesso, os direitos.
+let abaDoEspaco='resumo';
+function montarAbasDoEspaco(access, direitos) {
+ const abas=[{key:'resumo',label:'Resumo'},{key:'conexoes',label:'Conexões'},...(access?[{key:'direitos',label:'Direitos',count:direitos}]:[])];
+ if(!abas.some(aba=>aba.key===abaDoEspaco))abaDoEspaco='resumo';
+ const mostrar=()=>['resumo','conexoes','direitos'].forEach(key=>{const painel=$('product-panel-'+key);if(painel)painel.hidden=key!==abaDoEspaco||!abas.some(aba=>aba.key===key);});
+ mountTabs({host:$('product-tabs'),tabs:abas,active:abaDoEspaco,label:'Seções do espaço',prefix:'product',onChange:key=>{abaDoEspaco=key;mostrar();}});
+ mostrar();
 }
 
 /* ---------- carregamento ---------- */
@@ -2027,6 +2037,7 @@ function fillContextSelect(products) {
  renderContextPicker(products);
 }
 
+let consultaEspaco='';
 function renderContextPicker(products) {
  const picker=$('context-picker'),currentIcon=$('context-current-icon'),currentCopy=$('context-current-copy'),options=$('context-options');
  if(!picker||!currentIcon||!currentCopy||!options)return;
@@ -2037,7 +2048,37 @@ function renderContextPicker(products) {
  const choice=(id,label,detail,icon)=>{const button=node('button',undefined,'context-option'+(id===state.context?' active':''));button.type='button';button.setAttribute('aria-current',id===state.context?'true':'false');const mark=node('span',undefined,'context-option-icon');mark.append(icon);const copy=node('span',undefined,'context-option-copy');copy.append(node('strong',label),node('small',detail));button.append(mark,copy);button.onclick=()=>{picker.open=false;if(id!==state.context)switchContext(id).catch(reportError);};return button;};
  const general=choice('','TZOLKIN','Gestão geral',coreSpaceIcon());
  const productChoices=byKind(products).flatMap(({kind,items})=>[node('span',kindInfo(kind).plural,'context-group-label'),...items.map(product=>choice(product.id,product.name,productLifecycle(product).label,productFavicon(productFaviconUrl(product))))]);
- options.replaceChildren(general,...productChoices);
+ // Busca (só quando a lista é longa) e teclado: seta move entre os espaços, Enter abre o primeiro que sobrou, Esc fecha.
+ const busca=node('input',undefined,'context-search');busca.type='search';busca.placeholder='Buscar espaço';busca.setAttribute('aria-label','Buscar espaço');busca.autocomplete='off';busca.value=consultaEspaco;
+ busca.hidden=products.length<7;
+ const itens=[general,...productChoices.filter(item=>item.tagName==='BUTTON')];
+ const textos=itens.map(item=>({texto:item.textContent}));
+ const aplicarFiltro=()=>{
+  consultaEspaco=busca.value;
+  const ficam=new Set(filtrarEspacos(textos,consultaEspaco));
+  itens.forEach((item,i)=>{item.hidden=!ficam.has(i);});
+  // Rótulo de grupo some quando nenhum espaço dele sobra.
+  let rotulo=null,algum=false;
+  for(const filho of options.children){
+   if(filho.classList.contains('context-group-label')){if(rotulo)rotulo.hidden=!algum;rotulo=filho;algum=false;}
+   else if(filho.tagName==='BUTTON'&&!filho.hidden)algum=true;
+  }
+  if(rotulo)rotulo.hidden=!algum;
+  vazio.hidden=ficam.size>0;
+ };
+ const vazio=node('p','Nenhum espaço com esse nome.','context-empty');vazio.hidden=true;
+ busca.oninput=aplicarFiltro;
+ options.replaceChildren(busca,general,...productChoices,vazio);
+ aplicarFiltro();
+ options.onkeydown=event=>{
+  const visiveis=itens.filter(item=>!item.hidden);
+  const i=visiveis.indexOf(document.activeElement);
+  if(event.key==='ArrowDown'||event.key==='ArrowUp'){
+   event.preventDefault();
+   const proximo=event.key==='ArrowDown'?visiveis[Math.min(visiveis.length-1,i+1)]:(i<=0?busca:visiveis[i-1]);
+   (proximo&&!proximo.hidden?proximo:visiveis[0])?.focus();
+  }else if(event.key==='Enter'&&document.activeElement===busca&&visiveis[0]){event.preventDefault();visiveis[0].click();}
+ };
 }
 
 // O contexto geral é o único que carrega o cadastro completo.
@@ -2119,6 +2160,7 @@ async function load() {
  if(state.view==='tracking'||state.view==='product-tracking') await tracking.load({ product: contextKind() === 'product' ? state.context : '' });
  if(state.view==='finance') await finance.load();
  if(state.view==='emails') await emails.load();
+ if(state.view==='whatsapp') await whatsapp.load();
  // Entrar, Atualizar e salvar um projeto passam por aqui: sem isto Deploys ficaria com os painéis do GitHub vazios.
  // As DUAS telas leem o mesmo cadastro desde que Projetos técnicos ganhou entrada
  // própria. Listar só 'deploys' aqui fazia o salvar não repintar a lista de quem
@@ -2212,6 +2254,7 @@ function bindForm(id, handler) {
    if (dialog) dialog.close();
    form.reset();
    await load();
+   if (id === 'login-form') await aplicarPedido();
    if (id === 'login-form') {
     $('password').type = 'password';
     $('show-password').textContent = 'Mostrar';
@@ -2259,6 +2302,13 @@ $('new-record').onclick = () => {
  }
  openDialog(dialog);
 };
+{
+ // O seletor fecha ao clicar fora e com Esc (devolvendo o foco ao botão); ao abrir, foca a busca ou o espaço atual.
+ const picker=$('context-picker');
+ addEventListener('pointerdown',event=>{if(picker.open&&!picker.contains(event.target))picker.open=false;});
+ picker.addEventListener('keydown',event=>{if(event.key==='Escape'&&picker.open){event.stopPropagation();picker.open=false;picker.querySelector('summary')?.focus();}});
+ picker.addEventListener('toggle',()=>{if(!picker.open)return;const busca=picker.querySelector('.context-search');(busca&&!busca.hidden?busca:picker.querySelector('.context-option.active')||picker.querySelector('.context-option'))?.focus();});
+}
 $('context-select').addEventListener('change', event => switchContext(event.target.value).catch(reportError));
 $('client-search').addEventListener('input', () => { state.clientPage = 0; renderTenants(); });
 $('client-pagesize').addEventListener('change', () => { state.clientPage = 0; renderTenants(); });
@@ -2391,6 +2441,10 @@ const delivery = setupDelivery({ api,openResource:resource.open,onSaved:()=>load
 // escolhe a tela inicial e `?meta=` traz o resultado da conexão. Os dois saem
 // da barra de endereço em seguida, para um recarregar não repetir o aviso.
 let inicial = 'overview';
+// Endereço pedido na abertura (`#/espaco/sites/product-inbound`). Só vale depois da entrada e do primeiro carregamento:
+// o espaço precisa existir no cadastro. Ver aplicarPedido.
+let pedido = lerEndereco(location.hash);
+if (pedido && !pedido.espaco && pedido.tela && Object.hasOwn(CONTEXTS.general.views, pedido.tela) && !CONTEXTS.general.views[pedido.tela].hidden) inicial = pedido.tela;
 {
  const params = new URLSearchParams(location.search);
  const pedida = params.get('view');
@@ -2411,9 +2465,27 @@ let inicial = 'overview';
 }
 renderNav();
 setupShell();
-switchView(inicial);
+semHistorico(() => switchView(inicial));
 renderContextChrome();
-load().catch(error => { if (error.message !== 'Entre para continuar.') $('login-notice').textContent = error.message; });
+load().then(aplicarPedido).catch(error => { if (error.message !== 'Entre para continuar.') $('login-notice').textContent = error.message; });
+
+// Abre o espaço e a tela do endereço. Espaço que não existe (apagado, arquivado ou sem permissão) não derruba nada:
+// fica no geral. Roda uma vez, depois do primeiro carregamento com sessão — logo, também depois do login.
+async function irPara(alvo) {
+ if (alvo.espaco && !state.overview?.products?.some(p => p.id === alvo.espaco)) return;
+ if (alvo.espaco !== state.context) await switchContext(alvo.espaco, alvo.tela);
+ else if (alvo.tela && views()[alvo.tela] && !views()[alvo.tela].hidden) switchView(alvo.tela);
+}
+async function aplicarPedido() {
+ const alvo = pedido; pedido = null;
+ if (!alvo || (!alvo.espaco && !alvo.tela)) return;
+ await semHistorico(() => irPara(alvo));
+}
+// Voltar e avançar do navegador percorrem os espaços e telas já visitados.
+addEventListener('popstate', () => {
+ const alvo = lerEndereco(location.hash);
+ if (alvo && state.overview) semHistorico(() => irPara(alvo)).catch(reportError);
+});
 
 // Instalar como aplicativo: o Chrome dispara `beforeinstallprompt` logo ao carregar, bem antes de alguém abrir Configurações → Aplicativo.
 // Guarda o evento aqui para a seção poder oferecer o botão. Sem o evento (já instalado, ou navegador sem suporte) a seção só explica.
@@ -2431,7 +2503,7 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
  navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
  navigator.serviceWorker.addEventListener('message', event => {
   if (event.data?.type === 'push-notification-received') {
-   tocarSomNotificacao();
+   tocarSomNotificacaoPorTag(event.data?.tag);
   }
  });
 }

@@ -67,7 +67,7 @@ export function automationsManager({ api, spaces, pipelines, initialSpace }) {
   for (const a of automations) {
    const linha = el('div', null, 'automation-row');
    const filtro = [a.pipeline_id ? 'funil ' + nomeFunil(a.pipeline_id) : 'qualquer funil', a.stage_id ? 'etapa ' + nomeEtapa(a.stage_id) : null].filter(Boolean).join(', ');
-   const faz = a.actions.map(x => x.action === 'tarefa.criar' ? `criar tarefa "${x.title}"${x.delay_days ? ` (prazo ${x.delay_days} dias)` : ''}` : x.action === 'email.enviar' ? `enviar o e-mail "${x.template}" ao lead` : `atribuir a ${donos.find(d => d.id === x.owner_id)?.name || 'responsável'}`).join('; ');
+   const faz = a.actions.map(x => x.action === 'tarefa.criar' ? `criar tarefa "${x.title}"${x.delay_days ? ` (prazo ${x.delay_days} dias)` : ''}` : x.action === 'email.enviar' ? `enviar o e-mail "${x.template}" ao lead` : x.action === 'whatsapp.enviar' ? `enviar o WhatsApp "${x.message.length > 40 ? `${x.message.slice(0, 37)}…` : x.message}" ao lead` : x.action === 'whatsapp.avisar_equipe' ? 'avisar a equipe no WhatsApp' : `atribuir a ${donos.find(d => d.id === x.owner_id)?.name || 'responsável'}`).join('; ');
    const texto = el('div'); texto.append(el('strong', a.name + (a.is_enabled ? '' : ' (desativada)')), el('p', `Quando: ${catalog.events[a.trigger_event]} · ${filtro}`, 'detail'), el('p', `Faz: ${faz}`, 'detail'));
    if (a.last_run_at) texto.append(el('p', `Última execução: ${hora(a.last_run_at)} · ${a.last_result === 'OK' ? 'deu certo' : 'FALHOU'}`, 'detail'));
    const acoes = el('div', null, 'field-row');
@@ -102,6 +102,9 @@ export function automationsManager({ api, spaces, pipelines, initialSpace }) {
   const prazo = campo(form, 'Prazo da tarefa, em dias (0 = sem prazo)', 'number'); prazo.min = '0'; prazo.max = '365'; prazo.value = '0';
   const dono = lista(form, 'Responsável', donos.map(o => [o.id, o.name || o.email]));
   // E-mail ao lead: o template é do espaço; a mensagem sai pela fila de e-mail (E-mails → Atividade), nunca na hora e nunca sem e-mail configurado.
+  // WhatsApp: o texto é da própria automação (sem template). Sai pela fila de WhatsApp (menu WhatsApp), só com o envio ligado.
+  const mensagem = el('label', 'Mensagem do WhatsApp'), texto = el('textarea'); texto.rows = 4; texto.maxLength = 1000; texto.placeholder = 'Oi {{first_name}}, recebemos seu contato na {{product_name}}. Já já falamos com você!'; mensagem.append(texto);
+  const ajudaMensagem = el('p', 'Dados do lead: {{name}}, {{first_name}}, {{email}}, {{whatsapp}}, {{company_name}}, {{product_name}}. "Enviar ao lead" precisa de um WhatsApp válido no lead; "Avisar a equipe" usa os números de Integrações → WhatsApp.', 'detail'); mensagem.append(ajudaMensagem); form.append(mensagem);
   const modelo = lista(form, 'Template do e-mail', []);
   const ajudaModelo = el('p', null, 'detail'); modelo.l.append(ajudaModelo);
   const carregarModelos = async () => {
@@ -112,8 +115,8 @@ export function automationsManager({ api, spaces, pipelines, initialSpace }) {
    } catch (e) { ajudaModelo.textContent = e.message; }
   };
   const mostra = () => {
-   const tarefa = acao.value === 'tarefa.criar', email = acao.value === 'email.enviar';
-   titulo.parentElement.hidden = prazo.parentElement.hidden = !tarefa; dono.l.hidden = tarefa || email; modelo.l.hidden = !email;
+   const tarefa = acao.value === 'tarefa.criar', email = acao.value === 'email.enviar', zap = acao.value.startsWith('whatsapp.');
+   titulo.parentElement.hidden = prazo.parentElement.hidden = !tarefa; dono.l.hidden = tarefa || email || zap; modelo.l.hidden = !email; mensagem.hidden = !zap;
    if (email && !modelo.s.options.length) carregarModelos();
   };
   acao.onchange = mostra; mostra();
@@ -121,7 +124,7 @@ export function automationsManager({ api, spaces, pipelines, initialSpace }) {
   form.onsubmit = async e => {
    e.preventDefault(); enviar.disabled = true;
    try {
-    const acaoCorpo = acao.value === 'tarefa.criar' ? { action: 'tarefa.criar', title: titulo.value, delay_days: Number(prazo.value || 0) } : acao.value === 'email.enviar' ? { action: 'email.enviar', template: modelo.s.value } : { action: 'responsavel.atribuir', owner_id: dono.s.value };
+    const acaoCorpo = acao.value === 'tarefa.criar' ? { action: 'tarefa.criar', title: titulo.value, delay_days: Number(prazo.value || 0) } : acao.value === 'email.enviar' ? { action: 'email.enviar', template: modelo.s.value } : acao.value.startsWith('whatsapp.') ? { action: acao.value, message: texto.value } : { action: 'responsavel.atribuir', owner_id: dono.s.value };
     await api('/api/commercial/automations', 'POST', { space_id: espaco, name: nome.value, trigger_event: evento.value, ...(funil.value ? { pipeline_id: funil.value } : {}), ...(etapa.s.value ? { stage_id: etapa.s.value } : {}), actions: [acaoCorpo] });
     await desenhar();
    } catch (err) { aviso(form, err); enviar.disabled = false; }

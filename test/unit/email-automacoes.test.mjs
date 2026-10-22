@@ -43,7 +43,7 @@ test('o editor e o modelo falam das mesmas variáveis', () => {
 
 // ---------- ação da automação ----------
 test('ação "Enviar e-mail": entra no catálogo, só valida com template e só vale em evento de lead', () => {
- assert.deepEqual(Object.keys(ACTIONS), ['tarefa.criar', 'responsavel.atribuir', 'email.enviar']);
+ assert.deepEqual(Object.keys(ACTIONS), ['tarefa.criar', 'responsavel.atribuir', 'email.enviar', 'whatsapp.enviar', 'whatsapp.avisar_equipe']);
  assert.deepEqual(validateActions([{ action: 'email.enviar', template: 'boas-vindas' }]), [{ action: 'email.enviar', template: 'boas-vindas' }]);
  const falha = a => assert.throws(() => validateActions([a]), e => e.status === 400);
  falha({ action: 'email.enviar' }); falha({ action: 'email.enviar', template: 'Com Espaço' }); falha({ action: 'email.enviar', template: 'ok', para: 'x@y.co' });

@@ -131,6 +131,10 @@ body[data-view=database] .content { max-width: none; padding: 0; }
 .context-options { position: absolute; top: calc(100% + 6px); left: 0; right: 0; display: grid; gap: 2px; max-height: min(360px, 65dvh); padding: 6px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-pop); }
 .context-option { display: grid; grid-template-columns: 28px minmax(0,1fr); align-items: center; gap: 9px; width: 100%; padding: 7px; border-radius: 6px; background: transparent; text-align: left; }
 .context-option:hover, .context-option.active { background: var(--surface-hover); }
+.context-option[hidden], .context-group-label[hidden] { display: none; }
+.context-search { position: sticky; top: -6px; z-index: 1; width: 100%; min-height: 34px; margin: -6px 0 2px; padding: 6px 8px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: var(--surface); color: var(--text); font: inherit; font-size: 12px; }
+.context-search[hidden] { display: none; }
+.context-empty { margin: 0; padding: 8px; color: var(--muted); font-size: 12px; }
 .mobile-shellbar, .nav-backdrop { display: none; }
 
 @media (max-width: 1100px) { :root { --page-gutter: 24px; } }

@@ -53,6 +53,8 @@ import { googleCalendarRoutes } from './modules/google-calendar.mjs';
 import { integrationsCredentialsRoutes } from './modules/integrations-credentials.mjs';
 import { integrationsEmailRoutes } from './modules/integrations-email.mjs';
 import { emailFilaRoutes } from './modules/email-fila.mjs';
+import { whatsappFilaRoutes } from './modules/whatsapp-fila.mjs';
+import { whatsappEntradaRoutes } from './modules/whatsapp-entrada.mjs';
 import { contaRoutes } from './modules/conta.mjs';
 import { vivo } from './platform/env-vivo.mjs';
 import { mediaRoutes } from './modules/media.mjs';
@@ -110,6 +112,8 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  integrationsEmailRoutes(router,{vivo,clock});
  // Fila de e-mail (migração 051): atividade, pré-visualização, teste, supressão. O consumidor da fila liga em production.mjs.
  emailFilaRoutes(router,{clock});
+ whatsappFilaRoutes(router,{clock});
+ whatsappEntradaRoutes(router,{clock});
  // Configurações → Perfil e sessão, Auditoria.
  contaRoutes(router,{clock});
  mediaRoutes(router,{clock,...mediaOptions});

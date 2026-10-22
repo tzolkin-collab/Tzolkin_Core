@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { createCore } from './app.mjs';
 import { iniciarJobsDaAgenda } from './modules/agenda-jobs.mjs';
 import { iniciarFilaDeEmail } from './modules/email-fila.mjs';
+import { iniciarFilaDeWhatsapp } from './modules/whatsapp-fila.mjs';
 import { openDatabase, transportWarning, manterPoolQuente } from './platform/database.mjs';
 
 export { createCore };
@@ -34,6 +35,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
  // Em desenvolvimento os trabalhos de fundo ficam DESLIGADOS (o .env aponta para o banco compartilhado: um servidor local mandaria e-mail de verdade).
  const pararAgenda = process.env.AGENDA_JOBS === '1' ? iniciarJobsDaAgenda({ pool }) : () => {};
  const pararEmail = process.env.AGENDA_JOBS === '1' ? iniciarFilaDeEmail({ pool }) : () => {};
- const stop = () => { pararAgenda(); pararEmail(); server.closeAllConnections(); server.close(() => pool.end().finally(() => process.exit(0))); };
+ const pararWhatsapp = process.env.AGENDA_JOBS === '1' ? iniciarFilaDeWhatsapp({ pool }) : () => {};
+ const stop = () => { pararAgenda(); pararEmail(); pararWhatsapp(); server.closeAllConnections(); server.close(() => pool.end().finally(() => process.exit(0))); };
  process.on('SIGTERM',stop); process.on('SIGINT',stop);
 }

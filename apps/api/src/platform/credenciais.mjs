@@ -5,6 +5,7 @@ import { createVercelAdapter } from '../integrations/vercel.mjs';
 import { createGithubAdapter } from '../integrations/github.mjs';
 import { createEasypanelAdapter } from '../integrations/easypanel.mjs';
 import { createHostingerDnsAdapter } from '../integrations/hostinger-dns.mjs';
+import { createEvolutionAdapter, normalizarNumero } from '../integrations/evolution.mjs';
 import { createECDH } from 'node:crypto';
 import { scrub } from './secrets.mjs';
 import { lerRemetente, conferirResend, PROVEDORES_DE_EMAIL } from './email.mjs';
@@ -54,6 +55,19 @@ const retornoMeta = v => {
 const provedorEmail = v => PROVEDORES_DE_EMAIL.includes(v) ? null : `Por enquanto só ${PROVEDORES_DE_EMAIL.join(', ')}.`;
 const chaveResend = v => /^re_[A-Za-z0-9_]{16,}$/.test(v) ? null : 'Chave do Resend inválida (começa com re_).';
 const remetenteEmail = v => lerRemetente(v) ? null : 'Use voce@dominio.com ou Nome <voce@dominio.com>.';
+
+const enderecoEvolution = v => {
+ let u; try { u = new URL(v); } catch { return 'Informe o endereço completo, com https://.'; }
+ return u.protocol === 'https:' && !u.username && !u.password && !u.search && !u.hash ? null : 'Use um endereço https, sem usuário, parâmetros ou âncora.';
+};
+const instanciaEvolution = v => /^[A-Za-z0-9_.-]{1,64}$/.test(v) ? null : 'Use só letras, números, . _ e - (até 64 caracteres).';
+const numerosDaEquipe = v => {
+ const itens = String(v).split(',').map(x => x.trim()).filter(Boolean);
+ if (!itens.length || itens.length > 10) return 'Informe de 1 a 10 números, separados por vírgula.';
+ return itens.every(n => normalizarNumero(n)) ? null : 'Há um número inválido. Use DDD + número, por exemplo (31) 99999-9999.';
+};
+/** Números da equipe já normalizados (só dígitos, com DDI), sem repetição. */
+export const numerosDaEquipeNormalizados = v => [...new Set(String(v || '').split(',').map(x => normalizarNumero(x.trim())).filter(Boolean))];
 
 const rotuloDeErro = (e, ...segredos) => scrub(e?.message || 'sem detalhe', ...segredos).slice(0, 160);
 
@@ -204,6 +218,24 @@ export const PROVEDORES = Object.freeze({
    if (r.status === 'ok') return `A Hostinger respondeu (${r.records.length} registros na zona ${r.zone}).`;
    const motivos = { unauthorized: 'A Hostinger recusou a chave.', not_found: `A zona ${r.zone} não foi encontrada nesta conta.`, unavailable: 'A Hostinger não respondeu.', invalid: 'A resposta da Hostinger veio em formato inesperado.' };
    throw new Error(motivos[r.status] || 'A Hostinger não confirmou.');
+  },
+ },
+ evolution: {
+  nome: 'WhatsApp (Evolution API)',
+  campos: [
+   { nome: 'EVOLUTION_URL', rotulo: 'Endereço da Evolution', secreto: false, obrigatorio: true, validar: enderecoEvolution, ajuda: 'Ex.: https://evolution.seudominio.com' },
+   { nome: 'EVOLUTION_INSTANCE', rotulo: 'Nome da instância', secreto: false, obrigatorio: true, validar: instanciaEvolution, ajuda: 'A instância conectada ao número da TZOLKIN, no manager da Evolution.' },
+   { nome: 'EVOLUTION_API_KEY', rotulo: 'Chave da API', secreto: true, obrigatorio: true, validar: segredo, ajuda: 'A chave da instância (ou a global) da Evolution.' },
+   { nome: 'EVOLUTION_WEBHOOK_SECRET', rotulo: 'Segredo do webhook', secreto: true, validar: segredo, ajuda: 'Segredo que a Evolution manda ao Core ao avisar mensagem recebida. Sem ele, o Core só envia.' },
+   { nome: 'WHATSAPP_ENVIO', rotulo: 'Envio automático', secreto: false, validar: v => (['ligado', 'desligado'].includes(String(v).trim().toLowerCase()) ? null : 'Use ligado ou desligado.'), ajuda: 'Só com "ligado" a fila envia mensagens. Desligado, elas ficam esperando.' },
+   { nome: 'WHATSAPP_TEAM_NUMBERS', rotulo: 'Números da equipe', secreto: false, validar: numerosDaEquipe, ajuda: 'Quem recebe o aviso de lead novo, com DDD, separados por vírgula.' },
+  ],
+  async testar(v, fetchImpl) {
+   const r = await createEvolutionAdapter({ env: { EVOLUTION_URL: v.EVOLUTION_URL, EVOLUTION_INSTANCE: v.EVOLUTION_INSTANCE, EVOLUTION_API_KEY: v.EVOLUTION_API_KEY }, fetchImpl }).connectionState();
+   if (r.ok && r.connected) return `A Evolution respondeu e a instância ${v.EVOLUTION_INSTANCE} está conectada ao WhatsApp.`;
+   if (r.ok) throw new Error(`A instância existe, mas o WhatsApp não está conectado (estado: ${r.state}). Leia o QR code no manager da Evolution.`);
+   const motivos = { unauthorized: 'A Evolution recusou a chave.', not_found: `A instância ${v.EVOLUTION_INSTANCE} não existe nesta Evolution.`, unavailable: 'A Evolution não respondeu.', invalid: 'A resposta da Evolution veio em formato inesperado.', invalid_config: 'Endereço, instância ou chave inválidos.' };
+   throw new Error(motivos[r.reason] || 'A Evolution não confirmou.');
   },
  },
 });

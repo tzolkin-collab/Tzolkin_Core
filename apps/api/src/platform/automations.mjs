@@ -1,5 +1,6 @@
 import { fail, input, isUuid, isProductId, text } from './http.mjs';
 import { enfileirarParaLead } from './email-saida.mjs';
+import { enfileirarParaLead as whatsappParaLead, enfileirarParaEquipe as whatsappParaEquipe, variaveisInvalidas } from './whatsapp-saida.mjs';
 
 // Eventos e automações (fase 5). Regras puras: o catálogo de eventos e de ações, a validação das ações e o
 // motor `emitEvent`, que roda as automações ligadas a um evento dentro da transação de quem emitiu.
@@ -24,6 +25,8 @@ export const ACTIONS = Object.freeze({
  'tarefa.criar': 'Criar tarefa',
  'responsavel.atribuir': 'Atribuir responsável',
  'email.enviar': 'Enviar e-mail ao lead',
+ 'whatsapp.enviar': 'Enviar WhatsApp ao lead',
+ 'whatsapp.avisar_equipe': 'Avisar a equipe no WhatsApp',
 });
 // Eventos em que existe um lead com e-mail para receber a mensagem.
 export const EVENTOS_COM_LEAD = Object.freeze(['lead.criado', 'lead.mudou_de_etapa', 'lead.qualificado', 'lead.descartado', 'lead.restaurado']);
@@ -47,6 +50,13 @@ export function validateActions(actions) {
    input(a, ['action', 'template']);
    if (!isProductId(a.template)) throw fail(400, 'Escolha o template do e-mail.');
    return { action: 'email.enviar', template: a.template };
+  }
+  if (a.action === 'whatsapp.enviar' || a.action === 'whatsapp.avisar_equipe') {
+   input(a, ['action', 'message']);
+   const message = text(a.message, 2, 1000);
+   const ruins = variaveisInvalidas(message);
+   if (ruins.length) throw fail(400, `Variável desconhecida na mensagem: ${ruins.map(v => `{{${v}}}`).join(', ')}.`);
+   return { action: a.action, message };
   }
   if (a.action === 'responsavel.atribuir') {
    input(a, ['action', 'owner_id']);
@@ -82,6 +92,12 @@ async function runAction(client, action, ctx, automationId, event) {
   if (!ctx.leadId) throw new Error('Enviar e-mail só funciona em evento de lead.');
   // Não envia: grava na fila, na MESMA transação do evento. Quem envia é o consumidor da fila.
   return enfileirarParaLead(client, { modelo: action.template, spaceId: ctx.spaceId, leadId: ctx.leadId, automationId, evento: event });
+ }
+ if (action.action === 'whatsapp.enviar' || action.action === 'whatsapp.avisar_equipe') {
+  if (!ctx.leadId) throw new Error('WhatsApp só funciona em evento de lead.');
+  // Também não envia: grava na fila, na MESMA transação do evento. Quem envia é o consumidor da fila (e só com o envio ligado).
+  const dados = { mensagem: action.message, spaceId: ctx.spaceId, leadId: ctx.leadId, automationId, evento: event };
+  return action.action === 'whatsapp.enviar' ? whatsappParaLead(client, dados) : whatsappParaEquipe(client, dados);
  }
  throw new Error(`Ação desconhecida: ${action.action}`);
 }

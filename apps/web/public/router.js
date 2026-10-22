@@ -1,6 +1,7 @@
 import { $, node } from './dom.js';
 import { stateProxy as state, store } from './store.js';
 import { createIcon } from './icons.js';
+import { registrarTela } from './espacos-nav.js';
 
 export const CONTEXTS = {
   general: {
@@ -18,6 +19,7 @@ export const CONTEXTS = {
     leads: { title: 'Inbound', desc: "Oportunidades em prospecção, por etapa.", section: 'view-commercial', metrics: false },
     outbound: { title: 'Outbound', desc: "Prospecção ativa e abordagem direta.", section: 'view-outbound', metrics: false },
     emails: { title: 'E-mails', section: 'view-emails', metrics: false },
+    whatsapp: { title: 'WhatsApp', section: 'view-whatsapp', metrics: false },
     payments: { title: 'Pagamentos', desc: "Vendas, cobranças e gateways.", section: 'view-payments', metrics: false },
     // PORTFÓLIO
     products: { title: 'Produtos', desc: "O que a TZOLKIN desenvolve e opera.", section: 'view-products', action: ['Novo produto', 'space-dialog'], metrics: false },
@@ -43,19 +45,21 @@ export const CONTEXTS = {
    label: 'GESTÃO DO PRODUTO',
    views: {
     product: { title: 'Visão geral', section: 'view-product' },
-    'product-tracking': { title: 'Acompanhamento', section: 'view-tracking', metrics:false },
+    // Inbound, Contratações e Recebimentos eram só atalhos da visão geral: quem trabalha no espaço precisava voltar a ela
+    // para chegar ao funil. Agora estão no menu; cada um só aparece se o tipo do espaço tem a capacidade (VIEW_CAPABILITIES).
+    'product-inbound': { title: 'Inbound', section: 'view-commercial', metrics:false },
     'product-clients': { title: 'Clientes', section: 'view-product-orgs', action: ['Vincular cliente', 'entitlement-dialog'], metrics:false },
+    'product-engagements': { title: 'Contratações', section: 'view-product-engagements', metrics:false },
+    'product-receivables': { title: 'Recebimentos', section: 'view-product-receivables', metrics:false },
     'product-payments': { title: 'Pagamentos', section: 'view-product-payments', metrics:false },
     'product-emails': { title: 'E-mails', section: 'view-product-emails', metrics:false },
+    'product-tracking': { title: 'Acompanhamento', section: 'view-tracking', metrics:false },
     'product-connections': { title: 'Conexões', section: 'view-product-keys', metrics:false },
-    'product-inbound': { title: 'Inbound', section: 'view-commercial', metrics:false, hidden:true },
     'product-keys': { title: 'Chaves de integração', section: 'view-product-keys', metrics:false, hidden:true },
     // "Clientes" aqui nunca foi a carteira: é quem tem acesso a ESTE item, que é o
     // que a tela mostra e o que o botão vincula. No contexto geral, Clientes é a
     // carteira — duas telas com o mesmo nome e conteúdos diferentes ensinavam errado.
     'product-orgs': { title: 'Acessos', section: 'view-product-orgs', action: ['Vincular cliente', 'entitlement-dialog'], hidden:true },
-    'product-engagements': { title: 'Contratações', section: 'view-product-engagements', metrics:false, hidden:true },
-    'product-receivables': { title: 'Recebimentos', section: 'view-product-receivables', metrics:false, hidden:true },
     client: { title: 'Cliente', section: 'view-client', hidden:true, metrics:false },
     // Campanhas do item mora dentro de Inbound, como uma aba (montarInbound).
     // Oculta do menu; o botão Configurações do rodapé abre em qualquer contexto.
@@ -70,7 +74,7 @@ export const SECTIONS = [
   'view-connections', 'view-access', 'view-database', 'view-redis', 'view-settings', 'view-security', 'view-vercel', 
   'view-github', 'view-easypanel', 'view-dns', 'view-server-metrics', 'view-product', 'view-product-orgs', 
   'view-product-engagements', 'view-product-payments', 'view-product-receivables', 'view-product-emails', 
-  'view-service-campaigns', 'view-finance','view-emails', 'view-outbound', 'view-payments', 'view-portfolio-services'
+  'view-service-campaigns', 'view-finance','view-emails','view-whatsapp', 'view-outbound', 'view-payments', 'view-portfolio-services'
 ];
 
 export const contextKind = () => (state.context ? 'product' : 'general');
@@ -106,7 +110,7 @@ export function renderNav() {
  // teste de navegação pega antes de virar dois cabeçalhos "Tecnologia" na tela.
  const groups=contextKind()==='general'?{
   overview:'Hoje',finance:'Hoje',tracking:'Hoje',
-  companies:'CRM',people:'CRM',clients:'CRM',client:'CRM',leads:'CRM',outbound:'CRM',emails:'CRM',payments:'CRM',
+  companies:'CRM',people:'CRM',clients:'CRM',client:'CRM',leads:'CRM',outbound:'CRM',emails:'CRM',whatsapp:'CRM',payments:'CRM',
   products:'Portfólio',portfolioServices:'Portfólio',services:'Portfólio',serviceCampaigns:'Portfólio',
   connections:'Tecnologia',vercel:'Tecnologia',easypanel:'Tecnologia',dns:'Tecnologia',github:'Tecnologia',database:'Tecnologia',resource:'Tecnologia',serverMetrics:'Tecnologia',redis:'Tecnologia',access:'Tecnologia',settings:'Tecnologia',security:'Tecnologia',
  }:Object.fromEntries(Object.keys(context.views).map(key=>[key,contextKindLabel()]));
@@ -116,7 +120,7 @@ export function renderNav() {
   const atual = state.view === 'client' ? state.clientBack : state.view;
   const button = node('button', undefined, 'nav-item' + (key === atual ? ' active' : ''));
   button.type = 'button'; button.dataset.view = key;
-  const icon = createIcon(({overview:'layers',finance:'wallet',tracking:'calendar',companies:'building',people:'people',clients:'building',leads:'user-plus',outbound:'chart',emails:'mail',payments:'wallet',products:'package',portfolioServices:'briefcase',services:'briefcase',connections:'branch',vercel:'cloud',easypanel:'server',dns:'globe',github:'repo',database:'database',access:'shield',redis:'cache',settings:'sliders',security:'lock',serverMetrics:'activity',product:'package','product-tracking':'calendar','product-clients':'people','product-connections':'branch','product-inbound':'user-plus','product-keys':'lock','product-orgs':'people','product-engagements':'briefcase','product-payments':'wallet','product-receivables':'calendar','product-emails':'mail',campaigns:'chart','product-campaigns':'chart',serviceCampaigns:'chart'})[key]);
+  const icon = createIcon(({overview:'layers',finance:'wallet',tracking:'calendar',companies:'building',people:'people',clients:'building',leads:'user-plus',outbound:'chart',emails:'mail',whatsapp:'message-circle',payments:'wallet',products:'package',portfolioServices:'briefcase',services:'briefcase',connections:'branch',vercel:'cloud',easypanel:'server',dns:'globe',github:'repo',database:'database',access:'shield',redis:'cache',settings:'sliders',security:'lock',serverMetrics:'activity',product:'package','product-tracking':'calendar','product-clients':'people','product-connections':'branch','product-inbound':'user-plus','product-keys':'lock','product-orgs':'people','product-engagements':'briefcase','product-payments':'wallet','product-receivables':'calendar','product-emails':'mail',campaigns:'chart','product-campaigns':'chart',serviceCampaigns:'chart'})[key]);
   icon.classList.add('nav-icon'); button.append(icon, document.createTextNode(view.title));
   if (key === atual) button.setAttribute('aria-current', 'page');
   button.onclick = () => {switchView(key);closeNavigation();};
@@ -148,6 +152,7 @@ export function switchView(view) {
   if (active.action && $('new-record-label')) $('new-record-label').textContent = active.action[0];
  }
  if ($('notice')) $('notice').textContent = '';
+ if (!active.hidden) registrarTela(state.context, view);
  renderNav();
 }
 
