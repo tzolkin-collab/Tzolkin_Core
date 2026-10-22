@@ -11,9 +11,9 @@
 | # | Épico | Entrega | Valor | Depende de | Status |
 |---|---|---|---|---|---|
 | E1 | Conexão | Adaptador, credenciais, teste de conexão, estado nas integrações | Dá para configurar e testar a Evolution | — | **Pronto** (falta commit) |
-| E2 | Saída | Fila de envio com retentativa e ritmo baixo; lista de quem pediu para não receber | Mensagem sai sem perda e sem risco de duplicar | E1, migração | A fazer |
-| E3 | Automações | Ações "Enviar WhatsApp ao lead" e "Avisar a equipe no WhatsApp"; templates por espaço | Lead novo vira aviso e resposta sozinhos | E2 | A fazer |
-| E4 | Atividade e saúde | Tela de envios (status e motivo), instância conectada, fila parada | Dá para acompanhar sem olhar o banco | E2 | A fazer |
+| E2 | Saída | Fila de envio com retentativa e ritmo baixo; lista de quem pediu para não receber | Mensagem sai sem perda e sem risco de duplicar | E1, migração | **Pronto** (migração 062 escrita, não aplicada) |
+| E3 | Automações | Ações "Enviar WhatsApp ao lead" e "Avisar a equipe no WhatsApp"; templates por espaço | Lead novo vira aviso e resposta sozinhos | E2 | **Pronto** (mensagem escrita na própria ação; sem templates por espaço) |
+| E4 | Atividade e saúde | Tela de envios (status e motivo), instância conectada, fila parada | Dá para acompanhar sem olhar o banco | E2 | **Pronto** (menu CRM → WhatsApp) |
 | E5 | Entrada | Webhook `/webhooks/evolution` com segredo; mensagens ligadas ao lead pelo telefone | Resposta do lead não se perde | E1, migração | A fazer |
 | E6 | Caixa de entrada | Tela de conversas por lead; marcar como lida; responder pelo Core | Equipe atende dentro do Core | E5 | A fazer |
 | E7 | Entrada em produção | Publicar, variáveis no Easypanel, webhook apontado na Evolution, teste ponta a ponta | Funciona de verdade | E3, E5 | A fazer |

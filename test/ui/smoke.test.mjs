@@ -21,7 +21,7 @@ const ARTEFATOS = fileURLToPath(new URL('./artifacts/', import.meta.url));
 
 const MENU_ESPERADO = [
  'Visão geral', 'Financeiro', 'Acompanhamento',
- 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Outbound', 'E-mails', 'Pagamentos',
+ 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Outbound', 'E-mails', 'WhatsApp', 'Pagamentos',
  'Produtos', 'Serviços', 'Contratações',
  'Conexões', 'Vercel', 'EasyPanel', 'DNS', 'GitHub', 'Banco de dados'
 ];
@@ -3428,6 +3428,24 @@ test('navegação por espaço: endereço, voltar, memória da tela e recarregar'
  await pagina.avaliar(`location.reload()`);
  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`, { descricao: 'painel aberto' });
  assert.notEqual(await pagina.avaliar(`document.body.dataset.context`), 'product');
+ semExcecoes();
+});
+
+// WhatsApp: a tela de atividade explica a conexão e a fila, mesmo sem a Evolution configurada e sem a migração 062.
+test('WhatsApp: a tela abre, diz que a Evolution não está configurada e que o envio está desligado', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 800);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`, { descricao: 'painel aberto' });
+ await pagina.avaliar(CLICAR_NO_MENU('WhatsApp'));
+ await pagina.esperar(`location.hash === '#/geral/whatsapp'`, { descricao: 'endereço do WhatsApp' });
+ await pagina.esperar(`document.querySelector('#view-whatsapp .whatsapp-estado')?.textContent.includes('Não configurada')`, { descricao: 'estado da Evolution' });
+ const texto = await pagina.avaliar(`document.getElementById('view-whatsapp').innerText`);
+ assert.match(texto, /Envio automático/);
+ assert.match(texto, /Desligado/);
+ assert.match(await pagina.avaliar(SECAO + '.innerText'), /Histórico de mensagens|Nenhuma mensagem na fila/);
+ const defeitos = await pagina.avaliar(leituraDe(SECAO));
+ assert.equal(defeitos.titulo, 'WhatsApp'); assert.deepEqual(defeitos.vazamento, []); assert.equal(defeitos.estouro, 0); assert.equal(defeitos.botoesSemNome, 0);
+ if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-WhatsApp_atividade.png'));
  semExcecoes();
 });
 

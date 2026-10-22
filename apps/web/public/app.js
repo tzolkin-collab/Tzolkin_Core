@@ -12,6 +12,7 @@ import { setupResource } from './resource.js';
 import {providerLogo,createIcon,productFavicon,faviconDoSite} from './icons.js';
 import {paymentInstitution,brazilMonth} from './finance-model.js';
 import {setupEmails} from './emails.js';
+import {setupWhatsapp} from './whatsapp.js';
 import {setupTracking} from './tracking.js';
 import {setupFinance} from './finance.js';
 import {setupBilling} from './billing.js';
@@ -36,6 +37,7 @@ const billing=setupBilling({api});
 const productPayments=setupProductPayments({api,billing});
 const serviceReceivables=setupServiceReceivables({api});
 const emails=setupEmails({api,configure:product=>openProductModule(product,'product-emails')});
+const whatsapp=setupWhatsapp({api});
 const productEmails=setupProductEmails({api});
 const campaigns=setupCampaigns({api,onError:reportError});
 const finance=setupFinance({api});
@@ -132,6 +134,7 @@ function clearRenderedData() {
  tracking.clear();
  finance.clear();
  emails.clear();
+ whatsapp.clear();
  billing.clear();
  productPayments.clear();
  resource.clear();
@@ -194,6 +197,7 @@ store.subscribe('view', (view) => {
   if (view === 'tracking' || view === 'product-tracking') tracking.load({ product: contextKind() === 'product' ? state.context : '' }).catch(reportError);
   if (view === 'finance') finance.load().catch(reportError);
   if (view === 'emails') emails.load().catch(reportError);
+  if (view === 'whatsapp') whatsapp.load().catch(reportError);
   if (view === 'people') renderPeople();
   if (view === 'clients') renderTenants();
   if (view === 'leads' || view === 'product-inbound') montarInbound();
@@ -2156,6 +2160,7 @@ async function load() {
  if(state.view==='tracking'||state.view==='product-tracking') await tracking.load({ product: contextKind() === 'product' ? state.context : '' });
  if(state.view==='finance') await finance.load();
  if(state.view==='emails') await emails.load();
+ if(state.view==='whatsapp') await whatsapp.load();
  // Entrar, Atualizar e salvar um projeto passam por aqui: sem isto Deploys ficaria com os painéis do GitHub vazios.
  // As DUAS telas leem o mesmo cadastro desde que Projetos técnicos ganhou entrada
  // própria. Listar só 'deploys' aqui fazia o salvar não repintar a lista de quem
