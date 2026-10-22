@@ -1,0 +1,24 @@
+/* WhatsApp: aba Conversas, lista à esquerda e a conversa aberta à direita (empilhadas no celular). */
+.wa-caixa { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); margin-top: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden; min-height: 420px; }
+.wa-lista { display: flex; flex-direction: column; border-right: 1px solid var(--line); max-height: 560px; overflow: auto; }
+.wa-conversa { display: grid; gap: 4px; width: 100%; padding: 12px 14px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; text-align: left; }
+.wa-conversa:hover, .wa-conversa.active { background: var(--surface-hover); }
+.wa-conversa-topo, .wa-conversa-base { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.wa-conversa-topo strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.wa-conversa-topo small, .wa-conversa-base { color: var(--muted); font-size: 12px; }
+.wa-nao-lida { min-width: 20px; padding: 1px 6px; border-radius: 10px; background: var(--text); color: var(--surface); font-size: 12px; text-align: center; }
+.wa-fio { display: flex; flex-direction: column; min-width: 0; max-height: 560px; }
+.wa-fio-topo { display: grid; gap: 2px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.wa-fio-topo small { color: var(--muted); font-size: 12px; }
+.wa-mensagens { display: flex; flex: 1; flex-direction: column; gap: 8px; padding: 16px; overflow: auto; }
+.wa-msg { max-width: 78%; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-hover); }
+.wa-msg.out { align-self: flex-end; background: var(--brand-soft); }
+.wa-msg p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
+.wa-msg small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+.wa-resposta { display: grid; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.wa-resposta textarea { width: 100%; resize: vertical; }
+.wa-resposta .primary { justify-self: end; }
+@media (max-width: 760px) {
+  .wa-caixa { grid-template-columns: minmax(0, 1fr); }
+  .wa-lista { border-right: 0; border-bottom: 1px solid var(--line); max-height: 260px; }
+}

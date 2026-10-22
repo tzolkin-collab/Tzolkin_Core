@@ -90,6 +90,7 @@ const FILES = {
  '/service-receivables.js': ['service-receivables.js', 'text/javascript'],
  '/emails.js': ['emails.js', 'text/javascript'],
  '/emails.css': ['emails.css', 'text/css'],
+ '/whatsapp-conversas.css': ['whatsapp-conversas.css', 'text/css'],
  '/projects.js': ['projects.js', 'text/javascript'],
  '/projects.css': ['projects.css', 'text/css'],
  '/product-emails.js': ['product-emails.js', 'text/javascript'],
