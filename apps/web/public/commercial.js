@@ -1,4 +1,5 @@
 import {photoPanel} from './media.js';
+import {mountTabs} from './tabs.js';
 import {dataPanel,fieldsManager} from './space-fields.js';
 import {tasksPanel,automationsManager} from './automations.js';
 import {blockersNotice,requirementsManager} from './stage-requirements.js';
@@ -13,9 +14,35 @@ function field(label,type='text',value=''){const wrap=el('label',label),input=el
 function select(label,options,value=''){const wrap=el('label',label),input=el('select');for(const [v,t]of options){const o=el('option',t);o.value=v;input.append(o);}input.value=value;if(input.selectedIndex<0&&input.options.length)input.selectedIndex=0;wrap.append(input);return{wrap,input};}
 function button(label,fn){const b=el('button',label,'secondary');b.type='button';b.onclick=async()=>{b.disabled=true;try{await fn();}catch(e){const msg=el('p',e.message,'notice-inline');msg.setAttribute('role','alert');b.parentElement?.append(msg);}finally{b.disabled=false;}};return b;}
 function submit(form,label,fn){const b=el('button',label,'primary');b.type='submit';form.append(b);form.onsubmit=async e=>{e.preventDefault();b.disabled=true;form.querySelector('[role=alert]')?.remove();try{await fn();}catch(err){const p=el('p',err.message,'notice-inline');p.setAttribute('role','alert');form.append(p);}finally{b.disabled=false;}};}
+// Linhas editáveis (cada linha com os mesmos campos, adicionar e remover). Substitui os campos de texto "a=b, c=d" da configuração do SDK.
+function editorDeLinhas({titulo,ajuda,colunas,valores,rotuloAdicionar,vazio}){
+ const wrap=el('fieldset',null,'sdk-linhas'),corpo=el('div',null,'sdk-linhas-corpo'),aviso=el('p',vazio,'detail sdk-linhas-vazio');
+ wrap.append(el('legend',titulo));
+ if(ajuda)wrap.append(el('p',ajuda,'detail'));
+ const atualizar=()=>{aviso.hidden=corpo.children.length>0;};
+ const nova=(v={})=>{
+  const linha=el('div',null,'sdk-linha'),campos={};linha.style.setProperty('--cols',String(colunas.length));
+  for(const c of colunas){
+   const celula=el('label',null,'sdk-celula');celula.append(el('span',c.rotulo));
+   let input;
+   if(c.opcoes){input=el('select');for(const [valor,texto] of c.opcoes){const o=el('option',texto);o.value=valor;input.append(o);}}
+   else{input=el('input');input.type='text';if(c.placeholder)input.placeholder=c.placeholder;}
+   input.value=v[c.key]??'';
+   if(c.opcoes&&input.selectedIndex<0&&input.options.length)input.selectedIndex=0;
+   campos[c.key]=input;celula.append(input);linha.append(celula);
+  }
+  const tirar=el('button','Remover','quiet');tirar.type='button';tirar.setAttribute('aria-label','Remover esta linha');tirar.onclick=()=>{linha.remove();atualizar();};
+  linha.append(tirar);linha._campos=campos;corpo.append(linha);
+ };
+ valores.forEach(nova);
+ const adicionar=el('button',rotuloAdicionar,'secondary');adicionar.type='button';
+ adicionar.onclick=()=>{nova();atualizar();corpo.lastChild.querySelector('input,select')?.focus();};
+ wrap.append(corpo,aviso,adicionar);atualizar();
+ return{wrap,valores:()=>[...corpo.children].map(l=>Object.fromEntries(Object.entries(l._campos).map(([k,i])=>[k,i.value.trim()])))};
+}
 // openTenant abre a ficha da empresa; vem de app.js por callback para este módulo não importá-lo.
 export function setupCommercial({api,openTenant}) {
- let epoch=0,product='',offset=0,status='',query='',pipelineId='',stageId='',notice=null,detailNotice=null;
+ let abaConexoes='site',epoch=0,product='',offset=0,status='',query='',pipelineId='',stageId='',notice=null,detailNotice=null;
  // A ficha do lead é o painel lateral (peek.js) sobre a lista. Contador próprio: abrir a ficha não pode
  // invalidar o carregamento da lista que fica por baixo.
  let epochLead=0,peekLead=null,leadAberto=null,abaLead='geral';
@@ -200,109 +227,78 @@ export function setupCommercial({api,openTenant}) {
   const allowedScopes=Array.isArray(d.allowed_scopes)?d.allowed_scopes:['commercial:intake','commercial:read','context:read'];
   const active=d.keys.filter(k=>statusOf(k)==='active'),used=active.filter(k=>k.last_used_at);
   const header=el('header',null,'keys-hero'),headerCopy=el('div');
-  headerCopy.append(el('span','CONEXÕES DO CONTEXTO · SDK, UTMS E API','keys-eyebrow'),el('h2',`Conexões · ${productName}`),el('p',`Script CDN auto-configurável (UTMs, formulários e enriquecimento de links da Stripe) e chaves de API de ${productName}.`));
+  headerCopy.append(el('p',`Como o site e os sistemas de ${productName} falam com o Core: o script que coloca o rastreio no site, os UTMs e as chaves de API.`));
   const createToggle=el('button','Nova chave de API','primary keys-create-toggle');createToggle.type='button';
   header.append(headerCopy,createToggle);
-  const stats=el('div',null,'keys-stats');
-  for(const [value,label,detail]of [[active.length,'chaves ativas','podem autenticar agora'],[(sdkData?.config?.forms||[]).length,'formulários','auto-registrados pelo SDK'],[(sdkData?.lead_fields||[]).length,'campos extras','habilitados na ingestão']]){const item=el('article');item.append(el('strong',String(value)),el('span',label),el('small',detail));stats.append(item);}
 
-  // Seção 1: SDK CDN, UTMs Adicionais do Core (sem substituir UTMs de anúncio) e Auto-cadastro de Formulários
-  const sdkSection=el('section',null,'panel');
+  // Aba "Site e UTMs": o script, o funil que recebe os leads, os UTMs e o que o script captura. Um único formulário, uma única gravação.
+  const sdkPanel=el('div',null,'sdk-aba'),formsPanel=el('div',null,'sdk-aba');
+  if(!sdkData)sdkPanel.append(el('p','Não foi possível carregar a configuração do site agora. Tente de novo em instantes.','keys-empty'));
   if(sdkData){
    const cfg=sdkData.config||{},pipes=sdkData.pipelines||[];
-   const sdkHead=el('div',null,'keys-section-head');
-   const btnCopySdk=el('button','Copiar script CDN','secondary');btnCopySdk.type='button';
-   btnCopySdk.onclick=()=>copy(sdkData.snippet,btnCopySdk);
-   sdkHead.append(el('div'),btnCopySdk);
-   sdkHead.firstChild.append(
-    el('h3','Script CDN / SDK do Contexto'),
-    el('p','Cole este script no site ou microsserviço. Ele preserva intactos todos os UTMs vindos dos anúncios (utm_source, utm_medium, utm_campaign, utm_content, utm_term, meta_*_id, fbclid, gclid) e soma automaticamente os UTMs adicionais do Core deste contexto (utm_tzolkin e parâmetros de oferta/rota), além de enriquecer links da Stripe e auto-cadastrar formulários.')
-   );
-   const codeBox=el('code',sdkData.snippet,'keys-secret-value');
-   sdkSection.append(sdkHead,codeBox);
+   const nichos=pipes.length
+    ? pipes.map(pl=>[pl.slug,`${pl.name}${pl.is_default?' (padrão)':''}`])
+    : [[cfg.default_niche||'padrao','Funil padrão']];
 
+   const passo=(numero,titulo,texto)=>{const secao=el('section',null,'sdk-passo'),cab=el('header');cab.append(el('span',String(numero),'sdk-passo-n'),el('h3',titulo));secao.append(cab);if(texto)secao.append(el('p',texto,'detail'));return secao;};
+
+   // 1) Script
+   const p1=passo(1,'Coloque o script no site','Cole uma vez, antes de fechar o body. Ele guarda os UTMs do anúncio, manda os formulários para o Inbound e enriquece os links de pagamento da Stripe.');
+   const btnScript=el('button','Copiar script','secondary');btnScript.type='button';btnScript.onclick=()=>copy(sdkData.snippet,btnScript);
+   p1.append(el('code',sdkData.snippet,'keys-secret-value'),btnScript);
+
+   // 2) Funil e rotas, 3) UTMs fixos, 4) formulários — um formulário só
+   const utmForm=el('form',null,'sdk-form');
+   const p2=passo(2,'Para qual funil vão os leads','Todo lead que chega por este script entra no funil padrão, a não ser que a página tenha uma regra própria.');
+   const fNiche=select('Funil padrão',nichos,cfg.default_niche||'padrao');
+   const rotas=editorDeLinhas({titulo:'Regras por página (opcional)',ajuda:'Quando o endereço da página começa com o caminho, o lead vai para o funil escolhido. Ex.: /corretores → Corretor.',colunas:[{key:'path_prefix',rotulo:'Endereço começa com',placeholder:'/corretores'},{key:'niche',rotulo:'Funil',opcoes:nichos},{key:'offer_label',rotulo:'Oferta (opcional)',placeholder:'site-corretor'}],valores:(cfg.route_rules||[]).map(r=>({path_prefix:r.path_prefix,niche:r.niche,offer_label:r.offer_label||''})),rotuloAdicionar:'Adicionar regra',vazio:'Sem regras: todas as páginas usam o funil padrão.'});
+   p2.append(fNiche.wrap,rotas.wrap);
+
+   const p3=passo(3,'UTMs','Os UTMs do anúncio (utm_source, utm_medium, utm_campaign, utm_content, utm_term, fbclid, gclid) nunca são alterados. O Core só soma o utm_tzolkin, que diz o funil, e os fixos abaixo.');
+   const resumo=el('p',null,'sdk-utm-atual');resumo.append(el('span','utm_tzolkin = '),el('code',`${p}.${cfg.default_niche||'padrao'}`));p3.append(resumo);
+   const fixos=editorDeLinhas({titulo:'UTMs fixos deste espaço (opcional)',ajuda:'Somados a todo link do site. Úteis para marcar a oferta ou o sistema de origem.',colunas:[{key:'nome',rotulo:'Nome',placeholder:'utm_offer'},{key:'valor',rotulo:'Valor',placeholder:'plano-anual'}],valores:Object.entries(cfg.core_params||{}).map(([nome,valor])=>({nome,valor})),rotuloAdicionar:'Adicionar UTM fixo',vazio:'Nenhum UTM fixo.'});
+   p3.append(fixos.wrap);
    if(sdkData.ad_url_template){
-    const adHead=el('div',null,'keys-section-head');
-    const btnCopyAd=el('button','Copiar parâmetros para Anúncio','secondary');btnCopyAd.type='button';
-    btnCopyAd.onclick=()=>copy(sdkData.ad_url_template,btnCopyAd);
-    adHead.append(el('div'),btnCopyAd);
-    adHead.firstChild.append(
-     el('h4','Parâmetros adicionais para URL de Anúncios (Meta Ads / Google Ads)'),
-     el('small','Use junto aos UTMs da sua campanha no gerenciador de anúncios para amarrar o ID da campanha e o funil deste contexto:')
-    );
-    const adCode=el('code',sdkData.ad_url_template,'keys-secret-value');
-    sdkSection.append(adHead,adCode);
+    const btnAd=el('button','Copiar para o anúncio','secondary');btnAd.type='button';btnAd.onclick=()=>copy(sdkData.ad_url_template,btnAd);
+    p3.append(el('h4','No gerenciador de anúncios (Meta Ads, Google Ads)'),el('p','Cole estes parâmetros no fim da URL do anúncio, depois dos UTMs da campanha. Eles amarram o ID da campanha ao funil deste espaço.','detail'),el('code',sdkData.ad_url_template,'keys-secret-value'),btnAd);
    }
 
-   const corePairs=Object.entries(cfg.core_params||{}).map(([k,v])=>`${k}=${v}`).join(', ');
-   const rulesText=(cfg.route_rules||[]).map(r=>`${r.path_prefix}:${r.niche}${r.offer_label?'='+r.offer_label:''}`).join(', ');
-   const nicheOpts=pipes.length
-    ? pipes.map(pl=>[pl.slug,`${pl.name} (${p}.${pl.slug})${pl.is_default?' · padrão':''}`])
-    : [[cfg.default_niche||'padrao',`Funil padrão (${p}.${cfg.default_niche||'padrao'})`]];
+   const p4=passo(4,'O que o script captura');
+   const opcao=(titulo,texto,ligado)=>{const rotulo=el('label',null,'keys-scope-option'),caixa=el('input'),corpo=el('span');caixa.type='checkbox';caixa.checked=ligado;corpo.append(el('strong',titulo),el('small',texto));rotulo.append(caixa,corpo);return{rotulo,caixa};};
+   const optForms=opcao('Capturar formulários do site','Detecta os formulários da página, cria os campos extras neste espaço e envia cada envio para o Inbound com os UTMs.',cfg.auto_capture_forms!==false);
+   const optStripe=opcao('Enriquecer links de pagamento da Stripe','Leva os UTMs e o client_reference_id para os links buy.stripe.com da página.',cfg.enrich_payment_links!==false);
+   const fCustom=field('Campos extras dos formulários (separados por vírgula)','text',(sdkData.lead_fields||[]).map(f=>f.key).join(', '));
+   fCustom.input.placeholder='porte, funcionarios, instagram, site';
+   p4.append(optForms.rotulo,optStripe.rotulo,fCustom.wrap);
 
-   const utmForm=el('form',null,'commercial-form');
-   const fNiche=select('Funil / Nicho padrão do contexto (utm_tzolkin)',nicheOpts,cfg.default_niche||'padrao');
-   const fCoreParams=field('UTMs adicionais do Core para o microsserviço (chave=valor separados por vírgula — nunca sobrescreve utm_source/medium/campaign do anúncio)','text',corePairs);
-   fCoreParams.input.placeholder='Ex.: utm_offer=plano-anual, utm_funnel=corretor, utm_microservice=checkout';
-   const fRules=field('Regras de rota do site → nicho/funil (caminho:nicho=oferta separados por vírgula)','text',rulesText);
-   fRules.input.placeholder='Ex.: /corretores:corretor=site-corretor, /advogados:advogado=site-juridico';
-   const fCustom=field('Campos próprios deste contexto em formulários (space_fields separados por vírgula)','text',(sdkData.lead_fields||[]).map(f=>f.key).join(', '));
-   fCustom.input.placeholder='Ex.: porte, funcionarios, instagram, site, creci';
-
-   const chkForms=el('label',null,'keys-scope-option'),inForms=el('input');inForms.type='checkbox';inForms.checked=cfg.auto_capture_forms!==false;
-   const chkFormsCopy=el('span');chkFormsCopy.append(el('strong','Auto-cadastrar formulários e capturar leads'),el('small','Detecta formulários do site, cria automaticamente os campos extras neste contexto (space_fields) e envia submissões para o Inbound preservando os UTMs do anúncio + utm_tzolkin.'));
-   chkForms.append(inForms,chkFormsCopy);
-
-   const chkStripe=el('label',null,'keys-scope-option'),inStripe=el('input');inStripe.type='checkbox';inStripe.checked=cfg.enrich_payment_links!==false;
-   const chkStripeCopy=el('span');chkStripeCopy.append(el('strong','Enriquecer Payment Links da Stripe'),el('small','Propaga os UTMs do anúncio + utm_tzolkin + client_reference_id para links buy.stripe.com da página.'));
-   chkStripe.append(inStripe,chkStripeCopy);
-
-   utmForm.append(fNiche.wrap,fCoreParams.wrap,fRules.wrap,fCustom.wrap,chkForms,chkStripe);
-   submit(utmForm,'Salvar configuração do SDK e UTMs do Core',async()=>{
+   utmForm.append(p2,p3,p4);
+   submit(utmForm,'Salvar configuração',async()=>{
     const core_params={};
-    for(const item of fCoreParams.input.value.split(',').map(s=>s.trim()).filter(Boolean)){
-     const eq=item.indexOf('=');
-     if(eq>0){
-      const k=item.slice(0,eq).trim(),v=item.slice(eq+1).trim();
-      if(k&&v)core_params[k]=v;
-     }
-    }
-    const route_rules=[];
-    for(const item of fRules.input.value.split(',').map(s=>s.trim()).filter(Boolean)){
-     const [pathPart,rest='']=item.split(':');
-     if(pathPart&&rest){
-      const [nichePart,offerPart]=rest.split('=');
-      route_rules.push({path_prefix:pathPart.trim(),niche:nichePart.trim(),offer_label:offerPart?offerPart.trim():null});
-     }
-    }
-    const customFields=fCustom.input.value.split(',').map(s=>s.trim()).filter(Boolean);
+    for(const {nome,valor} of fixos.valores())if(nome&&valor)core_params[nome]=valor;
+    const route_rules=rotas.valores().filter(r=>r.path_prefix&&r.niche).map(r=>({path_prefix:r.path_prefix,niche:r.niche,offer_label:r.offer_label||null}));
     const chosenNiche=fNiche.input.value||'padrao';
     await api('/api/products/'+encodeURIComponent(p)+'/sdk','PUT',{
      default_niche:chosenNiche,
      utm_tzolkin:`${p}.${chosenNiche}`,
      core_params,
      route_rules,
-     auto_capture_forms:inForms.checked,
-     enrich_payment_links:inStripe.checked,
-     custom_fields:customFields,
+     auto_capture_forms:optForms.caixa.checked,
+     enrich_payment_links:optStripe.caixa.checked,
+     custom_fields:fCustom.input.value.split(',').map(x=>x.trim()).filter(Boolean),
     });
     await keys(p);
    });
-   sdkSection.append(utmForm);
+   sdkPanel.append(p1,utmForm);
 
    if((cfg.forms||[]).length){
-    const formsList=el('div',null,'tracking-list');
-    sdkSection.append(el('h4','Formulários auto-cadastrados pelo SDK neste contexto'));
+    const lista=el('div',null,'tracking-list');
+    formsPanel.append(el('p','Formulários que o script encontrou nas páginas do site e cadastrou neste espaço.','detail'));
     for(const fm of cfg.forms){
      const row=el('article',null,'tracking-row');
-     row.append(
-      el('strong',`${fm.name||fm.form_id}`),
-      el('span',`Campos: ${(fm.fields||[]).map(x=>x.key).join(', ')||'padrão'}${fm.niche?` · funil ${p}.${fm.niche}`:''}`),
-      el('span',fm.page_url||'site','detail mono')
-     );
-     formsList.append(row);
+     row.append(el('strong',`${fm.name||fm.form_id}`),el('span',`Campos: ${(fm.fields||[]).map(x=>x.key).join(', ')||'padrão'}${fm.niche?` · funil ${p}.${fm.niche}`:''}`),el('span',fm.page_url||'site','detail mono'));
+     lista.append(row);
     }
-    sdkSection.append(formsList);
+    formsPanel.append(lista);
    }
   }
 
@@ -333,7 +329,22 @@ export function setupCommercial({api,openTenant}) {
   const audit=el('details',null,'keys-audit'),auditSummary=el('summary',null);auditSummary.append(el('span','Histórico de segurança'),el('small',`${d.audit.length} eventos`));audit.append(auditSummary);const events=el('ol',null,'keys-audit-list');
   if(!d.audit.length)events.append(el('li','Nenhum evento registrado.'));
   for(const a of d.audit){const item=el('li'),marker=el('span','',`audit-marker audit-${a.action}`),content=el('div');content.append(el('strong',actionNames[a.action]||a.action),el('span',`${date(a.created_at)} · ${a.actor_email||a.actor_subject||'Operador'}`),el('code',shortId(a.key_id)));item.append(marker,content);events.append(item);}audit.append(events);
-  r.replaceChildren(header,stats,sdkSection,composer,inventory,audit);
+  // Abas do Core: o que é do site (script, funil, UTMs) separado do que é de segurança (chaves de API).
+  const nForms=(sdkData?.config?.forms||[]).length;
+  const abas=[{key:'site',label:'Site e UTMs'},{key:'chaves',label:'Chaves de API',count:active.length||undefined},...(nForms?[{key:'formularios',label:'Formulários',count:nForms}]:[])];
+  const painelChaves=el('div',null,'sdk-aba');painelChaves.append(composer,inventory,audit);
+  const paineis={site:sdkPanel,chaves:painelChaves,formularios:formsPanel};
+  const hostAbas=el('div');hostAbas.id='conexoes-tabs';
+  const area=el('div');
+  const mostrar=()=>{
+   area.replaceChildren(paineis[abaConexoes]);
+   const painel=paineis[abaConexoes];painel.id=`conexoes-panel-${abaConexoes}`;painel.setAttribute('role','tabpanel');painel.setAttribute('aria-labelledby',`conexoes-tab-${abaConexoes}`);
+  };
+  if(!paineis[abaConexoes]||(abaConexoes==='formularios'&&!nForms))abaConexoes='site';
+  mountTabs({host:hostAbas,tabs:abas,active:abaConexoes,label:'Seções das conexões',prefix:'conexoes',onChange:key=>{abaConexoes=key;mostrar();}});
+  mostrar();
+  createToggle.onclick=()=>{abaConexoes='chaves';mountTabs({host:hostAbas,tabs:abas,active:'chaves',label:'Seções das conexões',prefix:'conexoes',onChange:key=>{abaConexoes=key;mostrar();}});mostrar();composer.hidden=false;label.input.focus();};
+  r.replaceChildren(header,hostAbas,area);
  }
  return{load,keys,clear,detail};
 }
