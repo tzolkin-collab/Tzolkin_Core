@@ -1,66 +1,96 @@
 import { createIcon } from './icons.js';
 import { selo } from './data-table.js';
 import { mountTabs } from './tabs.js';
+import { painelDeAgentes } from './whatsapp-agentes.js';
 
-// Tela "WhatsApp": a conexão com a Evolution, as conversas (o que os leads responderam) e a atividade da fila (o que está esperando,
-// o que saiu, o que falhou). As mensagens saem pelas automações do funil (Inbound → Automações → "Enviar WhatsApp ao lead" / "Avisar a
-// equipe no WhatsApp") ou pela resposta manual de uma conversa, sempre pela fila.
+// Tela "WhatsApp": as instâncias da Evolution, as conversas de cada uma (o que os leads responderam), a atividade da fila (o que está
+// esperando, o que saiu, o que falhou) e os agentes de IA. As mensagens saem pelas automações do funil ou pela resposta manual de uma
+// conversa, sempre pela fila e sempre pela instância da conversa.
 const el = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
 const SITUACAO = { sent: ['Enviada', 'success'], queued: ['Na fila', 'info'], sending: ['Enviando', 'info'], failed: ['Falhou', 'danger'], cancelled: ['Cancelada', 'neutral'], suppressed: ['Não enviada', 'neutral'] };
 const TIPO = { lead: 'ao lead', equipe: 'à equipe', teste: 'teste' };
 const quando = v => (v ? new Date(v).toLocaleString('pt-BR') : '');
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 const cortar = (t, n) => (t.length > n ? `${t.slice(0, n - 3)}…` : t);
+const guardado = () => { try { return localStorage.getItem('core.wa-instancia') || ''; } catch { return ''; } };
+const guardar = v => { try { localStorage.setItem('core.wa-instancia', v); } catch { /* sem armazenamento: vale só nesta visita */ } };
+const ESTADOS = { open: ['Conectada', 'success'], connecting: ['Conectando', 'warning'], close: ['Desconectada', 'danger'] };
 
-export function setupWhatsapp({ api }) {
+export function setupWhatsapp({ api, reportError }) {
  // aviso: a frase do que a pessoa acabou de fazer, que sobrevive ao redesenho
- let geracao = 0, fila = null, estado = null, erro = '', aviso = '';
- let aba = 'conversas', conversas = null, aberta = null, conversa = null, erroConversa = '';
+ let geracao = 0, fila = null, lista = null, erro = '', aviso = '';
+ let aba = 'conversas', instancia = guardado(), conversas = null, aberta = null, conversa = null, erroConversa = '', agentes = null;
  const host = () => document.getElementById('view-whatsapp');
+ const q = () => (instancia ? `?instance=${encodeURIComponent(instancia)}` : '');
 
  async function carregar() {
   const ticket = ++geracao;
   desenhar();
-  const [lista, conexaoDaEvolution, caixa] = await Promise.all([
-   api('/api/whatsapp/outbox').catch(e => ({ falha: e.message })),
-   api('/api/whatsapp/status').catch(e => ({ falha: e.message })),
-   api('/api/whatsapp/conversations').catch(e => ({ falha: e.message })),
+  lista = await api('/api/whatsapp/instances').catch(e => ({ falha: e.message }));
+  if (ticket !== geracao) return;
+  const nomes = (lista.instancias || []).map(i => i.name);
+  if (!nomes.includes(instancia)) instancia = nomes.includes(lista.padrao) ? lista.padrao : (nomes[0] || '');
+  guardar(instancia);
+  desenhar();
+  await carregarDaInstancia(ticket);
+ }
+ async function carregarDaInstancia(ticket = geracao) {
+  const [outbox, caixa] = await Promise.all([
+   api('/api/whatsapp/outbox' + (aba === 'atividade' ? q() : '')).catch(e => ({ falha: e.message })),
+   instancia ? api('/api/whatsapp/conversations' + q()).catch(e => ({ falha: e.message })) : Promise.resolve(null),
   ]);
   if (ticket !== geracao) return;
-  erro = lista.falha || '';
-  fila = lista.falha ? { disponivel: false, itens: [], contagem: {}, suprimidos: 0 } : lista;
-  estado = conexaoDaEvolution;
-  conversas = caixa.falha ? { disponivel: false, conversas: [], nao_lidas: 0, falha: caixa.falha } : caixa;
+  erro = outbox.falha || outbox.aviso || '';
+  fila = outbox.falha ? { disponivel: false, itens: [], contagem: {}, suprimidos: 0 } : outbox;
+  conversas = !caixa ? null : caixa.falha ? { disponivel: false, conversas: [], nao_lidas: 0, falha: caixa.falha } : caixa;
   desenhar();
  }
 
- function conexao() {
+ // ---------- cabeçalho: a Evolution e o envio ----------
+ function resumo() {
   const caixa = el('section', undefined, 'whatsapp-estado');
   const linha = (rotulo, valor, tom) => { const l = el('div'); l.append(el('span', rotulo), valor ? selo(valor, tom) : el('span', '…')); return l; };
-  if (!estado) { caixa.append(el('p', 'Consultando a Evolution…', 'email-help')); return caixa; }
-  const conectada = estado.conectada === true;
+  if (!lista) { caixa.append(el('p', 'Consultando a Evolution…', 'email-help')); return caixa; }
+  const configurada = lista.configurada !== false && !lista.falha;
+  const conectadas = (lista.instancias || []).filter(i => i.conectada).length;
   caixa.append(
-   linha('Evolution', estado.configurada ? (conectada ? 'Conectada' : 'Desconectada') : 'Não configurada', conectada ? 'success' : 'danger'),
+   linha('Evolution', configurada ? (conectadas ? `${plural(conectadas, 'instância conectada', 'instâncias conectadas')}` : 'Nenhuma instância conectada') : 'Não configurada', conectadas ? 'success' : 'danger'),
    linha('Envio automático', fila?.envio_ligado ? 'Ligado' : 'Desligado', fila?.envio_ligado ? 'success' : 'warning'),
   );
-  if (estado.instancia) caixa.append(el('p', `Instância ${estado.instancia}`, 'email-help'));
-  if (!estado.configurada) caixa.append(el('p', 'Preencha EVOLUTION_URL, EVOLUTION_INSTANCE e EVOLUTION_API_KEY em Configurações → Integrações → WhatsApp.', 'email-help'));
-  else if (!conectada) caixa.append(el('p', `${estado.motivo || 'A instância não está conectada.'} Enquanto isso, as mensagens esperam na fila (e expiram em 48 horas).`, 'email-help'));
+  if (!configurada) caixa.append(el('p', lista.falha || 'Preencha EVOLUTION_URL, EVOLUTION_INSTANCE e EVOLUTION_API_KEY em Configurações → Integrações → WhatsApp.', 'email-help'));
+  else if (lista.todas === false) caixa.append(el('p', 'A chave da Evolution é de uma instância só, então o Core vê apenas a instância padrão. Para listar todas, use a chave global (AUTHENTICATION_API_KEY da Evolution).', 'email-help'));
   if (fila?.disponivel && !fila.envio_ligado) caixa.append(el('p', 'O envio está desligado: nada sai, as mensagens só acumulam na fila. Para ligar, defina WHATSAPP_ENVIO como "ligado" em Configurações → Integrações → WhatsApp.', 'email-help'));
   return caixa;
+ }
+
+ // ---------- instâncias ----------
+ function instancias() {
+  const faixa = el('div', undefined, 'wa-instancias'); faixa.setAttribute('role', 'group'); faixa.setAttribute('aria-label', 'Instância');
+  if (!lista) return faixa;
+  if (!(lista.instancias || []).length) { faixa.append(el('p', 'Nenhuma instância encontrada na Evolution.', 'email-empty')); return faixa; }
+  for (const i of lista.instancias) {
+   const b = el('button', undefined, 'wa-instancia' + (i.name === instancia ? ' active' : '')); b.type = 'button'; b.setAttribute('aria-pressed', String(i.name === instancia)); b.dataset.instancia = i.name;
+   const topo = el('span', undefined, 'wa-instancia-topo'); topo.append(el('strong', i.name), ...(i.nao_lidas ? [el('span', String(i.nao_lidas), 'wa-nao-lida')] : []));
+   const [rotulo, tom] = ESTADOS[i.state] || [i.state, 'neutral'];
+   b.append(topo, el('small', [i.profile, i.number].filter(Boolean).join(' · ') || (i.name === lista.padrao ? 'Instância padrão' : ''), 'detail'), selo(rotulo, tom));
+   b.onclick = () => { instancia = i.name; guardar(instancia); aberta = null; conversa = null; conversas = null; fila = null; carregarDaInstancia(); desenhar(); };
+   faixa.append(b);
+  }
+  return faixa;
  }
 
  // ---------- Conversas ----------
  async function abrir(numero) {
   aberta = numero; conversa = null; erroConversa = ''; desenhar();
   try {
-   const r = await api(`/api/whatsapp/conversations/${numero}`);
+   const r = await api(`/api/whatsapp/conversations/${numero}${q()}`);
    if (aberta !== numero) return;
    conversa = r; desenhar();
    const item = conversas?.conversas.find(c => c.number === numero);
    if (item?.unread) {
-    await api(`/api/whatsapp/conversations/${numero}/lida`, 'POST', {});
+    await api(`/api/whatsapp/conversations/${numero}/lida${q()}`, 'POST', {});
     conversas.nao_lidas -= item.unread; item.unread = 0;
+    const atual = lista?.instancias?.find(i => i.name === instancia); if (atual) atual.nao_lidas = Math.max(0, (atual.nao_lidas || 0) - 1);
     if (aberta === numero) desenhar();
    }
   } catch (e) { if (aberta === numero) { erroConversa = e.message; desenhar(); } }
@@ -73,7 +103,7 @@ export function setupWhatsapp({ api }) {
   if (!conversa) { painel.append(el('p', 'Carregando conversa…', 'email-empty')); return painel; }
   const item = conversas?.conversas.find(c => c.number === aberta);
   const topo = el('header', undefined, 'wa-fio-topo');
-  topo.append(el('strong', item?.lead_name || conversa.name || aberta), el('small', [aberta, conversa.lead_id ? 'lead do funil' : 'sem lead ligado'].join(' · ')));
+  topo.append(el('strong', item?.lead_name || conversa.name || aberta), el('small', [aberta, conversa.lead_id ? 'lead do funil' : 'sem lead ligado', `via ${instancia}`].join(' · ')));
   const mensagens = el('div', undefined, 'wa-mensagens');
   for (const m of conversa.mensagens) {
    const b = el('div', undefined, `wa-msg ${m.direcao}`); b.dataset.direcao = m.direcao;
@@ -93,7 +123,7 @@ export function setupWhatsapp({ api }) {
    e.preventDefault();
    if (!texto.value.trim()) return;
    enviar.disabled = true;
-   try { await api(`/api/whatsapp/conversations/${aberta}/responder`, 'POST', { text: texto.value }); aviso = 'Resposta na fila.'; await abrir(aberta); }
+   try { await api(`/api/whatsapp/conversations/${aberta}/responder`, 'POST', { text: texto.value, instance: instancia }); aviso = 'Resposta na fila.'; await abrir(aberta); }
    catch (err) { ajuda.textContent = err.message; ajuda.classList.add('email-outbox-erro'); enviar.disabled = false; }
   };
   painel.append(topo, mensagens, form);
@@ -102,24 +132,28 @@ export function setupWhatsapp({ api }) {
  }
 
  function painelConversas() {
-  const caixa = el('section', undefined, 'wa-caixa');
-  if (!conversas) { caixa.append(el('p', 'Carregando conversas…', 'email-empty')); return caixa; }
+  const bloco = el('div', undefined, 'wa-conversas');
+  bloco.append(instancias());
+  if (!instancia) { bloco.append(el('p', 'Escolha uma instância para ver as conversas dela.', 'email-empty')); return bloco; }
+  if (!conversas) { bloco.append(el('p', 'Carregando conversas…', 'email-empty')); return bloco; }
   if (!conversas.disponivel) {
    const v = el('div', undefined, 'email-empty');
    v.append(createIcon('message-circle'), el('h2', 'Caixa de entrada'), el('p', conversas.falha || 'Disponível assim que a atualização do banco (migração 063) for aplicada.'));
-   caixa.append(v); return caixa;
+   bloco.append(v); return bloco;
   }
-  const lista = el('div', undefined, 'wa-lista'); lista.setAttribute('role', 'list');
-  if (!conversas.conversas.length) lista.append(el('p', 'Nenhuma resposta recebida ainda. Quando um lead responder no WhatsApp, a conversa aparece aqui (o webhook da Evolution precisa apontar para o Core).', 'email-empty'));
+  const caixa = el('section', undefined, 'wa-caixa');
+  const itens = el('div', undefined, 'wa-lista'); itens.setAttribute('role', 'list');
+  if (!conversas.conversas.length) itens.append(el('p', `Nenhuma resposta recebida em ${instancia} ainda. Quando um lead responder no WhatsApp, a conversa aparece aqui (o webhook da Evolution precisa apontar para o Core).`, 'email-empty'));
   for (const c of conversas.conversas) {
    const b = el('button', undefined, 'wa-conversa' + (c.number === aberta ? ' active' : '')); b.type = 'button'; b.setAttribute('role', 'listitem');
    const topo = el('span', undefined, 'wa-conversa-topo'); topo.append(el('strong', c.lead_name || c.name || c.number), el('small', quando(c.last_at)));
    const base = el('span', undefined, 'wa-conversa-base'); base.append(el('span', cortar(c.last_text, 70)));
    if (c.unread) base.append(el('span', String(c.unread), 'wa-nao-lida'));
-   b.append(topo, base); b.onclick = () => abrir(c.number); lista.append(b);
+   b.append(topo, base); b.onclick = () => abrir(c.number); itens.append(b);
   }
-  caixa.append(lista, fio());
-  return caixa;
+  caixa.append(itens, fio());
+  bloco.append(caixa);
+  return bloco;
  }
 
  // ---------- Atividade da fila ----------
@@ -134,13 +168,13 @@ export function setupWhatsapp({ api }) {
   const c = fila.contagem || {};
   caixa.append(el('p', `Últimos 30 dias: ${plural(c.sent || 0, 'enviada', 'enviadas')}, ${c.queued || 0} na fila, ${plural(c.failed || 0, 'com falha', 'com falha')}${fila.suprimidos ? ` · ${plural(fila.suprimidos, 'número bloqueado', 'números bloqueados')}` : ''}.`, 'email-note'));
   const nota = el('p', aviso, 'email-note'); nota.setAttribute('role', 'status'); aviso = '';
-  const lista = el('div', undefined, 'email-outbox');
-  if (!fila.itens.length) lista.append(el('p', 'Nenhuma mensagem na fila ainda. As automações de lead com a ação "Enviar WhatsApp ao lead" ou "Avisar a equipe no WhatsApp" aparecem aqui.', 'email-empty'));
+  const itens = el('div', undefined, 'email-outbox');
+  if (!fila.itens.length) itens.append(el('p', 'Nenhuma mensagem na fila ainda. As automações de lead com a ação "Enviar WhatsApp ao lead" ou "Avisar a equipe no WhatsApp" aparecem aqui.', 'email-empty'));
   for (const m of fila.itens) {
    const linha = el('article', undefined, 'email-outbox-item'); linha.dataset.id = m.id; linha.dataset.status = m.status;
    const topo = el('div', undefined, 'email-outbox-top'); const [rotulo, tom] = SITUACAO[m.status] || [m.status, 'neutral'];
    topo.append(selo(rotulo, tom), el('strong', cortar(m.body_text, 140)));
-   const meta = [m.to_name || m.to_number, TIPO[m.kind], quando(m.sent_at || m.created_at), m.attempts > 1 ? `${m.attempts} tentativas` : null].filter(Boolean).join(' · ');
+   const meta = [m.to_name || m.to_number, TIPO[m.kind], m.instance ? `via ${m.instance}` : null, quando(m.sent_at || m.created_at), m.attempts > 1 ? `${m.attempts} tentativas` : null].filter(Boolean).join(' · ');
    linha.append(topo, el('p', meta, 'email-help'));
    if (m.last_error) linha.append(el('p', m.last_error, 'email-help email-outbox-erro'));
    const acoes = el('div', undefined, 'email-outbox-acoes');
@@ -155,29 +189,45 @@ export function setupWhatsapp({ api }) {
     acoes.append(b);
    }
    if (acoes.childElementCount) linha.append(acoes);
-   lista.append(linha);
+   itens.append(linha);
   }
-  caixa.append(nota, lista);
+  caixa.append(nota, itens);
   return caixa;
+ }
+
+ function painelAtividade() {
+  const bloco = el('div', undefined, 'wa-atividade');
+  const barra = el('div', undefined, 'wa-filtro'), rot = el('label', undefined, 'au-espaco'), sel = el('select'); sel.setAttribute('aria-label', 'Instância');
+  for (const [v, t] of [['', 'Todas as instâncias'], ...(lista?.instancias || []).map(i => [i.name, i.name])]) { const o = el('option', t); o.value = v; sel.append(o); }
+  sel.value = instancia === '*' ? '' : instancia;
+  sel.onchange = () => { instancia = sel.value; guardar(instancia); fila = null; carregarDaInstancia(); desenhar(); };
+  rot.append(el('span', 'Instância'), sel); barra.append(rot);
+  bloco.append(barra, atividade());
+  return bloco;
+ }
+
+ function painelAgentes() {
+  agentes ??= painelDeAgentes({ api, instancias: lista?.instancias || [], reportError });
+  return agentes;
  }
 
  function desenhar() {
   const root = host(); if (!root) return;
   root.replaceChildren(); root.classList.add('email-hub');
   const intro = el('div', undefined, 'email-intro');
-  intro.append(createIcon('message-circle'), el('p', 'Mensagens de WhatsApp enviadas pelas automações do funil e respondidas pelos leads, pela Evolution API.'));
+  intro.append(createIcon('message-circle'), el('p', 'Instâncias do WhatsApp, conversas com os leads, o que está na fila e os agentes de IA, pela Evolution API.'));
   const abas = el('div'); abas.id = 'whatsapp-tabs';
-  root.append(intro, conexao(), abas);
+  root.append(intro, resumo(), abas);
   const naoLidas = conversas?.nao_lidas;
   mountTabs({
    host: abas, active: aba, label: 'Seções do WhatsApp', prefix: 'whatsapp',
-   tabs: [{ key: 'conversas', label: 'Conversas', count: Number.isFinite(naoLidas) && naoLidas > 0 ? naoLidas : undefined }, { key: 'atividade', label: 'Atividade' }],
-   onChange: key => { aba = key; desenhar(); },
+   tabs: [{ key: 'conversas', label: 'Conversas', count: Number.isFinite(naoLidas) && naoLidas > 0 ? naoLidas : undefined }, { key: 'atividade', label: 'Atividade' }, { key: 'agentes', label: 'Agentes de IA' }],
+   onChange: key => { aba = key; if (key === 'atividade') { fila = null; carregarDaInstancia(); } desenhar(); },
   });
-  const painel = aba === 'conversas' ? painelConversas() : atividade();
+  const painel = aba === 'conversas' ? painelConversas() : aba === 'atividade' ? painelAtividade() : painelAgentes();
   painel.id = `whatsapp-panel-${aba}`; painel.setAttribute('role', 'tabpanel'); painel.setAttribute('aria-labelledby', `whatsapp-tab-${aba}`);
   root.append(painel);
  }
 
- return { load: carregar, clear() { geracao++; fila = null; estado = null; erro = ''; aviso = ''; conversas = null; aberta = null; conversa = null; erroConversa = ''; host()?.replaceChildren(); } };
+ return { load: carregar, clear() { geracao++; fila = null; lista = null; erro = ''; aviso = ''; conversas = null; aberta = null; conversa = null; erroConversa = ''; agentes = null; host()?.replaceChildren(); } };
 }

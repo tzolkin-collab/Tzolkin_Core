@@ -36,7 +36,7 @@ const MOTIVOS = Object.freeze({
 export const envioLigado = env => String(env.WHATSAPP_ENVIO ?? '').trim().toLowerCase() === 'ligado';
 
 /** Um ciclo da fila. Nunca lança: devolve o que fez. `adaptador` e `pausar` são injetáveis (testes). */
-export async function processarFila(pool, { env = vivo.env, adaptador = createEvolutionAdapter({ env }), agora = Date.now, lote = 3, pausar = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
+export async function processarFila(pool, { env = vivo.env, adaptador = createEvolutionAdapter({ env }), criarAdaptador = instance => createEvolutionAdapter({ env, instance }), agora = Date.now, lote = 3, pausar = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
  const t = agora();
  const saida = { reenfileirados: 0, expirados: 0, enviados: 0, falhas: 0, suprimidos: 0, adiados: 0 };
  try {
@@ -44,12 +44,20 @@ export async function processarFila(pool, { env = vivo.env, adaptador = createEv
   saida.expirados = (await pool.query("UPDATE whatsapp_outbox SET status='cancelled', last_error='Expirou na fila: ficou mais de 48 horas sem poder ser enviada.' WHERE status='queued' AND created_at < $1 RETURNING id", [iso(t - VALIDADE_MS)])).rowCount ?? 0;
   if (!envioLigado(env)) return { ...saida, desligado: true };
   if (!adaptador.configured) return { ...saida, desligado: true };
-  const estado = await adaptador.connectionState();
-  if (!estado.ok || !estado.connected) return { ...saida, desconectado: true };
+  // Cada mensagem sai pela instância dela (NULL = a padrão). Só pega as de instância conectada: instância caída não gasta tentativa de ninguém.
+  const devidas = (await pool.query("SELECT DISTINCT instance FROM whatsapp_outbox WHERE status='queued' AND next_attempt_at <= $1 LIMIT 10", [iso(t)])).rows.map(r => r.instance ?? null);
+  const adaptadores = new Map(), liberadas = [];
+  for (const nome of devidas.length ? devidas : [null]) {
+   const ad = !nome || nome === adaptador.instance ? adaptador : criarAdaptador(nome);
+   adaptadores.set(nome ?? '', ad);
+   const estado = await ad.connectionState();
+   if (estado.ok && estado.connected) liberadas.push(nome ?? '');
+  }
+  if (!liberadas.length) return { ...saida, desconectado: true };
   const pegos = (await pool.query(
    `UPDATE whatsapp_outbox SET status='sending', locked_at=$2, attempts=attempts+1
-     WHERE id IN (SELECT id FROM whatsapp_outbox WHERE status='queued' AND next_attempt_at <= $2 ORDER BY next_attempt_at, created_at LIMIT $1 FOR UPDATE SKIP LOCKED)
-     RETURNING id,to_number,body_text,attempts`, [lote, iso(t)])).rows;
+     WHERE id IN (SELECT id FROM whatsapp_outbox WHERE status='queued' AND next_attempt_at <= $2 AND coalesce(instance,'') = ANY($3::text[]) ORDER BY next_attempt_at, created_at LIMIT $1 FOR UPDATE SKIP LOCKED)
+     RETURNING id,to_number,body_text,attempts,instance`, [lote, iso(t), liberadas])).rows;
   let primeira = true;
   for (const m of pegos) {
    if (!primeira) await pausar(PAUSA_ENTRE_MENSAGENS_MS);
@@ -57,7 +65,7 @@ export async function processarFila(pool, { env = vivo.env, adaptador = createEv
    try {
     const barrado = (await pool.query('SELECT 1 FROM whatsapp_suppressions WHERE number=$1 AND revoked_at IS NULL', [m.to_number])).rows.length > 0;
     if (barrado) { await pool.query("UPDATE whatsapp_outbox SET status='suppressed', locked_at=NULL, last_error='Número na lista de supressão.' WHERE id=$1", [m.id]); saida.suprimidos++; continue; }
-    const r = await adaptador.sendText({ number: m.to_number, text: m.body_text });
+    const r = await (adaptadores.get(m.instance ?? '') ?? adaptador).sendText({ number: m.to_number, text: m.body_text });
     if (r.ok) {
      await pool.query("UPDATE whatsapp_outbox SET status='sent', locked_at=NULL, sent_at=$2, provider_message_id=$3, last_error=NULL WHERE id=$1", [m.id, iso(agora()), r.messageId ?? null]);
      saida.enviados++;
@@ -83,7 +91,7 @@ export async function processarFila(pool, { env = vivo.env, adaptador = createEv
    }
   }
  } catch (e) {
-  if (e?.code === '42P01') return { ...saida, indisponivel: true };   // migração 062 ainda não aplicada
+  if (e?.code === '42P01' || e?.code === '42703') return { ...saida, indisponivel: true };   // migração 062 ainda não aplicada
   console.error('[whatsapp-fila] ciclo falhou:', e?.message);
   return { ...saida, erro: true };
  }
@@ -109,13 +117,15 @@ export function iniciarFilaDeWhatsapp({ pool, env = vivo.env, log = console, cad
 
 export function whatsappFilaRoutes(router, { env = vivo.env, clock = Date.now, criarAdaptador = createEvolutionAdapter } = {}) {
  // Atividade: o que está na fila e o que já saiu. Não chama a Evolution (a lista abre rápido); o estado da conexão é /api/whatsapp/status.
- router.get('/api/whatsapp/outbox', async ({ pool, reply }) => {
+ router.get('/api/whatsapp/outbox', async ({ pool, url, reply }) => {
   let itens = [], contagem = [], suprimidos = 0;
+  const padrao = String(env.EVOLUTION_INSTANCE ?? '').trim(), instancia = url.searchParams.get('instance') || '';
+  if (instancia && !/^[A-Za-z0-9_.-]{1,64}$/.test(instancia)) throw fail(400, 'Instância inválida.');
   try {
-   itens = (await pool.query('SELECT id,kind,to_number,to_name,body_text,status,attempts,last_error,product_id,event,lead_id,created_at,sent_at FROM whatsapp_outbox ORDER BY created_at DESC LIMIT 50')).rows;
+   itens = (await pool.query("SELECT id,kind,to_number,to_name,body_text,status,attempts,last_error,product_id,event,lead_id,created_at,sent_at,coalesce(instance,$1) AS instance FROM whatsapp_outbox WHERE ($2::text = '' OR coalesce(instance,$1) = $2) ORDER BY created_at DESC LIMIT 50", [padrao, instancia])).rows;
    contagem = (await pool.query("SELECT status,count(*)::int AS n FROM whatsapp_outbox WHERE created_at > now() - interval '30 days' GROUP BY status")).rows;
    suprimidos = (await pool.query('SELECT count(*)::int AS n FROM whatsapp_suppressions WHERE revoked_at IS NULL')).rows[0].n;
-  } catch (e) { if (e?.code === '42P01') return reply(200, { disponivel: false, itens: [], contagem: {}, suprimidos: 0 }); throw e; }
+  } catch (e) { if (e?.code === '42P01') return reply(200, { disponivel: false, itens: [], contagem: {}, suprimidos: 0 }); if (e?.code === '42703') return reply(200, { disponivel: false, itens: [], contagem: {}, suprimidos: 0, aviso: 'O WhatsApp com várias instâncias ainda não está disponível neste banco: falta aplicar a migração 064.' }); throw e; }
   reply(200, { disponivel: true, configurada: createEvolutionAdapter({ env }).configured, envio_ligado: envioLigado(env), itens, contagem: Object.fromEntries(contagem.map(c => [c.status, c.n])), suprimidos });
  }, { body: false });
 

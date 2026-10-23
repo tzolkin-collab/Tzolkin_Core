@@ -9,7 +9,7 @@ const LEAD = { email: 'maria@exemplo.com', whatsapp: '(31) 99759-9216', lead_nam
 const DADOS = { spaceId: 'sites', leadId: 'l1', automationId: 'a1', evento: 'lead.criado' };
 
 // Banco falso: guarda as consultas e responde por trecho do SQL.
-function banco({ lead = LEAD, jaNaFila = false, semTabela = false, pegos = [], suprimidos = [], acoes = null } = {}) {
+function banco({ lead = LEAD, jaNaFila = false, semTabela = false, pegos = [], suprimidos = [], acoes = null, devidas = [] } = {}) {
  const sql = [];
  return {
   sql,
@@ -18,14 +18,15 @@ function banco({ lead = LEAD, jaNaFila = false, semTabela = false, pegos = [], s
    if (acoes && texto.includes('FROM automations')) return { rows: [{ id: 'auto-1', name: 'Regra', actions: acoes }] };
    if (texto.includes('FROM commercial_leads l')) return { rows: lead ? [lead] : [] };
    if (texto.startsWith('INSERT INTO whatsapp_outbox')) { if (semTabela) throw Object.assign(new Error('relation'), { code: '42P01' }); return { rows: jaNaFila ? [] : [{ id: 'wa-1' }] }; }
+   if (texto.startsWith('SELECT DISTINCT instance')) return { rows: devidas };
    if (texto.includes("SET status='sending'")) return { rows: pegos };
    if (texto.includes('FROM whatsapp_suppressions')) return { rows: suprimidos.includes(p[0]) ? [{}] : [] };
    return { rows: [], rowCount: 0 };
   },
  };
 }
-const adaptadorFake = ({ conectado = true, resposta = { ok: true, messageId: 'M1' }, enviados = [] } = {}) => ({
- configured: true,
+const adaptadorFake = ({ conectado = true, resposta = { ok: true, messageId: 'M1' }, enviados = [], instance = 'padrao' } = {}) => ({
+ configured: true, instance,
  async connectionState() { return { ok: true, state: conectado ? 'open' : 'close', connected: conectado }; },
  async sendText(m) { enviados.push(m); return resposta; },
 });
@@ -134,4 +135,34 @@ test('migração 062: só adiciona, número só com dígitos, idempotência úni
  assert.match(sql, /idempotency_key text NOT NULL UNIQUE/);
  assert.match(sql, /to_number ~ '\^\[0-9\]\{10,15\}\$'/);
  assert.match(sql, /revoked_at timestamptz/);
+});
+
+test('fila: cada mensagem sai pela instância dela; instância desconectada não leva as outras junto', async () => {
+ const enviados = { padrao: [], suporte: [], comercial: [] };
+ const adaptadores = { padrao: adaptadorFake({ enviados: enviados.padrao }), suporte: adaptadorFake({ enviados: enviados.suporte, instance: 'suporte' }), comercial: adaptadorFake({ enviados: enviados.comercial, instance: 'comercial', conectado: false }) };
+ const c = banco({ devidas: [{ instance: null }, { instance: 'suporte' }, { instance: 'comercial' }], pegos: [
+  { id: 'a', to_number: '5531997599216', body_text: 'padrao', attempts: 1, instance: null },
+  { id: 'b', to_number: '5511988887777', body_text: 'suporte', attempts: 1, instance: 'suporte' }] });
+ const r = await processarFila(c, { env: LIGADO, adaptador: adaptadores.padrao, criarAdaptador: nome => adaptadores[nome], ...SEM_PAUSA });
+ assert.equal(r.enviados, 2);
+ assert.deepEqual(enviados.padrao.map(m => m.text), ['padrao']);
+ assert.deepEqual(enviados.suporte.map(m => m.text), ['suporte']);
+ assert.equal(enviados.comercial.length, 0);
+ const pegar = c.sql.find(q => q.texto.includes("SET status='sending'"));
+ assert.deepEqual(pegar.p[2].sort(), ['', 'suporte'], 'a instância desconectada fica fora do que é pego');
+});
+
+test('fila: com todas as instâncias desconectadas não pega nada', async () => {
+ const c = banco({ devidas: [{ instance: 'comercial' }], pegos: [{ id: 'a', to_number: '5531997599216', body_text: 'x', attempts: 1, instance: 'comercial' }] });
+ const r = await processarFila(c, { env: LIGADO, adaptador: adaptadorFake(), criarAdaptador: () => adaptadorFake({ conectado: false }), ...SEM_PAUSA });
+ assert.equal(r.desconectado, true);
+ assert.ok(!c.sql.some(q => q.texto.includes("SET status='sending'")));
+});
+
+test('migração 064: só adiciona colunas opcionais e índices', async () => {
+ const { readFileSync } = await import('node:fs');
+ const sql = readFileSync(new URL('../../db/migrations/064_whatsapp_instancias.sql', import.meta.url), 'utf8').replace(/--.*$/gm, '');
+ assert.doesNotMatch(sql, /\b(DROP|DELETE|TRUNCATE|UPDATE|RENAME)\b/i);
+ assert.equal((sql.match(/ADD COLUMN IF NOT EXISTS instance text CHECK \(instance IS NULL OR/g) || []).length, 2);
+ assert.doesNotMatch(sql, /NOT NULL/, 'a coluna é opcional: o que já foi gravado continua válido');
 });

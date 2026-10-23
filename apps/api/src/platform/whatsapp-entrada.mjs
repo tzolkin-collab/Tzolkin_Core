@@ -1,6 +1,7 @@
 // Mensagens de WhatsApp que chegam pelo webhook da Evolution API: o que vale a pena guardar, e onde. Funções puras onde dá, para testar sem rede.
 import { timingSafeEqual } from 'node:crypto';
 
+export const MENSAGEM_064 = 'O WhatsApp com várias instâncias ainda não está disponível neste banco: falta aplicar a migração 064.';
 export const MENSAGEM_063 = 'A caixa de entrada de WhatsApp ainda não está disponível neste banco: falta aplicar a migração 063.';
 
 /** Palavras que, sozinhas, são um pedido para parar de receber. */
@@ -20,13 +21,13 @@ const textoDe = m => m?.conversation ?? m?.extendedTextMessage?.text ?? m?.image
 const MIDIA = ['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage', 'contactMessage', 'locationMessage'];
 
 /**
- * Do corpo do webhook, as mensagens RECEBIDAS de uma pessoa (nada de grupo, status, mensagem nossa nem de outra instância).
- * Devolve { evento, mensagens: [{ id, numero, nome, texto, midia, em }] }; `mensagens` vazio = nada a guardar (também é sucesso).
+ * Do corpo do webhook, as mensagens RECEBIDAS de uma pessoa (nada de grupo, status nem mensagem nossa), de qualquer instância do servidor.
+ * Devolve { evento, mensagens: [{ id, instancia, numero, nome, texto, midia, em }] }; `mensagens` vazio = nada a guardar (também é sucesso).
  */
-export function extrairMensagens(corpo, { instancia } = {}) {
+export function extrairMensagens(corpo) {
  const evento = String(corpo?.event ?? '').toLowerCase().replace(/_/g, '.');
  if (evento !== 'messages.upsert') return { evento, mensagens: [] };
- if (instancia && corpo?.instance && String(corpo.instance) !== String(instancia)) return { evento, mensagens: [] };
+ const instancia = /^[A-Za-z0-9_.-]{1,64}$/.test(String(corpo?.instance ?? '')) ? String(corpo.instance) : null;
  const lista = Array.isArray(corpo.data) ? corpo.data : corpo.data ? [corpo.data] : [];
  const mensagens = [];
  for (const d of lista) {
@@ -39,7 +40,7 @@ export function extrairMensagens(corpo, { instancia } = {}) {
   const texto = String(textoDe(d.message) ?? '').trim().slice(0, 4096) || (midia ? '[mídia]' : '');
   if (!texto) continue;
   const segundos = Number(d.messageTimestamp);
-  mensagens.push({ id: chave.id, numero: m[1], nome: typeof d.pushName === 'string' ? d.pushName.trim().slice(0, 200) || null : null, texto, midia, em: Number.isFinite(segundos) && segundos > 0 ? new Date(segundos * 1000) : new Date() });
+  mensagens.push({ id: chave.id, instancia, numero: m[1], nome: typeof d.pushName === 'string' ? d.pushName.trim().slice(0, 200) || null : null, texto, midia, em: Number.isFinite(segundos) && segundos > 0 ? new Date(segundos * 1000) : new Date() });
  }
  return { evento, mensagens };
 }
@@ -53,9 +54,9 @@ export async function registrarMensagem(db, m) {
   `SELECT l.id, l.product_id FROM commercial_leads l LEFT JOIN stakeholders s ON s.id=l.stakeholder_id
     WHERE right(regexp_replace(coalesce(l.whatsapp, s.phone, ''), '\\D', '', 'g'), 8) = $1 ORDER BY l.created_at DESC LIMIT 1`, [m.numero.slice(-8)])).rows[0] ?? null;
  const r = await db.query(
-  `INSERT INTO whatsapp_inbox(provider_message_id,from_number,push_name,body_text,has_media,lead_id,product_id,received_at)
-   VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (provider_message_id) DO NOTHING RETURNING id`,
-  [m.id, m.numero, m.nome, m.texto, m.midia, lead?.id ?? null, lead?.product_id ?? null, m.em.toISOString()]);
+  `INSERT INTO whatsapp_inbox(provider_message_id,from_number,push_name,body_text,has_media,lead_id,product_id,received_at,instance)
+   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (provider_message_id) DO NOTHING RETURNING id`,
+  [m.id, m.numero, m.nome, m.texto, m.midia, lead?.id ?? null, lead?.product_id ?? null, m.em.toISOString(), m.instancia ?? null]);
  const novo = r.rows.length > 0;
  const saiu = novo && !m.midia && ehPedidoDeSaida(m.texto);
  if (saiu) {

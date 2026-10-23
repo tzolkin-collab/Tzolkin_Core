@@ -50,6 +50,7 @@ const FILES = {
  '/controls.css': ['controls.css', 'text/css'],
  '/peek.js': ['peek.js', 'text/javascript'],
  '/whatsapp.js': ['whatsapp.js', 'text/javascript'],
+ '/whatsapp-agentes.js': ['whatsapp-agentes.js', 'text/javascript'],
  '/crm-pagamentos.js': ['crm-pagamentos.js', 'text/javascript'],
  '/crm-pagamentos.css': ['crm-pagamentos.css', 'text/css'],
  '/fluxo.js': ['fluxo.js', 'text/javascript'],

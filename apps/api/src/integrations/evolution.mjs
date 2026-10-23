@@ -1,6 +1,6 @@
 // Evolution API (WhatsApp) v2: envio de texto e estado da conexão. Só servidor; a chave nunca sai daqui nem entra em log.
 //
-// O Core fala com UMA instância (EVOLUTION_INSTANCE) de UMA Evolution (EVOLUTION_URL). Cada método devolve um objeto com `ok` e, se
+// O Core fala com UMA Evolution (EVOLUTION_URL), por padrão pela instância EVOLUTION_INSTANCE; `instance` escolhe outra do mesmo servidor. Cada método devolve um objeto com `ok` e, se
 // falhou, `reason` (um motivo estável, que a fila usa para decidir entre tentar de novo e desistir), sem nunca lançar por falha de rede.
 //
 //   unauthorized  chave recusada (401/403): não adianta tentar de novo
@@ -45,15 +45,15 @@ const enderecoSeguro = valor => {
  return u;
 };
 
-export function createEvolutionAdapter({ env = process.env, fetchImpl = fetch } = {}) {
+export function createEvolutionAdapter({ env = process.env, fetchImpl = fetch, instance: escolhida } = {}) {
  const base = String(env.EVOLUTION_URL || '').trim();
- const name = String(env.EVOLUTION_INSTANCE || '').trim();
+ const name = String(escolhida || env.EVOLUTION_INSTANCE || '').trim();
  const key = String(env.EVOLUTION_API_KEY || '').trim();
- if (!base && !name && !key) return { configured: false, async connectionState() { return { ok: false, reason: 'not_configured' }; }, async sendText() { return { ok: false, reason: 'not_configured' }; } };
+ if (!base && !name && !key) return { configured: false, async connectionState() { return { ok: false, reason: 'not_configured' }; }, async sendText() { return { ok: false, reason: 'not_configured' }; }, async listInstances() { return { ok: false, reason: 'not_configured' }; } };
  const origem = enderecoSeguro(base);
  if (!origem || !instancia(name) || !key || /[\r\n]/.test(key)) {
   const invalido = async () => ({ ok: false, reason: 'invalid_config' });
-  return { configured: false, connectionState: invalido, sendText: invalido };
+  return { configured: false, connectionState: invalido, sendText: invalido, listInstances: invalido };
  }
 
  const chamar = async (metodo, caminho, corpo) => {
@@ -78,6 +78,23 @@ export function createEvolutionAdapter({ env = process.env, fetchImpl = fetch } 
  return {
   configured: true,
   instance: name,
+
+  /**
+   * Instâncias do servidor (precisa da chave global da Evolution; com a chave de uma instância só, a Evolution recusa e o Core usa só a padrão).
+   * Aceita os dois formatos que a Evolution devolve: o v2 (um objeto por instância) e o antigo (`{ instance: { instanceName, status } }`).
+   */
+  async listInstances() {
+   const r = await chamar('GET', '/instance/fetchInstances');
+   if (!r.ok) return r;
+   const lista = Array.isArray(r.body) ? r.body : Array.isArray(r.body?.instances) ? r.body.instances : null;
+   if (!lista) return { ok: false, reason: 'invalid' };
+   const instancias = lista.map(i => {
+    const d = i?.instance && typeof i.instance === 'object' ? i.instance : i, nome = String(d?.name ?? d?.instanceName ?? '');
+    const numero = String(d?.ownerJid ?? d?.owner ?? d?.number ?? '').replace(/@.*$/, '').replace(/\D/g, '');
+    return { name: nome, state: String(d?.connectionStatus ?? d?.status ?? 'close'), number: numero || null, profile: typeof d?.profileName === 'string' ? d.profileName : null };
+   }).filter(i => instancia(i.name));
+   return { ok: true, instances: instancias };
+  },
 
   /** `open` = WhatsApp conectado e pronto para enviar. */
   async connectionState() {

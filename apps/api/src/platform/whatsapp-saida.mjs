@@ -19,9 +19,9 @@ export function renderizarMensagem(texto, valores) {
 /** Insere uma linha na fila. Idempotente pela chave. Devolve { criado, id }. */
 export async function enfileirar(client, i) {
  const r = await client.query(
-  `INSERT INTO whatsapp_outbox(idempotency_key,kind,product_id,event,automation_id,lead_id,to_number,to_name,body_text,created_by)
-   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id`,
-  [i.chave, i.tipo, i.produto ?? null, i.evento ?? null, i.automacao ?? null, i.lead ?? null, i.para, i.nome ?? null, i.texto, i.por ?? null]);
+  `INSERT INTO whatsapp_outbox(idempotency_key,kind,product_id,event,automation_id,lead_id,to_number,to_name,body_text,created_by,instance)
+   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (idempotency_key) DO NOTHING RETURNING id`,
+  [i.chave, i.tipo, i.produto ?? null, i.evento ?? null, i.automacao ?? null, i.lead ?? null, i.para, i.nome ?? null, i.texto, i.por ?? null, i.instancia ?? null]);
  return { criado: r.rows.length > 0, id: r.rows[0]?.id ?? null };
 }
 
@@ -38,7 +38,7 @@ async function carregarLead(client, spaceId, leadId) {
 
 const gravar = async (client, dados) => {
  try { return await enfileirar(client, dados); }
- catch (e) { if (e?.code === '42P01') throw new Error(MENSAGEM_062); throw e; }
+ catch (e) { if (e?.code === '42P01') throw new Error(MENSAGEM_062); if (e?.code === '42703') throw new Error('A fila de WhatsApp precisa da migração 064 (instâncias) neste banco.'); throw e; }
 };
 const previa = t => (t.length > 60 ? `${t.slice(0, 57)}…` : t);
 
