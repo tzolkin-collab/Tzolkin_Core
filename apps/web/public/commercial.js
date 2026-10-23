@@ -1,8 +1,8 @@
 import {photoPanel} from './media.js';
 import {mountTabs} from './tabs.js';
-import {dataPanel,fieldsManager} from './space-fields.js';
-import {tasksPanel,automationsManager} from './automations.js';
-import {blockersNotice,requirementsManager} from './stage-requirements.js';
+import {dataPanel} from './space-fields.js';
+import {tasksPanel} from './automations.js';
+import {blockersNotice} from './stage-requirements.js';
 import {tabela,celulaNome,selo,tomDoEstado} from './data-table.js';
 import {criarPeek} from './peek.js';
 import {campoInline} from './inline-edit.js';
@@ -96,9 +96,6 @@ export function setupCommercial({api,openTenant}) {
    {titulo:'Recebido',num:true,celula:l=>date(l.source_created_at||l.created_at).slice(0,10)}
   ]}));
   const nav=el('div',null,'commercial-actions');if(offset)nav.append(button('Anterior',async()=>{offset=Math.max(0,offset-25);await load(product,false);}));if(data.has_more)nav.append(button('Próxima',async()=>{offset+=25;await load(product,false);}));r.append(nav);
-  // Campos próprios do espaço: definir o que cada espaço guarda do lead, da oportunidade e da contratação.
-  const espacos=[...new Map((funis.pipelines||[]).filter(x=>x.is_active).map(x=>[x.space_id,{id:x.space_id,name:x.space_name}])).values()];
-  if(espacos.length){r.append(fieldsManager({api,spaces:espacos,initialSpace:p}));r.append(automationsManager({api,spaces:espacos,pipelines:funis.pipelines||[],initialSpace:p}));r.append(requirementsManager({api,pipelines:funis.pipelines||[],initialSpace:p}));}
  }
  // Oportunidades da etapa escolhida. Mover pede o motivo quando o destino é "Perdido"; ao ganhar, o Core cria a contratação.
  async function opportunityList(r,ticket){

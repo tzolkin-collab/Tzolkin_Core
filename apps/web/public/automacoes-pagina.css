@@ -1,0 +1,24 @@
+/* Tecnologia → Automações: espaço no alto, abas do Core e, dentro de cada aba, texto de apoio + ação à direita, tabela e formulário. */
+#view-automacoes { display: grid; gap: 16px; align-content: start; }
+.au-barra { display: flex; align-items: center; gap: 12px; }
+.au-espaco { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.au-espaco select { width: auto; min-width: 240px; }
+#automacoes-painel { display: grid; gap: 16px; margin-top: 4px; }
+.au-topo { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.au-topo > p { margin: 0; max-width: 78ch; }
+.au-topo > button { flex: none; }
+.au-form { max-width: 760px; }
+.au-form h3 { margin: 0 0 4px; font-size: 16px; }
+.au-funis { display: flex; flex-wrap: wrap; gap: 8px; }
+.au-funil { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 13px; }
+.au-funil.active { border-color: var(--text); background: var(--surface-hover); }
+.au-acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.au-etapa { display: inline-flex; align-items: center; gap: 8px; }
+.au-ponto { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.au-linha-acoes { display: inline-flex; align-items: center; justify-content: flex-end; gap: 2px; }
+.au-historico-bloco { display: grid; gap: 8px; padding: 16px 20px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.au-historico-bloco h3 { margin: 0; font-size: 15px; }
+.au-run { display: flex; align-items: center; gap: 4px; margin: 0; font-size: 13px; }
+.au-embutido > summary { display: none; }
+.au-embutido { border: 0; padding: 0; }
+@media (max-width: 760px) { .au-topo { flex-direction: column; gap: 12px; } .au-espaco select { min-width: 0; width: 100%; } }

@@ -14,6 +14,7 @@ import {paymentInstitution,brazilMonth} from './finance-model.js';
 import {setupEmails} from './emails.js';
 import {setupWhatsapp} from './whatsapp.js';
 import {setupCrmPagamentos} from './crm-pagamentos.js';
+import {setupAutomacoes} from './automacoes-pagina.js';
 import {setupTracking} from './tracking.js';
 import {setupFinance} from './finance.js';
 import {setupBilling} from './billing.js';
@@ -39,6 +40,7 @@ const productPayments=setupProductPayments({api,billing});
 const serviceReceivables=setupServiceReceivables({api});
 const emails=setupEmails({api,configure:product=>openProductModule(product,'product-emails')});
 const whatsapp=setupWhatsapp({api});
+const automacoes=setupAutomacoes({api,reportError});
 // CRM → Pagamentos mora em crm-pagamentos.js (vendas do mês dos processadores e o estado de cada conexão).
 const crmPagamentos = setupCrmPagamentos({ api, reportError, abrirIntegracoes: () => { state.configSecao = 'integracoes'; switchView('settings'); } });
 const productEmails=setupProductEmails({api});
@@ -139,6 +141,7 @@ function clearRenderedData() {
  emails.clear();
  whatsapp.clear();
  crmPagamentos.clear();
+ automacoes.clear();
  billing.clear();
  productPayments.clear();
  resource.clear();
@@ -207,6 +210,7 @@ store.subscribe('view', (view) => {
   if (view === 'leads' || view === 'product-inbound') montarInbound();
   if (view === 'outbound') renderOutbound();
   if (view === 'payments') crmPagamentos.load();
+  if (view === 'automacoes') automacoes.load();
   if (view === 'product-keys' || view === 'product-connections') commercial.keys(state.context).catch(reportError);
   if (view === 'product-clients' || view === 'product-orgs') { if (state.product) renderProductOrganizations(); }
   if (view === 'companies') renderCompanies();

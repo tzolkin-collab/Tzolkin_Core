@@ -21,7 +21,7 @@ const NAVEGACAO = [
  ['Hoje', ['Visão geral', 'Financeiro', 'Acompanhamento']],
  ['CRM', ['Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Outbound', 'E-mails', 'WhatsApp', 'Pagamentos']],
  ['Portfólio', ['Produtos', 'Serviços', 'Contratações']],
- ['Tecnologia', ['Conexões', 'Vercel', 'EasyPanel', 'DNS', 'GitHub', 'Banco de dados']],
+ ['Tecnologia', ['Conexões', 'Automações', 'Vercel', 'EasyPanel', 'DNS', 'GitHub', 'Banco de dados']],
 ];
 
 test('Configurações continua acessível pelo botão fixo do rodapé', () => {
