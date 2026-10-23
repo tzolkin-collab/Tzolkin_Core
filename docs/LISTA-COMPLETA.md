@@ -44,7 +44,7 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 - [x] **P0 [VOCÊ]** Aplicar a migração **045** (a trilha de auditoria ganha a coluna `details`) junto com as outras. Só adiciona uma coluna opcional. *(aplicada em 02/10 no banco compartilhado, com saída 0; conferido: tabelas, colunas e funis semeados existem e os dados antigos não mudaram.)*
 - [x] **P0 [VOCÊ]** Aplicar a migração **044** (eventos, automações e tarefas) junto com as outras. Só cria três tabelas; o banco tem 0 leads. *(aplicada em 02/10 no banco compartilhado, com saída 0; conferido: tabelas, colunas e funis semeados existem e os dados antigos não mudaram.)*
 - [x] **P0 [VOCÊ]** Aplicar a migração **043** (campos próprios por espaço) junto com as outras. Cria uma tabela, duas colunas com padrão e semeia os 4 campos do site; o banco tem 0 leads. *(aplicada em 02/10 no banco compartilhado, com saída 0; conferido: tabelas, colunas e funis semeados existem e os dados antigos não mudaram.)*
-- [ ] **P2** Campos próprios: "obrigatório" vale só no intake; a edição não força preencher os que já existiam. Edição de valor na lista e filtro por campo ficam para depois (os valores moram em `jsonb`; se virar gargalo, tabela própria, como a Kalidash prevê).
+- [x] **P2** Campos próprios: "obrigatório" vale só no intake; a edição não força preencher os que já existiam (feito em 02/10 com validateSpaceData({ enforceRequired: false }) e teste em test/unit/space-fields.test.mjs). Edição de valor na lista e filtro por campo ficam para depois (os valores moram em `jsonb`; se virar gargalo, tabela própria, como a Kalidash prevê).
 - [x] **P1** Funil: requisitos de etapa (bloquear entrar ou sair; tarefa a concluir ou campo a preencher).
   *(feito em 02/10: migração 046, `commercial-gates.mjs` (gate.ts da Kalidash), bloqueio ao mover o lead e a oportunidade com a lista do que falta, e gerenciador no Inbound. Perder, descartar e qualificar nunca ficam presos. Migração 046 aplicada no banco compartilhado em 02/10.)*
 - [x] **P1** Funil, fase 5: eventos e automações (e as tarefas mínimas que a ação "criar tarefa" pede).
@@ -206,7 +206,7 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 - [ ] `CORE-EXECUTION-TODO.md` (aplicar o §4 do STATUS), `FEATURES.md`, `TESTING.md`, `ROADMAP.md`, `PENDENCIAS.md`.
 - [ ] `PRODUCT.md`, `ARCHITECTURE.md`, `DATA-OWNERSHIP.md`, `DOMAIN-MODEL.md`, `DESIGN-SYSTEM.md`, `UX-RELATION-MAP.md`
   (citam Barber/Commerce/Data e a regra antiga de lead).
-- [ ] `decisions/README.md`: ADR 0009 ainda diz "036 não aplicada" (foi aplicada). ADR 0001 e 0003 seguem `PROPOSTO`.
+- [x] `decisions/README.md` e `0009-tipos-de-espaco-do-portfolio.md`: ADR 0009 atualizada para registrar que a 036 foi aplicada (23/10).
 - [ ] `auditoria-2026-09-07/README.md`: registrar o estado de G1 a G9.
 - [ ] ADR 0010 cita `spikes/go-mysql`, que só tem pastas vazias (o git não registra). Escrever o spike ou ajustar a ADR. **[D]**
 

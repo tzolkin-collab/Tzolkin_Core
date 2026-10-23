@@ -1,6 +1,6 @@
 # ADR 0009 — Tipos de espaço do portfólio
 
-- **Status:** `[ACEITA]` em 2026-09-29 (código pronto; migração `036` escrita, **não aplicada**)
+- **Status:** `[ACEITA]` em 2026-09-29 (código pronto; migração `036` aplicada)
 - **Substitui em parte:** [ADR 0007](0007-portfolio-kind-rotulo-ou-regra.md) (o vocabulário de tipos)
 - **Referências:** migração `036_portfolio_espacos.sql`, `apps/api/src/modules/catalog.mjs` (`KIND_REGISTRY`), `portfolio.mjs`
 
