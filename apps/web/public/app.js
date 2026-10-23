@@ -13,6 +13,7 @@ import {providerLogo,createIcon,productFavicon,faviconDoSite} from './icons.js';
 import {paymentInstitution,brazilMonth} from './finance-model.js';
 import {setupEmails} from './emails.js';
 import {setupWhatsapp} from './whatsapp.js';
+import {setupCrmPagamentos} from './crm-pagamentos.js';
 import {setupTracking} from './tracking.js';
 import {setupFinance} from './finance.js';
 import {setupBilling} from './billing.js';
@@ -38,6 +39,8 @@ const productPayments=setupProductPayments({api,billing});
 const serviceReceivables=setupServiceReceivables({api});
 const emails=setupEmails({api,configure:product=>openProductModule(product,'product-emails')});
 const whatsapp=setupWhatsapp({api});
+// CRM → Pagamentos mora em crm-pagamentos.js (vendas do mês dos processadores e o estado de cada conexão).
+const crmPagamentos = setupCrmPagamentos({ api, reportError, abrirIntegracoes: () => { state.configSecao = 'integracoes'; switchView('settings'); } });
 const productEmails=setupProductEmails({api});
 const campaigns=setupCampaigns({api,onError:reportError});
 const finance=setupFinance({api});
@@ -135,6 +138,7 @@ function clearRenderedData() {
  finance.clear();
  emails.clear();
  whatsapp.clear();
+ crmPagamentos.clear();
  billing.clear();
  productPayments.clear();
  resource.clear();
@@ -202,7 +206,7 @@ store.subscribe('view', (view) => {
   if (view === 'clients') renderTenants();
   if (view === 'leads' || view === 'product-inbound') montarInbound();
   if (view === 'outbound') renderOutbound();
-  if (view === 'payments') renderCrmPayments();
+  if (view === 'payments') crmPagamentos.load();
   if (view === 'product-keys' || view === 'product-connections') commercial.keys(state.context).catch(reportError);
   if (view === 'product-clients' || view === 'product-orgs') { if (state.product) renderProductOrganizations(); }
   if (view === 'companies') renderCompanies();
@@ -1308,147 +1312,6 @@ async function renderOutbound() {
  } catch (err) {
   host.replaceChildren(node('p', err.message, 'notice-inline'));
  }
-}
-
-let crmPaymentsTab = 'vendas';
-let crmSalesData = null;
-
-async function renderCrmPayments() {
- const tabsHost = $('crm-payments-tabs');
- const vendasPanel = $('crm-payments-vendas');
- const gatewaysPanel = $('crm-payments-gateways');
- if (!tabsHost || !vendasPanel || !gatewaysPanel) return;
-
- const tabs = [
-  { key: 'vendas', label: 'Vendas e cobranças' },
-  { key: 'gateways', label: 'Gateways e integrações' },
- ];
-
- const money = val => (Number(val || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
- const currMonth = brazilMonth(Date.now());
-
- const mostrarAba = key => {
-  crmPaymentsTab = key;
-  vendasPanel.hidden = key !== 'vendas';
-  gatewaysPanel.hidden = key !== 'gateways';
-  if (key === 'vendas') pintarVendas();
-  else pintarGateways();
- };
-
- mountTabs({ host: tabsHost, tabs, active: crmPaymentsTab, label: 'Abas de pagamentos', prefix: 'crm-pay', onChange: mostrarAba });
-
- async function pintarVendas() {
-  vendasPanel.replaceChildren(node('p', 'Carregando vendas…', 'detail'));
-  try {
-   if (!crmSalesData) crmSalesData = await api('/api/finance/sales?month=' + currMonth);
-   const providers = crmSalesData?.providers || {};
-   const allSales = Object.values(providers).flatMap(p => p.snapshot?.payload?.sales || []).sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
-
-   const gross = allSales.reduce((acc, sale) => acc + (sale.gross || 0), 0);
-   const fees = allSales.reduce((acc, sale) => acc + (sale.fee || 0), 0);
-   const net = allSales.reduce((acc, sale) => acc + (sale.net != null ? sale.net : (sale.gross || 0) - (sale.fee || 0)), 0);
-
-   const toolbar = node('div', undefined, 'section-toolbar');
-   const syncBtn = node('button', 'Sincronizar processadores', 'secondary');
-   syncBtn.type = 'button';
-   syncBtn.onclick = async () => {
-    syncBtn.disabled = true;
-    syncBtn.textContent = 'Sincronizando…';
-    try {
-     await api('/api/finance/sales/sync', 'POST', { month: currMonth });
-     crmSalesData = null;
-     await pintarVendas();
-    } catch (err) {
-     reportError(err);
-    } finally {
-     syncBtn.disabled = false;
-     syncBtn.textContent = 'Sincronizar processadores';
-    }
-   };
-   toolbar.append(node('div', `Mês corrente (${currMonth})`), syncBtn);
-
-   const metrics = node('div', undefined, 'overview-kpis');
-   const cardGross = node('article', undefined, 'metric-card');
-   cardGross.append(node('span', 'Vendas brutas'), node('strong', money(gross)), node('small', 'Confirmadas no período'));
-   const cardFees = node('article', undefined, 'metric-card');
-   cardFees.append(node('span', 'Taxas operacionais'), node('strong', money(fees)), node('small', 'Retidas pelos gateways'));
-   const cardNet = node('article', undefined, 'metric-card');
-   cardNet.append(node('span', 'Líquido recebido'), node('strong', money(net)), node('small', 'Disponível após taxas'));
-   metrics.append(cardGross, cardFees, cardNet);
-
-   if (!allSales.length) {
-    const vazio = node('div', undefined, 'empty-state');
-    vazio.append(
-     node('span', '◈', 'empty-symbol'),
-     node('p', 'Nenhuma venda registrada neste mês.', 'empty-list')
-    );
-    vendasPanel.replaceChildren(toolbar, metrics, vazio);
-    return;
-   }
-
-   const tabelaVendas = tabela({
-    legenda: 'Vendas registradas',
-    linhas: allSales,
-    colunas: [
-     { titulo: 'Data', celula: s => s.date ? new Date(s.date).toLocaleDateString('pt-BR') : '—' },
-     { titulo: 'Processador', celula: s => selo(s.processor === 'stripe' ? 'Stripe' : (s.processor || 'Gateway'), 'tone-info') },
-     { titulo: 'Descrição', celula: s => celulaNome({ nome: s.description || 'Venda', apoio: s.customer_name || s.customer_email || '' }) },
-     { titulo: 'Situação', celula: s => selo(s.status === 'paid' || s.status === 'received' ? 'Pago' : s.status, 'active') },
-     { titulo: 'Bruto', num: true, celula: s => money(s.gross) },
-     { titulo: 'Taxa', num: true, celula: s => money(s.fee) },
-     { titulo: 'Líquido', num: true, celula: s => money(s.net) },
-    ]
-   });
-
-   vendasPanel.replaceChildren(toolbar, metrics, tabelaVendas);
-  } catch (err) {
-   vendasPanel.replaceChildren(node('p', err.message, 'notice-inline'));
-  }
- }
-
- async function pintarGateways() {
-  gatewaysPanel.replaceChildren(node('p', 'Consultando conexões de gateway…', 'detail'));
-  try {
-   const status = await api('/api/integrations/status').catch(() => ({}));
-   const stripeOk = Boolean(status.stripe?.configured ?? status.stripe_configured ?? true);
-   const asaasOk = Boolean(status.asaas?.configured ?? status.asaas_configured ?? false);
-
-   const grid = node('div', undefined, 'overview-layout');
-
-   const stripeCard = node('section', undefined, 'overview-panel');
-   const stripeTitle = node('div', undefined, 'overview-panel-title');
-   const stripeHead = node('div');
-   stripeHead.append(node('span', 'PROCESSADOR', 'overview-kicker'), node('h3', 'Stripe'));
-   stripeTitle.append(stripeHead, selo(stripeOk ? 'Ativo' : 'Pendente', stripeOk ? 'active' : 'building'));
-   stripeCard.append(
-    stripeTitle,
-    node('p', 'Processador de checkout transparente, assinaturas recorrentes e links de pagamento.', 'detail'),
-    node('p', 'Suporta cartões de crédito, débito e cobrança internacional com webhooks sincronizados em tempo real.', 'catalog-caption')
-   );
-
-   const asaasCard = node('section', undefined, 'overview-panel');
-   const asaasTitle = node('div', undefined, 'overview-panel-title');
-   const asaasHead = node('div');
-   asaasHead.append(node('span', 'PROCESSADOR', 'overview-kicker'), node('h3', 'Asaas'));
-   asaasTitle.append(asaasHead, selo(asaasOk ? 'Ativo' : 'Configurar', asaasOk ? 'active' : 'building'));
-   asaasCard.append(
-    asaasTitle,
-    node('p', 'Cobranças bancárias via PIX e boletos registrados.', 'detail'),
-    node('p', 'Integração de conciliação e faturamento nacional com emissão direta.', 'catalog-caption')
-   );
-
-   grid.append(stripeCard, asaasCard);
-
-   const infoSec = node('div', undefined, 'section-toolbar');
-   infoSec.append(node('p', 'Para gerenciar chaves de API, webhooks e contas conectadas, acesse Configurações no rodapé.', 'catalog-caption'));
-
-   gatewaysPanel.replaceChildren(grid, infoSec);
-  } catch (err) {
-   gatewaysPanel.replaceChildren(node('p', err.message, 'notice-inline'));
-  }
- }
-
- mostrarAba(crmPaymentsTab);
 }
 
 /* ---------- vínculo de recurso a dono, nas abas dos provedores ---------- */
