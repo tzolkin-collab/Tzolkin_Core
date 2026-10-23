@@ -32,8 +32,8 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 - [x] **P1** **Rede de segurança do envio** sem banco: o site tenta o intake 2 a 3 vezes (idempotente) e, se falhar,
   manda e-mail interno com o lead. *(proposta, [D])*
   *(feito em 02/10: 3 tentativas e e-mail interno; só vale com `RESEND_API_KEY`, `EMAIL_FROM` e `EMAIL_INTERNAL_TO` no site.)*
-- [ ] **P1** Dedupe por CPF (hash) e CNPJ alfanumérico no intake. O e-mail já deduplica pessoa e empresa (02/10); o documento entra
-  quando o formulário pedir. *(STATUS §3.D G3.)*
+- [x] **P1** Dedupe por CPF (hash) e CNPJ alfanumérico no intake. O e-mail já deduplica pessoa e empresa (02/10); o documento entra
+  quando o formulário pedir. *(STATUS §3.D G3; feito em 23/10: migração 068, platform/documents.mjs e dedupe por hash SHA-256 de CPF e CNPJ alfanumérico em commercial-intake.mjs, com testes em test/unit/intake-dedupe.test.mjs).*
 - [x] **P1** Funil por espaço: pipeline, etapas, fontes, oportunidade (copiar o desenho da Kalidash).
   *(`design/2026-10-01-pipeline-por-espaco-e-atribuicao.md`.)* **[D]** 4 decisões nesse documento.
   *(fase 1 feita em 02/10: migração 040, funis por espaço com funil padrão, etapas, oportunidades e o lead entrando no funil pelo `utm_tzolkin`. Migração 040 aplicada no banco compartilhado em 02/10. Faltam: fontes, qualificar/descartar/mover o lead pela tela, ganhar → contratação.)*

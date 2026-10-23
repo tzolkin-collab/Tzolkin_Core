@@ -89,7 +89,7 @@ Consolidação de **2026-09-29**, verificada contra o código. **Este é o ponto
 |---|---|---|
 | G1 intake vs índice | **Resolvido** no código (sem `ON CONFLICT`, advisory lock, índice `(product_id,source_system,source_ref)`; teste com trigger e rollback) | Nada no código. Passou na suíte de 29/09 |
 | G2 migração e transação | **Quase resolvido**: nenhuma migração tem `BEGIN/COMMIT` de arquivo; `migrate.mjs` é o único dono | Dois arquivos `015_*`; sem teste de falha injetada nem lint que impeça `COMMIT` futuro |
-| G3 idempotência | **Resolvido** (chave por produto, hash, 409, concorrência testada com 6 chamadas) | Dedupe por contato e sugestão de merge; `source_system` cai em `'tzolkin-site'` por padrão |
+| G3 idempotência | **Resolvido** (chave por produto, hash, 409, concorrência testada com 6 chamadas, dedupe por hash de CPF e CNPJ alfanumérico) | Sugestão de merge na interface |
 | G4 credenciais | **Resolvido** (escopos, expiração obrigatória, token uma vez, rotação, revogação, trilha) | Operador sem linha em `operator_accounts`, ou `local-bootstrap`, passa nas ações só de owner (`commercial-keys.mjs:12`); uso da chave não é auditado, só `last_used_at` |
 | G5 checkout de Sites | **Resolvido** (`CAPABILITIES.checkout` exclui `service_line`; gateway responde 404) | Teste HTTP direto de `/api/checkout/sessions` com `sites`; `checkout-gateway.test.mjs` só usa `skiller` |
 | G6 leads | **Parcial**: fila, detalhe, dono, atividades, perda motivada, PF | `commercial_attributions` guarda um toque só; sem oportunidades múltiplas nem histórico de estágio dedicado |

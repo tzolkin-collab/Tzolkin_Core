@@ -5,6 +5,7 @@ import { placeLead } from './commercial-pipelines.mjs';
 import { CHAVES_ATRIBUICAO, atribuicaoEstendida } from '../platform/attribution.mjs';
 import { fieldsOf, validateSpaceData } from '../platform/space-fields.mjs';
 import { emitEvent } from '../platform/automations.mjs';
+import { isValidCpf, isValidCnpj, stripDoc, cpfHash } from '../platform/documents.mjs';
 export { commercialKeyRoutes } from './commercial-keys.mjs';
 
 const optional=(v,max=500)=>v==null||v===''?null:text(v,1,max);
@@ -14,7 +15,7 @@ export const canonical=v=>JSON.stringify(v,(_,value)=>value&&typeof value==='obj
 export function validateIntake(body,productId) {
  input(body,['lead','organization','stakeholder','commercial','attribution','privacy','space_data']);
  const l=body.lead??{},o=body.organization??{},s=body.stakeholder??{},c=body.commercial??{},a=body.attribution??{},p=body.privacy??{};
- input(l,['name','email','whatsapp','message']);input(o,['name','slug','organization_type']);input(s,['role','title']);input(c,['product_id','service_model','label']);
+ input(l,['name','email','whatsapp','message','document','cpf']);input(o,['name','slug','organization_type','document','cnpj','tax_id']);input(s,['role','title','document','cpf']);input(c,['product_id','service_model','label']);
  input(a,CHAVES_ATRIBUICAO);
  input(p,['notice_version','contact_allowed','captured_at','source']);
  // O espaço é o da CHAVE: quem chama não precisa dizer qual é. Se disser, tem que ser o mesmo (aponta chave trocada em vez de gravar no espaço errado).
@@ -26,12 +27,26 @@ export function validateIntake(body,productId) {
  const orgType=o.organization_type??(o.name?'company':'person');if(!['company','person','nonprofit'].includes(orgType))throw fail(400,'Tipo de organização inválido.');
  if(s.role&&!['owner','decision_maker','champion','finance','technical','operational','student','contact'].includes(s.role))throw fail(400,'Papel inválido.');
  if(p.contact_allowed!=null&&typeof p.contact_allowed!=='boolean')throw fail(400,'Preferência inválida.');
+ const rawCpf=optional(l.cpf,30)??optional(l.document,30)??optional(s.cpf,30)??optional(s.document,30);
+ let cpfHashVal=null;
+ if(rawCpf){
+  if(!isValidCpf(rawCpf))throw fail(400,'CPF inválido.');
+  cpfHashVal=cpfHash(rawCpf);
+ }
+ const rawCnpj=optional(o.cnpj,30)??optional(o.tax_id,30)??optional(o.document,30);
+ let taxIdVal=null;
+ if(rawCnpj){
+  if(!isValidCnpj(rawCnpj))throw fail(400,'CNPJ inválido.');
+  taxIdVal=stripDoc(rawCnpj);
+ }
  const date=v=>{if(!v)return null;const d=Date.parse(v);if(!Number.isFinite(d)||d>Date.now()+300000)throw fail(400,'Data inválida.');return new Date(d).toISOString();};
  const privacy={notice_version:optional(p.notice_version,120),contact_allowed:p.contact_allowed===true,captured_at:date(p.captured_at),source:optional(p.source,120)||'unspecified'};
  if(privacy.contact_allowed&&(!privacy.notice_version||!privacy.captured_at))throw fail(400,'Preferência exige versão do aviso e data.');
  return {name,email,phone,message:multiline(l.message,5000),org_name:optional(o.name,200)||name,org_type:orgType,
  role:s.role||'contact',title:optional(s.title,120),product_id:productId,service_model:c.service_model,interest:optional(c.label,200)||'Contato comercial',
  source_system:optional(a.source_system,80)||'tzolkin-site',source_ref:optional(a.source_ref,200),source_created_at:date(a.created_at),privacy,
+ ...(cpfHashVal?{cpf_hash:cpfHashVal}:{}),
+ ...(taxIdVal?{tax_id:taxIdVal}:{}),
  // Os 7 campos de sempre entram sempre (null quando ausentes), como antes. A parte estendida
  // (ids do anúncio, sessão, localização) só entra se foi enviada, para o hash de um pedido
  // antigo não mudar (ver platform/attribution.mjs).
@@ -42,21 +57,50 @@ export function validateIntake(body,productId) {
 export async function recordActivity(client,lead,kind,operator,note=null,details={}) {
  await client.query('INSERT INTO commercial_activities(lead_id,kind,note,details,actor_subject,actor_email) VALUES($1,$2,$3,$4,$5,$6)',[lead,kind,note,details,operator.subject,operator.email]);
 }
-// Acha a pessoa pelo e-mail (sem diferenciar maiúsculas) e a empresa entre as dela, ou deixa criar o que faltar,
-// sem duplicar (regra do resolveParties da Kalidash). Só o e-mail identifica a pessoa: o telefone sozinho não, porque
-// é compartilhado (recepção, família). A empresa só é reaproveitada se for da própria pessoa e tiver o mesmo nome;
-// nome igual em outra pessoa vira outra empresa. Cliente que volta (empresa deixou de ser lead) sai com a marca.
-// Lock por e-mail, entre espaços, para dois envios simultâneos não criarem a mesma pessoa duas vezes.
+// Acha a pessoa (e-mail ou hash de CPF) e a empresa (CNPJ ou entre as da pessoa pelo nome), ou deixa criar o que faltar,
+// sem duplicar (regra do resolveParties da Kalidash). Telefone sozinho não identifica pessoa por ser compartilhado.
+// A empresa pode ser localizada diretamente por CNPJ, ou reaproveitada se for da pessoa e tiver o mesmo nome.
+// Locks por e-mail (28), CPF hash (29) e CNPJ (30), em ordem fixa, para requisições concorrentes não duplicarem registros.
 async function resolveParties(client,v){
- if(!v.email)return {person:null,tenant:null,returning:false};
- await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,28))',[v.email]);
- const person=(await client.query('SELECT id FROM stakeholders WHERE lower(email)=$1 ORDER BY created_at,id LIMIT 1',[v.email])).rows[0]?.id??null;
- if(!person)return {person:null,tenant:null,returning:false};
- const orgs=(await client.query(`SELECT t.id,t.name,t.relationship_kind,t.lifecycle_status FROM organization_stakeholders os JOIN tenants t ON t.id=os.tenant_id
-  WHERE os.stakeholder_id=$1 AND t.relationship_kind<>'internal' ORDER BY os.is_primary DESC,t.created_at,t.id`,[person])).rows;
- const same=orgs.find(o=>o.name.trim().toLowerCase()===v.org_name.trim().toLowerCase());
- const returning=orgs.some(o=>o.relationship_kind==='customer'&&['onboarding','active','paused','completed'].includes(o.lifecycle_status));
- return {person,tenant:same?.id??null,returning};
+ if(!v.email&&!v.cpf_hash&&!v.tax_id)return {person:null,tenant:null,returning:false};
+ if(v.email)await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,28))',[v.email]);
+ if(v.cpf_hash)await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,29))',[v.cpf_hash]);
+ if(v.tax_id)await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,30))',[v.tax_id]);
+
+ let person=null;
+ if(v.cpf_hash){
+  try{
+   person=(await client.query('SELECT id FROM stakeholders WHERE document_hash=$1 ORDER BY created_at,id LIMIT 1',[v.cpf_hash])).rows[0]?.id??null;
+  }catch(e){if(e?.code!=='42703')throw e;}
+ }
+ if(!person&&v.email){
+  person=(await client.query('SELECT id FROM stakeholders WHERE lower(email)=$1 ORDER BY created_at,id LIMIT 1',[v.email])).rows[0]?.id??null;
+ }
+
+ let tenant=null;
+ let returning=false;
+ if(v.tax_id){
+  try{
+   const matchOrg=(await client.query(`SELECT id,relationship_kind,lifecycle_status FROM tenants WHERE tax_id=$1 AND relationship_kind<>'internal' ORDER BY created_at,id LIMIT 1`,[v.tax_id])).rows[0]??null;
+   if(matchOrg){
+    tenant=matchOrg.id;
+    returning=matchOrg.relationship_kind==='customer'&&['onboarding','active','paused','completed'].includes(matchOrg.lifecycle_status);
+   }
+  }catch(e){if(e?.code!=='42703')throw e;}
+ }
+
+ if(person){
+  const orgs=(await client.query(`SELECT t.id,t.name,t.relationship_kind,t.lifecycle_status FROM organization_stakeholders os JOIN tenants t ON t.id=os.tenant_id
+   WHERE os.stakeholder_id=$1 AND t.relationship_kind<>'internal' ORDER BY os.is_primary DESC,t.created_at,t.id`,[person])).rows;
+  if(!tenant){
+   const same=orgs.find(o=>o.name.trim().toLowerCase()===v.org_name.trim().toLowerCase());
+   tenant=same?.id??null;
+  }
+  if(!returning){
+   returning=orgs.some(o=>o.relationship_kind==='customer'&&['onboarding','active','paused','completed'].includes(o.lifecycle_status));
+  }
+ }
+ return {person,tenant,returning};
 }
 // `avisarLeadNovo` é injetável para o teste conferir QUANDO e com QUÊ o aviso sai, sem push de verdade.
 export function commercialIntakeRoutes(router,{avisarLeadNovo=notificarLeadNovo}={}) {
@@ -86,9 +130,25 @@ export function commercialIntakeRoutes(router,{avisarLeadNovo=notificarLeadNovo}
    const source=`inbound:${productId}:${v.source_system}`;
    const slug='lead-'+digest(`${source}:${v.source_ref}`).slice(0,40);
    const found=await resolveParties(client,v);
-   const tenant=found.tenant??(await client.query(`INSERT INTO tenants(name,slug,relationship_kind,lifecycle_status,organization_type,source_system,source_ref) VALUES($1,$2,'prospect','lead',$3,$4,$5) RETURNING id`,[v.org_name,slug,v.org_type,source,v.source_ref])).rows[0].id;
-   const person=found.person??(await client.query('INSERT INTO stakeholders(name,email,phone,source_system,source_ref) VALUES($1,$2,$3,$4,$5) RETURNING id',[v.name,v.email,v.phone,source,v.source_ref])).rows[0].id;
+   const tenant=found.tenant??(await (async()=>{
+    if(v.tax_id){
+     try{
+      return (await client.query(`INSERT INTO tenants(name,slug,relationship_kind,lifecycle_status,organization_type,source_system,source_ref,tax_id) VALUES($1,$2,'prospect','lead',$3,$4,$5,$6) RETURNING id`,[v.org_name,slug,v.org_type,source,v.source_ref,v.tax_id])).rows[0].id;
+     }catch(e){if(e?.code!=='42703')throw e;}
+    }
+    return (await client.query(`INSERT INTO tenants(name,slug,relationship_kind,lifecycle_status,organization_type,source_system,source_ref) VALUES($1,$2,'prospect','lead',$3,$4,$5) RETURNING id`,[v.org_name,slug,v.org_type,source,v.source_ref])).rows[0].id;
+   })());
+   const person=found.person??(await (async()=>{
+    if(v.cpf_hash){
+     try{
+      return (await client.query('INSERT INTO stakeholders(name,email,phone,source_system,source_ref,document_hash) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',[v.name,v.email,v.phone,source,v.source_ref,v.cpf_hash])).rows[0].id;
+     }catch(e){if(e?.code!=='42703')throw e;}
+    }
+    return (await client.query('INSERT INTO stakeholders(name,email,phone,source_system,source_ref) VALUES($1,$2,$3,$4,$5) RETURNING id',[v.name,v.email,v.phone,source,v.source_ref])).rows[0].id;
+   })());
    if(found.person&&v.phone)await client.query('UPDATE stakeholders SET phone=$2 WHERE id=$1 AND phone IS NULL',[person,v.phone]);
+   if(found.person&&v.cpf_hash){try{await client.query('UPDATE stakeholders SET document_hash=$2 WHERE id=$1 AND document_hash IS NULL',[person,v.cpf_hash]);}catch(e){if(e?.code!=='42703')throw e;}}
+   if(found.tenant&&v.tax_id){try{await client.query('UPDATE tenants SET tax_id=$2 WHERE id=$1 AND tax_id IS NULL',[tenant,v.tax_id]);}catch(e){if(e?.code!=='42703')throw e;}}
    await client.query('INSERT INTO organization_stakeholders(tenant_id,stakeholder_id,role,title,is_primary,contact_allowed) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(tenant_id,stakeholder_id) DO NOTHING',[tenant,person,v.role,v.title,!found.tenant,v.privacy.contact_allowed]);
    // Funil do espaço: o nicho do utm_tzolkin escolhe o funil; sem casamento, o padrão. Espaço sem funil = lead sem funil.
    const place=await placeLead(client,productId,v.attribution?.utm_tzolkin);
