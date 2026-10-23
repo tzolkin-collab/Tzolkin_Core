@@ -65,13 +65,29 @@ export function accountRoutes(router, { env = process.env } = {}) {
  router.get('/api/accounts', async ({ url, pool, reply }) => {
   onlyParams(url.searchParams, []);
 
-  const [contas, times, membros] = await Promise.all([
-   pool.query('SELECT id,email,name,role,status,source,created_at FROM operator_accounts ORDER BY email'),
-   pool.query('SELECT id,slug,name,description,created_at FROM teams ORDER BY name'),
-   pool.query(`SELECT tm.team_id, tm.role, a.id AS account_id, a.email, a.name, a.status
-                 FROM team_members tm JOIN operator_accounts a ON a.id = tm.account_id
-                ORDER BY a.email`),
-  ]);
+  let contas, times, membros;
+  const pContas = pool.query('SELECT id,email,name,role,status,source,created_at FROM operator_accounts ORDER BY email');
+  const pTimes = pool.query('SELECT id,slug,name,description,created_at FROM teams ORDER BY name');
+  try {
+   [contas, times, membros] = await Promise.all([
+    pContas,
+    pTimes,
+    pool.query(`SELECT tm.team_id, tm.role, a.id AS account_id, a.email, a.name, a.status
+                  FROM team_members tm JOIN operator_accounts a ON a.id = tm.account_id
+                 WHERE tm.removed_at IS NULL
+                 ORDER BY a.email`),
+   ]);
+  } catch (e) {
+   if (e?.code === '42703') {
+    [contas, times, membros] = await Promise.all([
+     pContas,
+     pTimes,
+     pool.query(`SELECT tm.team_id, tm.role, a.id AS account_id, a.email, a.name, a.status
+                   FROM team_members tm JOIN operator_accounts a ON a.id = tm.account_id
+                  ORDER BY a.email`),
+    ]);
+   } else throw e;
+  }
 
   const permitidos = allowedEmails(env);
   const ativos = contas.rows.filter(c => c.status === 'active').map(c => c.email.toLowerCase());
@@ -166,7 +182,16 @@ export function accountRoutes(router, { env = process.env } = {}) {
   if (body.members != null && !Array.isArray(body.members)) throw fail(400, 'Membros inválidos.');
 
   const timeAntes = (await client.query('SELECT id,name,description FROM teams WHERE slug=$1', [slug])).rows[0] ?? null;
-  const membrosAntes = timeAntes ? (await client.query('SELECT a.email,tm.role FROM team_members tm JOIN operator_accounts a ON a.id=tm.account_id WHERE tm.team_id=$1 ORDER BY a.email', [timeAntes.id])).rows : [];
+  let membrosAntes = [];
+  if (timeAntes) {
+   try {
+    membrosAntes = (await client.query('SELECT a.email,tm.role FROM team_members tm JOIN operator_accounts a ON a.id=tm.account_id WHERE tm.team_id=$1 AND tm.removed_at IS NULL ORDER BY a.email', [timeAntes.id])).rows;
+   } catch (e) {
+    if (e?.code === '42703') {
+     membrosAntes = (await client.query('SELECT a.email,tm.role FROM team_members tm JOIN operator_accounts a ON a.id=tm.account_id WHERE tm.team_id=$1 ORDER BY a.email', [timeAntes.id])).rows;
+    } else throw e;
+   }
+  }
   const time = await client.query(
    `INSERT INTO teams(slug,name,description) VALUES($1,$2,$3)
     ON CONFLICT(slug) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description, updated_at=now()
@@ -176,7 +201,7 @@ export function accountRoutes(router, { env = process.env } = {}) {
 
   if (body.members) {
    // Substitui a composição declarada sem apagar quem continua no time:
-   // faz upsert dos membros atuais e só emite DELETE se alguém realmente saiu.
+   // faz upsert dos membros atuais e só emite UPDATE/DELETE se alguém realmente saiu.
    const resolvidos = [];
    for (const m of body.members) {
     if (!m || typeof m.email !== 'string') throw fail(400, 'Membro inválido.');
@@ -192,17 +217,36 @@ export function accountRoutes(router, { env = process.env } = {}) {
    const emailsMantidos = new Set(resolvidos.map(r => r.email));
    const alguemSaiu = membrosAntes.some(m => !emailsMantidos.has(m.email.toLowerCase()));
    if (alguemSaiu) {
-    if (resolvidos.length) {
-     await client.query('DELETE FROM team_members WHERE team_id=$1 AND NOT (account_id = ANY($2::uuid[]))', [teamId, resolvidos.map(r => r.id)]);
-    } else {
-     await client.query('DELETE FROM team_members WHERE team_id=$1', [teamId]);
+    try {
+     if (resolvidos.length) {
+      await client.query('UPDATE team_members SET removed_at=now() WHERE team_id=$1 AND removed_at IS NULL AND NOT (account_id = ANY($2::uuid[]))', [teamId, resolvidos.map(r => r.id)]);
+     } else {
+      await client.query('UPDATE team_members SET removed_at=now() WHERE team_id=$1 AND removed_at IS NULL', [teamId]);
+     }
+    } catch (e) {
+     if (e?.code === '42703') {
+      if (resolvidos.length) {
+       await client.query('DELETE FROM team_members WHERE team_id=$1 AND NOT (account_id = ANY($2::uuid[]))', [teamId, resolvidos.map(r => r.id)]);
+      } else {
+       await client.query('DELETE FROM team_members WHERE team_id=$1', [teamId]);
+      }
+     } else throw e;
     }
    }
    for (const r of resolvidos) {
-    await client.query(
-     `INSERT INTO team_members(team_id,account_id,role) VALUES($1,$2,$3)
-      ON CONFLICT(team_id,account_id) DO UPDATE SET role=EXCLUDED.role WHERE team_members.role<>EXCLUDED.role`,
-     [teamId, r.id, r.role]);
+    try {
+     await client.query(
+      `INSERT INTO team_members(team_id,account_id,role,removed_at) VALUES($1,$2,$3,NULL)
+       ON CONFLICT(team_id,account_id) DO UPDATE SET role=EXCLUDED.role, removed_at=NULL`,
+      [teamId, r.id, r.role]);
+    } catch (e) {
+     if (e?.code === '42703') {
+      await client.query(
+       `INSERT INTO team_members(team_id,account_id,role) VALUES($1,$2,$3)
+        ON CONFLICT(team_id,account_id) DO UPDATE SET role=EXCLUDED.role WHERE team_members.role<>EXCLUDED.role`,
+       [teamId, r.id, r.role]);
+     } else throw e;
+    }
    }
   }
   const descricao = body.description == null ? null : text(body.description, 1, 500);
