@@ -193,8 +193,7 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 - [ ] **P1 [VOCÊ]** Variáveis em produção (EasyPanel): `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`,
   `R2_SECRET_ACCESS_KEY`. A migração 039 já está no banco compartilhado.
 - [ ] **P1** CI: não há `.github/`, nem execução automática de `test:unit`, `test` e `test:ui`.
-- [x] **P2** G2: teste de falha injetada, lint contra `COMMIT`/`BEGIN` em migração e trava de numeração *(feito em 23/10: `test/unit/migrations-lint.test.mjs`)*. G5: teste HTTP de
-  `/api/checkout/sessions` com `sites`. Teste do filtro de Serviços *(feito em 23/10: `test/unit/services-filter.test.mjs`, commit `407195f`)*.
+- [x] **P2** G2: teste de falha injetada, lint contra `COMMIT`/`BEGIN` em migração e trava de numeração *(feito em 23/10: `test/unit/migrations-lint.test.mjs`)*. G5: teste HTTP de `/api/checkout/sessions` com `sites` *(feito em 23/10: `test/checkout-gateway.test.mjs`)*. Teste do filtro de Serviços *(feito em 23/10: `test/unit/services-filter.test.mjs`, commit `407195f`)*.
 - [x] **P2** Foco do menu no celular (`app.js`: `$('sidebar').focus()` com `tabindex="-1"` no `<aside>`).
   *(feito em 23/10: commit `cec0297`).*
 - [ ] **P2** Remover os popups remanescentes (módulo de Projetos); revisão página a página de tipografia, contraste e

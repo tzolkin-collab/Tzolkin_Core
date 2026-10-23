@@ -24,8 +24,15 @@ test('checkout gateway HTTP suite', async t => {
  const PRODUCT = { id: 'skiller', name: 'Skiller' };
 
  function mockPool({ offer = OFFER, template = TEMPLATE, product = PRODUCT } = {}) {
-  return { query: async sql => {
-   if (sql.includes('FROM products')) return { rows: product ? [product] : [] };
+  return { query: async (sql, params = []) => {
+   if (sql.includes('FROM products')) {
+    if (!product) return { rows: [] };
+    if (sql.includes('portfolio_kind = ANY') && params[1]) {
+     const kind = product.portfolio_kind || 'platform';
+     if (!params[1].includes(kind)) return { rows: [] };
+    }
+    return { rows: [product] };
+   }
    if (sql.includes('FROM billing_offers')) return { rows: offer ? [offer] : [] };
    if (sql.includes('FROM checkout_templates')) return { rows: template ? [template] : [] };
    return { rows: [] };
@@ -94,6 +101,19 @@ test('checkout gateway HTTP suite', async t => {
   const { server, origin } = await boot({ rows: { offer: { slug: 'pro', payload: { ...OFFER.payload, provider: 'asaas' } } } });
   try { assert.equal((await pay(origin, { product_id: 'skiller', offer_slug: 'pro' })).status, 400); }
   finally { await close(server); }
+ });
+
+ await t.test('checkout sessions are refused for service lines (sites) because CAPABILITIES.checkout excludes service_line', async () => {
+  const { server, origin } = await boot({
+   rows: {
+    product: { id: 'sites', name: 'Sites', portfolio_kind: 'service_line' },
+    offer: { slug: 'pro', payload: { ...OFFER.payload, name: 'Site Pro' } }
+   }
+  });
+  try {
+   const r = await pay(origin, { product_id: 'sites', offer_slug: 'pro' });
+   assert.equal(r.status, 404);
+  } finally { await close(server); }
  });
 
  await t.test('a missing Stripe credential answers honestly, not a fake success', async () => {
