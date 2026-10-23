@@ -28,7 +28,7 @@ export const CONTEXTS = {
     serviceCampaigns: { title: 'Campanhas do serviço', section: 'view-service-campaigns', metrics: false, hidden: true },
     // TECNOLOGIA
     connections: { title: 'Conexões', desc: "O que está ligado a cada cliente, contratação ou item do portfólio. O inventário de cada provedor fica nas abas Vercel, GitHub e EasyPanel.", section: 'view-connections', action: ['Novo projeto', 'delivery-new'], metrics: false },
-    automacoes: { title: 'Automações', desc: "Tudo o que o Core faz sozinho num funil: regras, etapas e tarefas de cada espaço.", section: 'view-automacoes', metrics: false },
+    automacoes: { title: 'Automações', desc: "As regras que o Core executa sozinho quando algo acontece num funil.", section: 'view-automacoes', metrics: false },
     vercel: { title: 'Vercel', section: 'view-vercel', metrics: false },
     easypanel: { title: 'EasyPanel', section: 'view-easypanel', metrics: false },
     dns: { title: 'DNS', section: 'view-dns', metrics: false },

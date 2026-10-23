@@ -358,42 +358,49 @@ test('Inbound: nome, e-mail, WhatsApp e mensagem do lead se editam no lugar, com
 });
 
 // Automações: página própria em Tecnologia (antes eram caixas dentro do Inbound). Abas do Core: Automações, Pipelines, Tarefas e Campos.
-const IR_PARA_AUTOMACOES = async aba => {
+const IR_PARA_AUTOMACOES = async () => {
  await pagina.tela(1280, 900);
  await pagina.avaliar(CLICAR_NO_MENU('Automações'));
- await pagina.esperar(`document.querySelector('#automacoes-tabs [role=tab]')`, { descricao: 'abas de Automações' });
- if (aba) await pagina.avaliar(`document.getElementById('automacoes-tab-${aba}').click()`);
+ await pagina.esperar(`document.querySelector('#automacoes-painel')`, { descricao: 'página de Automações' });
+};
+const IR_PARA_CONFIG_DO_INBOUND = async aba => {
+ await pagina.tela(1280, 900);
+ await pagina.avaliar(CLICAR_NO_MENU('Inbound'));
+ await pagina.esperar(`document.getElementById('inbound-tab-${aba}')`, { descricao: 'abas do Inbound' });
+ await pagina.avaliar(`document.getElementById('inbound-tab-${aba}').click()`);
+ await pagina.esperar(`document.querySelector('#funil-painel')`, { descricao: 'configuração do funil' });
 };
 
-test('Automações: página própria em Tecnologia, com o espaço no alto e as abas; o Inbound não leva mais as caixas de configuração', { skip: PULAR }, async () => {
- await IR_PARA_AUTOMACOES('automacoes');
+test('Automações: página própria em Tecnologia só com as regras; Pipelines, Tarefas e Campos são abas do Inbound', { skip: PULAR }, async () => {
+ await IR_PARA_AUTOMACOES();
  assert.equal(await pagina.avaliar(`location.hash`), '#/geral/automacoes');
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#automacoes-tabs [role=tab]')].map(t => t.firstChild.textContent)`), ['Automações', 'Pipelines', 'Tarefas', 'Campos']);
- assert.equal(await pagina.avaliar(`document.querySelector('.au-espaco select').selectedOptions[0].textContent`), 'Mentorias');
  assert.equal(await pagina.avaliar(`document.getElementById('page-title').textContent.trim()`), 'Automações');
+ assert.equal(await pagina.avaliar(`document.querySelector('.au-espaco select').selectedOptions[0].textContent`), 'Mentorias');
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('#view-automacoes [role=tab]').length`), 0, 'a página não tem abas: só as regras');
  await pagina.avaliar(CLICAR_NO_MENU('Inbound'));
- await pagina.esperar(`document.querySelectorAll('#inbound-panel-leads tbody tr').length > 0`, { descricao: 'leads listados' });
+ await pagina.esperar(`document.querySelector('#inbound-tabs [role=tab]')`, { descricao: 'abas do Inbound' });
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#inbound-tabs [role=tab]')].map(t => t.firstChild.textContent)`), ['Leads', 'Pipelines', 'Tarefas', 'Campos', 'Campanhas']);
  assert.equal(await pagina.avaliar(`document.querySelectorAll('#inbound-panel-leads details').length`), 0, 'sem as caixas antigas');
  semExcecoes();
 });
 
-test('Automações → Campos: lista por tipo de registro e abre o formulário de novo campo', { skip: PULAR }, async () => {
- await IR_PARA_AUTOMACOES('campos');
- await pagina.esperar(`document.querySelectorAll('#automacoes-painel .fields-manager .field-row').length === 4`, { descricao: 'quatro campos listados' });
- const linhas = await pagina.avaliar(`[...document.querySelectorAll('#automacoes-painel .fields-manager .field-row span')].map(s => s.textContent)`);
+test('Inbound → Campos: lista por tipo de registro e abre o formulário de novo campo', { skip: PULAR }, async () => {
+ await IR_PARA_CONFIG_DO_INBOUND('campos');
+ await pagina.esperar(`document.querySelectorAll('#funil-painel .fields-manager .field-row').length === 4`, { descricao: 'quatro campos listados' });
+ const linhas = await pagina.avaliar(`[...document.querySelectorAll('#funil-painel .fields-manager .field-row span')].map(s => s.textContent)`);
  assert.deepEqual(linhas, ['Porte · Lista (uma opção) (Micro, Pequena)', 'Observação · Texto · obrigatório', 'Campo antigo · Texto · desativado', 'Orçamento · Número']);
- const botoes = await pagina.avaliar(`[...document.querySelectorAll('#automacoes-painel .fields-manager .field-row')].map(r => [...r.querySelectorAll('button')].map(b => b.textContent).join('/'))`);
+ const botoes = await pagina.avaliar(`[...document.querySelectorAll('#funil-painel .fields-manager .field-row')].map(r => [...r.querySelectorAll('button')].map(b => b.textContent).join('/'))`);
  assert.deepEqual(botoes, ['Desativar/Tornar obrigatório', 'Desativar/Tornar opcional', 'Ativar', 'Desativar/Tornar obrigatório']);
  // As opções só aparecem para tipo de lista.
- const opcoes = () => pagina.avaliar(`[...document.querySelectorAll('#automacoes-painel .fields-manager form label')].find(l => l.firstChild.textContent === 'Opções, separadas por vírgula').hidden`);
+ const opcoes = () => pagina.avaliar(`[...document.querySelectorAll('#funil-painel .fields-manager form label')].find(l => l.firstChild.textContent === 'Opções, separadas por vírgula').hidden`);
  assert.equal(await opcoes(), true);
- await pagina.avaliar(`(() => { const s = [...document.querySelectorAll('#automacoes-painel .fields-manager form label')].find(l => l.firstChild.textContent === 'Tipo').querySelector('select'); s.value = 'SELECT'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+ await pagina.avaliar(`(() => { const s = [...document.querySelectorAll('#funil-painel .fields-manager form label')].find(l => l.firstChild.textContent === 'Tipo').querySelector('select'); s.value = 'SELECT'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
  assert.equal(await opcoes(), false);
  semExcecoes();
 });
 
 test('Automações: a tabela lista, o histórico abre na linha e o formulário só pede o que a ação precisa', { skip: PULAR }, async () => {
- await IR_PARA_AUTOMACOES('automacoes');
+ await IR_PARA_AUTOMACOES();
  await pagina.esperar(`document.querySelectorAll('#automacoes-painel tbody tr').length === 1`, { descricao: 'automação listada' });
  const texto = await pagina.avaliar(`document.querySelector('#automacoes-painel tbody tr').innerText`);
  assert.match(texto, /Ligar logo/); assert.match(texto, /Funil padrão/); assert.match(texto, /Lead criado/); assert.match(texto, /criar a tarefa "Ligar para o lead" \(prazo de 2 dias\)/); assert.match(texto, /Ligada/);
@@ -427,31 +434,31 @@ test('Automações: a tabela lista, o histórico abre na linha e o formulário s
  semExcecoes();
 });
 
-test('Automações → Pipelines: as etapas do funil em tabela, na ordem, com o tipo e o que impede apagar', { skip: PULAR }, async () => {
- await IR_PARA_AUTOMACOES('pipelines');
- await pagina.esperar(`document.querySelectorAll('#automacoes-painel tbody tr').length === 8`, { descricao: 'oito etapas' });
+test('Inbound → Pipelines: as etapas do funil em tabela, na ordem, com o tipo e o que impede apagar', { skip: PULAR }, async () => {
+ await IR_PARA_CONFIG_DO_INBOUND('pipelines');
+ await pagina.esperar(`document.querySelectorAll('#funil-painel tbody tr').length === 8`, { descricao: 'oito etapas' });
  assert.match(await pagina.avaliar(`document.querySelector('.au-funis').innerText`), /Funil padrão[\s\S]*Padrão/);
- const nomes = await pagina.avaliar(`[...document.querySelectorAll('#automacoes-painel tbody tr')].map(r => r.querySelector('.au-etapa').textContent)`);
+ const nomes = await pagina.avaliar(`[...document.querySelectorAll('#funil-painel tbody tr')].map(r => r.querySelector('.au-etapa').textContent)`);
  assert.equal(nomes[0], 'Novos');
  if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-Automacoes_pipelines.png'));
  // subir a primeira etapa de um tipo não faz sentido: o botão fica desligado
- assert.equal(await pagina.avaliar(`document.querySelector('#automacoes-painel tbody tr button[aria-label^="Subir"]').disabled`), true);
+ assert.equal(await pagina.avaliar(`document.querySelector('#funil-painel tbody tr button[aria-label^="Subir"]').disabled`), true);
  // "Nova etapa" abre o formulário com tipo, cor, chance e alerta
- await pagina.avaliar(`[...document.querySelectorAll('#automacoes-painel .au-acoes button')].find(b => b.textContent === 'Nova etapa').click()`);
- await pagina.esperar(`document.querySelector('#automacoes-painel form.au-form')`, { descricao: 'formulário de etapa' });
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#automacoes-painel form.au-form label')].map(l => l.firstChild.textContent)`), ['Nome', 'Tipo', 'Cor', 'Chance de ganhar (%)', 'Avisar após (dias parado)']);
+ await pagina.avaliar(`[...document.querySelectorAll('#funil-painel .au-acoes button')].find(b => b.textContent === 'Nova etapa').click()`);
+ await pagina.esperar(`document.querySelector('#funil-painel form.au-form')`, { descricao: 'formulário de etapa' });
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#funil-painel form.au-form label')].map(l => l.firstChild.textContent)`), ['Nome', 'Tipo', 'Cor', 'Chance de ganhar (%)', 'Avisar após (dias parado)']);
  semExcecoes();
 });
 
-test('Automações → Tarefas: o que cada etapa exige, em tabela, e o campo oferecido é o do tipo de registro da etapa', { skip: PULAR }, async () => {
- await IR_PARA_AUTOMACOES('tarefas');
- await pagina.esperar(`document.querySelectorAll('#automacoes-painel tbody tr').length === 1`, { descricao: 'tarefa exigida listada' });
- const texto = await pagina.avaliar(`document.querySelector('#automacoes-painel tbody tr').innerText`);
+test('Inbound → Tarefas: o que cada etapa exige, em tabela, e o campo oferecido é o do tipo de registro da etapa', { skip: PULAR }, async () => {
+ await IR_PARA_CONFIG_DO_INBOUND('tarefas');
+ await pagina.esperar(`document.querySelectorAll('#funil-painel tbody tr').length === 1`, { descricao: 'tarefa exigida listada' });
+ const texto = await pagina.avaliar(`document.querySelector('#funil-painel tbody tr').innerText`);
  assert.match(texto, /Para entrar na etapa/); assert.match(texto, /Confirmar o telefone/); assert.match(texto, /Tarefa a concluir/); assert.match(texto, /prazo de 2 dias/); assert.match(texto, /Ligada/);
  if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-Automacoes_tarefas.png'));
- await pagina.avaliar(`[...document.querySelectorAll('#automacoes-painel > .au-topo button')].find(b => b.textContent === 'Nova tarefa').click()`);
- await pagina.esperar(`document.querySelector('#automacoes-painel form.au-form')`, { descricao: 'formulário aberto' });
- const campo = nome => `[...document.querySelectorAll('#automacoes-painel form label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)})`;
+ await pagina.avaliar(`[...document.querySelectorAll('#funil-painel > .au-topo button')].find(b => b.textContent === 'Nova tarefa').click()`);
+ await pagina.esperar(`document.querySelector('#funil-painel form.au-form')`, { descricao: 'formulário aberto' });
+ const campo = nome => `[...document.querySelectorAll('#funil-painel form label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)})`;
  const escolher = (nome, valor) => pagina.avaliar(`(() => { const s = ${campo(nome)}.querySelector('select'); s.value = ${JSON.stringify(valor)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
  // Tarefa: prazo e responsável; sem a escolha de campo.
  assert.equal(await pagina.avaliar(`${campo('Campo')}.hidden`), true);
