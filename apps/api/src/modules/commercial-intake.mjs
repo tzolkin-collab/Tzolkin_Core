@@ -17,7 +17,8 @@ export function validateIntake(body,productId) {
  input(l,['name','email','whatsapp','message']);input(o,['name','slug','organization_type']);input(s,['role','title']);input(c,['product_id','service_model','label']);
  input(a,CHAVES_ATRIBUICAO);
  input(p,['notice_version','contact_allowed','captured_at','source']);
- if(c.product_id!==productId||!isProductId(productId))throw fail(403,'Produto inválido para esta chave.');
+ // O espaço é o da CHAVE: quem chama não precisa dizer qual é. Se disser, tem que ser o mesmo (aponta chave trocada em vez de gravar no espaço errado).
+ if((c.product_id!=null&&c.product_id!==productId)||!isProductId(productId))throw fail(403,'Produto inválido para esta chave.');
  if(body.space_data!=null&&(typeof body.space_data!=='object'||Array.isArray(body.space_data)))throw fail(400,'Dados do espaço inválidos.');
  if(!SERVICE_MODELS.includes(c.service_model))throw fail(400,'Modelo comercial inválido.');
  const name=text(l.name,2,200),email=optional(l.email,320)?.toLowerCase()??null,phone=optional(l.whatsapp,40)?.replace(/[\s()+.-]/g,'')??null;
