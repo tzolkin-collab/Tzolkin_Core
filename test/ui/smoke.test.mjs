@@ -21,7 +21,7 @@ const ARTEFATOS = fileURLToPath(new URL('./artifacts/', import.meta.url));
 
 const MENU_ESPERADO = [
  'Visão geral', 'Financeiro', 'Acompanhamento',
- 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Outbound', 'E-mails', 'WhatsApp', 'Pagamentos',
+ 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Fluxo', 'Outbound', 'E-mails', 'WhatsApp', 'Pagamentos',
  'Produtos', 'Serviços', 'Contratações',
  'Conexões', 'Automações', 'Vercel', 'EasyPanel', 'DNS', 'GitHub', 'Banco de dados'
 ];
@@ -371,7 +371,7 @@ const IR_PARA_CONFIG_DO_INBOUND = async aba => {
  await pagina.esperar(`document.querySelector('#funil-painel')`, { descricao: 'configuração do funil' });
 };
 
-test('Automações: página própria em Tecnologia só com as regras; Pipelines, Tarefas e Campos são abas do Inbound', { skip: PULAR }, async () => {
+test('Automações: página própria em Tecnologia só com as regras; o Inbound fica com Leads, Campos e Campanhas', { skip: PULAR }, async () => {
  await IR_PARA_AUTOMACOES();
  assert.equal(await pagina.avaliar(`location.hash`), '#/geral/automacoes');
  assert.equal(await pagina.avaliar(`document.getElementById('page-title').textContent.trim()`), 'Automações');
@@ -379,7 +379,7 @@ test('Automações: página própria em Tecnologia só com as regras; Pipelines,
  assert.equal(await pagina.avaliar(`document.querySelectorAll('#view-automacoes [role=tab]').length`), 0, 'a página não tem abas: só as regras');
  await pagina.avaliar(CLICAR_NO_MENU('Inbound'));
  await pagina.esperar(`document.querySelector('#inbound-tabs [role=tab]')`, { descricao: 'abas do Inbound' });
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#inbound-tabs [role=tab]')].map(t => t.firstChild.textContent)`), ['Leads', 'Pipelines', 'Tarefas', 'Campos', 'Campanhas']);
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#inbound-tabs [role=tab]')].map(t => t.firstChild.textContent)`), ['Leads', 'Campos', 'Campanhas']);
  assert.equal(await pagina.avaliar(`document.querySelectorAll('#inbound-panel-leads details').length`), 0, 'sem as caixas antigas');
  semExcecoes();
 });
@@ -434,43 +434,65 @@ test('Automações: a tabela lista, o histórico abre na linha e o formulário s
  semExcecoes();
 });
 
-test('Inbound → Pipelines: as etapas do funil em tabela, na ordem, com o tipo e o que impede apagar', { skip: PULAR }, async () => {
- await IR_PARA_CONFIG_DO_INBOUND('pipelines');
- await pagina.esperar(`document.querySelectorAll('#funil-painel tbody tr').length === 8`, { descricao: 'oito etapas' });
- assert.match(await pagina.avaliar(`document.querySelector('.au-funis').innerText`), /Funil padrão[\s\S]*Padrão/);
- const nomes = await pagina.avaliar(`[...document.querySelectorAll('#funil-painel tbody tr')].map(r => r.querySelector('.au-etapa').textContent)`);
- assert.equal(nomes[0], 'Novos');
- if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-Automacoes_pipelines.png'));
- // subir a primeira etapa de um tipo não faz sentido: o botão fica desligado
- assert.equal(await pagina.avaliar(`document.querySelector('#funil-painel tbody tr button[aria-label^="Subir"]').disabled`), true);
- // "Nova etapa" abre o formulário com tipo, cor, chance e alerta
- await pagina.avaliar(`[...document.querySelectorAll('#funil-painel .au-acoes button')].find(b => b.textContent === 'Nova etapa').click()`);
- await pagina.esperar(`document.querySelector('#funil-painel form.au-form')`, { descricao: 'formulário de etapa' });
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#funil-painel form.au-form label')].map(l => l.firstChild.textContent)`), ['Nome', 'Tipo', 'Cor', 'Chance de ganhar (%)', 'Avisar após (dias parado)']);
+// CRM → Fluxo: o desenho do Kalidash. Galeria de funis e, dentro de cada um, o workflow (canvas com etapas e tarefas, painel lateral).
+test('Fluxo: a galeria lista os funis com os números e abre o workflow no endereço do funil', { skip: PULAR }, async () => {
+ await pagina.tela(1440, 900);
+ await pagina.avaliar(CLICAR_NO_MENU('Fluxo'));
+ await pagina.esperar(`document.querySelectorAll('.fx-card').length === 1`, { descricao: 'funil na galeria' });
+ const card = await pagina.avaliar(`document.querySelector('.fx-card').innerText`);
+ assert.match(card, /Funil padrão/); assert.match(card, /Mentorias/); assert.match(card, /registros/i); assert.match(card, /etapas/i); assert.match(card, /tarefas/i); assert.match(card, /Ver workflow/);
+ await pagina.avaliar(`document.querySelector('.fx-card').click()`);
+ await pagina.esperar(`document.querySelectorAll('.wf-no').length === 9`, { descricao: 'entrada e oito etapas no canvas' });
+ assert.match(await pagina.avaliar(`location.hash`), /^#\/geral\/fluxo\/[0-9a-f-]{36}$/);
+ assert.equal(await pagina.avaliar(`document.querySelector('.wf-barra-titulos h1').textContent`), 'Funil padrão');
+ // a etapa mostra o que a etapa exige, e Ganha e Perdida ficam no fim, cada uma no seu nível
+ const etapa = await pagina.avaliar(`document.querySelectorAll('.wf-etapa')[1].innerText`);
+ assert.match(etapa, /Em contato/); assert.match(etapa, /Confirmar o telefone/); assert.match(etapa, /entrar/i); assert.match(etapa, /Adicionar tarefa/);
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('.wf-aresta').length`), 8, 'entrada→1ª, entre as etapas, última→ganha e última→perdida');
+ if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1440-Fluxo_workflow.png'));
+ // painel lateral: a estrutura do funil
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('.wf-insp-alterna span:nth-child(2)')].map(s => s.textContent)`), ['Entrada', 'Etapas', 'Tarefas']);
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('.wf-insp-secao')[1].querySelectorAll('.wf-linha').length`), 8);
+ // voltar leva à galeria e limpa o endereço do funil
+ await pagina.avaliar(`document.querySelector('.wf-voltar').click()`);
+ await pagina.esperar(`document.querySelector('.fx-card')`, { descricao: 'galeria de volta' });
+ assert.equal(await pagina.avaliar(`location.hash`), '#/geral/fluxo');
  semExcecoes();
 });
 
-test('Inbound → Tarefas: o que cada etapa exige, em tabela, e o campo oferecido é o do tipo de registro da etapa', { skip: PULAR }, async () => {
- await IR_PARA_CONFIG_DO_INBOUND('tarefas');
- await pagina.esperar(`document.querySelectorAll('#funil-painel tbody tr').length === 1`, { descricao: 'tarefa exigida listada' });
- const texto = await pagina.avaliar(`document.querySelector('#funil-painel tbody tr').innerText`);
- assert.match(texto, /Para entrar na etapa/); assert.match(texto, /Confirmar o telefone/); assert.match(texto, /Tarefa a concluir/); assert.match(texto, /prazo de 2 dias/); assert.match(texto, /Ligada/);
- if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-Automacoes_tarefas.png'));
- await pagina.avaliar(`[...document.querySelectorAll('#funil-painel > .au-topo button')].find(b => b.textContent === 'Nova tarefa').click()`);
- await pagina.esperar(`document.querySelector('#funil-painel form.au-form')`, { descricao: 'formulário aberto' });
- const campo = nome => `[...document.querySelectorAll('#funil-painel form label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)})`;
- const escolher = (nome, valor) => pagina.avaliar(`(() => { const s = ${campo(nome)}.querySelector('select'); s.value = ${JSON.stringify(valor)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
- // Tarefa: prazo e responsável; sem a escolha de campo.
- assert.equal(await pagina.avaliar(`${campo('Campo')}.hidden`), true);
- assert.equal(await pagina.avaliar(`${campo('Prazo da tarefa, em dias (opcional)')}.hidden`), false);
- // Campo, em etapa de lead (Novos): os campos do lead.
- await escolher('Exige', 'FIELD');
- assert.equal(await pagina.avaliar(`${campo('Campo')}.hidden`), false);
- assert.equal(await pagina.avaliar(`${campo('Prazo da tarefa, em dias (opcional)')}.hidden`), true);
- assert.deepEqual(await pagina.avaliar(`[...${campo('Campo')}.querySelector('select').options].map(o => o.textContent)`), ['Porte', 'Observação']);
- // Campo, em etapa aberta (Qualificação): os campos da oportunidade.
- await escolher('Etapa', '55555555-5555-4555-8555-555555555502');
- assert.deepEqual(await pagina.avaliar(`[...${campo('Campo')}.querySelector('select').options].map(o => o.textContent)`), ['Orçamento']);
+test('Fluxo: o canvas arrasta, dá zoom e o painel edita etapa e tarefa', { skip: PULAR }, async () => {
+ await pagina.tela(1440, 900);
+ await pagina.avaliar(CLICAR_NO_MENU('Fluxo'));
+ await pagina.esperar(`document.querySelector('.fx-card')`, { descricao: 'galeria' });
+ await pagina.avaliar(`document.querySelector('.fx-card').click()`);
+ await pagina.esperar(`document.querySelectorAll('.wf-no').length === 9`, { descricao: 'workflow aberto' });
+ const mat = () => pagina.avaliar(`getComputedStyle(document.querySelector('.wf-viewport')).transform`);
+ const antes = await mat();
+ // roda do mouse rola o canvas; Ctrl + roda dá zoom
+ await pagina.avaliar(`document.querySelector('.wf-canvas').dispatchEvent(new WheelEvent('wheel', { deltaX: 0, deltaY: 120, bubbles: true, cancelable: true }))`);
+ const rolou = await mat();
+ assert.notEqual(rolou, antes, 'a roda rolou o canvas');
+ await pagina.avaliar(`document.querySelector('.wf-canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: -200, ctrlKey: true, clientX: 400, clientY: 300, bubbles: true, cancelable: true }))`);
+ assert.notEqual(await mat(), rolou, 'Ctrl + roda deu zoom');
+ await pagina.avaliar(`document.querySelector('[aria-label="Ajustar à tela"]').click()`);
+ // clicar no cabeçalho de uma etapa abre o editor dela no painel
+ await pagina.avaliar(`document.querySelectorAll('.wf-etapa .wf-cab')[1].click()`);
+ await pagina.esperar(`document.querySelector('.wf-painel-cab h2')?.textContent === 'Configurar etapa'`, { descricao: 'editor de etapa' });
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('.wf-painel-corpo label')].map(l => l.firstChild.textContent)`), ['Nome', 'Tipo', 'Cor', 'Chance de ganhar (%)', 'Avisar após (dias parado)']);
+ await pagina.avaliar(`document.querySelector('[aria-label="Fechar o painel"]').click()`);
+ // clicar numa tarefa abre o editor da tarefa, com quando e tipo travados
+ await pagina.avaliar(`document.querySelector('.wf-req').click()`);
+ await pagina.esperar(`document.querySelector('.wf-painel-cab h2')?.textContent === 'Configurar tarefa'`, { descricao: 'editor de tarefa' });
+ assert.equal(await pagina.avaliar(`document.querySelector('.wf-painel-corpo input').value`), 'Confirmar o telefone');
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('.wf-painel-corpo input')].filter(i => i.disabled).length`), 2);
+ // "Nova etapa" deixa só os tipos que cabem (Ganha e Perdida já existem)
+ await pagina.avaliar(`[...document.querySelectorAll('.wf-barra-acoes button')].find(b => b.textContent.includes('Nova etapa')).click()`);
+ await pagina.esperar(`document.querySelector('.wf-painel-cab h2')?.textContent === 'Nova etapa'`, { descricao: 'nova etapa' });
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelector('.wf-painel-corpo select').options].map(o => o.textContent)`), ['Lead', 'Aberta']);
+ if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1440-Fluxo_painel.png'));
+ // o painel recolhe e abre
+ await pagina.avaliar(`[...document.querySelectorAll('.wf-barra-acoes button')].find(b => b.textContent.includes('Painel')).click()`);
+ assert.equal(await pagina.avaliar(`document.querySelector('.wf-dock').classList.contains('open')`), false);
  semExcecoes();
 });
 

@@ -15,6 +15,7 @@ import {setupEmails} from './emails.js';
 import {setupWhatsapp} from './whatsapp.js';
 import {setupCrmPagamentos} from './crm-pagamentos.js';
 import {setupAutomacoes} from './automacoes-pagina.js';
+import {setupFluxo} from './fluxo.js';
 import {setupTracking} from './tracking.js';
 import {setupFinance} from './finance.js';
 import {setupBilling} from './billing.js';
@@ -42,7 +43,8 @@ const emails=setupEmails({api,configure:product=>openProductModule(product,'prod
 const whatsapp=setupWhatsapp({api});
 const automacoes=setupAutomacoes({api,reportError});
 // Pipelines, Tarefas e Campos: a configuração do funil mora no Inbound, em abas ao lado de Leads e Campanhas.
-const funilConfig=setupAutomacoes({api,reportError,hostId:'inbound-panel-config',prefixo:'funil',painelInicial:'pipelines'});
+const fluxo=setupFluxo({api,reportError,abrirConexoes:id=>{const p=state.overview?.products?.find(x=>x.id===id);if(p)openProductModule(p,'product-connections').catch(reportError);}});
+const funilConfig=setupAutomacoes({api,reportError,hostId:'inbound-panel-config',prefixo:'funil',painelInicial:'campos'});
 // CRM → Pagamentos mora em crm-pagamentos.js (vendas do mês dos processadores e o estado de cada conexão).
 const crmPagamentos = setupCrmPagamentos({ api, reportError, abrirIntegracoes: () => { state.configSecao = 'integracoes'; switchView('settings'); } });
 const productEmails=setupProductEmails({api});
@@ -144,6 +146,7 @@ function clearRenderedData() {
  whatsapp.clear();
  crmPagamentos.clear();
  automacoes.clear();
+ fluxo.clear();
  funilConfig.clear();
  billing.clear();
  productPayments.clear();
@@ -214,6 +217,7 @@ store.subscribe('view', (view) => {
   if (view === 'outbound') renderOutbound();
   if (view === 'payments') crmPagamentos.load();
   if (view === 'automacoes') automacoes.load();
+  if (view === 'fluxo') fluxo.load();
   if (view === 'product-keys' || view === 'product-connections') commercial.keys(state.context).catch(reportError);
   if (view === 'product-clients' || view === 'product-orgs') { if (state.product) renderProductOrganizations(); }
   if (view === 'companies') renderCompanies();
@@ -237,16 +241,16 @@ store.subscribe('view', (view) => {
 function montarInbound() {
  const doItem = contextKind() === 'product';
  const comLeads = !doItem || hasCapability(contextProduct(), 'commercial');
- // A configuração do funil (etapas, tarefas de etapa e campos) fica aqui; as regras automáticas têm página própria em Tecnologia.
- const abas = [...(comLeads ? [{ key: 'leads', label: 'Leads' }, { key: 'pipelines', label: 'Pipelines' }, { key: 'tarefas', label: 'Tarefas' }, { key: 'campos', label: 'Campos' }] : []), { key: 'campaigns', label: 'Campanhas' }];
+ // Os campos do espaço ficam aqui; etapas e tarefas de etapa moram em CRM → Fluxo, e as regras automáticas em Tecnologia → Automações.
+ const abas = [...(comLeads ? [{ key: 'leads', label: 'Leads' }, { key: 'campos', label: 'Campos' }] : []), { key: 'campaigns', label: 'Campanhas' }];
  if (!abas.some(aba => aba.key === state.inboundTab)) state.inboundTab = abas[0].key;
  const mostrar = key => {
   state.inboundTab = key;
   $('inbound-panel-leads').hidden = key !== 'leads';
   $('inbound-panel-campaigns').hidden = key !== 'campaigns';
-  $('inbound-panel-config').hidden = !['pipelines', 'tarefas', 'campos'].includes(key);
+  $('inbound-panel-config').hidden = key !== 'campos';
   if (key === 'leads') commercial.load(doItem ? state.context : '').catch(reportError);
-  else if (['pipelines', 'tarefas', 'campos'].includes(key)) funilConfig.load({ painel: key, espaco: doItem ? state.context : '' });
+  else if (key === 'campos') funilConfig.load({ painel: 'campos', espaco: doItem ? state.context : '' });
   else if (!doItem) campaigns.load().catch(reportError);
   else if (state.product) campaigns.loadProduct(state.product.product).catch(reportError);
  };
