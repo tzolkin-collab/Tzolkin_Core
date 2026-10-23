@@ -3547,6 +3547,64 @@ test('Conexões do espaço: abas, regras e UTMs em linhas, e o que é salvo', { 
  semExcecoes();
 });
 
+// CRM → Pagamentos: resumo em conta (bruto − taxas − estornos = líquido), filtros, processador certo na linha e a aba dos processadores.
+// O banco falso não tem os retratos de venda: a rota responde por fora.
+test('Pagamentos: resumo, filtros, situação certa e estado de cada processador', { skip: PULAR }, async () => {
+ await pagina.tela(1280, 1000);
+ await pagina.ir(origem + '/');
+ await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`, { descricao: 'painel aberto' });
+ await pagina.avaliar(`(() => {
+  window.__meses = [];
+  const f = window.fetch;
+  const resp = dados => Promise.resolve(new Response(JSON.stringify(dados), { status: 200, headers: { 'content-type': 'application/json' } }));
+  const venda = (id, provider, dia, description, gross, fee, net, status, method, refunded = 0) => ({ id, provider, date: '2026-10-' + dia + 'T15:00:00.000Z', description, gross, fee, net, refunded, currency: 'BRL', status, method });
+  window.fetch = (url, init = {}) => {
+   const u = String(url);
+   if (u.startsWith('/api/finance/sales?month=')) {
+    window.__meses.push(u.split('=')[1]);
+    return resp({ month: u.split('=')[1], configured: { stripe: true, asaas: false, asaas_environment: 'sandbox' }, providers: {
+     stripe: { snapshot: { updated_at: '2026-10-22T20:40:00Z', payload: { sales: [
+      venda('s1', 'stripe', '21', 'Plano Pro (mensal)', 297, 12.62, 284.38, 'received', 'card'),
+      venda('s2', 'stripe', '20', 'Plano Pro (mensal)', 297, 12.62, 284.38, 'received', 'card'),
+      venda('s3', 'stripe', '18', 'Consultoria de CRM', 1500, 0, 0, 'pending', 'card'),
+      venda('s4', 'stripe', '12', 'Plano Start', 97, 4.3, 92.7, 'refunded', 'card', 97)] } }, attempt: { payload: { state: 'ok' } } },
+     asaas: { snapshot: null, attempt: null } } });
+   }
+   return f(url, init);
+  };
+ })()`);
+ await pagina.avaliar(CLICAR_NO_MENU('Pagamentos'));
+ await pagina.esperar(`document.querySelectorAll('#crm-payments-vendas tbody tr').length === 4`, { descricao: 'vendas listadas' });
+ // o resumo só conta o que foi recebido: pendente fica à parte e a venda estornada entra como estorno
+ const resumo = await pagina.avaliar(`document.querySelector('.pg-resumo').innerText`);
+ assert.match(resumo, /bruto\s*r\$\s*691,00/i); assert.match(resumo, /estornos\s*r\$\s*97,00/i); assert.match(resumo, /líquido\s*r\$\s*564,46/i); assert.match(resumo, /1 pendente \(r\$\s*1\.500,00 a receber\)/i);
+ // o processador sai da venda (antes todas diziam "Gateway") e a situação tem rótulo em português
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('#crm-payments-vendas tbody tr')].every(r => r.innerText.includes('Stripe'))`), true);
+ assert.match(await pagina.avaliar(`document.getElementById('crm-payments-vendas').innerText`), /Recebida[\s\S]*Pendente[\s\S]*Estornada/);
+ assert.doesNotMatch(await pagina.avaliar(`document.getElementById('crm-payments-vendas').innerText`), /Gateway|received|pending|refunded/);
+ // filtros
+ await pagina.avaliar(`document.querySelector('.pg-filtros select').value = 'pending'; document.querySelector('.pg-filtros select').dispatchEvent(new Event('change'))`);
+ await pagina.esperar(`document.querySelectorAll('#crm-payments-vendas tbody tr').length === 1`, { descricao: 'filtro por situação' });
+ await pagina.avaliar(`[...document.querySelectorAll('.pg-segmento')].find(b => b.textContent.startsWith('Asaas')).click()`);
+ await pagina.esperar(`document.querySelector('#crm-payments-vendas .empty-list')`, { descricao: 'sem vendas do Asaas' });
+ await pagina.avaliar(`[...document.querySelectorAll('.pg-segmento')].find(b => b.textContent.startsWith('Todos')).click(); document.querySelector('.pg-filtros select').value = ''; document.querySelector('.pg-filtros select').dispatchEvent(new Event('change'))`);
+ if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-Pagamentos_vendas.png'));
+ // mês anterior busca o mês anterior
+ await pagina.avaliar(`document.querySelector('[aria-label="Mês anterior"]').click()`);
+ await pagina.esperar(`window.__meses.length === 2`, { descricao: 'mês anterior pedido' });
+ assert.equal(await pagina.avaliar(`document.querySelector('[aria-label="Próximo mês"]').disabled`), false);
+ // processadores: o estado vem da configuração de verdade (Stripe ligado, Asaas não), e não de um "Ativo" fixo
+ await pagina.avaliar(`document.getElementById('crm-pay-tab-processadores').click()`);
+ await pagina.esperar(`document.querySelectorAll('.pg-processador').length === 2`, { descricao: 'processadores' });
+ const proc = await pagina.avaliar(`[...document.querySelectorAll('.pg-processador')].map(p => p.innerText)`);
+ assert.match(proc[0], /Stripe[\s\S]*Conectado/); assert.match(proc[1], /Asaas[\s\S]*Não configurado/);
+ assert.match(proc[1], /Configurar/);
+ if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-Pagamentos_processadores.png'));
+ const defeitos = await pagina.avaliar(leituraDe(SECAO));
+ assert.equal(defeitos.titulo, 'Pagamentos'); assert.deepEqual(defeitos.vazamento, []); assert.equal(defeitos.estouro, 0); assert.equal(defeitos.botoesSemNome, 0);
+ semExcecoes();
+});
+
 test('nenhuma requisição crítica falhou durante a sessão', { skip: PULAR }, async () => {
  pagina.limparProblemas();
  await pagina.ir(origem + '/');
