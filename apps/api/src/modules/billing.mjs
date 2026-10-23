@@ -1,13 +1,17 @@
+import { vivo } from '../platform/env-vivo.mjs';
+import { asaasCardEnabled, assertMethods } from '../platform/payment-model.mjs';
 import {input,text,isProductId,fail} from '../platform/http.mjs';
 import {requireProductFor} from './catalog.mjs';
 
 export const EMAIL_EVENTS=['welcome','charge_created','payment_confirmed','due_reminder','overdue','renewal','canceled','refunded'];
-export function validateOffer(body){
+export function validateOffer(body, env = vivo.env){
  input(body,['product_id','slug','name','provider','kind','amount_minor','currency','interval','installments','email_owner','email_templates','version']);
  if(!isProductId(body.product_id)||!isProductId(body.slug))throw fail(400,'Produto ou slug inválido.');
  if(!['asaas','stripe'].includes(body.provider)||!['one_time','installments','subscription'].includes(body.kind))throw fail(400,'Processador ou modalidade inválida.');
  if(!Number.isSafeInteger(body.amount_minor)||body.amount_minor<1||body.amount_minor>100000000)throw fail(400,'Informe um valor válido em centavos.');
  if(!['BRL','USD','EUR','GBP'].includes(body.currency)||(body.provider==='asaas'&&body.currency!=='BRL'))throw fail(400,'Moeda incompatível com o processador.');
+ if(body.provider==='asaas'&&(body.method==='card'||(Array.isArray(body.methods)&&body.methods.includes('card'))||body.payment_method==='card')&&!asaasCardEnabled(env))throw fail(400,'Cartão não está disponível para Asaas enquanto ASAAS_CARD_ENABLED não for true.');
+ if(Array.isArray(body.methods))assertMethods(body.provider,body.currency,body.methods,env);
  if(body.kind==='subscription'?!['month','year'].includes(body.interval):body.interval!==null)throw fail(400,'Periodicidade inválida.');
  if(!Number.isInteger(body.installments)||body.installments<1||body.installments>12||(body.kind!=='installments'&&body.installments!==1)||(body.kind==='installments'&&(body.provider!=='asaas'||body.installments<2)))throw fail(400,'Parcelamento disponível nesta configuração apenas no Asaas, de 2 a 12 parcelas.');
  if(!['provider','core'].includes(body.email_owner))throw fail(400,'Escolha um responsável pelos e-mails financeiros.');
@@ -27,7 +31,7 @@ export async function inheritBillingOffer(client,tenant,product,plan){
  VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT(tenant_id,product_id) DO NOTHING`,[tenant,product,offer.slug,offer.version,JSON.stringify(offer.payload)]);
 }
 
-export function billingRoutes(router){
+export function billingRoutes(router,{env=vivo.env}={}){
  router.get('/api/billing/offers',async({pool,url,reply})=>{
   const product=url.searchParams.get('product_id');
   if(!isProductId(product)||[...url.searchParams.keys()].some(k=>k!=='product_id')||url.searchParams.getAll('product_id').length!==1)throw fail(400,'Produto inválido.');
@@ -35,7 +39,7 @@ export function billingRoutes(router){
   return reply(200,{offers:result.rows,execution:'draft_only'});
  });
  router.put('/api/billing/offers',async({client,body})=>{
- const offer=validateOffer(body);
+ const offer=validateOffer(body,env);
   // Linha de serviço é contratada por proposta: o tipo recusa com 409 e diz o porquê.
   await requireProductFor(client, offer.product_id, 'checkout', { draft: true, missing: fail(400, 'Produto não está disponível para cobrança.') });
   const result=await client.query(`INSERT INTO billing_offers(product_id,slug,payload)
