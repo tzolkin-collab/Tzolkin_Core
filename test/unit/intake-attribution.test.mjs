@@ -144,6 +144,10 @@ test('datas no futuro são recusadas (primeiro toque, último toque, sessão, ev
 
 test('as regras de produto e de contato continuam valendo com a atribuição estendida', () => {
  assert.throws(() => validateIntake(comAtribuicao(COMPLETA), 'skiller'), { status: 403 });
+ // O espaço é o da chave: sem product_id no corpo vale o da chave; com product_id, tem que ser o mesmo.
+ const semProduto = comAtribuicao(COMPLETA); delete semProduto.commercial.product_id;
+ assert.equal(validateIntake(semProduto, 'consultorias').product_id, 'consultorias');
+ assert.throws(() => validateIntake(comAtribuicao(COMPLETA), 'consultorias'), { status: 403 });
  const b = comAtribuicao(COMPLETA); b.lead = { name: 'Maria Silva' };
  assert.throws(() => intake(b), ERRO400);
 });
