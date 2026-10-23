@@ -63,5 +63,5 @@ export async function registrarMensagem(db, m) {
   await db.query("INSERT INTO whatsapp_suppressions(number,reason,created_by) VALUES($1,'pediu_para_sair','webhook') ON CONFLICT DO NOTHING", [m.numero]);
   await db.query("UPDATE whatsapp_outbox SET status='suppressed', locked_at=NULL, last_error='Número na lista de supressão.' WHERE to_number=$1 AND status='queued'", [m.numero]);
  }
- return { novo, lead: lead?.id ?? null, saiu };
+ return { novo, lead: lead?.id ?? null, saiu, inboxId: r.rows[0]?.id ?? null };
 }

@@ -20,6 +20,7 @@ export const INTEGRACOES = Object.freeze([
  { id: 'github', nome: 'GitHub', grupo: 'Tecnologia', obrigatorias: ['GITHUB_TOKEN'], alternativa: { GITHUB_USE_CLI: 'true' }, para: 'Leitura de repositórios.', tela: 'github' },
  { id: 'easypanel', nome: 'EasyPanel', grupo: 'Tecnologia', obrigatorias: ['EASYPANEL_URL', 'EASYPANEL_TOKEN'], para: 'Inventário de serviços e operações.', tela: 'easypanel' },
  { id: 'hostinger', nome: 'Hostinger (DNS)', grupo: 'Tecnologia', obrigatorias: ['HOSTINGER_API_KEY', 'HOSTINGER_DNS_ZONE'], para: 'Leitura da zona de DNS.', tela: 'dns' },
+ { id: 'anthropic', nome: 'Claude (agentes de IA)', grupo: 'Marketing', obrigatorias: ['ANTHROPIC_API_KEY'], opcionais: ['AGENTES_EXECUCAO'], para: 'Fazer os agentes de IA do WhatsApp responderem os leads.' },
  { id: 'evolution', nome: 'WhatsApp (Evolution API)', grupo: 'Marketing', obrigatorias: ['EVOLUTION_URL', 'EVOLUTION_INSTANCE', 'EVOLUTION_API_KEY'], opcionais: ['EVOLUTION_WEBHOOK_SECRET', 'WHATSAPP_TEAM_NUMBERS', 'WHATSAPP_ENVIO'], para: 'Envio e recebimento de mensagens de WhatsApp (aviso à equipe e resposta ao lead).' },
  { id: 'push', nome: 'Notificações push', grupo: 'Avisos', obrigatorias: ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'], para: 'Avisos de lead novo e lembretes da agenda no aparelho.' },
 ]);

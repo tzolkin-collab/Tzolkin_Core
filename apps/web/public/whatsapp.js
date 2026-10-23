@@ -103,7 +103,12 @@ export function setupWhatsapp({ api, reportError }) {
   if (!conversa) { painel.append(el('p', 'Carregando conversa…', 'email-empty')); return painel; }
   const item = conversas?.conversas.find(c => c.number === aberta);
   const topo = el('header', undefined, 'wa-fio-topo');
-  topo.append(el('strong', item?.lead_name || conversa.name || aberta), el('small', [aberta, conversa.lead_id ? 'lead do funil' : 'sem lead ligado', `via ${instancia}`].join(' · ')));
+  const quem = el('div'); quem.append(el('strong', item?.lead_name || conversa.name || aberta), el('small', [aberta, conversa.lead_id ? 'lead do funil' : 'sem lead ligado', `via ${instancia}`].join(' · ')));
+  const atendimento = el('div', undefined, 'wa-atendimento');
+  atendimento.append(selo(conversa.com_pessoa ? 'Com uma pessoa' : 'Agente atende, se houver', conversa.com_pessoa ? 'warning' : 'neutral'));
+  const passar = el('button', conversa.com_pessoa ? 'Devolver ao agente' : 'Assumir conversa', 'secondary'); passar.type = 'button';
+  passar.onclick = async () => { passar.disabled = true; try { await api(`/api/whatsapp/conversations/${aberta}/${conversa.com_pessoa ? 'devolver' : 'assumir'}${q()}`, 'POST', {}); await abrir(aberta); } catch (e) { erroConversa = e.message; desenhar(); } };
+  atendimento.append(passar); topo.append(quem, atendimento);
   const mensagens = el('div', undefined, 'wa-mensagens');
   for (const m of conversa.mensagens) {
    const b = el('div', undefined, `wa-msg ${m.direcao}`); b.dataset.direcao = m.direcao;

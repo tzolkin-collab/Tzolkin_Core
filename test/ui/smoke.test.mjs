@@ -3538,10 +3538,12 @@ test('WhatsApp: escolher a instância, ver o chat dela, marcar como lida e respo
     { name: 'suporte', state: 'close', conectada: false, number: null, profile: null, nao_lidas: 0 }] });
    if (u === '/api/whatsapp/conversations?instance=comercial') return resp({ disponivel: true, nao_lidas: 2, conversas: [{ number: '5531997599216', name: 'Maria', lead_name: 'Maria Souza', last_at: '2026-10-22T14:00:00Z', unread: 2, last_text: 'Quanto custa o site?', lead_id: 'l1' }] });
    if (u === '/api/whatsapp/conversations?instance=suporte') return resp({ disponivel: true, nao_lidas: 0, conversas: [] });
-   if (u === '/api/whatsapp/conversations/5531997599216?instance=comercial') return resp({ number: '5531997599216', instance: 'comercial', name: 'Maria', lead_id: 'l1', bloqueado: false, mensagens: [
+   if (u === '/api/whatsapp/conversations/5531997599216?instance=comercial') return resp({ number: '5531997599216', instance: 'comercial', name: 'Maria', lead_id: 'l1', bloqueado: false, com_pessoa: window.__pessoa === true, mensagens: [
     { id: 'o1', direcao: 'out', texto: 'Oi Maria! Recebemos seu contato.', em: '2026-10-22T13:00:00Z', status: 'sent', erro: null },
     { id: 'i1', direcao: 'in', texto: 'Oi! Quanto custa o site?', em: '2026-10-22T13:59:00Z', status: null, erro: null }] });
    if (u.includes('/lida') || u.endsWith('/responder')) return resp({ ok: true });
+   if (u.includes('/assumir')) { window.__pessoa = true; return resp({ ok: true }); }
+   if (u.includes('/devolver')) { window.__pessoa = false; return resp({ ok: true, devolvidas: 1 }); }
    return f(url, init);
   };
  })()`);
@@ -3565,6 +3567,14 @@ test('WhatsApp: escolher a instância, ver o chat dela, marcar como lida e respo
  await pagina.esperar(`window.__chamadas.includes('POST /api/whatsapp/conversations/5531997599216/lida?instance=comercial {}')`, { descricao: 'marcada como lida na instância' });
  await pagina.esperar(`!document.querySelector('.wa-conversa .wa-nao-lida')`, { descricao: 'contador zerado' });
  if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-WhatsApp_conversa.png'));
+ // quem atende: assumir passa a conversa para uma pessoa (o agente sai), devolver traz o agente de volta
+ assert.match(await pagina.avaliar(`document.querySelector('.wa-atendimento').innerText`), /Agente atende, se houver[\s\S]*Assumir conversa/i);
+ await pagina.avaliar(`[...document.querySelectorAll('.wa-atendimento button')].find(b => b.textContent === 'Assumir conversa').click()`);
+ await pagina.esperar(`window.__chamadas.includes('POST /api/whatsapp/conversations/5531997599216/assumir?instance=comercial {}')`, { descricao: 'conversa assumida' });
+ await pagina.esperar(`/Com uma pessoa[\\s\\S]*Devolver ao agente/i.test(document.querySelector('.wa-atendimento').innerText)`, { descricao: 'estado com uma pessoa' });
+ await pagina.avaliar(`[...document.querySelectorAll('.wa-atendimento button')].find(b => b.textContent === 'Devolver ao agente').click()`);
+ await pagina.esperar(`window.__chamadas.includes('POST /api/whatsapp/conversations/5531997599216/devolver?instance=comercial {}')`, { descricao: 'conversa devolvida' });
+ await pagina.esperar(`/Agente atende, se houver/i.test(document.querySelector('.wa-atendimento').innerText)`, { descricao: 'agente de volta' });
  await pagina.avaliar(`(() => { const t = document.querySelector('.wa-resposta textarea'); t.value = 'R$ 4.900, em 3 semanas.'; document.querySelector('.wa-resposta').requestSubmit(); })()`);
  await pagina.esperar(`window.__chamadas.some(c => c.startsWith('POST /api/whatsapp/conversations/5531997599216/responder') && c.includes('"instance":"comercial"'))`, { descricao: 'resposta vai pela mesma instância' });
  semExcecoes();
@@ -3579,8 +3589,8 @@ test('WhatsApp → Agentes de IA: criar um agente com funis, ferramentas, capaci
   window.__posts = [];
   const f = window.fetch;
   const resp = dados => Promise.resolve(new Response(JSON.stringify(dados), { status: 200, headers: { 'content-type': 'application/json' } }));
-  const catalogo = { ferramentas: { 'lead.buscar': { nome: 'Buscar lead e histórico', descricao: 'Lê o cadastro do lead.', risco: 'baixo' }, 'tarefa.criar': { nome: 'Criar tarefa para a equipe', descricao: 'Abre uma tarefa.', risco: 'medio' }, 'cobranca.gerar_link': { nome: 'Gerar link de pagamento', descricao: 'Mexe com dinheiro.', risco: 'alto' } },
-   capacidades: { texto: { nome: 'Responder por texto', descricao: 'Escreve as respostas.' }, ligacao: { nome: 'Fazer ligações', descricao: 'Liga para o lead.' } },
+  const catalogo = { ferramentas: { 'lead.buscar': { nome: 'Buscar lead e histórico', descricao: 'Lê o cadastro do lead.', risco: 'baixo', execucao: true }, 'tarefa.criar': { nome: 'Criar tarefa para a equipe', descricao: 'Abre uma tarefa.', risco: 'medio', execucao: true }, 'cobranca.gerar_link': { nome: 'Gerar link de pagamento', descricao: 'Mexe com dinheiro.', risco: 'alto', execucao: false } },
+   capacidades: { texto: { nome: 'Responder por texto', descricao: 'Escreve as respostas.', execucao: true }, ligacao: { nome: 'Fazer ligações', descricao: 'Liga para o lead.', execucao: false } },
    modelos: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'], tipos: { documento: 'Documento', link: 'Link', texto: 'Texto' } };
   const funis = [{ id: '44444444-4444-4444-8444-444444444444', name: 'Funil padrão', space_id: 'sites', space_name: 'Sites' }];
   window.fetch = (url, init = {}) => {
@@ -3588,6 +3598,7 @@ test('WhatsApp → Agentes de IA: criar um agente com funis, ferramentas, capaci
    if (u === '/api/whatsapp/instances') return resp({ configurada: true, todas: true, padrao: 'comercial', instancias: [{ name: 'comercial', state: 'open', conectada: true, number: null, profile: null, nao_lidas: 0 }] });
    if (u.startsWith('/api/whatsapp/conversations')) return resp({ disponivel: true, nao_lidas: 0, conversas: [] });
    if (u === '/api/whatsapp/agents' && init.method === 'POST') { window.__posts.push(JSON.parse(init.body)); return resp({ id: 'novo' }); }
+   if (u === '/api/whatsapp/agents/execucao') return resp({ disponivel: true, ligada: false, com_chave: false, envio_ligado: false, turnos: [{ id: 'j1', status: 'done', instance: 'comercial', number: '5531997599216', agent_name: 'Sofia', reply: 'Um site começa em R$ 4.900.', note: null, tools_used: ['lead.buscar'], input_tokens: 300, output_tokens: 40, created_at: '2026-10-23T12:00:00Z', finished_at: '2026-10-23T12:00:09Z' }] });
    if (u === '/api/whatsapp/agents') return resp({ disponivel: true, agents: [{ id: 'a1', name: 'Sofia', description: 'Atende os leads do site', instance: 'comercial', model: 'claude-sonnet-5-5', instructions: 'Você é a Sofia, da Tzolkin.', context: null, pipelines: ['44444444-4444-4444-8444-444444444444'], tools: ['lead.buscar', 'cobranca.gerar_link'], abilities: { texto: true }, assets: [], is_active: true, version: 2, risco: 'alto' }], catalogo, funis });
    return f(url, init);
   };
@@ -3595,13 +3606,18 @@ test('WhatsApp → Agentes de IA: criar um agente com funis, ferramentas, capaci
  await pagina.avaliar(CLICAR_NO_MENU('WhatsApp'));
  await pagina.esperar(`document.getElementById('whatsapp-tab-agentes')`, { descricao: 'abas do WhatsApp' });
  await pagina.avaliar(`document.getElementById('whatsapp-tab-agentes').click()`);
- await pagina.esperar(`document.querySelectorAll('#whatsapp-panel-agentes tbody tr').length === 1`, { descricao: 'agente listado' });
+ await pagina.esperar(`document.querySelectorAll('#whatsapp-panel-agentes tbody tr').length === 2`, { descricao: 'agente e execução listados' });
  const linha = await pagina.avaliar(`document.querySelector('#whatsapp-panel-agentes tbody tr').innerText`);
  assert.match(linha, /Sofia/); assert.match(linha, /comercial/); assert.match(linha, /Funil padrão/); assert.match(linha, /2 ferramentas/); assert.match(linha, /Risco alto/i); assert.match(linha, /Ligado/);
- assert.match(await pagina.avaliar(`document.getElementById('whatsapp-panel-agentes').innerText`), /ainda não responde sozinho/);
+ // a tela diz o que está ligado de verdade: sem execução e sem chave, nenhum agente responde; e lista as últimas execuções
+ const painelAgentes = await pagina.avaliar(`document.getElementById('whatsapp-panel-agentes').innerText`);
+ assert.match(painelAgentes, /Execução dos agentes[\s\S]*Desligada/); assert.match(painelAgentes, /Chave da Anthropic[\s\S]*Faltando/); assert.match(painelAgentes, /nenhum agente responde/i);
+ assert.match(painelAgentes, /Últimas execuções/); assert.match(painelAgentes, /Um site começa em R\$ 4\.900/); assert.match(painelAgentes, /lead\.buscar/);
  if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-WhatsApp_agentes.png'));
  await pagina.avaliar(`[...document.querySelectorAll('#whatsapp-panel-agentes button')].find(b => b.textContent.includes('Novo agente')).click()`);
  await pagina.esperar(`document.querySelector('.ia-form')`, { descricao: 'formulário aberto' });
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('.ia-opcao-grande.is-embreve')].map(l => l.innerText.includes('Em breve')).every(Boolean)`), true, 'ferramenta e capacidade sem execução aparecem como Em breve');
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('.ia-opcao-grande.is-embreve').length`), 2);
  assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('.ia-secao h4')].map(h => h.textContent)`), ['Quem é', 'O que ele sabe', 'Quais funis ele atende', 'Ferramentas do Core', 'O que ele pode fazer na conversa', 'Materiais que ele pode usar', 'Ligar']);
  // preenche e escolhe: um funil, duas ferramentas, a capacidade de ligar e um material
  await pagina.avaliar(`(() => {

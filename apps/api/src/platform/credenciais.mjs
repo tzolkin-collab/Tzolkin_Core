@@ -6,6 +6,7 @@ import { createGithubAdapter } from '../integrations/github.mjs';
 import { createEasypanelAdapter } from '../integrations/easypanel.mjs';
 import { createHostingerDnsAdapter } from '../integrations/hostinger-dns.mjs';
 import { createEvolutionAdapter, normalizarNumero } from '../integrations/evolution.mjs';
+import { createAnthropicAdapter } from '../integrations/anthropic.mjs';
 import { createECDH } from 'node:crypto';
 import { scrub } from './secrets.mjs';
 import { lerRemetente, conferirResend, PROVEDORES_DE_EMAIL } from './email.mjs';
@@ -218,6 +219,19 @@ export const PROVEDORES = Object.freeze({
    if (r.status === 'ok') return `A Hostinger respondeu (${r.records.length} registros na zona ${r.zone}).`;
    const motivos = { unauthorized: 'A Hostinger recusou a chave.', not_found: `A zona ${r.zone} não foi encontrada nesta conta.`, unavailable: 'A Hostinger não respondeu.', invalid: 'A resposta da Hostinger veio em formato inesperado.' };
    throw new Error(motivos[r.status] || 'A Hostinger não confirmou.');
+  },
+ },
+ anthropic: {
+  nome: 'Claude (agentes de IA)',
+  campos: [
+   { nome: 'ANTHROPIC_API_KEY', rotulo: 'Chave da API da Anthropic', secreto: true, obrigatorio: true, validar: v => (/^[\x21-\x7e]{20,300}$/.test(v) ? null : 'Chave inválida (de 20 a 300 caracteres, sem espaços).'), ajuda: 'Criada em console.anthropic.com → API keys. Os agentes de IA do WhatsApp usam esta chave.' },
+   { nome: 'AGENTES_EXECUCAO', rotulo: 'Execução dos agentes', secreto: false, validar: v => (['ligado', 'desligado'].includes(String(v).trim().toLowerCase()) ? null : 'Use ligado ou desligado.'), ajuda: 'Só com "ligado" os agentes respondem. Desligado, nada chama o modelo e nada é agendado.' },
+  ],
+  async testar(v, fetchImpl) {
+   const r = await createAnthropicAdapter({ env: { ANTHROPIC_API_KEY: v.ANTHROPIC_API_KEY }, fetchImpl }).listModels();
+   if (r.ok) return `A Anthropic aceitou a chave e ela enxerga ${r.models.length} ${r.models.length === 1 ? 'modelo' : 'modelos'}.`;
+   const motivos = { unauthorized: 'A Anthropic recusou a chave.', rate_limited: 'A Anthropic pediu para ir mais devagar. Tente de novo.', unavailable: 'A Anthropic não respondeu.', invalid: 'A resposta da Anthropic veio em formato inesperado.', invalid_config: 'A chave tem formato inválido.' };
+   throw new Error(motivos[r.reason] || 'A Anthropic não confirmou.');
   },
  },
  evolution: {

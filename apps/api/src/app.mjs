@@ -56,6 +56,7 @@ import { emailFilaRoutes } from './modules/email-fila.mjs';
 import { whatsappFilaRoutes } from './modules/whatsapp-fila.mjs';
 import { whatsappEntradaRoutes } from './modules/whatsapp-entrada.mjs';
 import { whatsappAgentesRoutes } from './modules/whatsapp-agentes.mjs';
+import { agentesExecucaoRoutes } from './modules/whatsapp-agentes-fila.mjs';
 import { contaRoutes } from './modules/conta.mjs';
 import { vivo } from './platform/env-vivo.mjs';
 import { mediaRoutes } from './modules/media.mjs';
@@ -116,6 +117,7 @@ export function createCore({ pool, adminPassword, identity, clock = Date.now, se
  whatsappFilaRoutes(router,{clock});
  whatsappEntradaRoutes(router,{clock});
  whatsappAgentesRoutes(router);
+ agentesExecucaoRoutes(router);
  // Configurações → Perfil e sessão, Auditoria.
  contaRoutes(router,{clock});
  mediaRoutes(router,{clock,...mediaOptions});

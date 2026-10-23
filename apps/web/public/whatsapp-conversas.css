@@ -53,3 +53,11 @@
 .ia-materiais { display: grid; gap: 10px; }
 .ia-material { display: grid; grid-template-columns: minmax(140px, 1fr) 130px minmax(180px, 1.4fr) minmax(180px, 1.4fr) auto; align-items: center; gap: 8px; }
 @media (max-width: 900px) { .ia-material { grid-template-columns: minmax(0, 1fr); } }
+
+/* Agentes: estado da execução, "em breve" e a tabela de turnos; chat: quem atende */
+.ia-turnos { display: grid; gap: 12px; margin-top: 8px; }
+.ia-turnos h3 { margin: 0; font-size: 15px; }
+.ia-opcao-grande.is-embreve { opacity: .65; }
+.wa-fio-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.wa-atendimento { display: flex; align-items: center; gap: 8px; flex: none; }
+.wa-fio-topo > div:first-child { display: grid; gap: 2px; min-width: 0; }

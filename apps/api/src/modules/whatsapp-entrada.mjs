@@ -5,6 +5,7 @@ import { CORPO_MAXIMO } from '../integrations/payment-webhooks.mjs';
 import { enfileirar } from '../platform/whatsapp-saida.mjs';
 import { extrairMensagens, registrarMensagem, verificarSegredo, MENSAGEM_063, MENSAGEM_064 } from '../platform/whatsapp-entrada.mjs';
 import { vivo } from '../platform/env-vivo.mjs';
+import { agendarTurno } from './whatsapp-agentes-fila.mjs';
 
 // Webhook da Evolution (mensagens recebidas) e rotas da aba "Conversas" do WhatsApp.
 //
@@ -36,7 +37,15 @@ export function whatsappEntradaRoutes(router, { env = vivo.env, clock = Date.now
   try { corpo = JSON.parse(await corpoCru(req)); } catch (e) { if (e?.status) throw e; throw fail(400, 'JSON inválido.'); }
   const { mensagens } = extrairMensagens(corpo);
   let registradas = 0;
-  try { for (const m of mensagens) if ((await registrarMensagem(pool, m)).novo) registradas++; }
+  try {
+   for (const m of mensagens) {
+    const r = await registrarMensagem(pool, m);
+    if (!r.novo) continue;
+    registradas++;
+    // Texto de verdade, que não pediu para sair: o agente (se houver um para este funil) responde daqui a alguns segundos.
+    if (!r.saiu && !m.midia && r.inboxId) await agendarTurno(pool, { instancia: m.instancia, numero: m.numero, inboxId: r.inboxId, env });
+   }
+  }
   catch (e) { if (e?.code === '42P01') throw fail(503, MENSAGEM_063); if (e?.code === '42703') throw fail(503, MENSAGEM_064); throw e; }   // 5xx: a Evolution tenta de novo depois de aplicada
   // 2xx inclusive para o que não guardamos (grupo, status, evento de outro tipo): recusar derrubaria a entrega do que importa.
   return reply(200, { received: true, registradas });
@@ -93,7 +102,9 @@ export function whatsappEntradaRoutes(router, { env = vivo.env, clock = Date.now
      ) t ORDER BY em DESC LIMIT 100`, [params.number, padrao(), instancia])).rows.reverse();
    const bloqueado = (await pool.query('SELECT 1 FROM whatsapp_suppressions WHERE number=$1 AND revoked_at IS NULL', [params.number])).rows.length > 0;
    const lead = (await pool.query('SELECT lead_id, push_name FROM whatsapp_inbox WHERE from_number=$1 AND coalesce(instance, $2) = $3 ORDER BY received_at DESC LIMIT 1', [params.number, padrao(), instancia])).rows[0] ?? null;
-   reply(200, { number: params.number, instance: instancia, mensagens, bloqueado, lead_id: lead?.lead_id ?? null, name: lead?.push_name ?? null });
+   let comPessoa = false;
+   try { comPessoa = (await pool.query('SELECT 1 FROM ai_handoffs WHERE instance=$1 AND number=$2 AND released_at IS NULL', [instancia, params.number])).rows.length > 0; } catch (e) { if (e?.code !== '42P01') throw e; }
+   reply(200, { number: params.number, instance: instancia, com_pessoa: comPessoa, mensagens, bloqueado, lead_id: lead?.lead_id ?? null, name: lead?.push_name ?? null });
   } catch (e) { if (e?.code === '42P01') throw fail(409, MENSAGEM_063); if (e?.code === '42703') throw fail(409, MENSAGEM_064); throw e; }
  }, { body: false });
 
@@ -118,6 +129,10 @@ export function whatsappEntradaRoutes(router, { env = vivo.env, clock = Date.now
    if ((await client.query('SELECT 1 FROM whatsapp_suppressions WHERE number=$1 AND revoked_at IS NULL', [params.number])).rows.length) throw fail(409, 'Este número pediu para não receber mensagens (ou não tem WhatsApp).');
    const origem = (await client.query('SELECT lead_id, product_id, push_name FROM whatsapp_inbox WHERE from_number=$1 AND coalesce(instance, $2) = $3 ORDER BY received_at DESC LIMIT 1', [params.number, padrao(), instancia])).rows[0] ?? null;
    const g = await enfileirar(client, { chave: `wa:resposta:${randomUUID()}`, tipo: 'lead', produto: origem?.product_id ?? null, evento: 'resposta.manual', lead: origem?.lead_id ?? null, para: params.number, nome: origem?.push_name ?? null, texto, por: ator(operator), instancia });
+   // Quando uma PESSOA responde, o agente sai da conversa até alguém devolver (ai_handoffs); sem a migração 066 isto é só ignorado.
+   await client.query('SAVEPOINT passagem');
+   try { await client.query("INSERT INTO ai_handoffs(instance,number,reason,created_by) VALUES($1,$2,'pessoa_respondeu',$3) ON CONFLICT DO NOTHING", [instancia, params.number, ator(operator)]); await client.query('RELEASE SAVEPOINT passagem'); }
+   catch (e) { await client.query('ROLLBACK TO SAVEPOINT passagem'); await client.query('RELEASE SAVEPOINT passagem'); if (e?.code !== '42P01') throw e; }
    return { response: { ok: true, id: g.id } };
   } catch (e) { if (e?.code === '42P01') throw fail(409, 'A fila de WhatsApp ainda não está disponível neste banco: falta aplicar a migração 062.'); throw e; }
  }, { transactional: true, audit: false });

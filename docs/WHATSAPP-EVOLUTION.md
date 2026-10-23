@@ -45,3 +45,20 @@ O que o webhook faz e não faz:
 - Não responde ao lead, não cria lead e não dispara automação.
 
 Responder pela aba Conversas **entra na fila de saída**, com o mesmo ritmo e o mesmo interruptor `WHATSAPP_ENVIO`. Número bloqueado não recebe resposta.
+
+## Agentes de IA
+
+A aba **WhatsApp → Agentes de IA** configura quem atende (migração `065`); o motor que executa vem na migração `066`. O fluxo de um turno:
+
+1. O webhook guarda a mensagem do lead e, se a execução estiver ligada, marca um **turno** para daqui a 8 segundos (mensagens seguidas empurram o mesmo turno: o agente responde uma vez, depois que o lead parou de digitar).
+2. O agente que atende é o primeiro **ligado** cuja instância e cujos funis batem com o lead. Número sem lead em funil não é atendido por agente.
+3. O motor lê as últimas 20 mensagens, monta as instruções (instruções do agente, contexto, materiais, dados do lead e as regras fixas) e fala com o modelo da Anthropic. O modelo pode usar **só** as ferramentas que o agente tem e que o motor sabe executar; as ferramentas nunca recebem o lead, o número ou a instância do modelo, porque o turno já nasce preso a uma conversa.
+4. A resposta (limpa de markdown, até 1000 caracteres) entra na fila de saída **pela instância da conversa**, com o mesmo ritmo e o mesmo interruptor `WHATSAPP_ENVIO` de qualquer mensagem.
+
+**Para ligar** (nesta ordem): aplicar as migrações 064, 065 e 066 → preencher `ANTHROPIC_API_KEY` e definir `AGENTES_EXECUCAO=ligado` em Configurações → Integrações → Claude (agentes de IA) → criar o agente e ligá-lo → conferir em **Últimas execuções**. Sem a chave ou com `AGENTES_EXECUCAO` diferente de `ligado`, nada chama o modelo.
+
+**Ferramentas que o motor executa hoje:** buscar lead e histórico, consultar a base de conhecimento (contexto e materiais do agente), registrar anotação, criar e concluir tarefa, corrigir nome e e-mail do lead, consultar contratos e pagamentos, enviar um template de e-mail do espaço e transferir para uma pessoa. **Em breve** (a configuração fica salva, mas o modelo não as recebe): mover de etapa, consultar e marcar horário na agenda, gerar link de pagamento. Capacidades: só texto; áudio, imagem, documento, ligação e retomar conversa parada dependem de voz, mídia e agendamento.
+
+**Limites do motor:** no máximo 8 respostas por hora por conversa, 6 voltas com o modelo por turno, 3 tarefas e 1 e-mail por resposta, 3 tentativas por turno (a Anthropic fora do ar ou pedindo calma repete com espera crescente; chave recusada não repete).
+
+**Passar para uma pessoa:** enquanto a conversa está com uma pessoa, nenhum agente responde. Ela passa sozinha quando alguém responde pela aba Conversas ou quando o agente usa a ferramenta de transferir (que avisa a equipe no WhatsApp). Na conversa, **Assumir conversa** e **Devolver ao agente** fazem isso à mão.

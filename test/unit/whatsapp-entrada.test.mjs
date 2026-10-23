@@ -67,7 +67,7 @@ const MENSAGEM = { id: 'ABC1', numero: '5531997599216', nome: 'Maria', texto: 'O
 test('registrar: liga ao lead pelos 8 últimos dígitos e não duplica a reentrega', async () => {
  const c = bancoDeEntrada({ lead: { id: 'lead-1', product_id: 'sites' } });
  const r = await registrarMensagem(c, MENSAGEM);
- assert.deepEqual(r, { novo: true, lead: 'lead-1', saiu: false });
+ assert.deepEqual(r, { novo: true, lead: 'lead-1', saiu: false, inboxId: 'in-1' });
  assert.equal(c.sql.find(q => q.texto.includes('FROM commercial_leads l')).p[0], '97599216');
  assert.deepEqual((await registrarMensagem(bancoDeEntrada({ jaExiste: true }), MENSAGEM)).novo, false);
 });
