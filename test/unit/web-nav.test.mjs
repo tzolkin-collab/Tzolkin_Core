@@ -143,3 +143,8 @@ test('no contexto do produto, "Clientes" chama-se Acessos', () => {
  assert.equal(orgs.titulo, 'Acessos');
  assert.equal(telas(fonte('router.js'), 'general').find(v => v.chave === 'clients').titulo, 'Clientes');
 });
+
+test('o sidebar possui tabindex="-1" para foco programatico no celular em openNavigation', () => {
+ const html = fonte('index.html');
+ assert.match(html, /<aside\s+id="sidebar"[^>]*tabindex="-1"/, 'sidebar precisa de tabindex="-1" para responder a openNavigation().focus()');
+});
