@@ -76,13 +76,22 @@ export function commercialWorkspaceRoutes(router) {
   return reply(200,{contracts:(await pool.query('SELECT c.*,t.name AS organization_name FROM commercial_contracts c JOIN tenants t ON t.id=c.tenant_id WHERE ($1::text IS NULL OR c.product_id=$1) ORDER BY c.created_at DESC LIMIT 100',[product])).rows});
  });
  router.post('/api/commercial/contracts',async({client,body,operator})=>{
-  await commercialPermission(client,operator,true);input(body,['lead_id','title','scope','amount_minor','currency','starts_on','ends_on','owner_id']);
-  const l=(await client.query('SELECT id,tenant_id,product_id FROM commercial_leads WHERE id=$1',[uuid(body.lead_id)])).rows[0];if(!l)throw fail(404,'Lead não encontrado.');
+  await commercialPermission(client,operator,true);input(body,['lead_id','tenant_id','product_id','title','scope','amount_minor','currency','starts_on','ends_on','owner_id']);
+  let leadId=null,tenantId=null,productId=null;
+  if(body.lead_id){
+   const l=(await client.query('SELECT id,tenant_id,product_id FROM commercial_leads WHERE id=$1',[uuid(body.lead_id)])).rows[0];if(!l)throw fail(404,'Lead não encontrado.');
+   leadId=l.id;tenantId=l.tenant_id;productId=l.product_id;
+  }else{
+   if(!body.tenant_id||!body.product_id)throw fail(400,'lead_id ou (tenant_id e product_id) são obrigatórios.');
+   const t=(await client.query('SELECT id FROM tenants WHERE id=$1',[uuid(body.tenant_id)])).rows[0];if(!t)throw fail(404,'Organização não encontrada.');
+   if(!isProductId(body.product_id))throw fail(400,'Produto inválido.');
+   tenantId=t.id;productId=body.product_id;
+  }
   if(!Number.isSafeInteger(body.amount_minor)||body.amount_minor<0||body.amount_minor>10000000000||!['BRL','USD','EUR','GBP'].includes(body.currency))throw fail(400,'Valor ou moeda inválidos.');
   for(const k of ['starts_on','ends_on'])if(body[k]&&(!/^\d{4}-\d{2}-\d{2}$/.test(body[k])||!Number.isFinite(Date.parse(body[k]))))throw fail(400,'Data inválida.');
   if(body.starts_on&&body.ends_on&&body.ends_on<body.starts_on)throw fail(400,'Vigência inválida.');
-  const c=(await client.query(`INSERT INTO commercial_contracts(lead_id,tenant_id,product_id,title,scope,amount_minor,currency,starts_on,ends_on,owner_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,[l.id,l.tenant_id,l.product_id,text(body.title,2,160),note(body.scope),body.amount_minor,body.currency,body.starts_on||null,body.ends_on||null,await owner(client,body.owner_id??null)])).rows[0];
-  await contractAudit(client,c,operator);await recordActivity(client,l.id,'contract_created',operator,null,{contract_id:c.id});return{body:{contract:c}};
+  const c=(await client.query(`INSERT INTO commercial_contracts(lead_id,tenant_id,product_id,title,scope,amount_minor,currency,starts_on,ends_on,owner_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,[leadId,tenantId,productId,text(body.title,2,160),note(body.scope),body.amount_minor,body.currency,body.starts_on||null,body.ends_on||null,await owner(client,body.owner_id??null)])).rows[0];
+  await contractAudit(client,c,operator);if(leadId)await recordActivity(client,leadId,'contract_created',operator,null,{contract_id:c.id});return{body:{contract:c}};
  },{transactional:true,audit:false});
  router.put('/api/commercial/contracts/:id/status',async({client,body,params,operator})=>{
   await commercialPermission(client,operator,true);input(body,['version','status','acceptance_reference']);const c=(await client.query('SELECT * FROM commercial_contracts WHERE id=$1 FOR UPDATE',[uuid(params.id)])).rows[0];if(!c)throw fail(404,'Contrato não encontrado.');
