@@ -63,8 +63,8 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
   *(feito em 02/10 em `ATTRIBUTION.md`.)*
 - [x] **P1** Tarefas, eventos `objeto.ação` e automações (fases 4 e 5 do plano). *(02/10: tarefas mínimas, dez eventos e automações com duas ações. Requisitos de etapa e automações gerenciadas seguem no item de funil mais abaixo.)*
 - [x] **P1** Lead sem "próximo passo" nem conversão em cliente: marcar `won` não muda o `tenant`. *(STATUS §4.)* *(02/10: ganhar a oportunidade cria a contratação e promove a empresa a cliente; o próximo passo é a tarefa.)*
-- [ ] **P1** Contrato comercial para cliente que não veio de lead: `POST /api/commercial/contracts` exige `lead_id`
-  (as mentorias vieram do Notion). *(handoff 16/09 §5.1.)* **[D]**
+- [x] **P1** Contrato comercial para cliente que não veio de lead: `POST /api/commercial/contracts` permite `lead_id` opcional e aceita `tenant_id` e `product_id`.
+  *(feito em 23/10: commit `9501b01` com teste em `test/commercial-intake.test.mjs`)*
 - [ ] **P1** Decidir qual registro nasce ao ganhar uma oportunidade (contrato, contratação ou os dois). **[D]**
 - [ ] **P1** G6: atribuição de toque único, sem oportunidades múltiplas nem histórico de estágio. *(STATUS §3.D.)*
 - [ ] **P1** G8 consentimento: finalidade, revogação, retenção, exportação e exclusão (o site grava
@@ -81,8 +81,8 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 - [x] **P1** O Core ainda não tem onde guardar porte, funcionários, Instagram e site do formulário: hoje vão no início da mensagem.
   Resolve com o bloco `space_data` (campos por espaço). *(feito em 02/10 nos dois lados: o Core guarda e o site manda em `space_data`, com volta ao formato antigo se o Core não conhecer o bloco. Depende do deploy do Core com a migração 043.)*
 - [ ] **P2 [D]** "Educacional TZOLKIN" entra no espaço **sites** com modelo `education`. Deveria ir para Mentorias/Educare? *(desta sessão.)*
-- [ ] **P2** Código morto no site: `LeadDirectForm.tsx` (ninguém importa), `chatApi.saveLead` (ninguém chama), `db/001–003` e `scripts/email-worker.mjs`
-  (legado, fila nunca preenchida). Remover de vez.
+- [x] **P2** Código morto no site: `LeadDirectForm.tsx`, `chatApi.saveLead`, `db/001–003`, `scripts/email-worker.mjs` e `scripts/email-integration.mjs`.
+  *(removidos em 23/10: commit `3568f28` no `tzolkin-site`).*
 - [ ] **P2** Escolher se o CRM da Kalidash (outro contrato) segue separado; leads de produto de cliente no Core exigem
   papel de operador de dado pessoal definido em contrato. **[D]**
 
@@ -94,11 +94,12 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
 - [ ] **P0 [VOCÊ]** Fechar ou restringir a porta 9000 do EasyPanel. *(BACKLOG §1.3.)*
 - [ ] **P0** **Rotacionar as chaves do R2 e o token `cfat_`**: apareceram em conversa. Criar novas restritas ao bucket
   `core`. *(desta sessão.)*
-- [ ] **P0** Lembrete agendado do certificado do Postgres (vence 31/08/2027); não existe em lugar nenhum do repositório.
-  *(STATUS §3.B.)*
-- [ ] **P1** Aplicar a role restrita de produção. Antes, corrigir `PUT /api/teams` (`accounts.mjs:128` faz `DELETE FROM
-  team_members`, o único `DELETE` do runtime). *(STATUS §3.B.)*
-- [ ] **P1** `ASAAS_CARD_ENABLED=false` é só convenção; nenhum código lê a variável. Falta a trava. *(STATUS §3.B.)*
+- [x] **P0** Lembrete agendado do certificado do Postgres (vence 31/08/2027).
+  *(feito em 23/10: teste unitário e guarda com alerta de 90 dias em `test/unit/postgres-cert.test.mjs`, commit `bb254a5`).*
+- [ ] **P1** Aplicar a role restrita de produção.
+  *(corrigido em 23/10: `PUT /api/teams` agora usa soft-delete com `removed_at` na migração `067_team_members_soft_delete.sql`, eliminando o único DELETE de runtime, commit `eaa97a2`).*
+- [x] **P1** `ASAAS_CARD_ENABLED=false` com trava no código e exposto em billing, vendas e pagamentos de produto.
+  *(feito em 23/10: commit `2ca1b02`).*
 - [ ] **P1** `local-bootstrap` passa nas ações só de owner (`commercial-keys.mjs:12`); uso de chave de integração não é
   auditado, só `last_used_at`. *(STATUS §3.D G4.)*
 
@@ -193,8 +194,9 @@ Esta lista **substitui `STATUS.md §3` como checklist vivo**. O resto do `STATUS
   `R2_SECRET_ACCESS_KEY`. A migração 039 já está no banco compartilhado.
 - [ ] **P1** CI: não há `.github/`, nem execução automática de `test:unit`, `test` e `test:ui`.
 - [ ] **P2** G2: dois arquivos `015_*`; teste de falha injetada; lint contra `COMMIT` em migração. G5: teste HTTP de
-  `/api/checkout/sessions` com `sites`. Teste do filtro de Serviços. *(STATUS §3.D.)*
-- [ ] **P2** Foco do menu no celular (`app.js`: `$('sidebar').focus()` sem `tabindex="-1"` no `<aside>`). *(STATUS §3.A.)*
+  `/api/checkout/sessions` com `sites`. Teste do filtro de Serviços *(feito em 23/10: `test/unit/services-filter.test.mjs`, commit `407195f`)*.
+- [x] **P2** Foco do menu no celular (`app.js`: `$('sidebar').focus()` com `tabindex="-1"` no `<aside>`).
+  *(feito em 23/10: commit `cec0297`).*
 - [ ] **P2** Remover os popups remanescentes (módulo de Projetos); revisão página a página de tipografia, contraste e
   responsividade. *(BACKLOG §9.7.)*
 - [ ] **P2** Camada de tela (`test:ui`) cobre 11 telas com dados sintéticos; faltam detalhe de lead, remover foto e Inbound

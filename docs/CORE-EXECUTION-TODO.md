@@ -1,22 +1,22 @@
 # Core — plano de execução
 
-Status: proposta de trabalho. A ordem importa: cada etapa reduz ambiguidades da seguinte.
+Status: reconciliado em `STATUS.md §4`. A ordem importa: cada etapa reduz ambiguidades da seguinte.
 
 ## Etapa 0 — estabilizar antes de desenhar
 
 - [ ] Fazer inventário das telas, rotas, componentes e estilos existentes.
 - [ ] Identificar CSS duplicado ou conflitante e escolher uma única camada visual.
-- [ ] Remover da navegação páginas sem conteúdo ou função real.
+- [x] Remover da navegação páginas sem conteúdo ou função real. *(feito: telas vazias retiradas do menu e mantidas apenas com dados úteis)*
 - [ ] Capturar referência visual do painel atual em desktop e celular.
 - [ ] Definir critérios de pronto: dado real, ação principal, vazio útil, responsividade e teste.
 
 ## Etapa 1 — modelo de domínio e fonte de verdade
 
 - [ ] Validar no Notion a lista de organizações, contatos, projetos, contratos e pagamentos.
-- [ ] Definir uma organização como entidade-base: empresa, pessoa física, interna ou parceira.
+- [x] Definir uma organização como entidade-base: empresa, pessoa física, interna ou parceira. *(feito: `tenants` governa organizações)*
 - [ ] Definir cliente como relacionamento comercial ativo, não como tipo de organização.
 - [ ] Definir lead como estágio de relacionamento, não como cadastro paralelo.
-- [ ] Definir pessoa como stakeholder, com papéis e vínculos com uma ou mais organizações.
+- [x] Definir pessoa como stakeholder, com papéis e vínculos com uma ou mais organizações. *(feito: `stakeholders` e vínculos implementados)*
 - [ ] Definir produto, serviço, projeto, marca e oferta sem sobreposição.
 - [ ] Aprovar vocabulário de tags: marca, produto, serviço, canal, projeto e origem.
 - [ ] Criar mapeamento Notion → Core com dono de cada campo e regra de sincronização.
@@ -24,10 +24,10 @@ Status: proposta de trabalho. A ordem importa: cada etapa reduz ambiguidades da 
 ## Etapa 2 — arquitetura da navegação
 
 - [ ] Reduzir a sidebar aos módulos que têm dado e ação utilizáveis.
-- [ ] Definir a ordem final: Visualização, Relacionamentos, Operação, Educacional, Gestão e Tecnologia.
+- [ ] Definir a ordem final: Hoje, CRM, Portfólio, Entrega, Tecnologia, Bases de dados, Administração (fixada em `web-nav.test.mjs`).
 - [ ] Validar se Produtos pertence a Operação ou a uma área própria de Portfólio.
-- [ ] Definir Serviços como execução/projetos, separado do catálogo.
-- [ ] Manter Mentorias fora da sidebar até haver turma, aluno e matrícula modelados.
+- [x] Definir Serviços como execução/projetos, separado do catálogo. *(feito: `client_engagements` / Serviços separados de produtos)*
+- [x] Manter Mentorias fora da sidebar até haver turma, aluno e matrícula modelados. *(feito: mentorias integradas em serviços)*
 - [ ] Manter Configurações, Segurança e Métricas de servidor como subpáginas de Gestão/Tecnologia até possuírem conteúdo real.
 - [ ] Definir um ícone semântico e uma ação principal por item de navegação.
 
@@ -35,7 +35,7 @@ Status: proposta de trabalho. A ordem importa: cada etapa reduz ambiguidades da 
 
 - [ ] Escolher uma direção visual única e documentar tokens de cor, espaçamento, tipografia e estados.
 - [ ] Confirmar disponibilidade/licença de Myriad Pro; usar fallback equivalente quando não instalada.
-- [ ] Reconstruir a sidebar em um único componente/CSS, eliminando overrides acumulados.
+- [x] Reconstruir a sidebar em um único componente/CSS, eliminando overrides acumulados. *(feito: sidebar em componente/CSS único e com tabindex="-1" para foco no celular)*
 - [ ] Projetar estados normal, hover, ativo, foco, carregamento e mobile.
 - [ ] Revisar contraste, teclado, leitores de tela e toque em celular.
 - [ ] Validar visualmente em desktop, tablet e celular antes de avançar.
@@ -49,7 +49,7 @@ Status: proposta de trabalho. A ordem importa: cada etapa reduz ambiguidades da 
 
 ## Etapa 5 — relacionamentos
 
-- [ ] Empresas: diretório de organizações, tipo, status e pessoas vinculadas.
+- [x] Empresas: diretório de organizações, tipo, status e pessoas vinculadas. *(feito: tela Empresas no ar)*
 - [ ] Pessoas: diretório de stakeholders, papel, contato, organizações e permissões.
 - [ ] Clientes: visão comercial de organizações com contratação ativa.
 - [ ] Leads: pipeline com origem, interesse, responsável, próximo passo e conversão.
@@ -58,9 +58,9 @@ Status: proposta de trabalho. A ordem importa: cada etapa reduz ambiguidades da 
 
 ## Etapa 6 — operação comercial e portfólio
 
-- [ ] Produtos: catálogo de produtos, plataformas e linhas de serviço.
+- [x] Produtos: catálogo de produtos, plataformas e linhas de serviço. *(feito: portfólio por tipo segundo ADR 0007)*
 - [ ] Ofertas/planos: preço, moeda, recorrência, canal e processador de pagamento.
-- [ ] Serviços: modelo de contratação (consultoria, assessoria, sob demanda, educacional).
+- [x] Serviços: modelo de contratação (consultoria, assessoria, sob demanda, educacional). *(feito: com filtro por tipo de serviço e teste)*
 - [ ] Projetos: escopo, status, responsáveis, repositório, entregas e vínculo com cliente/produto.
 - [ ] Checkout: vincular venda a cliente/lead de forma explícita, sem inferir somente por e-mail.
 - [ ] Criar uma visão de vendas com produto, oferta, cliente, origem, status e valor.
@@ -78,7 +78,7 @@ Status: proposta de trabalho. A ordem importa: cada etapa reduz ambiguidades da 
 - [ ] Modelar venda, assinatura, cobrança, parcela, recebimento, taxa e repasse.
 - [ ] Exibir data prevista, data recebida, valor bruto, líquido e situação de cada evento.
 - [ ] Modelar contratos e anexos com vínculo à organização, oferta e projeto.
-- [ ] Integrar nota fiscal emitida pelo Asaas à cobrança/contrato correspondente.
+- [ ] Integrar nota fiscal emitida (pela Contabilizei segundo ADR 0008, e não pelo Asaas) à cobrança/contrato correspondente.
 - [ ] Diferenciar valores reais, simulados e previstos em todos os gráficos e totais.
 - [ ] Implementar previsões recorrentes com vínculo opcional a cliente, produto e projeto.
 
@@ -113,7 +113,7 @@ Status: proposta de trabalho. A ordem importa: cada etapa reduz ambiguidades da 
 
 - [ ] Fonte de dados e regra de sincronização do Notion.
 - [ ] Vocabulário final de tags e marcas.
-- [ ] Diferença operacional entre produto, serviço, projeto e mentoria.
+- [x] Diferença operacional entre produto, serviço, projeto e mentoria. *(resolvido na ADR 0007)*
 - [ ] Regra de identificação do cliente no checkout.
-- [ ] Escopo de emissão fiscal no Asaas.
+- [x] Escopo de emissão fiscal no Asaas. *(resolvido na ADR 0008: emissor é a Contabilizei)*
 - [ ] Provedor e escopo das métricas de servidor.
