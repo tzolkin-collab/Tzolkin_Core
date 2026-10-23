@@ -1,5 +1,5 @@
-// Tarefas do lead e automações do espaço (fase 5). As regras moram na API (platform/automations.mjs e
-// modules/commercial-automations.mjs); aqui só se monta a tela. Sem estilo inline (a CSP não deixa).
+// Tarefas do lead (fase 5). As regras moram na API (platform/automations.mjs e modules/commercial-automations.mjs); as
+// automações do espaço têm página própria (automacoes-pagina.js). Sem estilo inline (a CSP não deixa).
 const el = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
 const dia = v => (v ? new Date(v).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : null);
 const hora = v => new Date(v).toLocaleString('pt-BR');
@@ -38,99 +38,5 @@ export function tasksPanel({ api, lead, detail, owners, onChange }) {
   } catch (erro) { aviso(form, erro); enviar.disabled = false; }
  };
  box.append(form);
- return box;
-}
-
-/** Automações do espaço: lista, liga/desliga, histórico de execuções e criação (uma ação por vez na tela). */
-export function automationsManager({ api, spaces, pipelines, initialSpace }) {
- const box = el('details', null, 'automations-manager');
- box.append(el('summary', 'Automações'));
- const corpo = el('div'); box.append(corpo);
- let espaco = spaces.some(s => s.id === initialSpace) ? initialSpace : spaces[0]?.id;
- let donos = null;
- const erro = e => { corpo.querySelector('[data-erro]')?.remove(); const p = el('p', e.message, 'notice-inline'); p.setAttribute('role', 'alert'); p.dataset.erro = '1'; corpo.prepend(p); };
- async function desenhar() {
-  corpo.replaceChildren(el('p', 'Carregando automações…'));
-  if (!donos) donos = (await api('/api/commercial/owners')).owners;
-  const { automations, catalog } = await api('/api/commercial/automations?space_id=' + encodeURIComponent(espaco));
-  const funis = pipelines.filter(p => p.space_id === espaco && p.is_active);
-  const nomeFunil = id => funis.find(f => f.id === id)?.name || 'funil arquivado';
-  const nomeEtapa = id => funis.flatMap(f => f.stages).find(s => s.id === id)?.name || 'etapa';
-  corpo.replaceChildren();
-  corpo.append(el('p', 'Quando acontece algo no funil, o Core faz sozinho o que estiver aqui. A automação não substitui o manual e, se falhar, o lead ou a venda seguem normalmente: a falha fica no histórico. Por ora: criar tarefa e atribuir responsável.', 'detail'));
-  if (spaces.length > 1) {
-   const l = el('label', 'Espaço'), s = el('select');
-   for (const x of spaces) { const o = el('option', x.name); o.value = x.id; s.append(o); }
-   s.value = espaco; s.onchange = () => { espaco = s.value; desenhar().catch(erro); }; l.append(s); corpo.append(l);
-  }
-  if (!automations.length) corpo.append(el('p', 'Nenhuma automação neste espaço.', 'empty-list'));
-  for (const a of automations) {
-   const linha = el('div', null, 'automation-row');
-   const filtro = [a.pipeline_id ? 'funil ' + nomeFunil(a.pipeline_id) : 'qualquer funil', a.stage_id ? 'etapa ' + nomeEtapa(a.stage_id) : null].filter(Boolean).join(', ');
-   const faz = a.actions.map(x => x.action === 'tarefa.criar' ? `criar tarefa "${x.title}"${x.delay_days ? ` (prazo ${x.delay_days} dias)` : ''}` : x.action === 'email.enviar' ? `enviar o e-mail "${x.template}" ao lead` : x.action === 'whatsapp.enviar' ? `enviar o WhatsApp "${x.message.length > 40 ? `${x.message.slice(0, 37)}…` : x.message}" ao lead` : x.action === 'whatsapp.avisar_equipe' ? 'avisar a equipe no WhatsApp' : `atribuir a ${donos.find(d => d.id === x.owner_id)?.name || 'responsável'}`).join('; ');
-   const texto = el('div'); texto.append(el('strong', a.name + (a.is_enabled ? '' : ' (desativada)')), el('p', `Quando: ${catalog.events[a.trigger_event]} · ${filtro}`, 'detail'), el('p', `Faz: ${faz}`, 'detail'));
-   if (a.last_run_at) texto.append(el('p', `Última execução: ${hora(a.last_run_at)} · ${a.last_result === 'OK' ? 'deu certo' : 'FALHOU'}`, 'detail'));
-   const acoes = el('div', null, 'field-row');
-   const alterna = el('button', a.is_enabled ? 'Desativar' : 'Ativar', 'secondary'); alterna.type = 'button';
-   alterna.onclick = async () => { alterna.disabled = true; try { await api('/api/commercial/automations/' + a.id, 'PUT', { version: a.version, is_enabled: !a.is_enabled }); await desenhar(); } catch (e) { erro(e); alterna.disabled = false; } };
-   const historico = el('div', null, 'automation-runs'); historico.hidden = true;
-   const ver = el('button', 'Ver execuções', 'secondary'); ver.type = 'button';
-   ver.onclick = async () => {
-    if (!historico.hidden) { historico.hidden = true; return; }
-    try {
-     const { runs } = await api(`/api/commercial/automations/${a.id}/runs`);
-     historico.replaceChildren(...(runs.length ? runs.map(r => el('p', `${hora(r.created_at)} · ${r.result === 'OK' ? 'OK' : 'FALHOU'} · ${r.note}`)) : [el('p', 'Ainda não rodou.', 'empty-list')]));
-     historico.hidden = false;
-    } catch (e) { erro(e); }
-   };
-   acoes.append(alterna, ver); linha.append(texto, acoes, historico); corpo.append(linha);
-  }
-  const form = el('form', null, 'commercial-form');
-  form.append(el('h4', 'Nova automação'));
-  const nome = campo(form, 'Nome'); nome.required = true; nome.maxLength = 120;
-  const evento = lista(form, 'Quando', Object.entries(catalog.events)).s;
-  const funil = lista(form, 'Só neste funil', [['', 'Qualquer funil'], ...funis.map(f => [f.id, f.name])]).s;
-  const etapa = lista(form, 'Só nesta etapa', [['', 'Qualquer etapa']]);
-  const sincroniza = () => {
-   const f = funis.find(x => x.id === funil.value);
-   etapa.s.replaceChildren(...[['', 'Qualquer etapa'], ...(f ? f.stages.map(s => [s.id, s.name]) : [])].map(([v, t]) => { const o = el('option', t); o.value = v; return o; }));
-   etapa.l.hidden = !f;
-  };
-  funil.onchange = sincroniza; sincroniza();
-  const acao = lista(form, 'Então', Object.entries(catalog.actions)).s;
-  const titulo = campo(form, 'Título da tarefa'); titulo.maxLength = 200;
-  const prazo = campo(form, 'Prazo da tarefa, em dias (0 = sem prazo)', 'number'); prazo.min = '0'; prazo.max = '365'; prazo.value = '0';
-  const dono = lista(form, 'Responsável', donos.map(o => [o.id, o.name || o.email]));
-  // E-mail ao lead: o template é do espaço; a mensagem sai pela fila de e-mail (E-mails → Atividade), nunca na hora e nunca sem e-mail configurado.
-  // WhatsApp: o texto é da própria automação (sem template). Sai pela fila de WhatsApp (menu WhatsApp), só com o envio ligado.
-  const mensagem = el('label', 'Mensagem do WhatsApp'), texto = el('textarea'); texto.rows = 4; texto.maxLength = 1000; texto.placeholder = 'Oi {{first_name}}, recebemos seu contato na {{product_name}}. Já já falamos com você!'; mensagem.append(texto);
-  const ajudaMensagem = el('p', 'Dados do lead: {{name}}, {{first_name}}, {{email}}, {{whatsapp}}, {{company_name}}, {{product_name}}. "Enviar ao lead" precisa de um WhatsApp válido no lead; "Avisar a equipe" usa os números de Integrações → WhatsApp.', 'detail'); mensagem.append(ajudaMensagem); form.append(mensagem);
-  const modelo = lista(form, 'Template do e-mail', []);
-  const ajudaModelo = el('p', null, 'detail'); modelo.l.append(ajudaModelo);
-  const carregarModelos = async () => {
-   try {
-    const { templates } = await api('/api/email-templates?product_id=' + encodeURIComponent(espaco));
-    modelo.s.replaceChildren(...templates.map(t => { const o = el('option', `${t.payload.name} (${t.slug})`); o.value = t.slug; return o; }));
-    ajudaModelo.textContent = templates.length ? 'Dados do lead no e-mail: {{name}}, {{email}}, {{product_name}}, {{company_name}}. Todo e-mail leva um aviso de como pedir para sair.' : 'Este espaço ainda não tem template. Crie um em E-mails → Templates (no contexto do espaço).';
-   } catch (e) { ajudaModelo.textContent = e.message; }
-  };
-  const mostra = () => {
-   const tarefa = acao.value === 'tarefa.criar', email = acao.value === 'email.enviar', zap = acao.value.startsWith('whatsapp.');
-   titulo.parentElement.hidden = prazo.parentElement.hidden = !tarefa; dono.l.hidden = tarefa || email || zap; modelo.l.hidden = !email; mensagem.hidden = !zap;
-   if (email && !modelo.s.options.length) carregarModelos();
-  };
-  acao.onchange = mostra; mostra();
-  const enviar = el('button', 'Criar automação', 'primary'); enviar.type = 'submit'; form.append(enviar);
-  form.onsubmit = async e => {
-   e.preventDefault(); enviar.disabled = true;
-   try {
-    const acaoCorpo = acao.value === 'tarefa.criar' ? { action: 'tarefa.criar', title: titulo.value, delay_days: Number(prazo.value || 0) } : acao.value === 'email.enviar' ? { action: 'email.enviar', template: modelo.s.value } : acao.value.startsWith('whatsapp.') ? { action: acao.value, message: texto.value } : { action: 'responsavel.atribuir', owner_id: dono.s.value };
-    await api('/api/commercial/automations', 'POST', { space_id: espaco, name: nome.value, trigger_event: evento.value, ...(funil.value ? { pipeline_id: funil.value } : {}), ...(etapa.s.value ? { stage_id: etapa.s.value } : {}), actions: [acaoCorpo] });
-    await desenhar();
-   } catch (err) { aviso(form, err); enviar.disabled = false; }
-  };
-  corpo.append(form);
- }
- box.addEventListener('toggle', () => { if (box.open && !corpo.childElementCount) desenhar().catch(erro); });
  return box;
 }
