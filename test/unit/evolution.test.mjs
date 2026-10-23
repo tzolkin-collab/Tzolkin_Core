@@ -104,3 +104,24 @@ test('credenciais: a Evolution está no catálogo, valida os campos e testa a co
  await assert.rejects(prov.testar({ ...env }, async () => resposta(200, { instance: { state: 'close' } })), /não está conectado/);
  await assert.rejects(prov.testar({ ...env }, async () => resposta(401, {})), /recusou a chave/);
 });
+
+test('listInstances: lê o formato da v2 e o antigo, ignora nome inválido e a chave só de instância cai em recusa', async () => {
+ const v2 = createEvolutionAdapter({ env, fetchImpl: async url => { assert.equal(new URL(url).pathname, '/instance/fetchInstances'); return resposta(200, [
+  { name: 'comercial', connectionStatus: 'open', ownerJid: '5531997599216@s.whatsapp.net', profileName: 'Tzolkin' },
+  { name: 'suporte', connectionStatus: 'close' },
+  { name: 'nome inválido!', connectionStatus: 'open' }]); } });
+ const r = await v2.listInstances();
+ assert.deepEqual(r.instances, [{ name: 'comercial', state: 'open', number: '5531997599216', profile: 'Tzolkin' }, { name: 'suporte', state: 'close', number: null, profile: null }]);
+ const antigo = createEvolutionAdapter({ env, fetchImpl: async () => resposta(200, [{ instance: { instanceName: 'velha', owner: '5511988887777@s.whatsapp.net', status: 'open' } }]) });
+ assert.deepEqual((await antigo.listInstances()).instances, [{ name: 'velha', state: 'open', number: '5511988887777', profile: null }]);
+ assert.equal((await createEvolutionAdapter({ env, fetchImpl: async () => resposta(403, {}) }).listInstances()).reason, 'unauthorized');
+ assert.equal((await createEvolutionAdapter({ env: {} }).listInstances()).reason, 'not_configured');
+});
+
+test('o adaptador envia pela instância escolhida, não pela padrão', async () => {
+ const chamadas = [];
+ const a = createEvolutionAdapter({ env, instance: 'suporte', fetchImpl: async url => { chamadas.push(new URL(url).pathname); return resposta(201, { key: { id: 'X1' } }); } });
+ await a.sendText({ number: '31997599216', text: 'oi' });
+ assert.deepEqual(chamadas, ['/message/sendText/suporte']);
+ assert.equal(a.instance, 'suporte');
+});

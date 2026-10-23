@@ -8,22 +8,24 @@ const evento = (data, extra = {}) => ({ event: 'messages.upsert', instance: 'tes
 const msg = (texto, extra = {}) => ({ key: { remoteJid: '5531997599216@s.whatsapp.net', fromMe: false, id: 'ABC1' }, pushName: 'Maria', message: { conversation: texto }, messageTimestamp: 1760000000, ...extra });
 
 test('extrair: guarda só mensagem recebida de uma pessoa, com texto', () => {
- const { mensagens } = extrairMensagens(evento(msg('Oi, quero saber mais')), { instancia: 'teste' });
+ const { mensagens } = extrairMensagens(evento(msg('Oi, quero saber mais')));
  assert.equal(mensagens.length, 1);
- assert.deepEqual({ ...mensagens[0], em: mensagens[0].em.toISOString() }, { id: 'ABC1', numero: '5531997599216', nome: 'Maria', texto: 'Oi, quero saber mais', midia: false, em: '2025-10-09T08:53:20.000Z' });
+ assert.deepEqual({ ...mensagens[0], em: mensagens[0].em.toISOString() }, { id: 'ABC1', instancia: 'teste', numero: '5531997599216', nome: 'Maria', texto: 'Oi, quero saber mais', midia: false, em: '2025-10-09T08:53:20.000Z' });
  const longa = extrairMensagens(evento(msg('x'.repeat(5000))), {}).mensagens[0];
  assert.equal(longa.texto.length, 4096);
 });
 
 test('extrair: ignora o que não é conversa com uma pessoa', () => {
- const vazio = corpo => extrairMensagens(corpo, { instancia: 'teste' }).mensagens.length;
+ const vazio = corpo => extrairMensagens(corpo).mensagens.length;
  assert.equal(vazio(evento(msg('oi', { key: { remoteJid: '5531997599216@s.whatsapp.net', fromMe: true, id: 'X' } }))), 0, 'mensagem nossa');
  assert.equal(vazio(evento(msg('oi', { key: { remoteJid: '120363000000@g.us', fromMe: false, id: 'X' } }))), 0, 'grupo');
  assert.equal(vazio(evento(msg('oi', { key: { remoteJid: 'status@broadcast', fromMe: false, id: 'X' } }))), 0, 'status');
  assert.equal(vazio(evento(msg('oi', { key: { remoteJid: '123456789@lid', fromMe: false, id: 'X' } }))), 0, 'lid: sem telefone');
  assert.equal(vazio(evento(msg('oi', { key: { remoteJid: '5531997599216@s.whatsapp.net', fromMe: false } }))), 0, 'sem id');
  assert.equal(vazio(evento(msg('   '))), 0, 'sem texto');
- assert.equal(vazio(evento(msg('oi'), { instance: 'outra' })), 0, 'outra instância');
+ assert.equal(vazio(evento(msg('oi'), { instance: 'outra' })), 1, 'qualquer instância do servidor vale, e a mensagem guarda de qual veio');
+ assert.equal(extrairMensagens(evento(msg('oi'), { instance: 'outra' })).mensagens[0].instancia, 'outra');
+ assert.equal(extrairMensagens(evento(msg('oi'), { instance: 'ruim nome!' })).mensagens[0].instancia, null, 'nome de instância esquisito não é guardado');
  assert.equal(vazio({ event: 'connection.update', data: { state: 'open' } }), 0, 'outro evento');
  assert.equal(vazio(null), 0);
 });
@@ -65,7 +67,7 @@ const MENSAGEM = { id: 'ABC1', numero: '5531997599216', nome: 'Maria', texto: 'O
 test('registrar: liga ao lead pelos 8 últimos dígitos e não duplica a reentrega', async () => {
  const c = bancoDeEntrada({ lead: { id: 'lead-1', product_id: 'sites' } });
  const r = await registrarMensagem(c, MENSAGEM);
- assert.deepEqual(r, { novo: true, lead: 'lead-1', saiu: false });
+ assert.deepEqual(r, { novo: true, lead: 'lead-1', saiu: false, inboxId: 'in-1' });
  assert.equal(c.sql.find(q => q.texto.includes('FROM commercial_leads l')).p[0], '97599216');
  assert.deepEqual((await registrarMensagem(bancoDeEntrada({ jaExiste: true }), MENSAGEM)).novo, false);
 });

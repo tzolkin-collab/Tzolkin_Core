@@ -9,14 +9,16 @@
 
 const ESPACO = /^[A-Za-z0-9_.-]{1,64}$/;
 const TELA = /^[A-Za-z][A-Za-z0-9-]{0,40}$/;
+const SUB = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;   // id de um item da tela (ex.: o funil aberto em Fluxo)
 const CHAVE = 'core.espacos.ultima-tela';
 
-/** `#/geral/leads` → { espaco: '', tela: 'leads' }; `#/espaco/sites` → { espaco: 'sites', tela: null }; outra coisa → null. */
+/** `#/geral/leads` → { espaco: '', tela: 'leads' }; `#/geral/fluxo/<uuid>` → { espaco: '', tela: 'fluxo', sub: '<uuid>' }; `#/espaco/sites` → { espaco: 'sites', tela: null }; outra coisa → null. */
 export function lerEndereco(hash) {
  const partes = String(hash || '').replace(/^#\/?/, '').split('/');
- if (partes[0] === 'geral' && partes.length <= 2) {
-  const tela = partes[1] ?? null;
-  return tela === null || TELA.test(tela) ? { espaco: '', tela } : null;
+ if (partes[0] === 'geral' && partes.length <= 3) {
+  const tela = partes[1] ?? null, sub = partes[2] ?? null;
+  if (sub !== null && !SUB.test(sub)) return null;
+  return tela === null || TELA.test(tela) ? { espaco: '', tela, ...(sub ? { sub } : {}) } : null;
  }
  if (partes[0] === 'espaco' && partes.length >= 2 && partes.length <= 3 && ESPACO.test(partes[1])) {
   const tela = partes[2] ?? null;
@@ -25,7 +27,7 @@ export function lerEndereco(hash) {
  return null;
 }
 
-export const montarEndereco = (espaco, tela) => `#/${espaco ? `espaco/${espaco}` : 'geral'}${tela ? `/${tela}` : ''}`;
+export const montarEndereco = (espaco, tela, sub) => `#/${espaco ? `espaco/${espaco}` : 'geral'}${tela ? `/${tela}` : ''}${sub && !espaco ? `/${sub}` : ''}`;
 
 const guardado = () => { try { return JSON.parse(localStorage.getItem(CHAVE)) || {}; } catch { return {}; } };
 

@@ -22,3 +22,42 @@
   .wa-caixa { grid-template-columns: minmax(0, 1fr); }
   .wa-lista { border-right: 0; border-bottom: 1px solid var(--line); max-height: 260px; }
 }
+
+/* Instâncias da Evolution: um cartão por instância, antes das conversas. */
+.wa-conversas { display: grid; gap: 16px; }
+.wa-instancias { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 16px; }
+.wa-instancia { display: grid; gap: 6px; justify-items: start; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); text-align: left; }
+.wa-instancia:hover { border-color: var(--line-hover); }
+.wa-instancia.active { border-color: var(--text); box-shadow: 0 0 0 1px var(--text) inset; }
+.wa-instancia-topo { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
+.wa-conversas .wa-caixa { margin-top: 0; }
+.wa-filtro { margin-top: 16px; }
+.wa-atividade { display: grid; gap: 12px; }
+
+/* Agentes de IA */
+.ia-raiz { display: grid; gap: 16px; margin-top: 16px; }
+.ia-lista { display: grid; gap: 16px; }
+.ia-ferramentas { display: inline-flex; align-items: center; gap: 8px; }
+.ia-form { display: grid; gap: 24px; max-width: 860px; }
+.ia-form label { display: grid; gap: 4px; font-size: 13px; }
+.ia-form input[type=text], .ia-form input[type=url], .ia-form select, .ia-form textarea { width: 100%; }
+.ia-secao { display: grid; gap: 12px; padding-top: 20px; border-top: 1px solid var(--line); }
+.ia-secao:first-of-type { border-top: 0; padding-top: 0; }
+.ia-secao h4 { margin: 0; font-size: 15px; }
+.ia-secao > p { margin: 0; max-width: 72ch; }
+.ia-grupo { display: grid; gap: 6px; }
+.ia-opcao { display: flex !important; align-items: center; gap: 10px; }
+.ia-opcao-grande { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.ia-opcao-grande:hover { background: var(--surface-hover); }
+.ia-opcao-texto { display: grid; flex: 1; gap: 2px; }
+.ia-materiais { display: grid; gap: 10px; }
+.ia-material { display: grid; grid-template-columns: minmax(140px, 1fr) 130px minmax(180px, 1.4fr) minmax(180px, 1.4fr) auto; align-items: center; gap: 8px; }
+@media (max-width: 900px) { .ia-material { grid-template-columns: minmax(0, 1fr); } }
+
+/* Agentes: estado da execução, "em breve" e a tabela de turnos; chat: quem atende */
+.ia-turnos { display: grid; gap: 12px; margin-top: 8px; }
+.ia-turnos h3 { margin: 0; font-size: 15px; }
+.ia-opcao-grande.is-embreve { opacity: .65; }
+.wa-fio-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.wa-atendimento { display: flex; align-items: center; gap: 8px; flex: none; }
+.wa-fio-topo > div:first-child { display: grid; gap: 2px; min-width: 0; }

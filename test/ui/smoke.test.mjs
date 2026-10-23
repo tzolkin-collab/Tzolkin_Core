@@ -21,7 +21,7 @@ const ARTEFATOS = fileURLToPath(new URL('./artifacts/', import.meta.url));
 
 const MENU_ESPERADO = [
  'Visão geral', 'Financeiro', 'Acompanhamento',
- 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Outbound', 'E-mails', 'WhatsApp', 'Pagamentos',
+ 'Empresas', 'Pessoas', 'Clientes', 'Inbound', 'Fluxo', 'Outbound', 'E-mails', 'WhatsApp', 'Pagamentos',
  'Produtos', 'Serviços', 'Contratações',
  'Conexões', 'Automações', 'Vercel', 'EasyPanel', 'DNS', 'GitHub', 'Banco de dados'
 ];
@@ -371,7 +371,7 @@ const IR_PARA_CONFIG_DO_INBOUND = async aba => {
  await pagina.esperar(`document.querySelector('#funil-painel')`, { descricao: 'configuração do funil' });
 };
 
-test('Automações: página própria em Tecnologia só com as regras; Pipelines, Tarefas e Campos são abas do Inbound', { skip: PULAR }, async () => {
+test('Automações: página própria em Tecnologia só com as regras; o Inbound fica com Leads, Campos e Campanhas', { skip: PULAR }, async () => {
  await IR_PARA_AUTOMACOES();
  assert.equal(await pagina.avaliar(`location.hash`), '#/geral/automacoes');
  assert.equal(await pagina.avaliar(`document.getElementById('page-title').textContent.trim()`), 'Automações');
@@ -379,7 +379,7 @@ test('Automações: página própria em Tecnologia só com as regras; Pipelines,
  assert.equal(await pagina.avaliar(`document.querySelectorAll('#view-automacoes [role=tab]').length`), 0, 'a página não tem abas: só as regras');
  await pagina.avaliar(CLICAR_NO_MENU('Inbound'));
  await pagina.esperar(`document.querySelector('#inbound-tabs [role=tab]')`, { descricao: 'abas do Inbound' });
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#inbound-tabs [role=tab]')].map(t => t.firstChild.textContent)`), ['Leads', 'Pipelines', 'Tarefas', 'Campos', 'Campanhas']);
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#inbound-tabs [role=tab]')].map(t => t.firstChild.textContent)`), ['Leads', 'Campos', 'Campanhas']);
  assert.equal(await pagina.avaliar(`document.querySelectorAll('#inbound-panel-leads details').length`), 0, 'sem as caixas antigas');
  semExcecoes();
 });
@@ -434,43 +434,65 @@ test('Automações: a tabela lista, o histórico abre na linha e o formulário s
  semExcecoes();
 });
 
-test('Inbound → Pipelines: as etapas do funil em tabela, na ordem, com o tipo e o que impede apagar', { skip: PULAR }, async () => {
- await IR_PARA_CONFIG_DO_INBOUND('pipelines');
- await pagina.esperar(`document.querySelectorAll('#funil-painel tbody tr').length === 8`, { descricao: 'oito etapas' });
- assert.match(await pagina.avaliar(`document.querySelector('.au-funis').innerText`), /Funil padrão[\s\S]*Padrão/);
- const nomes = await pagina.avaliar(`[...document.querySelectorAll('#funil-painel tbody tr')].map(r => r.querySelector('.au-etapa').textContent)`);
- assert.equal(nomes[0], 'Novos');
- if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-Automacoes_pipelines.png'));
- // subir a primeira etapa de um tipo não faz sentido: o botão fica desligado
- assert.equal(await pagina.avaliar(`document.querySelector('#funil-painel tbody tr button[aria-label^="Subir"]').disabled`), true);
- // "Nova etapa" abre o formulário com tipo, cor, chance e alerta
- await pagina.avaliar(`[...document.querySelectorAll('#funil-painel .au-acoes button')].find(b => b.textContent === 'Nova etapa').click()`);
- await pagina.esperar(`document.querySelector('#funil-painel form.au-form')`, { descricao: 'formulário de etapa' });
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#funil-painel form.au-form label')].map(l => l.firstChild.textContent)`), ['Nome', 'Tipo', 'Cor', 'Chance de ganhar (%)', 'Avisar após (dias parado)']);
+// CRM → Fluxo: o desenho do Kalidash. Galeria de funis e, dentro de cada um, o workflow (canvas com etapas e tarefas, painel lateral).
+test('Fluxo: a galeria lista os funis com os números e abre o workflow no endereço do funil', { skip: PULAR }, async () => {
+ await pagina.tela(1440, 900);
+ await pagina.avaliar(CLICAR_NO_MENU('Fluxo'));
+ await pagina.esperar(`document.querySelectorAll('.fx-card').length === 1`, { descricao: 'funil na galeria' });
+ const card = await pagina.avaliar(`document.querySelector('.fx-card').innerText`);
+ assert.match(card, /Funil padrão/); assert.match(card, /Mentorias/); assert.match(card, /registros/i); assert.match(card, /etapas/i); assert.match(card, /tarefas/i); assert.match(card, /Ver workflow/);
+ await pagina.avaliar(`document.querySelector('.fx-card').click()`);
+ await pagina.esperar(`document.querySelectorAll('.wf-no').length === 9`, { descricao: 'entrada e oito etapas no canvas' });
+ assert.match(await pagina.avaliar(`location.hash`), /^#\/geral\/fluxo\/[0-9a-f-]{36}$/);
+ assert.equal(await pagina.avaliar(`document.querySelector('.wf-barra-titulos h1').textContent`), 'Funil padrão');
+ // a etapa mostra o que a etapa exige, e Ganha e Perdida ficam no fim, cada uma no seu nível
+ const etapa = await pagina.avaliar(`document.querySelectorAll('.wf-etapa')[1].innerText`);
+ assert.match(etapa, /Em contato/); assert.match(etapa, /Confirmar o telefone/); assert.match(etapa, /entrar/i); assert.match(etapa, /Adicionar tarefa/);
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('.wf-aresta').length`), 8, 'entrada→1ª, entre as etapas, última→ganha e última→perdida');
+ if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1440-Fluxo_workflow.png'));
+ // painel lateral: a estrutura do funil
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('.wf-insp-alterna span:nth-child(2)')].map(s => s.textContent)`), ['Entrada', 'Etapas', 'Tarefas']);
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('.wf-insp-secao')[1].querySelectorAll('.wf-linha').length`), 8);
+ // voltar leva à galeria e limpa o endereço do funil
+ await pagina.avaliar(`document.querySelector('.wf-voltar').click()`);
+ await pagina.esperar(`document.querySelector('.fx-card')`, { descricao: 'galeria de volta' });
+ assert.equal(await pagina.avaliar(`location.hash`), '#/geral/fluxo');
  semExcecoes();
 });
 
-test('Inbound → Tarefas: o que cada etapa exige, em tabela, e o campo oferecido é o do tipo de registro da etapa', { skip: PULAR }, async () => {
- await IR_PARA_CONFIG_DO_INBOUND('tarefas');
- await pagina.esperar(`document.querySelectorAll('#funil-painel tbody tr').length === 1`, { descricao: 'tarefa exigida listada' });
- const texto = await pagina.avaliar(`document.querySelector('#funil-painel tbody tr').innerText`);
- assert.match(texto, /Para entrar na etapa/); assert.match(texto, /Confirmar o telefone/); assert.match(texto, /Tarefa a concluir/); assert.match(texto, /prazo de 2 dias/); assert.match(texto, /Ligada/);
- if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-Automacoes_tarefas.png'));
- await pagina.avaliar(`[...document.querySelectorAll('#funil-painel > .au-topo button')].find(b => b.textContent === 'Nova tarefa').click()`);
- await pagina.esperar(`document.querySelector('#funil-painel form.au-form')`, { descricao: 'formulário aberto' });
- const campo = nome => `[...document.querySelectorAll('#funil-painel form label')].find(l => l.firstChild.textContent === ${JSON.stringify(nome)})`;
- const escolher = (nome, valor) => pagina.avaliar(`(() => { const s = ${campo(nome)}.querySelector('select'); s.value = ${JSON.stringify(valor)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
- // Tarefa: prazo e responsável; sem a escolha de campo.
- assert.equal(await pagina.avaliar(`${campo('Campo')}.hidden`), true);
- assert.equal(await pagina.avaliar(`${campo('Prazo da tarefa, em dias (opcional)')}.hidden`), false);
- // Campo, em etapa de lead (Novos): os campos do lead.
- await escolher('Exige', 'FIELD');
- assert.equal(await pagina.avaliar(`${campo('Campo')}.hidden`), false);
- assert.equal(await pagina.avaliar(`${campo('Prazo da tarefa, em dias (opcional)')}.hidden`), true);
- assert.deepEqual(await pagina.avaliar(`[...${campo('Campo')}.querySelector('select').options].map(o => o.textContent)`), ['Porte', 'Observação']);
- // Campo, em etapa aberta (Qualificação): os campos da oportunidade.
- await escolher('Etapa', '55555555-5555-4555-8555-555555555502');
- assert.deepEqual(await pagina.avaliar(`[...${campo('Campo')}.querySelector('select').options].map(o => o.textContent)`), ['Orçamento']);
+test('Fluxo: o canvas arrasta, dá zoom e o painel edita etapa e tarefa', { skip: PULAR }, async () => {
+ await pagina.tela(1440, 900);
+ await pagina.avaliar(CLICAR_NO_MENU('Fluxo'));
+ await pagina.esperar(`document.querySelector('.fx-card')`, { descricao: 'galeria' });
+ await pagina.avaliar(`document.querySelector('.fx-card').click()`);
+ await pagina.esperar(`document.querySelectorAll('.wf-no').length === 9`, { descricao: 'workflow aberto' });
+ const mat = () => pagina.avaliar(`getComputedStyle(document.querySelector('.wf-viewport')).transform`);
+ const antes = await mat();
+ // roda do mouse rola o canvas; Ctrl + roda dá zoom
+ await pagina.avaliar(`document.querySelector('.wf-canvas').dispatchEvent(new WheelEvent('wheel', { deltaX: 0, deltaY: 120, bubbles: true, cancelable: true }))`);
+ const rolou = await mat();
+ assert.notEqual(rolou, antes, 'a roda rolou o canvas');
+ await pagina.avaliar(`document.querySelector('.wf-canvas').dispatchEvent(new WheelEvent('wheel', { deltaY: -200, ctrlKey: true, clientX: 400, clientY: 300, bubbles: true, cancelable: true }))`);
+ assert.notEqual(await mat(), rolou, 'Ctrl + roda deu zoom');
+ await pagina.avaliar(`document.querySelector('[aria-label="Ajustar à tela"]').click()`);
+ // clicar no cabeçalho de uma etapa abre o editor dela no painel
+ await pagina.avaliar(`document.querySelectorAll('.wf-etapa .wf-cab')[1].click()`);
+ await pagina.esperar(`document.querySelector('.wf-painel-cab h2')?.textContent === 'Configurar etapa'`, { descricao: 'editor de etapa' });
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('.wf-painel-corpo label')].map(l => l.firstChild.textContent)`), ['Nome', 'Tipo', 'Cor', 'Chance de ganhar (%)', 'Avisar após (dias parado)']);
+ await pagina.avaliar(`document.querySelector('[aria-label="Fechar o painel"]').click()`);
+ // clicar numa tarefa abre o editor da tarefa, com quando e tipo travados
+ await pagina.avaliar(`document.querySelector('.wf-req').click()`);
+ await pagina.esperar(`document.querySelector('.wf-painel-cab h2')?.textContent === 'Configurar tarefa'`, { descricao: 'editor de tarefa' });
+ assert.equal(await pagina.avaliar(`document.querySelector('.wf-painel-corpo input').value`), 'Confirmar o telefone');
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('.wf-painel-corpo input')].filter(i => i.disabled).length`), 2);
+ // "Nova etapa" deixa só os tipos que cabem (Ganha e Perdida já existem)
+ await pagina.avaliar(`[...document.querySelectorAll('.wf-barra-acoes button')].find(b => b.textContent.includes('Nova etapa')).click()`);
+ await pagina.esperar(`document.querySelector('.wf-painel-cab h2')?.textContent === 'Nova etapa'`, { descricao: 'nova etapa' });
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelector('.wf-painel-corpo select').options].map(o => o.textContent)`), ['Lead', 'Aberta']);
+ if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1440-Fluxo_painel.png'));
+ // o painel recolhe e abre
+ await pagina.avaliar(`[...document.querySelectorAll('.wf-barra-acoes button')].find(b => b.textContent.includes('Painel')).click()`);
+ assert.equal(await pagina.avaliar(`document.querySelector('.wf-dock').classList.contains('open')`), false);
  semExcecoes();
 });
 
@@ -3486,9 +3508,9 @@ test('WhatsApp: a tela abre, diz que a Evolution não está configurada e que o 
  const texto = await pagina.avaliar(`document.getElementById('view-whatsapp').innerText`);
  assert.match(texto, /Envio automático/);
  assert.match(texto, /Desligado/);
- // Abas do Core: Conversas (abre primeiro) e Atividade; sem a migração 063 a caixa de entrada explica, e a Atividade tem o histórico
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#whatsapp-tabs [role=tab]')].map(t => t.firstChild.textContent)`), ['Conversas', 'Atividade']);
- assert.match(await pagina.avaliar(`document.getElementById('whatsapp-panel-conversas').innerText`), /Caixa de entrada|Nenhuma resposta recebida/);
+ // Abas do Core: Conversas (abre primeiro), Atividade e Agentes de IA; sem instância a tela explica, e a Atividade tem o histórico
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#whatsapp-tabs [role=tab]')].map(t => t.firstChild.textContent)`), ['Conversas', 'Atividade', 'Agentes de IA']);
+ assert.match(await pagina.avaliar(`document.getElementById('whatsapp-panel-conversas').innerText`), /Nenhuma instância/);
  await pagina.avaliar(`document.getElementById('whatsapp-tab-atividade').click()`);
  await pagina.esperar(`document.getElementById('whatsapp-panel-atividade')`, { descricao: 'aba Atividade' });
  assert.match(await pagina.avaliar(`document.getElementById('whatsapp-panel-atividade').innerText`), /Histórico de mensagens|Nenhuma mensagem na fila/);
@@ -3498,9 +3520,9 @@ test('WhatsApp: a tela abre, diz que a Evolution não está configurada e que o 
  semExcecoes();
 });
 
-// WhatsApp, caixa de entrada: lista de conversas, conversa aberta (o que veio e o que saiu), marcar como lida e responder pela fila.
-// O banco falso não tem a caixa de entrada: as rotas respondem por fora, só para a tela ter o que desenhar.
-test('WhatsApp: abrir uma conversa mostra a troca, marca como lida e a resposta vai para a fila', { skip: PULAR }, async () => {
+// WhatsApp com várias instâncias: escolhe a instância, aparecem as conversas dela, abre a conversa, marca como lida e responde pela fila
+// da mesma instância. O banco falso não tem a caixa de entrada nem a Evolution: as rotas respondem por fora, só para a tela ter o que desenhar.
+test('WhatsApp: escolher a instância, ver o chat dela, marcar como lida e responder pela mesma instância', { skip: PULAR }, async () => {
  await pagina.tela(1280, 800);
  await pagina.ir(origem + '/');
  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`, { descricao: 'painel aberto' });
@@ -3510,142 +3532,113 @@ test('WhatsApp: abrir uma conversa mostra a troca, marca como lida e a resposta 
   const resp = dados => Promise.resolve(new Response(JSON.stringify(dados), { status: 200, headers: { 'content-type': 'application/json' } }));
   window.fetch = (url, init = {}) => {
    const u = String(url);
-   if (u.startsWith('/api/whatsapp/')) window.__chamadas.push((init.method || 'GET') + ' ' + u);
-   if (u === '/api/whatsapp/conversations') return resp({ disponivel: true, nao_lidas: 2, conversas: [{ number: '5531997599216', name: 'Maria', lead_name: 'Maria Souza', last_at: '2026-10-22T14:00:00Z', unread: 2, last_text: 'Quanto custa o site?', lead_id: 'l1' }] });
-   if (u === '/api/whatsapp/conversations/5531997599216') return resp({ number: '5531997599216', name: 'Maria', lead_id: 'l1', bloqueado: false, mensagens: [
+   if (u.startsWith('/api/whatsapp/')) window.__chamadas.push((init.method || 'GET') + ' ' + u + (init.body ? ' ' + init.body : ''));
+   if (u === '/api/whatsapp/instances') return resp({ configurada: true, todas: true, padrao: 'comercial', instancias: [
+    { name: 'comercial', state: 'open', conectada: true, number: '5531997599216', profile: 'Tzolkin', nao_lidas: 2 },
+    { name: 'suporte', state: 'close', conectada: false, number: null, profile: null, nao_lidas: 0 }] });
+   if (u === '/api/whatsapp/conversations?instance=comercial') return resp({ disponivel: true, nao_lidas: 2, conversas: [{ number: '5531997599216', name: 'Maria', lead_name: 'Maria Souza', last_at: '2026-10-22T14:00:00Z', unread: 2, last_text: 'Quanto custa o site?', lead_id: 'l1' }] });
+   if (u === '/api/whatsapp/conversations?instance=suporte') return resp({ disponivel: true, nao_lidas: 0, conversas: [] });
+   if (u === '/api/whatsapp/conversations/5531997599216?instance=comercial') return resp({ number: '5531997599216', instance: 'comercial', name: 'Maria', lead_id: 'l1', bloqueado: false, com_pessoa: window.__pessoa === true, mensagens: [
     { id: 'o1', direcao: 'out', texto: 'Oi Maria! Recebemos seu contato.', em: '2026-10-22T13:00:00Z', status: 'sent', erro: null },
     { id: 'i1', direcao: 'in', texto: 'Oi! Quanto custa o site?', em: '2026-10-22T13:59:00Z', status: null, erro: null }] });
-   if (u.endsWith('/lida') || u.endsWith('/responder')) return resp({ ok: true });
+   if (u.includes('/lida') || u.endsWith('/responder')) return resp({ ok: true });
+   if (u.includes('/assumir')) { window.__pessoa = true; return resp({ ok: true }); }
+   if (u.includes('/devolver')) { window.__pessoa = false; return resp({ ok: true, devolvidas: 1 }); }
    return f(url, init);
   };
  })()`);
  await pagina.avaliar(CLICAR_NO_MENU('WhatsApp'));
+ await pagina.esperar(`document.querySelectorAll('.wa-instancia').length === 2`, { descricao: 'instâncias listadas' });
+ // a instância padrão já vem escolhida, com o estado de cada uma e o que há por ler
+ assert.equal(await pagina.avaliar(`document.querySelector('.wa-instancia.active').dataset.instancia`), 'comercial');
+ assert.match(await pagina.avaliar(`document.querySelector('.wa-instancia[data-instancia=comercial]').innerText`), /Conectada/);
+ assert.match(await pagina.avaliar(`document.querySelector('.wa-instancia[data-instancia=suporte]').innerText`), /Desconectada/);
+ assert.equal(await pagina.avaliar(`document.querySelector('.wa-instancia[data-instancia=comercial] .wa-nao-lida').textContent`), '2');
  await pagina.esperar(`document.querySelectorAll('.wa-conversa').length === 1`, { descricao: 'conversa listada' });
- assert.equal(await pagina.avaliar(`document.querySelector('.wa-nao-lida').textContent`), '2');
- assert.match(await pagina.avaliar(`document.querySelector('#whatsapp-tab-conversas .tab-count').textContent`), /2/);
+ // trocar de instância troca a lista; voltar traz a conversa de novo
+ await pagina.avaliar(`document.querySelector('.wa-instancia[data-instancia=suporte]').click()`);
+ await pagina.esperar(`document.querySelectorAll('.wa-conversa').length === 0 && /Nenhuma resposta recebida em suporte/.test(document.getElementById('whatsapp-panel-conversas').innerText)`, { descricao: 'instância sem conversas' });
+ await pagina.avaliar(`document.querySelector('.wa-instancia[data-instancia=comercial]').click()`);
+ await pagina.esperar(`document.querySelectorAll('.wa-conversa').length === 1`, { descricao: 'conversa de volta' });
  await pagina.avaliar(`document.querySelector('.wa-conversa').click()`);
  await pagina.esperar(`document.querySelectorAll('.wa-msg').length === 2`, { descricao: 'conversa aberta' });
  assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('.wa-msg')].map(m => m.dataset.direcao)`), ['out', 'in']);
- await pagina.esperar(`window.__chamadas.includes('POST /api/whatsapp/conversations/5531997599216/lida')`, { descricao: 'marcada como lida' });
- await pagina.esperar(`!document.querySelector('.wa-nao-lida')`, { descricao: 'contador zerado' });
+ assert.match(await pagina.avaliar(`document.querySelector('.wa-fio-topo').innerText`), /via comercial/);
+ await pagina.esperar(`window.__chamadas.includes('POST /api/whatsapp/conversations/5531997599216/lida?instance=comercial {}')`, { descricao: 'marcada como lida na instância' });
+ await pagina.esperar(`!document.querySelector('.wa-conversa .wa-nao-lida')`, { descricao: 'contador zerado' });
  if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-WhatsApp_conversa.png'));
+ // quem atende: assumir passa a conversa para uma pessoa (o agente sai), devolver traz o agente de volta
+ assert.match(await pagina.avaliar(`document.querySelector('.wa-atendimento').innerText`), /Agente atende, se houver[\s\S]*Assumir conversa/i);
+ await pagina.avaliar(`[...document.querySelectorAll('.wa-atendimento button')].find(b => b.textContent === 'Assumir conversa').click()`);
+ await pagina.esperar(`window.__chamadas.includes('POST /api/whatsapp/conversations/5531997599216/assumir?instance=comercial {}')`, { descricao: 'conversa assumida' });
+ await pagina.esperar(`/Com uma pessoa[\\s\\S]*Devolver ao agente/i.test(document.querySelector('.wa-atendimento').innerText)`, { descricao: 'estado com uma pessoa' });
+ await pagina.avaliar(`[...document.querySelectorAll('.wa-atendimento button')].find(b => b.textContent === 'Devolver ao agente').click()`);
+ await pagina.esperar(`window.__chamadas.includes('POST /api/whatsapp/conversations/5531997599216/devolver?instance=comercial {}')`, { descricao: 'conversa devolvida' });
+ await pagina.esperar(`/Agente atende, se houver/i.test(document.querySelector('.wa-atendimento').innerText)`, { descricao: 'agente de volta' });
  await pagina.avaliar(`(() => { const t = document.querySelector('.wa-resposta textarea'); t.value = 'R$ 4.900, em 3 semanas.'; document.querySelector('.wa-resposta').requestSubmit(); })()`);
- await pagina.esperar(`window.__chamadas.includes('POST /api/whatsapp/conversations/5531997599216/responder')`, { descricao: 'resposta enviada para a fila' });
+ await pagina.esperar(`window.__chamadas.some(c => c.startsWith('POST /api/whatsapp/conversations/5531997599216/responder') && c.includes('"instance":"comercial"'))`, { descricao: 'resposta vai pela mesma instância' });
  semExcecoes();
 });
 
-// Conexões do espaço: abas do Core, configuração do site em linhas editáveis (nada de "a=b, c=d" num campo) e a gravação monta o corpo certo.
-// O banco falso não monta o console, as chaves nem o SDK do espaço: as rotas respondem por fora.
-test('Conexões do espaço: abas, regras e UTMs em linhas, e o que é salvo', { skip: PULAR }, async () => {
- await pagina.tela(1280, 900);
- await pagina.ir(origem + '/');
- await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`, { descricao: 'painel aberto' });
- await pagina.avaliar(`(() => {
-  window.__puts = [];
-  const f = window.fetch;
-  const resp = dados => Promise.resolve(new Response(JSON.stringify(dados), { status: 200, headers: { 'content-type': 'application/json' } }));
-  const produto = { id: 'plataforma-a', name: 'Plataforma A', portfolio_kind: 'platform', lifecycle_status: 'active', capabilities: ['access', 'checkout', 'commercial'] };
-  window.fetch = (url, init = {}) => {
-   const u = String(url);
-   if (u.includes('/api/products/plataforma-a/console')) return resp({ product: produto, engagements: [], clients: [], organizations: [], summary: { active_contracts: 0 } });
-   if (u.startsWith('/api/app-clients?')) return resp({ keys: [], audit: [], allowed_scopes: ['commercial:intake', 'commercial:read', 'context:read'] });
-   if (u === '/api/products/plataforma-a/sdk' && init.method === 'PUT') { window.__puts.push(JSON.parse(init.body)); return resp({ ok: true }); }
-   if (u === '/api/products/plataforma-a/sdk') return resp({ product: produto, snippet: '<script src="https://core.tzolkin.cloud/sdk.js" data-tzolkin-key="SUA_CHAVE" defer></script>', ad_url_template: 'utm_tzolkin=plataforma-a.padrao&meta_campaign_id={{campaign.id}}', lead_fields: [{ key: 'porte' }],
-    pipelines: [{ slug: 'padrao', name: 'Funil padrão', is_default: true }, { slug: 'corretor', name: 'Corretor', is_default: false }],
-    config: { default_niche: 'padrao', core_params: { utm_offer: 'plano-anual' }, route_rules: [{ path_prefix: '/corretores', niche: 'corretor', offer_label: 'site-corretor' }], auto_capture_forms: true, enrich_payment_links: false, forms: [{ form_id: 'contato', name: 'Contato', fields: [{ key: 'porte' }], page_url: 'https://exemplo.com/contato' }] } });
-   return f(url, init);
-  };
- })()`);
- await pagina.avaliar(`[...document.querySelectorAll('.context-option')].find(x => x.textContent.includes('Plataforma A')).click()`);
- await pagina.esperar(`document.querySelectorAll('#product-tabs [role=tab]').length > 0`, { descricao: 'espaço aberto' });
- await pagina.avaliar(CLICAR_NO_MENU('Conexões'));
- await pagina.esperar(`document.querySelector('#conexoes-tabs [role=tab]')`, { descricao: 'abas das conexões' });
- assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('#conexoes-tabs [role=tab]')].map(t => t.firstChild.textContent)`), ['Site e UTMs', 'Chaves de API', 'Formulários']);
- // sem campos de texto com "chave=valor, chave=valor": as regras e os UTMs são linhas
- assert.equal(await pagina.avaliar(`document.querySelectorAll('#view-product-keys .sdk-linhas').length`), 2);
- assert.equal(await pagina.avaliar(`document.querySelectorAll('#view-product-keys .sdk-linha').length`), 2, 'uma regra e um UTM fixo');
- assert.doesNotMatch(await pagina.avaliar(`document.getElementById('view-product-keys').innerText`), /separados por vírgula \(chave=valor|caminho:nicho=oferta/);
- if (process.env.UI_SCREENSHOTS) { await pagina.tela(1280, 2300); await new Promise(r => setTimeout(r, 300)); await pagina.imagem(join(ARTEFATOS, '1280-Conexoes_do_espaco.png')); await pagina.tela(1280, 900); }
- // adicionar uma regra, tirar o UTM fixo e salvar: o corpo sai estruturado
- await pagina.avaliar(`(() => { const b = [...document.querySelectorAll('.sdk-linhas .secondary')].find(x => x.textContent === 'Adicionar regra'); b.click(); const l = document.querySelectorAll('.sdk-linhas')[0].querySelectorAll('.sdk-linha'); const nova = l[l.length - 1]; nova.querySelector('input').value = '/advogados'; nova.querySelector('select').value = 'padrao'; document.querySelectorAll('.sdk-linhas')[1].querySelector('.quiet').click(); })()`);
- await pagina.avaliar(`document.querySelector('.sdk-form').requestSubmit()`);
- await pagina.esperar(`window.__puts.length === 1`, { descricao: 'configuração salva' });
- const salvo = await pagina.avaliar(`window.__puts[0]`);
- assert.deepEqual(salvo.route_rules, [{ path_prefix: '/corretores', niche: 'corretor', offer_label: 'site-corretor' }, { path_prefix: '/advogados', niche: 'padrao', offer_label: null }]);
- assert.deepEqual(salvo.core_params, {});
- assert.equal(salvo.utm_tzolkin, 'plataforma-a.padrao'); assert.equal(salvo.enrich_payment_links, false); assert.deepEqual(salvo.custom_fields, ['porte']);
- // Emitir uma chave: o segredo aparece uma única vez, no alto da aba de chaves (já quebrou: ficava sem aparecer).
- await pagina.avaliar(`(() => {
-  const f = window.fetch;
-  window.fetch = (url, init = {}) => String(url) === '/api/app-clients' && init.method === 'POST'
-   ? Promise.resolve(new Response(JSON.stringify({ api_key: 'tzk_segredo_de_teste_123', id: 'k1' }), { status: 200, headers: { 'content-type': 'application/json' } }))
-   : f(url, init);
- })()`);
- await pagina.avaliar(`document.getElementById('conexoes-tab-chaves').click()`);
- await pagina.avaliar(`document.querySelector('.keys-create-toggle').click()`);
- await pagina.avaliar(`(() => { const form = document.querySelector('.keys-form'); form.querySelector('input').value = 'Site institucional'; form.requestSubmit(); })()`);
- await pagina.esperar(`document.querySelector('.keys-secret .keys-secret-value')?.textContent === 'tzk_segredo_de_teste_123'`, { descricao: 'chave recém-emitida visível' });
- assert.equal(await pagina.avaliar(`document.querySelector('#conexoes-tab-chaves').getAttribute('aria-selected')`), 'true');
- await pagina.avaliar(`[...document.querySelectorAll('.keys-secret button')].find(b => b.textContent.includes('ocultar')).click()`);
- assert.equal(await pagina.avaliar(`document.querySelectorAll('.keys-secret').length`), 0, 'ocultar remove o segredo da tela');
- semExcecoes();
-});
-
-// CRM → Pagamentos: resumo em conta (bruto − taxas − estornos = líquido), filtros, processador certo na linha e a aba dos processadores.
-// O banco falso não tem os retratos de venda: a rota responde por fora.
-test('Pagamentos: resumo, filtros, situação certa e estado de cada processador', { skip: PULAR }, async () => {
+// WhatsApp → Agentes de IA: a lista, o formulário com funis, ferramentas, capacidades e materiais, e o corpo que é salvo.
+test('WhatsApp → Agentes de IA: criar um agente com funis, ferramentas, capacidades e materiais', { skip: PULAR }, async () => {
  await pagina.tela(1280, 1000);
  await pagina.ir(origem + '/');
  await pagina.esperar(`!document.getElementById('workspace').hidden && document.querySelectorAll('nav button').length > 5`, { descricao: 'painel aberto' });
  await pagina.avaliar(`(() => {
-  window.__meses = [];
+  window.__posts = [];
   const f = window.fetch;
   const resp = dados => Promise.resolve(new Response(JSON.stringify(dados), { status: 200, headers: { 'content-type': 'application/json' } }));
-  const venda = (id, provider, dia, description, gross, fee, net, status, method, refunded = 0) => ({ id, provider, date: '2026-10-' + dia + 'T15:00:00.000Z', description, gross, fee, net, refunded, currency: 'BRL', status, method });
+  const catalogo = { ferramentas: { 'lead.buscar': { nome: 'Buscar lead e histórico', descricao: 'Lê o cadastro do lead.', risco: 'baixo', execucao: true }, 'tarefa.criar': { nome: 'Criar tarefa para a equipe', descricao: 'Abre uma tarefa.', risco: 'medio', execucao: true }, 'cobranca.gerar_link': { nome: 'Gerar link de pagamento', descricao: 'Mexe com dinheiro.', risco: 'alto', execucao: false } },
+   capacidades: { texto: { nome: 'Responder por texto', descricao: 'Escreve as respostas.', execucao: true }, ligacao: { nome: 'Fazer ligações', descricao: 'Liga para o lead.', execucao: false } },
+   modelos: ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'], tipos: { documento: 'Documento', link: 'Link', texto: 'Texto' } };
+  const funis = [{ id: '44444444-4444-4444-8444-444444444444', name: 'Funil padrão', space_id: 'sites', space_name: 'Sites' }];
   window.fetch = (url, init = {}) => {
    const u = String(url);
-   if (u.startsWith('/api/finance/sales?month=')) {
-    window.__meses.push(u.split('=')[1]);
-    return resp({ month: u.split('=')[1], configured: { stripe: true, asaas: false, asaas_environment: 'sandbox' }, providers: {
-     stripe: { snapshot: { updated_at: '2026-10-22T20:40:00Z', payload: { sales: [
-      venda('s1', 'stripe', '21', 'Plano Pro (mensal)', 297, 12.62, 284.38, 'received', 'card'),
-      venda('s2', 'stripe', '20', 'Plano Pro (mensal)', 297, 12.62, 284.38, 'received', 'card'),
-      venda('s3', 'stripe', '18', 'Consultoria de CRM', 1500, 0, 0, 'pending', 'card'),
-      venda('s4', 'stripe', '12', 'Plano Start', 97, 4.3, 92.7, 'refunded', 'card', 97)] } }, attempt: { payload: { state: 'ok' } } },
-     asaas: { snapshot: null, attempt: null } } });
-   }
+   if (u === '/api/whatsapp/instances') return resp({ configurada: true, todas: true, padrao: 'comercial', instancias: [{ name: 'comercial', state: 'open', conectada: true, number: null, profile: null, nao_lidas: 0 }] });
+   if (u.startsWith('/api/whatsapp/conversations')) return resp({ disponivel: true, nao_lidas: 0, conversas: [] });
+   if (u === '/api/whatsapp/agents' && init.method === 'POST') { window.__posts.push(JSON.parse(init.body)); return resp({ id: 'novo' }); }
+   if (u === '/api/whatsapp/agents/execucao') return resp({ disponivel: true, ligada: false, com_chave: false, envio_ligado: false, turnos: [{ id: 'j1', status: 'done', instance: 'comercial', number: '5531997599216', agent_name: 'Sofia', reply: 'Um site começa em R$ 4.900.', note: null, tools_used: ['lead.buscar'], input_tokens: 300, output_tokens: 40, created_at: '2026-10-23T12:00:00Z', finished_at: '2026-10-23T12:00:09Z' }] });
+   if (u === '/api/whatsapp/agents') return resp({ disponivel: true, agents: [{ id: 'a1', name: 'Sofia', description: 'Atende os leads do site', instance: 'comercial', model: 'claude-sonnet-5-5', instructions: 'Você é a Sofia, da Tzolkin.', context: null, pipelines: ['44444444-4444-4444-8444-444444444444'], tools: ['lead.buscar', 'cobranca.gerar_link'], abilities: { texto: true }, assets: [], is_active: true, version: 2, risco: 'alto' }], catalogo, funis });
    return f(url, init);
   };
  })()`);
- await pagina.avaliar(CLICAR_NO_MENU('Pagamentos'));
- await pagina.esperar(`document.querySelectorAll('#crm-payments-vendas tbody tr').length === 4`, { descricao: 'vendas listadas' });
- // o resumo só conta o que foi recebido: pendente fica à parte e a venda estornada entra como estorno
- const resumo = await pagina.avaliar(`document.querySelector('.pg-resumo').innerText`);
- assert.match(resumo, /bruto\s*r\$\s*691,00/i); assert.match(resumo, /estornos\s*r\$\s*97,00/i); assert.match(resumo, /líquido\s*r\$\s*564,46/i); assert.match(resumo, /1 pendente \(r\$\s*1\.500,00 a receber\)/i);
- // o processador sai da venda (antes todas diziam "Gateway") e a situação tem rótulo em português
- assert.equal(await pagina.avaliar(`[...document.querySelectorAll('#crm-payments-vendas tbody tr')].every(r => r.innerText.includes('Stripe'))`), true);
- assert.match(await pagina.avaliar(`document.getElementById('crm-payments-vendas').innerText`), /Recebida[\s\S]*Pendente[\s\S]*Estornada/);
- assert.doesNotMatch(await pagina.avaliar(`document.getElementById('crm-payments-vendas').innerText`), /Gateway|received|pending|refunded/);
- // filtros
- await pagina.avaliar(`document.querySelector('.pg-filtros select').value = 'pending'; document.querySelector('.pg-filtros select').dispatchEvent(new Event('change'))`);
- await pagina.esperar(`document.querySelectorAll('#crm-payments-vendas tbody tr').length === 1`, { descricao: 'filtro por situação' });
- await pagina.avaliar(`[...document.querySelectorAll('.pg-segmento')].find(b => b.textContent.startsWith('Asaas')).click()`);
- await pagina.esperar(`document.querySelector('#crm-payments-vendas .empty-list')`, { descricao: 'sem vendas do Asaas' });
- await pagina.avaliar(`[...document.querySelectorAll('.pg-segmento')].find(b => b.textContent.startsWith('Todos')).click(); document.querySelector('.pg-filtros select').value = ''; document.querySelector('.pg-filtros select').dispatchEvent(new Event('change'))`);
- if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-Pagamentos_vendas.png'));
- // mês anterior busca o mês anterior
- await pagina.avaliar(`document.querySelector('[aria-label="Mês anterior"]').click()`);
- await pagina.esperar(`window.__meses.length === 2`, { descricao: 'mês anterior pedido' });
- assert.equal(await pagina.avaliar(`document.querySelector('[aria-label="Próximo mês"]').disabled`), false);
- // processadores: o estado vem da configuração de verdade (Stripe ligado, Asaas não), e não de um "Ativo" fixo
- await pagina.avaliar(`document.getElementById('crm-pay-tab-processadores').click()`);
- await pagina.esperar(`document.querySelectorAll('.pg-processador').length === 2`, { descricao: 'processadores' });
- const proc = await pagina.avaliar(`[...document.querySelectorAll('.pg-processador')].map(p => p.innerText)`);
- assert.match(proc[0], /Stripe[\s\S]*Conectado/); assert.match(proc[1], /Asaas[\s\S]*Não configurado/);
- assert.match(proc[1], /Configurar/);
- if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-Pagamentos_processadores.png'));
- const defeitos = await pagina.avaliar(leituraDe(SECAO));
- assert.equal(defeitos.titulo, 'Pagamentos'); assert.deepEqual(defeitos.vazamento, []); assert.equal(defeitos.estouro, 0); assert.equal(defeitos.botoesSemNome, 0);
+ await pagina.avaliar(CLICAR_NO_MENU('WhatsApp'));
+ await pagina.esperar(`document.getElementById('whatsapp-tab-agentes')`, { descricao: 'abas do WhatsApp' });
+ await pagina.avaliar(`document.getElementById('whatsapp-tab-agentes').click()`);
+ await pagina.esperar(`document.querySelectorAll('#whatsapp-panel-agentes tbody tr').length === 2`, { descricao: 'agente e execução listados' });
+ const linha = await pagina.avaliar(`document.querySelector('#whatsapp-panel-agentes tbody tr').innerText`);
+ assert.match(linha, /Sofia/); assert.match(linha, /comercial/); assert.match(linha, /Funil padrão/); assert.match(linha, /2 ferramentas/); assert.match(linha, /Risco alto/i); assert.match(linha, /Ligado/);
+ // a tela diz o que está ligado de verdade: sem execução e sem chave, nenhum agente responde; e lista as últimas execuções
+ const painelAgentes = await pagina.avaliar(`document.getElementById('whatsapp-panel-agentes').innerText`);
+ assert.match(painelAgentes, /Execução dos agentes[\s\S]*Desligada/); assert.match(painelAgentes, /Chave da Anthropic[\s\S]*Faltando/); assert.match(painelAgentes, /nenhum agente responde/i);
+ assert.match(painelAgentes, /Últimas execuções/); assert.match(painelAgentes, /Um site começa em R\$ 4\.900/); assert.match(painelAgentes, /lead\.buscar/);
+ if (process.env.UI_SCREENSHOTS) await pagina.imagem(join(ARTEFATOS, '1280-WhatsApp_agentes.png'));
+ await pagina.avaliar(`[...document.querySelectorAll('#whatsapp-panel-agentes button')].find(b => b.textContent.includes('Novo agente')).click()`);
+ await pagina.esperar(`document.querySelector('.ia-form')`, { descricao: 'formulário aberto' });
+ assert.equal(await pagina.avaliar(`[...document.querySelectorAll('.ia-opcao-grande.is-embreve')].map(l => l.innerText.includes('Em breve')).every(Boolean)`), true, 'ferramenta e capacidade sem execução aparecem como Em breve');
+ assert.equal(await pagina.avaliar(`document.querySelectorAll('.ia-opcao-grande.is-embreve').length`), 2);
+ assert.deepEqual(await pagina.avaliar(`[...document.querySelectorAll('.ia-secao h4')].map(h => h.textContent)`), ['Quem é', 'O que ele sabe', 'Quais funis ele atende', 'Ferramentas do Core', 'O que ele pode fazer na conversa', 'Materiais que ele pode usar', 'Ligar']);
+ // preenche e escolhe: um funil, duas ferramentas, a capacidade de ligar e um material
+ await pagina.avaliar(`(() => {
+  const campo = nome => [...document.querySelectorAll('.ia-form label')].find(l => l.firstChild.textContent === nome);
+  const digitar = (el, v) => { el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })); };
+  digitar(campo('Nome').querySelector('input'), 'Bruno');
+  digitar(campo('Instruções').querySelector('textarea'), 'Você é o Bruno. Responda curto e chame uma pessoa para fechar.');
+  const marcar = texto => { const l = [...document.querySelectorAll('.ia-form label.ia-opcao')].find(x => x.textContent.includes(texto)); l.querySelector('input').click(); };
+  marcar('Funil padrão'); marcar('Buscar lead e histórico'); marcar('Criar tarefa para a equipe'); marcar('Fazer ligações');
+  [...document.querySelectorAll('.ia-form button')].find(b => b.textContent.includes('Adicionar material')).click();
+  const m = document.querySelector('.ia-material');
+  digitar(m.querySelector('input'), 'Proposta modelo'); m.querySelectorAll('input')[1].value = 'https://exemplo.com/proposta.pdf'; m.querySelectorAll('input')[1].dispatchEvent(new Event('input', { bubbles: true }));
+  digitar(m.querySelectorAll('input')[2], 'Quando pedirem valores');
+ })()`);
+ await pagina.avaliar(`document.querySelector('.ia-form').requestSubmit()`);
+ await pagina.esperar(`window.__posts.length === 1`, { descricao: 'agente salvo' });
+ const corpo = await pagina.avaliar(`window.__posts[0]`);
+ assert.equal(corpo.name, 'Bruno'); assert.equal(corpo.model, 'claude-sonnet-5-5'); assert.equal(corpo.instance, null);
+ assert.deepEqual(corpo.pipelines, ['44444444-4444-4444-8444-444444444444']); assert.deepEqual(corpo.tools.sort(), ['lead.buscar', 'tarefa.criar']);
+ assert.equal(corpo.abilities.texto, true); assert.equal(corpo.abilities.ligacao, true); assert.equal(corpo.is_active, false);
+ assert.deepEqual(corpo.assets, [{ name: 'Proposta modelo', kind: 'documento', url: 'https://exemplo.com/proposta.pdf', when: 'Quando pedirem valores' }]);
  semExcecoes();
 });
 
