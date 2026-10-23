@@ -1,14 +1,14 @@
 import { $, node } from './dom.js';
-import { mountTabs } from './tabs.js';
 import { tabela, celulaNome, selo } from './data-table.js';
 import { fieldsManager } from './space-fields.js';
 
-// Tecnologia → Automações: tudo o que o Core faz sozinho num funil, numa página só, em abas (o mesmo desenho do Kalidash):
-//   Automações  as regras "quando acontecer X, fazer Y" do espaço, com histórico de execuções;
-//   Pipelines   os funis do espaço e as etapas de cada um (criar, editar, ordenar, apagar);
-//   Tarefas     o que cada etapa exige para entrar nela ou sair dela (requisitos de etapa);
-//   Campos      os campos que o espaço guarda de cada lead e oportunidade.
-// Tudo é do ESPAÇO escolhido no alto da página. As rotas já existiam; aqui só se monta a tela.
+// Configuração do funil, em quatro painéis que o mesmo módulo sabe desenhar (o desenho do Kalidash):
+//   automacoes  as regras "quando acontecer X, fazer Y" do espaço, com histórico de execuções  → página Tecnologia → Automações;
+//   pipelines   os funis do espaço e as etapas de cada um (criar, editar, ordenar, apagar)     → aba do Inbound;
+//   tarefas     o que cada etapa exige para entrar nela ou sair dela (requisitos de etapa)     → aba do Inbound;
+//   campos      os campos que o espaço guarda de cada lead e oportunidade                       → aba do Inbound.
+// Quem monta diz onde desenhar (`hostId`) e quais painéis mostra. Tudo é do ESPAÇO escolhido no alto (fixo, quando já se está dentro de um
+// espaço). As rotas já existiam; aqui só se monta a tela.
 
 const GATES = { ENTER: 'Para entrar na etapa', EXIT: 'Para sair da etapa' };
 const TIPOS = { ACTION: 'Tarefa a concluir', FIELD: 'Campo a preencher' };
@@ -22,23 +22,23 @@ function campoDe(form, rotulo, tipo = 'text', extra = {}) { const l = node('labe
 function listaDe(form, rotulo, pares, valor) { const l = node('label', rotulo), s = node('select'); for (const [v, t] of pares) { const o = node('option', t); o.value = v; s.append(o); } if (valor != null) s.value = valor; if (s.selectedIndex < 0 && s.options.length) s.selectedIndex = 0; l.append(s); form.append(l); return { s, l }; }
 function mostrarErro(alvo, e) { alvo.querySelector('[data-erro]')?.remove(); const p = node('p', e.message, 'notice-inline'); p.setAttribute('role', 'alert'); p.dataset.erro = '1'; alvo.prepend(p); }
 
-export function setupAutomacoes({ api, reportError }) {
- let geracao = 0, aba = 'automacoes', espaco = '', funis = [], funilId = '', donos = null, catalogo = null;
+export function setupAutomacoes({ api, reportError, hostId = 'view-automacoes', prefixo = 'automacoes', painelInicial = 'automacoes' }) {
+ let geracao = 0, aba = painelInicial, espacoFixo = '', espaco = '', funis = [], funilId = '', donos = null, catalogo = null;
  let formAberto = false, selecionada = null;
 
  const funisDoEspaco = () => funis.filter(f => f.space_id === espaco);
  const espacos = () => [...new Map(funis.map(f => [f.space_id, { id: f.space_id, name: f.space_name }])).values()];
  const funilAtual = () => { const lista = funisDoEspaco().filter(f => f.is_active); return lista.find(f => f.id === funilId) || lista[0] || null; };
- const painel = () => $('automacoes-painel');
-
+ 
  async function carregar() {
   const ticket = ++geracao;
-  const raiz = $('view-automacoes'); if (!raiz) return;
+  const raiz = $(hostId); if (!raiz) return;
   try {
    const r = await api('/api/commercial/pipelines');
    if (ticket !== geracao) return;
    funis = r.pipelines || [];
-   if (!espacos().some(e => e.id === espaco)) espaco = espacos()[0]?.id || '';
+   if (espacoFixo) espaco = espacoFixo;
+   else if (!espacos().some(e => e.id === espaco)) espaco = espacos()[0]?.id || '';
    donos ??= (await api('/api/commercial/owners').catch(() => ({ owners: [] }))).owners;
   } catch (e) { if (ticket === geracao) raiz.replaceChildren(node('p', e.message, 'notice-inline')); return; }
   desenhar();
@@ -46,23 +46,18 @@ export function setupAutomacoes({ api, reportError }) {
 
  // ---------- estrutura: espaço + abas ----------
  async function desenhar(contagens) {
-  const raiz = $('view-automacoes');
+  const raiz = $(hostId);
   const lista = espacos();
-  if (!lista.length) { raiz.replaceChildren(node('p', 'Nenhum espaço tem funil ainda. Crie um espaço com a capacidade comercial para configurar funis e automações.', 'empty-list')); return; }
+  if (!lista.length || (espacoFixo && !funisDoEspaco().length)) { raiz.replaceChildren(node('p', 'Este espaço ainda não tem funil. Crie um espaço com a capacidade comercial para configurar funis e automações.', 'empty-list')); return; }
   const barra = node('div', undefined, 'au-barra');
+  const corpo = node('div', undefined, 'au-painel'); corpo.id = `${prefixo}-painel`;
   const sel = node('select'); sel.setAttribute('aria-label', 'Espaço');
   for (const e of lista) { const o = node('option', e.name); o.value = e.id; sel.append(o); }
   sel.value = espaco;
   sel.onchange = () => { espaco = sel.value; funilId = ''; selecionada = null; formAberto = false; desenhar(); };
   const rotulo = node('label', undefined, 'au-espaco'); rotulo.append(node('span', 'Espaço'), sel);
-  barra.append(rotulo);
-  const abas = node('div'); abas.id = 'automacoes-tabs';
-  const corpo = node('div'); corpo.id = 'automacoes-painel'; corpo.setAttribute('role', 'tabpanel'); corpo.setAttribute('aria-labelledby', `automacoes-tab-${aba}`);
-  raiz.replaceChildren(barra, abas, corpo);
-  const nFunis = funisDoEspaco().filter(f => f.is_active).length;
-  mountTabs({ host: abas, active: aba, label: 'Seções de Automações', prefix: 'automacoes', panelId: 'automacoes-painel',
-   tabs: [{ key: 'automacoes', label: 'Automações' }, { key: 'pipelines', label: 'Pipelines', count: nFunis }, { key: 'tarefas', label: 'Tarefas' }, { key: 'campos', label: 'Campos' }],
-   onChange: key => { aba = key; formAberto = false; selecionada = null; desenhar(); } });
+  if (!espacoFixo) barra.append(rotulo);
+  raiz.replaceChildren(...(espacoFixo ? [] : [barra]), corpo);
   corpo.append(node('p', 'Carregando…', 'detail'));
   try {
    if (aba === 'automacoes') await abaAutomacoes(corpo);
@@ -352,5 +347,5 @@ export function setupAutomacoes({ api, reportError }) {
   gerente.open = true;
  }
 
- return { load: () => carregar().catch(reportError), clear() { geracao++; funis = []; donos = null; espaco = ''; funilId = ''; aba = 'automacoes'; formAberto = false; selecionada = null; $('view-automacoes')?.replaceChildren(); } };
+ return { load: (opcoes = {}) => { if (opcoes.painel && opcoes.painel !== aba) { aba = opcoes.painel; formAberto = false; selecionada = null; } espacoFixo = opcoes.espaco || ''; if (espacoFixo) espaco = espacoFixo; return carregar().catch(reportError); }, clear() { geracao++; espacoFixo = ''; funis = []; donos = null; espaco = ''; funilId = ''; aba = painelInicial; formAberto = false; selecionada = null; $(hostId)?.replaceChildren(); } };
 }

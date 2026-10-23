@@ -1,9 +1,9 @@
-/* Tecnologia → Automações: espaço no alto, abas do Core e, dentro de cada aba, texto de apoio + ação à direita, tabela e formulário. */
-#view-automacoes { display: grid; gap: 16px; align-content: start; }
+/* Configuração do funil (página Automações e abas do Inbound): espaço no alto e, em cada painel, texto de apoio + ação à direita, tabela e formulário. */
+#view-automacoes, #inbound-panel-config { display: grid; gap: 16px; align-content: start; }
 .au-barra { display: flex; align-items: center; gap: 12px; }
 .au-espaco { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
 .au-espaco select { width: auto; min-width: 240px; }
-#automacoes-painel { display: grid; gap: 16px; margin-top: 4px; }
+.au-painel { display: grid; gap: 16px; margin-top: 4px; }
 .au-topo { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
 .au-topo > p { margin: 0; max-width: 78ch; }
 .au-topo > button { flex: none; }
