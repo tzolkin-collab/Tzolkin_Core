@@ -26,7 +26,7 @@ const ator = o => o?.email || o?.subject || 'desconhecido';
 const MOTIVOS = Object.freeze({
  unauthorized: 'A Evolution recusou a chave de acesso.',
  not_found: 'A instância não existe na Evolution.',
- rejected: 'A Evolution recusou esta mensagem (o número pode não ter WhatsApp).',
+ rejected: 'A Evolution recusou esta mensagem: o número pode não ter WhatsApp ou ser um contato que o WhatsApp esconde atrás de um identificador interno (@lid), que a Evolution 2.3.7 não consegue enviar. Se a pessoa já respondeu, responda pelo WhatsApp do celular.',
  rate_limited: 'A Evolution pediu para ir mais devagar.',
  unavailable: 'A Evolution não respondeu.',
  invalid: 'Resposta inesperada da Evolution.',
