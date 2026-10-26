@@ -116,3 +116,22 @@ test('DELETE sem corpo atravessa proxy e roteador, e a guarda de JSON continua v
   assert.equal(depois.status,404,'a requisição seguinte na mesma conexão continua válida');
  } finally {await stop(web);await stop(api);}
 });
+
+test('entrar pelo painel em localhost:porta funciona como em 127.0.0.1 (origem canônica vai à API); outra origem segue barrada',async()=>{
+ const reserve=http.createServer();await listen(reserve);const port=reserve.address().port;await stop(reserve);
+ const origin=`http://127.0.0.1:${port}`;
+ const api=createCore({pool:{},adminPassword:'synthetic-password-for-split-test',webOrigin:origin,deployRegistry:[]});
+ await listen(api);
+ const web=createWeb({apiOrigin:`http://127.0.0.1:${api.address().port}`});await new Promise(r=>web.listen(port,'127.0.0.1',r));
+ const post=(host,originHeader)=>new Promise((resolve,reject)=>{
+  const corpo=JSON.stringify({password:'synthetic-password-for-split-test'});
+  const req=http.request({host:'127.0.0.1',port,path:'/api/login',method:'POST',headers:{host,origin:originHeader,'content-type':'application/json','content-length':Buffer.byteLength(corpo)}},res=>{res.resume();res.on('end',()=>resolve(res.statusCode));});
+  req.on('error',reject);req.end(corpo);
+ });
+ try {
+  assert.equal(await post(`localhost:${port}`,`http://localhost:${port}`),200,'localhost entra');
+  assert.equal(await post(`127.0.0.1:${port}`,origin),200,'127.0.0.1 continua entrando');
+  assert.equal(await post(`localhost:${port}`,'http://localhost:9'),403,'porta diferente é barrada');
+  assert.equal(await post(`localhost:${port}`,'https://evil.invalid'),403,'origem de fora é barrada');
+ } finally {await stop(web);await stop(api);}
+});

@@ -42,6 +42,9 @@ export function createWeb({ apiOrigin = 'http://127.0.0.1:3102' } = {}) {
    // Não encaminha Host, headers de proxy, hop-by-hop ou headers arbitrários.
    const headers={};
    for(const name of ['origin','cookie','authorization','content-type','accept']) if(req.headers[name]) headers[name]=req.headers[name];
+   // A API só aceita a origem exata http://127.0.0.1:<porta>. O painel também abre em localhost:<porta> (já validado acima), então a origem
+   // encaminhada é a canônica: sem isto, entrar por localhost dava "Origem não permitida" em todo POST (login incluído).
+   if(headers.origin === `http://localhost:${port}`) headers.origin = `http://127.0.0.1:${port}`;
    // Comprimento explícito, e não o do cliente: é o tamanho do que ESTE processo
    // vai reenviar. Sem ele, http.request não enquadra o corpo de um DELETE —
    // useChunkedEncodingByDefault é falso nesse verbo —, e os bytes do corpo
