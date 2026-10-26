@@ -69,9 +69,14 @@ async function probe(connectionString, ssl, Client) {
  *  'allow'   — compatibilidade legada explícita; pode cair para texto claro avisando.
  *  'disable' — nem tenta.
  */
-export async function openDatabase({ connectionString, mode = 'require', ...poolOptions }, { Client = pg.Client, Pool = pg.Pool } = {}) {
+export async function openDatabase({ connectionString, mode = 'require', tlsServername = process.env.DATABASE_TLS_SERVERNAME, ...poolOptions }, { Client = pg.Client, Pool = pg.Pool } = {}) {
  if (!connectionString) throw new Error('DATABASE_URL é obrigatória.');
  if (!SSL_MODES.includes(mode)) throw new Error(`DATABASE_SSL inválido: use ${SSL_MODES.join(', ')}.`);
+ // Nome que o certificado do servidor cobre, quando difere do host da URL (ex.: host interno do EasyPanel, certificado emitido para o
+ // domínio público). A cadeia e o nome continuam sendo validados; só muda contra QUE nome. Vazio = o host da URL, como sempre.
+ const servername = String(tlsServername ?? '').trim();
+ if (servername && !/^(?=.{1,253}$)[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$/.test(servername))
+  throw new Error('DATABASE_TLS_SERVERNAME inválido: use um nome de host (sem esquema, porta ou caminho).');
 
  const target = describeTarget(connectionString);
  const url = new URL(connectionString);
@@ -93,7 +98,7 @@ export async function openDatabase({ connectionString, mode = 'require', ...pool
  // pg dá precedência aos parâmetros da URL sobre ssl. Ler apenas os certificados
  // e remover opções TLS da URL impede que ela desligue a validação silenciosamente.
  const parsedSsl = new pg.Client({ connectionString }).connectionParameters.ssl;
- const certificates = {};
+ const certificates = servername ? { servername } : {};
  for (const key of ['ca', 'cert', 'key']) if (parsedSsl?.[key]) certificates[key] = parsedSsl[key];
  for (const key of ['ssl', 'sslmode', 'sslcert', 'sslkey', 'sslrootcert', 'uselibpqcompat']) url.searchParams.delete(key);
  const normalized = url.href;

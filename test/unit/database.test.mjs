@@ -103,3 +103,31 @@ test('rotation refuses unverified, plaintext, unknown and loopback transports', 
   assert.throws(() => assertVerifiedTransport(security), /Rotação cancelada/);
  assert.doesNotThrow(() => assertVerifiedTransport({ tls: true, verified: true }));
 });
+
+test('tlsServername: valida o certificado contra o nome informado, sem afrouxar a validação', async () => {
+ const stub = driver();
+ const { pool, security } = await openDatabase({ connectionString: 'postgres://u:synthetic@interno-db:5432/test', mode: 'require', tlsServername: ' db.example.invalid ' }, stub);
+ assert.equal(stub.calls[0].ssl.servername, 'db.example.invalid');
+ assert.equal(stub.calls[0].ssl.rejectUnauthorized, true);
+ assert.equal(pool.options.ssl.servername, 'db.example.invalid');
+ assert.equal(pool.options.ssl.rejectUnauthorized, true);
+ assert.equal(security.verified, true);
+});
+
+test('tlsServername vazio ou ausente: o certificado é validado contra o host da URL, como antes', async () => {
+ for (const vazio of [undefined, '', '   ']) {
+  const stub = driver();
+  const { pool } = await openDatabase({ connectionString, mode: 'require', tlsServername: vazio }, stub);
+  assert.equal('servername' in pool.options.ssl, false);
+  assert.equal('servername' in stub.calls[0].ssl, false);
+ }
+});
+
+test('tlsServername não é um atalho: certificado inválido continua recusado e o valor precisa ser um nome de host', async () => {
+ await assert.rejects(openDatabase({ connectionString, mode: 'require', tlsServername: 'db.example.invalid' }, driver({ valid: false })), /Conexão recusada/);
+ for (const ruim of ['https://db.example.invalid', 'db.example.invalid:5432', 'db/example', 'db example', '-db.example']) {
+  const stub = driver();
+  await assert.rejects(openDatabase({ connectionString, mode: 'require', tlsServername: ruim }, stub), /DATABASE_TLS_SERVERNAME inválido/);
+  assert.equal(stub.calls.length, 0);
+ }
+});
