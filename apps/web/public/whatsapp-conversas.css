@@ -61,3 +61,33 @@
 .wa-fio-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .wa-atendimento { display: flex; align-items: center; gap: 8px; flex: none; }
 .wa-fio-topo > div:first-child { display: grid; gap: 2px; min-width: 0; }
+
+/* Visão geral: saúde e resultado de cada instância. Uma tabela só; o que pede atenção vem antes, em linhas, sem cartões. */
+.wa-visao { display: grid; gap: 16px; margin-top: 16px; }
+.wa-visao-barra { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.wa-atencao { display: grid; gap: 8px; }
+.wa-atencao h3 { margin: 0; font-size: 15px; }
+.wa-atencao ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.wa-atencao li { display: flex; align-items: baseline; gap: 10px; font-size: 14px; }
+.wa-atencao li .status { flex: none; }
+.wa-inst-nome { display: grid; gap: 2px; min-width: 150px; }
+.wa-inst-topo { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wa-inst-topo strong { overflow-wrap: anywhere; }
+.wa-inst-nome small { color: var(--muted); font-size: 12px; }
+.wa-visao .tbl td.num { white-space: nowrap; }
+.wa-inst-abrir { justify-self: start; padding: 0; min-height: 0; font-size: 13px; text-decoration: underline; text-underline-offset: 2px; }
+.wa-visao-nota { max-width: 80ch; margin: 0; }
+
+/* Celular: a tabela da Visão geral vira uma lista, uma instância por bloco, com o nome de cada campo (rolar para o lado esconderia o resultado). */
+@media (max-width: 760px) {
+  .wa-visao .tbl, .wa-visao .tbl tbody, .wa-visao .tbl tr, .wa-visao .tbl td { display: block; }
+  .wa-visao .tbl thead { display: none; }
+  .wa-visao .tbl tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .wa-visao .tbl tbody td, .wa-visao .tbl tbody tr:last-child td { display: grid; gap: 2px; padding: 0; border: 0; border-bottom: 0; text-align: left; white-space: normal; }
+  .wa-visao .tbl td .status { justify-self: start; }
+  .wa-visao .tbl td.num { text-align: left; }
+  .wa-visao .tbl td::before { content: attr(data-rotulo); color: var(--muted); font-size: 12px; }
+  .wa-visao .tbl td:first-child { grid-column: 1 / -1; }
+  .wa-visao .tbl td:first-child::before { display: none; }
+  .wa-visao .tbl td.tbl-empty-cell { color: var(--muted); }
+}

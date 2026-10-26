@@ -2,8 +2,9 @@ import { createIcon } from './icons.js';
 import { selo } from './data-table.js';
 import { mountTabs } from './tabs.js';
 import { painelDeAgentes } from './whatsapp-agentes.js';
+import { painelDeVisao } from './whatsapp-visao.js';
 
-// Tela "WhatsApp": as instâncias da Evolution, as conversas de cada uma (o que os leads responderam), a atividade da fila (o que está
+// Tela "WhatsApp": a visão geral (saúde e resultado de cada instância), as conversas de cada uma (o que os leads responderam), a atividade da fila (o que está
 // esperando, o que saiu, o que falhou) e os agentes de IA. As mensagens saem pelas automações do funil ou pela resposta manual de uma
 // conversa, sempre pela fila e sempre pela instância da conversa.
 const el = (tag, text, cls) => { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; if (cls) n.className = cls; return n; };
@@ -19,7 +20,7 @@ const ESTADOS = { open: ['Conectada', 'success'], connecting: ['Conectando', 'wa
 export function setupWhatsapp({ api, reportError }) {
  // aviso: a frase do que a pessoa acabou de fazer, que sobrevive ao redesenho
  let geracao = 0, fila = null, lista = null, erro = '', aviso = '';
- let aba = 'conversas', instancia = guardado(), conversas = null, aberta = null, conversa = null, erroConversa = '', agentes = null;
+ let aba = 'visao', instancia = guardado(), conversas = null, aberta = null, conversa = null, erroConversa = '', agentes = null, visao = null;
  const host = () => document.getElementById('view-whatsapp');
  const q = () => (instancia ? `?instance=${encodeURIComponent(instancia)}` : '');
 
@@ -216,6 +217,15 @@ export function setupWhatsapp({ api, reportError }) {
   return agentes;
  }
 
+ function painelVisao() {
+  visao ??= painelDeVisao({
+   api, reportError, padrao: () => lista?.padrao || '',
+   // "Abrir conversas" leva à aba Conversas já na instância escolhida.
+   aoAbrirConversas: nome => { instancia = nome; guardar(nome); aba = 'conversas'; aberta = null; conversa = null; conversas = null; fila = null; carregarDaInstancia(); desenhar(); },
+  });
+  return visao;
+ }
+
  function desenhar() {
   const root = host(); if (!root) return;
   root.replaceChildren(); root.classList.add('email-hub');
@@ -226,13 +236,13 @@ export function setupWhatsapp({ api, reportError }) {
   const naoLidas = conversas?.nao_lidas;
   mountTabs({
    host: abas, active: aba, label: 'Seções do WhatsApp', prefix: 'whatsapp',
-   tabs: [{ key: 'conversas', label: 'Conversas', count: Number.isFinite(naoLidas) && naoLidas > 0 ? naoLidas : undefined }, { key: 'atividade', label: 'Atividade' }, { key: 'agentes', label: 'Agentes de IA' }],
-   onChange: key => { aba = key; if (key === 'atividade') { fila = null; carregarDaInstancia(); } desenhar(); },
+   tabs: [{ key: 'visao', label: 'Visão geral' }, { key: 'conversas', label: 'Conversas', count: Number.isFinite(naoLidas) && naoLidas > 0 ? naoLidas : undefined }, { key: 'atividade', label: 'Atividade' }, { key: 'agentes', label: 'Agentes de IA' }],
+   onChange: key => { aba = key; if (key === 'atividade') { fila = null; carregarDaInstancia(); } if (key === 'visao') visao?.recarregar(); desenhar(); },
   });
-  const painel = aba === 'conversas' ? painelConversas() : aba === 'atividade' ? painelAtividade() : painelAgentes();
+  const painel = aba === 'visao' ? painelVisao() : aba === 'conversas' ? painelConversas() : aba === 'atividade' ? painelAtividade() : painelAgentes();
   painel.id = `whatsapp-panel-${aba}`; painel.setAttribute('role', 'tabpanel'); painel.setAttribute('aria-labelledby', `whatsapp-tab-${aba}`);
   root.append(painel);
  }
 
- return { load: carregar, clear() { geracao++; fila = null; lista = null; erro = ''; aviso = ''; conversas = null; aberta = null; conversa = null; erroConversa = ''; agentes = null; host()?.replaceChildren(); } };
+ return { load: carregar, clear() { geracao++; fila = null; lista = null; erro = ''; aviso = ''; conversas = null; aberta = null; conversa = null; erroConversa = ''; agentes = null; visao = null; host()?.replaceChildren(); } };
 }
