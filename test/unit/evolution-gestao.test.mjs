@@ -95,14 +95,14 @@ test('setPresence só aceita os quatro valores da doc', async () => {
  for (const ruim of ['typing', '', undefined, 1]) assert.deepEqual(await semRede().a.setPresence({ presence: ruim }), { ok: false, reason: 'rejected', detail: 'invalid_presence' });
 });
 
-test('setWebhook: corpo plano da 2.3.7, segredo no cabeçalho; url http, evento minúsculo e cabeçalho com quebra de linha são recusados sem rede', async () => {
+test('setWebhook: corpo aninhado em "webhook" (exigido pela 2.3.7), segredo no cabeçalho; url http, evento minúsculo e cabeçalho com quebra de linha são recusados sem rede', async () => {
  const { a, chamadas } = com(200, { success: true, message: 'Webhook configured successfully' });
  const r = await a.setWebhook({ url: 'https://core.exemplo.com/api/webhooks/evolution', headers: { 'x-webhook-secret': 'segredo-longo-e-aleatorio' } });
  assert.deepEqual(r, { ok: true });
  assert.equal(chamadas[0].init.method, 'POST');
  assert.equal(chamadas[0].url.pathname, '/webhook/set/tzolkin');
- assert.deepEqual(chamadas[0].body, { enabled: true, url: 'https://core.exemplo.com/api/webhooks/evolution', events: ['MESSAGES_UPSERT'], base64: false, headers: { 'x-webhook-secret': 'segredo-longo-e-aleatorio' } });
- assert.equal('webhook' in chamadas[0].body, false, 'o corpo é plano, não aninhado em "webhook"');
+ assert.deepEqual(chamadas[0].body, { webhook: { enabled: true, url: 'https://core.exemplo.com/api/webhooks/evolution', events: ['MESSAGES_UPSERT'], byEvents: false, base64: false, headers: { 'x-webhook-secret': 'segredo-longo-e-aleatorio' } } });
+ assert.deepEqual(Object.keys(chamadas[0].body), ['webhook'], 'o servidor 2.3.7 exige o corpo aninhado em "webhook" (confirmado com a Evolution real; a doc mostra o plano)');
  for (const ruim of [{ url: 'http://core.exemplo.com/x' }, { url: 'https://u:p@core.exemplo.com/x' }, { url: 'não é url' }, { url: 'https://core.exemplo.com/x', events: ['messages_upsert'] },
   { url: 'https://core.exemplo.com/x', events: [] }, { url: 'https://core.exemplo.com/x', headers: { 'x-a': 'a\nb' } }, { url: 'https://core.exemplo.com/x', headers: { 'x a': 'v' } }]) {
   const x = semRede();

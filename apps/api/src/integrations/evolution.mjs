@@ -235,7 +235,8 @@ export function createEvolutionAdapter({ env = process.env, fetchImpl = fetch, i
    const w = webhookValido({ url, events, headers });
    if (!w) return { ok: false, reason: 'rejected', detail: 'invalid_webhook' };
    const c = rota('/webhook/set', escolhida); if (!c) return { ok: false, reason: 'invalid_config' };
-   const r = await chamar('POST', c, { enabled: enabled !== false, url: w.url, events: w.events, base64: false, ...(w.headers ? { headers: w.headers } : {}) });
+   // O servidor 2.3.7 EXIGE o objeto `webhook` (400 "instance requires property webhook" com o corpo plano que a doc mostra).
+   const r = await chamar('POST', c, { webhook: { enabled: enabled !== false, url: w.url, events: w.events, byEvents: false, base64: false, ...(w.headers ? { headers: w.headers } : {}) } });
    return r.ok ? { ok: r.body.success !== false } : r;
   },
 
