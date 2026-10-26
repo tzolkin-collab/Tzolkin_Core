@@ -80,6 +80,13 @@ const consultaValida = ({ where, orderBy, take = 50, skip = 0 } = {}) => {
  return { ...(where ? { where } : {}), ...(orderBy ? { orderBy } : {}), take, skip };
 };
 
+/** Consulta de histórico: `where`/`orderBy` com limite de tamanho, `page` de 1 a 10000 e `offset` (tamanho da página) de 1 a 100. */
+const consultaDeMensagens = ({ where, orderBy, page = 1, offset = 50 } = {}) => {
+ if (!inteiro(page, 1, 10_000) || !inteiro(offset, 1, 100)) return null;
+ for (const o of [where, orderBy]) if (o != null && (typeof o !== 'object' || Array.isArray(o) || JSON.stringify(o).length > 2000)) return null;
+ return { ...(where ? { where } : {}), ...(orderBy ? { orderBy } : {}), page, offset };
+};
+
 /** QR e código de pareamento: null quando a instância já está conectada (a Evolution devolve só `count`). */
 const qrDe = q => {
  if (!q || typeof q !== 'object') return null;
@@ -318,15 +325,16 @@ export function createEvolutionAdapter({ env = process.env, fetchImpl = fetch, i
   },
 
   /** Histórico. O filtro vai em `where` (ex.: `{ key: { remoteJid: '5531...@s.whatsapp.net' } }`); a sintaxe exata é do servidor. */
-  async findMessages({ instance: escolhida, ...consulta } = {}) {
-   const q = consultaValida(consulta); if (!q) return { ok: false, reason: 'rejected', detail: 'invalid_query' };
+  async findMessages({ instance: escolhida, where, orderBy, page = 1, offset = 50 } = {}) {
+   // Na 2.3.7 `offset` é o TAMANHO da página e `page` o número dela (a partir de 1); `take` e `skip` do corpo são ignorados. Vem da mais nova para a mais antiga.
+   const q = consultaDeMensagens({ where, orderBy, page, offset }); if (!q) return { ok: false, reason: 'rejected', detail: 'invalid_query' };
    const c = rota('/chat/findMessages', escolhida); if (!c) return { ok: false, reason: 'invalid_config' };
    const r = await chamar('POST', c, q);
    if (!r.ok) return r;
    const m = r.body.messages;
    if (!m || typeof m !== 'object' || !Array.isArray(m.records)) return { ok: false, reason: 'invalid' };
    return { ok: true, total: Number(m.total) || 0, pages: Number(m.pages) || 0, page: Number(m.currentPage) || 1,
-    messages: m.records.filter(x => x && typeof x === 'object').map(x => ({ id: texto(x.id), key: x.key && typeof x.key === 'object' ? x.key : null, fromMe: x.fromMe === true, messageType: texto(x.messageType), timestamp: Number.isFinite(Number(x.timestamp)) ? Number(x.timestamp) : null, message: x.message && typeof x.message === 'object' ? x.message : null })) };
+    messages: m.records.filter(x => x && typeof x === 'object').map(x => ({ id: texto(x.id), key: x.key && typeof x.key === 'object' ? x.key : null, fromMe: x.fromMe === true, messageType: texto(x.messageType), status: texto(x.status), timestamp: Number.isFinite(Number(x.messageTimestamp ?? x.timestamp)) && (x.messageTimestamp ?? x.timestamp) != null ? Number(x.messageTimestamp ?? x.timestamp) : null, message: x.message && typeof x.message === 'object' ? x.message : null })) };
   },
 
   /** Arquiva ou desarquiva a conversa com um número. */

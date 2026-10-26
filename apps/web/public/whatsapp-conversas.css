@@ -1,7 +1,7 @@
 /* WhatsApp: aba Conversas, lista à esquerda e a conversa aberta à direita (empilhadas no celular). */
 .wa-caixa { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); margin-top: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); overflow: hidden; min-height: 420px; }
 .wa-lista { display: flex; flex-direction: column; border-right: 1px solid var(--line); max-height: 560px; overflow: auto; }
-.wa-conversa { display: grid; gap: 4px; width: 100%; padding: 12px 14px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; text-align: left; }
+.wa-conversa { display: grid; grid-template-columns: 36px minmax(0, 1fr); align-items: center; gap: 4px 12px; width: 100%; padding: 12px 14px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; text-align: left; }
 .wa-conversa:hover, .wa-conversa.active { background: var(--surface-hover); }
 .wa-conversa-topo, .wa-conversa-base { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
 .wa-conversa-topo strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
@@ -91,3 +91,13 @@
   .wa-visao .tbl td:first-child::before { display: none; }
   .wa-visao .tbl td.tbl-empty-cell { color: var(--muted); }
 }
+
+/* Chat: avatar, texto da conversa, separador de dia, mídia e mensagem ainda na fila. */
+.wa-avatar { display: grid; place-items: center; width: 36px; height: 36px; overflow: hidden; border-radius: 50%; background: var(--surface-hover); color: var(--muted); font-size: 14px; font-weight: 600; }
+.wa-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.wa-conversa-texto { display: grid; gap: 4px; min-width: 0; }
+.wa-conversa-base span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wa-dia { align-self: center; margin: 4px 0; color: var(--muted); font-size: 12px; }
+.wa-mais-antigas { align-self: center; }
+.wa-msg.midia p { color: var(--muted); font-style: italic; }
+.wa-msg.pendente { border-style: dashed; opacity: .85; }

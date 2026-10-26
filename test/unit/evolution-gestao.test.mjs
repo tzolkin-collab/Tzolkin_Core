@@ -180,22 +180,34 @@ test('findChats, findContacts e findMessages: consulta com limites, caminho da d
  assert.deepEqual((await contatos.a.findContacts()).contacts, [{ id: 'k1', pushName: 'Marina', number: NUMERO, profilePictureUrl: null }]);
  assert.equal(contatos.chamadas[0].url.pathname, '/chat/findContacts/tzolkin');
 
- const msgs = com(200, { messages: { total: 3, pages: 1, currentPage: 1, records: [{ id: 'm1', key: { id: 'A', fromMe: false }, message: { conversation: 'oi' }, messageType: 'conversation', fromMe: false, timestamp: 1793000000 }, 5] } });
- const rm = await msgs.a.findMessages({ where: { key: { remoteJid: '5531997599216@s.whatsapp.net' } }, orderBy: { messageTimestamp: 'desc' }, take: 50, skip: 0, instance: 'suporte' });
- assert.deepEqual(rm, { ok: true, total: 3, pages: 1, page: 1, messages: [{ id: 'm1', key: { id: 'A', fromMe: false }, fromMe: false, messageType: 'conversation', timestamp: 1793000000, message: { conversation: 'oi' } }] });
+ const msgs = com(200, { messages: { total: 3, pages: 1, currentPage: 1, records: [{ id: 'm1', key: { id: 'A', fromMe: false }, message: { conversation: 'oi' }, messageType: 'conversation', fromMe: false, messageTimestamp: 1793000000 }, 5] } });
+ const rm = await msgs.a.findMessages({ where: { key: { remoteJid: '5531997599216@s.whatsapp.net' } }, orderBy: { messageTimestamp: 'desc' }, page: 2, offset: 20, instance: 'suporte' });
+ assert.deepEqual(rm, { ok: true, total: 3, pages: 1, page: 1, messages: [{ id: 'm1', key: { id: 'A', fromMe: false }, fromMe: false, messageType: 'conversation', status: null, timestamp: 1793000000, message: { conversation: 'oi' } }] });
  assert.equal(msgs.chamadas[0].url.pathname, '/chat/findMessages/suporte');
- assert.deepEqual(msgs.chamadas[0].body, { where: { key: { remoteJid: '5531997599216@s.whatsapp.net' } }, orderBy: { messageTimestamp: 'desc' }, take: 50, skip: 0 });
+ // na 2.3.7 `offset` é o tamanho da página e `page` o número; take e skip são ignorados pelo servidor, então nem vão no corpo
+ assert.deepEqual(msgs.chamadas[0].body, { where: { key: { remoteJid: '5531997599216@s.whatsapp.net' } }, orderBy: { messageTimestamp: 'desc' }, page: 2, offset: 20 });
+ assert.equal(rm.messages[0].timestamp, 1793000000, 'o horário vem de messageTimestamp');
+ await msgs.a.findMessages();
+ assert.deepEqual(msgs.chamadas[1].body, { page: 1, offset: 50 });
  assert.equal((await com(200, { messages: {} }).a.findMessages()).reason, 'invalid');
  assert.equal((await com(200, { chats: [] }).a.findChats()).reason, 'invalid');
 });
 
 test('consulta de listagem: take fora de 1 a 200, skip negativo, where ou orderBy que não é objeto e consulta enorme são recusados sem rede', async () => {
  for (const ruim of [{ take: 0 }, { take: 201 }, { take: 1.5 }, { skip: -1 }, { where: [] }, { where: 'x' }, { orderBy: [1] }, { where: { texto: 'x'.repeat(2100) } }]) {
-  for (const metodo of ['findChats', 'findContacts', 'findMessages']) {
+  for (const metodo of ['findChats', 'findContacts']) {
    const x = semRede();
    assert.deepEqual(await x.a[metodo](ruim), { ok: false, reason: 'rejected', detail: 'invalid_query' }, metodo + JSON.stringify(ruim).slice(0, 30));
    assert.equal(x.chamadas.length, 0);
   }
+ }
+});
+
+test('findMessages: página de 1 a 10000, tamanho de 1 a 100, where e orderBy com limite; tudo recusado sem rede', async () => {
+ for (const ruim of [{ page: 0 }, { page: 10001 }, { page: 1.5 }, { offset: 0 }, { offset: 101 }, { where: [] }, { where: 'x' }, { orderBy: [1] }, { where: { texto: 'x'.repeat(2100) } }]) {
+  const x = semRede();
+  assert.deepEqual(await x.a.findMessages(ruim), { ok: false, reason: 'rejected', detail: 'invalid_query' }, JSON.stringify(ruim).slice(0, 40));
+  assert.equal(x.chamadas.length, 0);
  }
 });
 

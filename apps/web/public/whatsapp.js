@@ -21,6 +21,7 @@ export function setupWhatsapp({ api, reportError }) {
  // aviso: a frase do que a pessoa acabou de fazer, que sobrevive ao redesenho
  let geracao = 0, fila = null, lista = null, erro = '', aviso = '';
  let aba = 'visao', instancia = guardado(), conversas = null, aberta = null, conversa = null, erroConversa = '', agentes = null, visao = null;
+ let antigas = [], paginaAntiga = 1, carregandoAntigas = false, rascunho = '', relogio = null, ajuste = null;
  const host = () => document.getElementById('view-whatsapp');
  const q = () => (instancia ? `?instance=${encodeURIComponent(instancia)}` : '');
 
@@ -34,11 +35,12 @@ export function setupWhatsapp({ api, reportError }) {
   guardar(instancia);
   desenhar();
   await carregarDaInstancia(ticket);
+  iniciarAtualizacao();
  }
  async function carregarDaInstancia(ticket = geracao) {
   const [outbox, caixa] = await Promise.all([
    api('/api/whatsapp/outbox' + (aba === 'atividade' ? q() : '')).catch(e => ({ falha: e.message })),
-   instancia ? api('/api/whatsapp/conversations' + q()).catch(e => ({ falha: e.message })) : Promise.resolve(null),
+   instancia ? api('/api/whatsapp/chat/conversas' + q()).catch(e => ({ falha: e.message })) : Promise.resolve(null),
   ]);
   if (ticket !== geracao) return;
   erro = outbox.falha || outbox.aviso || '';
@@ -74,66 +76,105 @@ export function setupWhatsapp({ api, reportError }) {
    const topo = el('span', undefined, 'wa-instancia-topo'); topo.append(el('strong', i.name), ...(i.nao_lidas ? [el('span', String(i.nao_lidas), 'wa-nao-lida')] : []));
    const [rotulo, tom] = ESTADOS[i.state] || [i.state, 'neutral'];
    b.append(topo, el('small', [i.profile, i.number].filter(Boolean).join(' · ') || (i.name === lista.padrao ? 'Instância padrão' : ''), 'detail'), selo(rotulo, tom));
-   b.onclick = () => { instancia = i.name; guardar(instancia); aberta = null; conversa = null; conversas = null; fila = null; carregarDaInstancia(); desenhar(); };
+   b.onclick = () => { instancia = i.name; guardar(instancia); aberta = null; conversa = null; conversas = null; fila = null; antigas = []; rascunho = ''; carregarDaInstancia(); desenhar(); };
    faixa.append(b);
   }
   return faixa;
  }
 
- // ---------- Conversas ----------
- async function abrir(numero) {
-  aberta = numero; conversa = null; erroConversa = ''; desenhar();
+ // ---------- Conversas (direto da Evolution: funciona sem webhook e mostra o histórico de antes do Core) ----------
+ const STATUS_MSG = { PENDING: 'Enviando', SERVER_ACK: 'Enviada', DELIVERY_ACK: 'Entregue', READ: 'Lida', PLAYED: 'Ouvida', FAILED: 'Falhou', QUEUED: 'Na fila' };
+ const hhmm = v => new Date(v).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+ const diaDe = v => {
+  const d = new Date(v), h = new Date(), ontem = new Date(h); ontem.setDate(h.getDate() - 1);
+  return d.toDateString() === h.toDateString() ? 'Hoje' : d.toDateString() === ontem.toDateString() ? 'Ontem' : d.toLocaleDateString('pt-BR');
+ };
+ const curto = v => (!v ? '' : diaDe(v) === 'Hoje' ? hhmm(v) : diaDe(v));
+ const inicial = c => (c.lead_name || c.name || c.number || '?').trim().charAt(0).toUpperCase();
+ const nomeDe = c => c.lead_name || c.name || (c.number ? `+${c.number}` : 'Contato sem telefone');
+
+ async function carregarConversa(jid, { silencioso = false } = {}) {
   try {
-   const r = await api(`/api/whatsapp/conversations/${numero}${q()}`);
-   if (aberta !== numero) return;
-   conversa = r; desenhar();
-   const item = conversas?.conversas.find(c => c.number === numero);
-   if (item?.unread) {
-    await api(`/api/whatsapp/conversations/${numero}/lida${q()}`, 'POST', {});
-    conversas.nao_lidas -= item.unread; item.unread = 0;
-    const atual = lista?.instancias?.find(i => i.name === instancia); if (atual) atual.nao_lidas = Math.max(0, (atual.nao_lidas || 0) - 1);
-    if (aberta === numero) desenhar();
-   }
-  } catch (e) { if (aberta === numero) { erroConversa = e.message; desenhar(); } }
+   const r = await api(`/api/whatsapp/chat/mensagens?jid=${encodeURIComponent(jid)}${instancia ? `&instance=${encodeURIComponent(instancia)}` : ''}`);
+   if (aberta !== jid) return;
+   conversa = r; erroConversa = ''; desenhar();
+  } catch (e) { if (aberta === jid && !silencioso) { erroConversa = e.message; desenhar(); } }
+ }
+ async function abrir(jid) {
+  aberta = jid; conversa = null; erroConversa = ''; antigas = []; paginaAntiga = 1; rascunho = ''; ajuste = null; desenhar();
+  await carregarConversa(jid);
+ }
+ // Mensagens mais antigas: a próxima página entra ANTES das que já estão na tela, sem pular a rolagem.
+ async function verMaisAntigas() {
+  if (!aberta || carregandoAntigas) return;
+  const jid = aberta; carregandoAntigas = true; desenhar();
+  try {
+   const r = await api(`/api/whatsapp/chat/mensagens?jid=${encodeURIComponent(jid)}&pagina=${paginaAntiga + 1}${instancia ? `&instance=${encodeURIComponent(instancia)}` : ''}`);
+   if (aberta !== jid) return;
+   const caixa = host()?.querySelector('.wa-mensagens'); const antes = caixa ? caixa.scrollHeight : 0;
+   antigas = [...r.mensagens, ...antigas]; paginaAntiga = r.pagina;
+   ajuste = { fixarNoTopo: antes };
+  } catch (e) { erroConversa = e.message; }
+  carregandoAntigas = false; desenhar();
+ }
+
+ function bolha(m) {
+  const b = el('div', undefined, `wa-msg ${m.direcao}${m.midia ? ' midia' : ''}${m.pendente ? ' pendente' : ''}`); b.dataset.direcao = m.direcao;
+  b.append(el('p', m.texto));
+  const rodape = [m.em ? hhmm(m.em) : null, m.direcao === 'out' ? STATUS_MSG[m.status] || null : null].filter(Boolean).join(' · ');
+  if (rodape) b.append(el('small', rodape));
+  if (m.erro) b.append(el('small', m.erro, 'email-outbox-erro'));
+  return b;
  }
 
  function fio() {
   const painel = el('div', undefined, 'wa-fio');
   if (!aberta) { painel.append(el('p', 'Escolha uma conversa.', 'email-empty')); return painel; }
-  if (erroConversa) { painel.append(el('p', erroConversa, 'email-help email-outbox-erro')); return painel; }
+  if (erroConversa && !conversa) { painel.append(el('p', erroConversa, 'email-help email-outbox-erro')); return painel; }
   if (!conversa) { painel.append(el('p', 'Carregando conversa…', 'email-empty')); return painel; }
-  const item = conversas?.conversas.find(c => c.number === aberta);
+  const item = conversas?.conversas.find(c => c.jid === aberta) || {};
   const topo = el('header', undefined, 'wa-fio-topo');
-  const quem = el('div'); quem.append(el('strong', item?.lead_name || conversa.name || aberta), el('small', [aberta, conversa.lead_id ? 'lead do funil' : 'sem lead ligado', `via ${instancia}`].join(' · ')));
-  const atendimento = el('div', undefined, 'wa-atendimento');
-  atendimento.append(selo(conversa.com_pessoa ? 'Com uma pessoa' : 'Agente atende, se houver', conversa.com_pessoa ? 'warning' : 'neutral'));
-  const passar = el('button', conversa.com_pessoa ? 'Devolver ao agente' : 'Assumir conversa', 'secondary'); passar.type = 'button';
-  passar.onclick = async () => { passar.disabled = true; try { await api(`/api/whatsapp/conversations/${aberta}/${conversa.com_pessoa ? 'devolver' : 'assumir'}${q()}`, 'POST', {}); await abrir(aberta); } catch (e) { erroConversa = e.message; desenhar(); } };
-  atendimento.append(passar); topo.append(quem, atendimento);
-  const mensagens = el('div', undefined, 'wa-mensagens');
-  for (const m of conversa.mensagens) {
-   const b = el('div', undefined, `wa-msg ${m.direcao}`); b.dataset.direcao = m.direcao;
-   b.append(el('p', m.texto));
-   const situacao = m.status ? (SITUACAO[m.status] || [m.status])[0] : null;
-   b.append(el('small', [quando(m.em), m.direcao === 'out' ? situacao : null].filter(Boolean).join(' · ')));
-   if (m.erro) b.append(el('small', m.erro, 'email-outbox-erro'));
-   mensagens.append(b);
+  const quem = el('div'); quem.append(el('strong', conversa.lead_name || item.name || (conversa.number ? `+${conversa.number}` : 'Contato sem telefone')),
+   el('small', [conversa.number ? `+${conversa.number}` : 'telefone não disponível', conversa.lead_id ? 'lead do funil' : 'sem lead ligado', `via ${instancia}`].join(' · ')));
+  topo.append(quem);
+  if (conversa.number) {
+   const atendimento = el('div', undefined, 'wa-atendimento');
+   atendimento.append(selo(conversa.com_pessoa ? 'Com uma pessoa' : 'Agente atende, se houver', conversa.com_pessoa ? 'warning' : 'neutral'));
+   const passar = el('button', conversa.com_pessoa ? 'Devolver ao agente' : 'Assumir conversa', 'secondary'); passar.type = 'button';
+   passar.onclick = async () => { passar.disabled = true; try { await api(`/api/whatsapp/conversations/${conversa.number}/${conversa.com_pessoa ? 'devolver' : 'assumir'}${q()}`, 'POST', {}); await carregarConversa(aberta); } catch (e) { erroConversa = e.message; desenhar(); } };
+   atendimento.append(passar); topo.append(atendimento);
   }
+  const mensagens = el('div', undefined, 'wa-mensagens'); mensagens.setAttribute('role', 'log'); mensagens.setAttribute('aria-label', 'Mensagens da conversa');
+  const temMais = paginaAntiga < conversa.paginas;
+  if (temMais) {
+   const mais = el('button', carregandoAntigas ? 'Carregando…' : 'Ver mensagens mais antigas', 'quiet wa-mais-antigas'); mais.type = 'button'; mais.disabled = carregandoAntigas; mais.onclick = verMaisAntigas;
+   mensagens.append(mais);
+  } else if ([...antigas, ...conversa.mensagens].length) mensagens.append(el('p', 'Início da conversa.', 'wa-dia'));
+  let dia = '';
+  for (const m of [...antigas, ...conversa.mensagens]) {
+   const d = m.em ? diaDe(m.em) : '';
+   if (d && d !== dia) { dia = d; mensagens.append(el('p', d, 'wa-dia')); }
+   mensagens.append(bolha(m));
+  }
+  if (!conversa.mensagens.length && !antigas.length) mensagens.append(el('p', 'Nenhuma mensagem ainda nesta conversa.', 'email-empty'));
   const form = el('form', undefined, 'wa-resposta');
-  const texto = el('textarea'); texto.rows = 3; texto.maxLength = 4096; texto.disabled = conversa.bloqueado; texto.setAttribute('aria-label', 'Resposta');
-  texto.placeholder = conversa.bloqueado ? 'Este número pediu para não receber mensagens.' : 'Escreva a resposta';
-  const enviar = el('button', 'Enviar', 'primary'); enviar.type = 'submit'; enviar.disabled = conversa.bloqueado;
+  const podeResponder = Boolean(conversa.number) && !conversa.bloqueado;
+  const texto = el('textarea'); texto.rows = 3; texto.maxLength = 4096; texto.disabled = !podeResponder; texto.setAttribute('aria-label', 'Resposta'); texto.value = rascunho;
+  texto.placeholder = conversa.bloqueado ? 'Este número pediu para não receber mensagens.' : !conversa.number ? 'Este contato não mostra o telefone, então não dá para responder por aqui.' : 'Escreva a resposta';
+  texto.oninput = () => { rascunho = texto.value; };
+  const enviar = el('button', 'Enviar', 'primary'); enviar.type = 'submit'; enviar.disabled = !podeResponder;
   const ajuda = el('p', aviso || 'A resposta entra na fila e sai no ritmo do envio automático, se ele estiver ligado.', 'email-help'); aviso = '';
   form.append(texto, enviar, ajuda);
   form.onsubmit = async e => {
    e.preventDefault();
    if (!texto.value.trim()) return;
    enviar.disabled = true;
-   try { await api(`/api/whatsapp/conversations/${aberta}/responder`, 'POST', { text: texto.value, instance: instancia }); aviso = 'Resposta na fila.'; await abrir(aberta); }
+   try { await api(`/api/whatsapp/conversations/${conversa.number}/responder`, 'POST', { text: texto.value, instance: instancia }); aviso = 'Resposta na fila.'; rascunho = ''; ajuste = null; await carregarConversa(aberta); }
    catch (err) { ajuda.textContent = err.message; ajuda.classList.add('email-outbox-erro'); enviar.disabled = false; }
   };
   painel.append(topo, mensagens, form);
-  queueMicrotask(() => { mensagens.scrollTop = mensagens.scrollHeight; });
+  const plano = ajuste; ajuste = null;
+  queueMicrotask(() => { mensagens.scrollTop = plano?.fixarNoTopo != null ? mensagens.scrollHeight - plano.fixarNoTopo : plano?.perto === false ? plano.topo : mensagens.scrollHeight; });
   return painel;
  }
 
@@ -144,23 +185,45 @@ export function setupWhatsapp({ api, reportError }) {
   if (!conversas) { bloco.append(el('p', 'Carregando conversas…', 'email-empty')); return bloco; }
   if (!conversas.disponivel) {
    const v = el('div', undefined, 'email-empty');
-   v.append(createIcon('message-circle'), el('h2', 'Caixa de entrada'), el('p', conversas.falha || 'Disponível assim que a atualização do banco (migração 063) for aplicada.'));
+   v.append(createIcon('message-circle'), el('h2', 'Conversas'), el('p', conversas.falha || 'Não consegui ler as conversas da Evolution.'));
    bloco.append(v); return bloco;
   }
   const caixa = el('section', undefined, 'wa-caixa');
   const itens = el('div', undefined, 'wa-lista'); itens.setAttribute('role', 'list');
-  if (!conversas.conversas.length) itens.append(el('p', `Nenhuma resposta recebida em ${instancia} ainda. Quando um lead responder no WhatsApp, a conversa aparece aqui (o webhook da Evolution precisa apontar para o Core).`, 'email-empty'));
+  if (!conversas.conversas.length) itens.append(el('p', `Nenhuma conversa em ${instancia} ainda.`, 'email-empty'));
   for (const c of conversas.conversas) {
-   const b = el('button', undefined, 'wa-conversa' + (c.number === aberta ? ' active' : '')); b.type = 'button'; b.setAttribute('role', 'listitem');
-   const topo = el('span', undefined, 'wa-conversa-topo'); topo.append(el('strong', c.lead_name || c.name || c.number), el('small', quando(c.last_at)));
-   const base = el('span', undefined, 'wa-conversa-base'); base.append(el('span', cortar(c.last_text, 70)));
+   const b = el('button', undefined, 'wa-conversa' + (c.jid === aberta ? ' active' : '')); b.type = 'button'; b.setAttribute('role', 'listitem');
+   const avatar = el('span', undefined, 'wa-avatar'); avatar.setAttribute('aria-hidden', 'true');
+   if (c.foto) { const img = el('img'); img.src = c.foto; img.alt = ''; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer'; img.onerror = () => { img.remove(); avatar.textContent = inicial(c); }; avatar.append(img); } else avatar.textContent = inicial(c);
+   const topo = el('span', undefined, 'wa-conversa-topo'); topo.append(el('strong', nomeDe(c)), el('small', curto(c.last_at)));
+   const base = el('span', undefined, 'wa-conversa-base'); base.append(el('span', `${c.last_from_me ? 'Você: ' : ''}${cortar(c.last_text, 60)}`));
    if (c.unread) base.append(el('span', String(c.unread), 'wa-nao-lida'));
-   b.append(topo, base); b.onclick = () => abrir(c.number); itens.append(b);
+   const texto = el('span', undefined, 'wa-conversa-texto'); texto.append(topo, base);
+   b.append(avatar, texto); b.onclick = () => abrir(c.jid); itens.append(b);
   }
   caixa.append(itens, fio());
   bloco.append(caixa);
   return bloco;
  }
+
+ // Atualiza sozinho a cada 20 s enquanto a aba Conversas está à vista: sem webhook, é assim que o que chegou aparece.
+ // O rascunho, o foco e a posição de leitura sobrevivem ao redesenho.
+ async function atualizarConversas() {
+  if (aba !== 'conversas' || !instancia || !host() || (typeof document !== 'undefined' && document.hidden)) return;
+  const ticket = geracao;
+  try {
+   const r = await api('/api/whatsapp/chat/conversas' + q());
+   if (ticket !== geracao || aba !== 'conversas') return;
+   const caixa = host().querySelector('.wa-mensagens');
+   if (caixa) ajuste = { perto: caixa.scrollHeight - caixa.scrollTop - caixa.clientHeight < 80, topo: caixa.scrollTop };
+   const naCaixaDeTexto = document.activeElement?.tagName === 'TEXTAREA';
+   if (r.disponivel) conversas = r;
+   if (aberta) { const m = await api(`/api/whatsapp/chat/mensagens?jid=${encodeURIComponent(aberta)}${instancia ? `&instance=${encodeURIComponent(instancia)}` : ''}`); if (ticket === geracao && aba === 'conversas') conversa = m; }
+   desenhar();
+   if (naCaixaDeTexto) { const t = host()?.querySelector('.wa-resposta textarea'); if (t && !t.disabled) { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } }
+  } catch { /* sem rede por um instante: tenta de novo no próximo ciclo */ }
+ }
+ const iniciarAtualizacao = () => { relogio ??= setInterval(atualizarConversas, 20000); };
 
  // ---------- Atividade da fila ----------
  function atividade() {
@@ -244,5 +307,5 @@ export function setupWhatsapp({ api, reportError }) {
   root.append(painel);
  }
 
- return { load: carregar, clear() { geracao++; fila = null; lista = null; erro = ''; aviso = ''; conversas = null; aberta = null; conversa = null; erroConversa = ''; agentes = null; visao = null; host()?.replaceChildren(); } };
+ return { load: carregar, clear() { clearInterval(relogio); relogio = null; antigas = []; rascunho = ''; geracao++; fila = null; lista = null; erro = ''; aviso = ''; conversas = null; aberta = null; conversa = null; erroConversa = ''; agentes = null; visao = null; host()?.replaceChildren(); } };
 }
