@@ -1,5 +1,5 @@
 import { fail, onlyParams } from '../platform/http.mjs';
-import { createEvolutionAdapter } from '../integrations/evolution.mjs';
+import { createEvolutionAdapter, mensagensDaPessoa } from '../integrations/evolution.mjs';
 import { vivo } from '../platform/env-vivo.mjs';
 
 // Chat do WhatsApp lendo DIRETO da Evolution: a lista de conversas e o histórico, sem depender do webhook nem de a pessoa já ter
@@ -84,6 +84,23 @@ export function montarMensagem(r) {
 
 const ultimos8 = telefone => String(telefone).slice(-8);
 
+/**
+ * A mesma pessoa pode ter duas conversas na Evolution (telefone e @lid, ver `mensagensDaPessoa`). Junta as de mesmo telefone numa só, com o endereço
+ * do telefone, a última mensagem mais recente e as não lidas somadas. Conversa sem telefone conhecido segue sozinha.
+ */
+export function juntarConversas(conversas) {
+ const porNumero = new Map(), saida = [];
+ for (const c of conversas) {
+  if (!c.number) { saida.push(c); continue; }
+  const antes = porNumero.get(c.number);
+  if (!antes) { const nova = { ...c, jid: `${c.number}@s.whatsapp.net` }; porNumero.set(c.number, nova); saida.push(nova); continue; }
+  const maisNova = String(c.last_at ?? '') > String(antes.last_at ?? '');
+  Object.assign(antes, maisNova ? { last_at: c.last_at, last_text: c.last_text, last_from_me: c.last_from_me } : {},
+   { name: antes.name ?? c.name, foto: antes.foto ?? c.foto, lead_id: antes.lead_id ?? c.lead_id, lead_name: antes.lead_name ?? c.lead_name, unread: antes.unread + c.unread });
+ }
+ return saida;
+}
+
 export function whatsappChatRoutes(router, { env = vivo.env, criarAdaptador = createEvolutionAdapter } = {}) {
  const padrao = () => String(env.EVOLUTION_INSTANCE ?? '').trim();
  const instanciaDe = valor => { const v = valor == null || valor === '' ? padrao() : String(valor); if (!INSTANCIA.test(v)) throw fail(400, 'Instância inválida.'); return v; };
@@ -117,7 +134,7 @@ export function whatsappChatRoutes(router, { env = vivo.env, criarAdaptador = cr
   const doChat = r.chats.filter(c => ehConversaDePessoa(c.remoteJid)).slice(0, limite);
   const telefones = doChat.map(c => telefoneDaConversa(c.remoteJid, c.lastMessage?.key?.remoteJidAlt));
   const leads = await leadsPorTelefone(pool, telefones);
-  const conversas = doChat.map((c, i) => montarConversa(c, telefones[i] ? leads.get(ultimos8(telefones[i])) : null))
+  const conversas = juntarConversas(doChat.map((c, i) => montarConversa(c, telefones[i] ? leads.get(ultimos8(telefones[i])) : null)))
    .sort((a, b) => String(b.last_at ?? '').localeCompare(String(a.last_at ?? '')));
   reply(200, { disponivel: true, instancia, conversas, nao_lidas: conversas.reduce((n, c) => n + c.unread, 0) });
  }, { body: false });
@@ -133,8 +150,12 @@ export function whatsappChatRoutes(router, { env = vivo.env, criarAdaptador = cr
   if (!Number.isInteger(pagina) || pagina < 1 || pagina > 10000) throw fail(400, 'Página inválida.');
   const adaptador = criarAdaptador({ env, instance: instancia });
   if (!adaptador.configured) throw fail(409, 'A Evolution não está configurada.');
-  const r = await adaptador.findMessages({ where: { key: { remoteJid: jid } }, page: pagina, offset: TAMANHO_DA_PAGINA });
+  const telefoneDoJid = telefoneDaConversa(jid, null);
+  let r = await mensagensDaPessoa(adaptador, { telefone: telefoneDoJid, jid, page: pagina, offset: TAMANHO_DA_PAGINA });
   if (!r.ok) throw fail(502, motivo(r));
+  // Conversa aberta pelo @lid: se ele aponta para um telefone, passa a ler a pessoa inteira.
+  const altDoLid = !telefoneDoJid && r.messages.map(m => telefoneDaConversa(jid, m.key?.remoteJidAlt)).find(Boolean);
+  if (altDoLid) { const todas = await mensagensDaPessoa(adaptador, { telefone: altDoLid, page: pagina, offset: TAMANHO_DA_PAGINA }); if (todas.ok) r = todas; }
   const mensagens = r.messages.map(montarMensagem).filter(Boolean).reverse();
   const alt = r.messages.map(m => m.key?.remoteJidAlt).find(Boolean);
   const numero = telefoneDaConversa(jid, alt);

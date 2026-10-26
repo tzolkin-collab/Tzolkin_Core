@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { descreverMensagem, telefoneDaConversa, ehConversaDePessoa, montarConversa, montarMensagem, whatsappChatRoutes } from '../../apps/api/src/modules/whatsapp-chat.mjs';
+import { descreverMensagem, telefoneDaConversa, ehConversaDePessoa, montarConversa, montarMensagem, juntarConversas, whatsappChatRoutes } from '../../apps/api/src/modules/whatsapp-chat.mjs';
 
 const PESSOA = '5531997599216@s.whatsapp.net';
 const LID = '123456789012345@lid';
@@ -88,7 +88,7 @@ test('rota de conversas: só pessoas, da mais recente para a mais antiga, com le
   linhas: { leads: [{ k: '97599216', id: 'lead-1', name: 'Marina Duarte' }] } });
  const { status, dados } = await x.chamar('/api/whatsapp/chat/conversas');
  assert.equal(status, 200);
- assert.deepEqual(dados.conversas.map(c => [c.jid, c.number, c.lead_name]), [[LID, '5511988887777', null], [PESSOA, '5531997599216', 'Marina Duarte']]);
+ assert.deepEqual(dados.conversas.map(c => [c.jid, c.number, c.lead_name]), [['5511988887777@s.whatsapp.net', '5511988887777', null], [PESSOA, '5531997599216', 'Marina Duarte']]);
  assert.equal(dados.instancia, 'teste');
  assert.deepEqual(x.chamadas[0], { f: 'findChats', instance: 'teste', q: { take: 120 } }, 'pede a mais para compensar os grupos');
  assert.deepEqual(x.sql[0].p[0].sort(), ['88887777', '97599216'], 'o vínculo com o lead usa os últimos 8 dígitos');
@@ -113,7 +113,7 @@ test('rota de mensagens: cada página sai da mais antiga para a mais nova; a Evo
  const { dados } = await x.chamar('/api/whatsapp/chat/mensagens', `?jid=${encodeURIComponent(PESSOA)}&pagina=2`);
  assert.deepEqual(dados.mensagens.map(m => m.texto), ['primeira', 'segunda', 'terceira']);
  assert.deepEqual(dados.mensagens.map(m => m.direcao), ['in', 'out', 'in']);
- assert.deepEqual({ p: dados.pagina, ps: dados.paginas, t: dados.total, mais: dados.tem_mais_antigas }, { p: 2, ps: 3, t: 90, mais: true });
+ assert.deepEqual({ p: dados.pagina, ps: dados.paginas, t: dados.total, mais: dados.tem_mais_antigas }, { p: 2, ps: 3, t: 180, mais: true });
  assert.deepEqual(x.chamadas[0], { f: 'findMessages', instance: 'teste', q: { where: { key: { remoteJid: PESSOA } }, page: 2, offset: 40 } });
  assert.equal(dados.number, '5531997599216');
 });
@@ -156,4 +156,31 @@ test('o chat só lê: nenhuma consulta de escrita no banco', async () => {
  await x.chamar('/api/whatsapp/chat/conversas');
  await x.chamar('/api/whatsapp/chat/mensagens', `?jid=${encodeURIComponent(PESSOA)}`);
  for (const q of x.sql) assert.equal(/\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE)\b/i.test(q.texto), false);
+});
+
+test('juntarConversas: telefone e @lid da mesma pessoa viram uma conversa só, com a última mensagem mais recente e as não lidas somadas', () => {
+ const ts = 1793000000;
+ const tel = montarConversa({ remoteJid: PESSOA, unreadCount: 0, lastMessage: { key: { fromMe: true, remoteJid: PESSOA }, message: { conversation: 'Oi, tudo bem?' }, messageTimestamp: ts } });
+ const lid = montarConversa({ remoteJid: LID, unreadCount: 2, pushName: 'Marina', lastMessage: { key: { fromMe: false, remoteJid: LID, remoteJidAlt: PESSOA }, message: { conversation: 'quero saber o preço' }, messageTimestamp: ts + 60 } });
+ const sozinha = montarConversa({ remoteJid: '999@lid', lastMessage: { key: { fromMe: false, remoteJid: '999@lid' }, message: { conversation: 'oi' }, messageTimestamp: ts } });
+ const r = juntarConversas([tel, lid, sozinha]);
+ assert.equal(r.length, 2);
+ assert.deepEqual([r[0].jid, r[0].number, r[0].last_text, r[0].last_from_me, r[0].unread, r[0].name], [PESSOA, '5531997599216', 'quero saber o preço', false, 2, 'Marina']);
+ assert.equal(r[1].jid, '999@lid', 'sem telefone não dá para juntar');
+});
+
+test('rota de mensagens: busca a pessoa pelo telefone E pelo remoteJidAlt e junta os dois lados em ordem (o que enviamos fica no telefone, a resposta no @lid)', async () => {
+ const enviada = { ...registro('s1', true, 'Oi, tudo bem?', 100), key: { id: 's1', fromMe: true, remoteJid: PESSOA } };
+ const resposta = { ...registro('r1', false, 'quero saber o preço', 160), key: { id: 'r1', fromMe: false, remoteJid: LID, remoteJidAlt: PESSOA } };
+ const chamadas = [];
+ const criarAdaptador = () => ({ configured: true, async findMessages(q) {
+  chamadas.push(q.where.key);
+  const m = q.where.key.remoteJid ? [enviada] : [resposta];
+  return { ok: true, total: m.length, pages: 1, page: 1, messages: m };
+ } });
+ const rotas = new Map(); const router = { get: (c, h) => rotas.set('GET ' + c, h) };
+ whatsappChatRoutes(router, { env: { EVOLUTION_INSTANCE: 'teste' }, criarAdaptador });
+ let saida; await rotas.get('GET /api/whatsapp/chat/mensagens')({ pool: { async query() { return { rows: [] }; } }, url: new URL('http://x/?jid=' + encodeURIComponent(PESSOA)), reply: (_s, d) => { saida = d; } });
+ assert.deepEqual(chamadas, [{ remoteJid: PESSOA }, { remoteJidAlt: PESSOA }]);
+ assert.deepEqual(saida.mensagens.map(m => [m.texto, m.direcao]), [['Oi, tudo bem?', 'out'], ['quero saber o preço', 'in']]);
 });

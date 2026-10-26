@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { fail, isUuid } from '../platform/http.mjs';
 import { commercialPermission } from './commercial-keys.mjs';
-import { createEvolutionAdapter } from '../integrations/evolution.mjs';
+import { createEvolutionAdapter, mensagensDaPessoa } from '../integrations/evolution.mjs';
 import { enfileirar, carregarLead } from '../platform/whatsapp-saida.mjs';
 import { emitEvent, EVENTS } from '../platform/automations.mjs';
 import { vivo } from '../platform/env-vivo.mjs';
@@ -40,7 +40,7 @@ async function respondeu(db, run, { env, criarAdaptador }) {
  } catch (e) { if (e?.code !== '42P01' && e?.code !== '42703') throw e; }
  const ad = criarAdaptador({ env, instance: run.instance || String(env.EVOLUTION_INSTANCE ?? '').trim() });
  if (!ad.configured) return false;
- const r = await ad.findMessages({ where: { key: { remoteJid: `${run.number}@s.whatsapp.net` } }, page: 1, offset: 20 });
+ const r = await mensagensDaPessoa(ad, { telefone: run.number, page: 1, offset: 20 });
  return r.ok && r.messages.some(m => !m.fromMe && m.timestamp && m.timestamp * 1000 > desde);
 }
 

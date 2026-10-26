@@ -358,3 +358,20 @@ export function createEvolutionAdapter({ env = process.env, fetchImpl = fetch, i
   },
  };
 }
+
+/**
+ * As mensagens de UMA PESSOA. O WhatsApp pode guardar a mesma pessoa em dois endereços: o que enviamos fica em `<telefone>@s.whatsapp.net` e o que
+ * ela responde em `<id>@lid`, ligado ao telefone por `key.remoteJidAlt`. Ler só o telefone mostra a conversa de um lado só (e um fluxo nunca
+ * perceberia a resposta). Com o telefone, busca pelos dois endereços e junta, da mais nova para a mais antiga. Sem telefone, só pelo `jid`.
+ * A busca principal decide o erro; a pelo `remoteJidAlt` que falha é ignorada.
+ */
+export async function mensagensDaPessoa(adaptador, { telefone = null, jid = null, page = 1, offset = 40 }) {
+ const chaves = telefone ? [{ remoteJid: `${telefone}@s.whatsapp.net` }, { remoteJidAlt: `${telefone}@s.whatsapp.net` }] : [{ remoteJid: jid }];
+ const rs = await Promise.all(chaves.map(key => adaptador.findMessages({ where: { key }, page, offset })));
+ if (!rs[0].ok) return rs[0];
+ const vistas = new Set(), messages = [];
+ for (const r of rs.filter(x => x.ok)) for (const m of r.messages) { const k = m.id ?? m.key?.id; if (k && vistas.has(k)) continue; if (k) vistas.add(k); messages.push(m); }
+ messages.sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
+ const oks = rs.filter(x => x.ok);
+ return { ok: true, total: oks.reduce((n, r) => n + r.total, 0), pages: Math.max(...oks.map(r => r.pages)), page, messages };
+}
