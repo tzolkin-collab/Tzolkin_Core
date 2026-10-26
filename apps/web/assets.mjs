@@ -52,6 +52,7 @@ const FILES = {
  '/whatsapp.js': ['whatsapp.js', 'text/javascript'],
  '/whatsapp-agentes.js': ['whatsapp-agentes.js', 'text/javascript'],
  '/whatsapp-visao.js': ['whatsapp-visao.js', 'text/javascript'],
+ '/whatsapp-fluxos.js': ['whatsapp-fluxos.js', 'text/javascript'],
  '/crm-pagamentos.js': ['crm-pagamentos.js', 'text/javascript'],
  '/crm-pagamentos.css': ['crm-pagamentos.css', 'text/css'],
  '/fluxo.js': ['fluxo.js', 'text/javascript'],

@@ -1,6 +1,7 @@
 import { fail, input, isUuid, isProductId, text } from './http.mjs';
 import { enfileirarParaLead } from './email-saida.mjs';
 import { enfileirarParaLead as whatsappParaLead, enfileirarParaEquipe as whatsappParaEquipe, variaveisInvalidas } from './whatsapp-saida.mjs';
+import { iniciarFluxo, dadosDoLead, validarDados } from './fluxos.mjs';
 
 // Eventos e automações (fase 5). Regras puras: o catálogo de eventos e de ações, a validação das ações e o
 // motor `emitEvent`, que roda as automações ligadas a um evento dentro da transação de quem emitiu.
@@ -19,6 +20,8 @@ export const EVENTS = Object.freeze({
  'oportunidade.ganha': 'Oportunidade ganha',
  'oportunidade.perdida': 'Oportunidade perdida',
  'contratacao.criada': 'Contratação criada',
+ 'fluxo.respondeu': 'Pessoa respondeu a um fluxo de WhatsApp',
+ 'fluxo.sem_resposta': 'Fluxo de WhatsApp acabou sem resposta',
 });
 
 export const ACTIONS = Object.freeze({
@@ -27,9 +30,10 @@ export const ACTIONS = Object.freeze({
  'email.enviar': 'Enviar e-mail ao lead',
  'whatsapp.enviar': 'Enviar WhatsApp ao lead',
  'whatsapp.avisar_equipe': 'Avisar a equipe no WhatsApp',
+ 'fluxo.iniciar': 'Iniciar fluxo de WhatsApp',
 });
 // Eventos em que existe um lead com e-mail para receber a mensagem.
-export const EVENTOS_COM_LEAD = Object.freeze(['lead.criado', 'lead.mudou_de_etapa', 'lead.qualificado', 'lead.descartado', 'lead.restaurado']);
+export const EVENTOS_COM_LEAD = Object.freeze(['lead.criado', 'lead.mudou_de_etapa', 'lead.qualificado', 'lead.descartado', 'lead.restaurado', 'fluxo.respondeu', 'fluxo.sem_resposta']);
 export const MAX_ACTIONS = 5;
 
 /**
@@ -58,6 +62,11 @@ export function validateActions(actions) {
    if (ruins.length) throw fail(400, `Variável desconhecida na mensagem: ${ruins.map(v => `{{${v}}}`).join(', ')}.`);
    return { action: a.action, message };
   }
+  if (a.action === 'fluxo.iniciar') {
+   input(a, ['action', 'flow_id', 'dados']);
+   if (!isUuid(a.flow_id)) throw fail(400, 'Escolha o fluxo.');
+   return { action: 'fluxo.iniciar', flow_id: a.flow_id, dados: validarDados(a.dados) };
+  }
   if (a.action === 'responsavel.atribuir') {
    input(a, ['action', 'owner_id']);
    if (!isUuid(a.owner_id)) throw fail(400, 'Escolha o responsável.');
@@ -79,6 +88,12 @@ async function runAction(client, action, ctx, automationId, event) {
    `INSERT INTO commercial_tasks(tenant_id,lead_id,opportunity_id,title,tag,due_at,source,automation_id) VALUES($1,$2,$3,$4,$5,$6,'automacao',$7)`,
    [ctx.tenantId, ctx.leadId ?? null, ctx.opportunityId ?? null, action.title, action.tag, due, automationId]);
   return `Tarefa "${action.title}" criada${due ? ` (prazo em ${action.delay_days} dias)` : ''}`;
+ }
+ if (action.action === 'fluxo.iniciar') {
+  if (!ctx.leadId) throw new Error('Iniciar fluxo só funciona em evento de lead.');
+  // Não envia nada aqui: grava a execução na MESMA transação do evento, com os dados do lead e os que a automação definiu. Quem anda o fluxo é o consumidor.
+  const dados = { ...(await dadosDoLead(client, ctx.leadId)), ...(action.dados ?? {}) };
+  return iniciarFluxo(client, { flowId: action.flow_id, spaceId: ctx.spaceId, leadId: ctx.leadId, automationId, evento: event, dados });
  }
  if (action.action === 'responsavel.atribuir') {
   if (!(await ownerAtivo(client, action.owner_id))) throw new Error('O responsável escolhido não está mais ativo.');

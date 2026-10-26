@@ -16,7 +16,7 @@ function listaDe(form, rotulo, pares, valor) { const l = node('label', rotulo), 
 function mostrarErro(alvo, e) { alvo.querySelector('[data-erro]')?.remove(); const p = node('p', e.message, 'notice-inline'); p.setAttribute('role', 'alert'); p.dataset.erro = '1'; alvo.prepend(p); }
 
 export function setupAutomacoes({ api, reportError, hostId = 'view-automacoes', prefixo = 'automacoes', painelInicial = 'automacoes' }) {
- let geracao = 0, aba = painelInicial, espacoFixo = '', espaco = '', funis = [], funilId = '', donos = null, catalogo = null;
+ let geracao = 0, aba = painelInicial, espacoFixo = '', espaco = '', funis = [], funilId = '', donos = null, catalogo = null, fluxosDoEspaco = [], todosOsFluxos = [];
  let formAberto = false, selecionada = null;
 
  const funisDoEspaco = () => funis.filter(f => f.space_id === espaco);
@@ -66,12 +66,15 @@ export function setupAutomacoes({ api, reportError, hostId = 'view-automacoes', 
   if (x.action === 'email.enviar') return `enviar o e-mail "${x.template}" ao lead`;
   if (x.action === 'whatsapp.enviar') return `enviar WhatsApp ao lead: "${x.message.length > 50 ? `${x.message.slice(0, 47)}…` : x.message}"`;
   if (x.action === 'whatsapp.avisar_equipe') return 'avisar a equipe no WhatsApp';
+  if (x.action === 'fluxo.iniciar') return `iniciar o fluxo "${todosOsFluxos.find(f => f.id === x.flow_id)?.name || 'de WhatsApp'}"`;
   return `atribuir a ${donos?.find(d => d.id === x.owner_id)?.name || 'um responsável'}`;
  }
 
  async function abaAutomacoes(corpo) {
   const { automations, catalog } = await api('/api/commercial/automations?space_id=' + encodeURIComponent(espaco));
   catalogo = catalog;
+  todosOsFluxos = ((await api('/api/whatsapp/fluxos').catch(() => ({ fluxos: [] }))).fluxos || []);
+  fluxosDoEspaco = todosOsFluxos.filter(f => f.space_id === espaco && f.status !== 'arquivado');
   const ativos = funisDoEspaco().filter(f => f.is_active);
   const nomeFunil = id => ativos.find(f => f.id === id)?.name || 'funil arquivado';
   const nomeEtapa = id => ativos.flatMap(f => f.stages).find(s => s.id === id)?.name || 'etapa';
@@ -127,6 +130,9 @@ export function setupAutomacoes({ api, reportError, hostId = 'view-automacoes', 
   const dono = listaDe(form, 'Responsável', (donos || []).map(o => [o.id, o.name || o.email]));
   const mensagem = node('label', 'Mensagem do WhatsApp'), texto = node('textarea'); texto.rows = 4; texto.maxLength = 1000; texto.placeholder = 'Oi {{first_name}}, recebemos seu contato na {{product_name}}. Já já falamos com você!';
   mensagem.append(texto, node('small', 'Dados do lead: {{name}}, {{first_name}}, {{email}}, {{whatsapp}}, {{company_name}}, {{product_name}}. "Enviar ao lead" precisa de um WhatsApp válido no lead; "Avisar a equipe" usa os números de Integrações → WhatsApp.', 'detail')); form.append(mensagem);
+  const fluxo = listaDe(form, 'Fluxo de WhatsApp', fluxosDoEspaco.map(f => [f.id, `${f.name} (${f.status === 'ativo' ? 'ativo' : f.status === 'teste' ? 'em teste' : 'rascunho'})`]));
+  const dadosDoFluxo = node('label', 'Dados para o fluxo (opcional)'), dadosTxt = node('textarea'); dadosTxt.rows = 3; dadosTxt.maxLength = 1200; dadosTxt.placeholder = 'foco=Lançamento';
+  dadosDoFluxo.append(dadosTxt, node('small', fluxosDoEspaco.length ? 'Um por linha, no formato nome=valor. O fluxo usa {{dados.nome}} no texto. Já vão sempre {{dados.interesse}} e {{dados.mensagem_do_lead}}.' : 'Este espaço ainda não tem fluxo. Crie em WhatsApp → Fluxos.', 'detail')); form.append(dadosDoFluxo);
   const modelo = listaDe(form, 'Template do e-mail', []);
   const ajudaModelo = node('small', undefined, 'detail'); modelo.l.append(ajudaModelo);
   const carregarModelos = async () => {
@@ -137,8 +143,8 @@ export function setupAutomacoes({ api, reportError, hostId = 'view-automacoes', 
    } catch (e) { ajudaModelo.textContent = e.message; }
   };
   const mostra = () => {
-   const tarefa = acao.value === 'tarefa.criar', email = acao.value === 'email.enviar', zap = acao.value.startsWith('whatsapp.');
-   titulo.parentElement.hidden = prazo.parentElement.hidden = !tarefa; dono.l.hidden = tarefa || email || zap; modelo.l.hidden = !email; mensagem.hidden = !zap;
+   const tarefa = acao.value === 'tarefa.criar', email = acao.value === 'email.enviar', zap = acao.value.startsWith('whatsapp.'), iniciar = acao.value === 'fluxo.iniciar';
+   titulo.parentElement.hidden = prazo.parentElement.hidden = !tarefa; dono.l.hidden = tarefa || email || zap || iniciar; modelo.l.hidden = !email; mensagem.hidden = !zap; fluxo.l.hidden = dadosDoFluxo.hidden = !iniciar;
    if (email && !modelo.s.options.length) carregarModelos();
   };
   acao.onchange = mostra; mostra();
@@ -149,6 +155,7 @@ export function setupAutomacoes({ api, reportError, hostId = 'view-automacoes', 
     const corpoDaAcao = acao.value === 'tarefa.criar' ? { action: 'tarefa.criar', title: titulo.value, delay_days: Number(prazo.value || 0) }
      : acao.value === 'email.enviar' ? { action: 'email.enviar', template: modelo.s.value }
      : acao.value.startsWith('whatsapp.') ? { action: acao.value, message: texto.value }
+     : acao.value === 'fluxo.iniciar' ? { action: 'fluxo.iniciar', flow_id: fluxo.s.value, dados: Object.fromEntries(dadosTxt.value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const i = l.indexOf('='); return i < 0 ? [l, ''] : [l.slice(0, i).trim(), l.slice(i + 1).trim()]; })) }
      : { action: 'responsavel.atribuir', owner_id: dono.s.value };
     await api('/api/commercial/automations', 'POST', { space_id: espaco, name: nome.value, trigger_event: evento.value, ...(funil.value ? { pipeline_id: funil.value } : {}), ...(etapa.s.value ? { stage_id: etapa.s.value } : {}), actions: [corpoDaAcao] });
     formAberto = false; desenhar();

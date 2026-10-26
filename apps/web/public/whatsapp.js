@@ -3,6 +3,7 @@ import { selo } from './data-table.js';
 import { mountTabs } from './tabs.js';
 import { painelDeAgentes } from './whatsapp-agentes.js';
 import { painelDeVisao } from './whatsapp-visao.js';
+import { painelDeFluxos } from './whatsapp-fluxos.js';
 
 // Tela "WhatsApp": a visão geral (saúde e resultado de cada instância), as conversas de cada uma (o que os leads responderam), a atividade da fila (o que está
 // esperando, o que saiu, o que falhou) e os agentes de IA. As mensagens saem pelas automações do funil ou pela resposta manual de uma
@@ -20,7 +21,7 @@ const ESTADOS = { open: ['Conectada', 'success'], connecting: ['Conectando', 'wa
 export function setupWhatsapp({ api, reportError }) {
  // aviso: a frase do que a pessoa acabou de fazer, que sobrevive ao redesenho
  let geracao = 0, fila = null, lista = null, erro = '', aviso = '';
- let aba = 'visao', instancia = guardado(), conversas = null, aberta = null, conversa = null, erroConversa = '', agentes = null, visao = null;
+ let aba = 'visao', instancia = guardado(), conversas = null, aberta = null, conversa = null, erroConversa = '', agentes = null, visao = null, fluxos = null;
  let antigas = [], paginaAntiga = 1, carregandoAntigas = false, rascunho = '', relogio = null, ajuste = null;
  const host = () => document.getElementById('view-whatsapp');
  const q = () => (instancia ? `?instance=${encodeURIComponent(instancia)}` : '');
@@ -280,6 +281,11 @@ export function setupWhatsapp({ api, reportError }) {
   return agentes;
  }
 
+ function painelFluxos() {
+  fluxos ??= painelDeFluxos({ api, instancias: lista?.instancias || [], reportError });
+  return fluxos;
+ }
+
  function painelVisao() {
   visao ??= painelDeVisao({
    api, reportError, padrao: () => lista?.padrao || '',
@@ -299,13 +305,13 @@ export function setupWhatsapp({ api, reportError }) {
   const naoLidas = conversas?.nao_lidas;
   mountTabs({
    host: abas, active: aba, label: 'Seções do WhatsApp', prefix: 'whatsapp',
-   tabs: [{ key: 'visao', label: 'Visão geral' }, { key: 'conversas', label: 'Conversas', count: Number.isFinite(naoLidas) && naoLidas > 0 ? naoLidas : undefined }, { key: 'atividade', label: 'Atividade' }, { key: 'agentes', label: 'Agentes de IA' }],
-   onChange: key => { aba = key; if (key === 'atividade') { fila = null; carregarDaInstancia(); } if (key === 'visao') visao?.recarregar(); desenhar(); },
+   tabs: [{ key: 'visao', label: 'Visão geral' }, { key: 'conversas', label: 'Conversas', count: Number.isFinite(naoLidas) && naoLidas > 0 ? naoLidas : undefined }, { key: 'fluxos', label: 'Fluxos' }, { key: 'atividade', label: 'Atividade' }, { key: 'agentes', label: 'Agentes de IA' }],
+   onChange: key => { aba = key; if (key === 'atividade') { fila = null; carregarDaInstancia(); } if (key === 'visao') visao?.recarregar(); if (key === 'fluxos') fluxos?.recarregar(); desenhar(); },
   });
-  const painel = aba === 'visao' ? painelVisao() : aba === 'conversas' ? painelConversas() : aba === 'atividade' ? painelAtividade() : painelAgentes();
+  const painel = aba === 'visao' ? painelVisao() : aba === 'conversas' ? painelConversas() : aba === 'fluxos' ? painelFluxos() : aba === 'atividade' ? painelAtividade() : painelAgentes();
   painel.id = `whatsapp-panel-${aba}`; painel.setAttribute('role', 'tabpanel'); painel.setAttribute('aria-labelledby', `whatsapp-tab-${aba}`);
   root.append(painel);
  }
 
- return { load: carregar, clear() { clearInterval(relogio); relogio = null; antigas = []; rascunho = ''; geracao++; fila = null; lista = null; erro = ''; aviso = ''; conversas = null; aberta = null; conversa = null; erroConversa = ''; agentes = null; visao = null; host()?.replaceChildren(); } };
+ return { load: carregar, clear() { clearInterval(relogio); relogio = null; antigas = []; rascunho = ''; geracao++; fila = null; lista = null; erro = ''; aviso = ''; conversas = null; aberta = null; conversa = null; erroConversa = ''; agentes = null; visao = null; fluxos = null; host()?.replaceChildren(); } };
 }

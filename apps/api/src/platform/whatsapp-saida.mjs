@@ -25,7 +25,7 @@ export async function enfileirar(client, i) {
  return { criado: r.rows.length > 0, id: r.rows[0]?.id ?? null };
 }
 
-async function carregarLead(client, spaceId, leadId) {
+export async function carregarLead(client, spaceId, leadId) {
  const lead = (await client.query(
   `SELECT l.email, l.whatsapp, s.name AS lead_name, s.phone, t.name AS company, p.name AS product
      FROM commercial_leads l LEFT JOIN stakeholders s ON s.id=l.stakeholder_id JOIN tenants t ON t.id=l.tenant_id JOIN products p ON p.id=$2

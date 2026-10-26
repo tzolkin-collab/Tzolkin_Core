@@ -197,3 +197,18 @@ Ainda abertas:
 ## 8. Fora do escopo desta fase
 
 Envio em massa, campanhas, WhatsApp Business oficial (Meta Cloud API), chamadas, grupos, e agente de voz. Os passos de grupo e etiqueta da Evolution ficam para depois dos épicos acima.
+
+## 9. Estado da entrega (2026-10-26)
+
+| Épico | Estado |
+|---|---|
+| F1 Adaptador completo | **Feito.** Corpos conferidos na Evolution 2.3.7 real; achados: `setWebhook` exige o corpo aninhado em `webhook`, `findMessages` pagina por `page`/`offset` e o horário vem de `messageTimestamp`. |
+| F2 Instâncias e saúde | **Metade feita:** aba Visão geral (todas as instâncias, estado, webhook, última mensagem, fila, resultado básico). Falta criar, parear por QR, reiniciar e apagar pela tela. |
+| F4 Chat | **Feito em versão 1:** conversas e histórico direto da Evolution (sem webhook), paginado, com atualização a cada 20 s. Falta enviar e receber mídia, arquivar e marcar como lida. |
+| F6 Automações ampliadas | **Parcial:** ação "Iniciar fluxo de WhatsApp" (com dados), eventos `fluxo.respondeu` e `fluxo.sem_resposta`. Faltam gatilhos de tarefa, webhook externo e encadeamento com proteção de ciclo. |
+| F7 Base de fluxos | **Feito em versão 1 (migração 070):** passos de mensagem e espera, espera durável, parar quando a pessoa responde (banco ou Evolution), janela final de 24 h, modo de teste, início manual para um número, execuções com log, formulário na aba Fluxos. |
+| F8 Condições e gatilhos de WhatsApp | Não começou (condição, ramo, palavra-chave, `sem_resposta` por tempo). |
+| F9 Editor visual | Não começou (hoje o fluxo é por formulário, como decidido). |
+| F3, F5, R1 a R5 | Não começaram. |
+
+A migração 070 **não está aplicada em produção**: sem ela a aba Fluxos avisa e a ação "Iniciar fluxo" falha com mensagem clara. Fluxo ativo envia pela fila de WhatsApp, então só envia de verdade com `WHATSAPP_ENVIO` ligado.

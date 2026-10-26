@@ -43,11 +43,11 @@ test('o editor e o modelo falam das mesmas variáveis', () => {
 
 // ---------- ação da automação ----------
 test('ação "Enviar e-mail": entra no catálogo, só valida com template e só vale em evento de lead', () => {
- assert.deepEqual(Object.keys(ACTIONS), ['tarefa.criar', 'responsavel.atribuir', 'email.enviar', 'whatsapp.enviar', 'whatsapp.avisar_equipe']);
+ assert.deepEqual(Object.keys(ACTIONS), ['tarefa.criar', 'responsavel.atribuir', 'email.enviar', 'whatsapp.enviar', 'whatsapp.avisar_equipe', 'fluxo.iniciar']);
  assert.deepEqual(validateActions([{ action: 'email.enviar', template: 'boas-vindas' }]), [{ action: 'email.enviar', template: 'boas-vindas' }]);
  const falha = a => assert.throws(() => validateActions([a]), e => e.status === 400);
  falha({ action: 'email.enviar' }); falha({ action: 'email.enviar', template: 'Com Espaço' }); falha({ action: 'email.enviar', template: 'ok', para: 'x@y.co' });
- assert.deepEqual([...EVENTOS_COM_LEAD], ['lead.criado', 'lead.mudou_de_etapa', 'lead.qualificado', 'lead.descartado', 'lead.restaurado']);
+ assert.deepEqual([...EVENTOS_COM_LEAD], ['lead.criado', 'lead.mudou_de_etapa', 'lead.qualificado', 'lead.descartado', 'lead.restaurado', 'fluxo.respondeu', 'fluxo.sem_resposta']);
  for (const e of EVENTOS_COM_LEAD) assert.ok(e in EVENTS);
 });
 

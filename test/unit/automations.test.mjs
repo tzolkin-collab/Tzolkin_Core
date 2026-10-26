@@ -5,12 +5,12 @@ import { ACTIONS, EVENTS, emitEvent, validateActions } from '../../apps/api/src/
 const OWNER = '11111111-1111-4111-8111-111111111111';
 const TENANT = '22222222-2222-4222-8222-222222222222';
 
-test('catálogo: dez eventos e cinco ações, e os nomes batem com o CHECK da migração 044', async () => {
- assert.equal(Object.keys(EVENTS).length, 10);
- assert.deepEqual(Object.keys(ACTIONS), ['tarefa.criar', 'responsavel.atribuir', 'email.enviar', 'whatsapp.enviar', 'whatsapp.avisar_equipe']);
+test('catálogo: doze eventos e seis ações, e os nomes batem com o CHECK do banco (migração 070, que ampliou a 044)', async () => {
+ assert.equal(Object.keys(EVENTS).length, 12);
+ assert.deepEqual(Object.keys(ACTIONS), ['tarefa.criar', 'responsavel.atribuir', 'email.enviar', 'whatsapp.enviar', 'whatsapp.avisar_equipe', 'fluxo.iniciar']);
  const { readFileSync } = await import('node:fs');
- const sql = readFileSync(new URL('../../db/migrations/044_eventos_e_automacoes.sql', import.meta.url), 'utf8');
- const bloco = sql.slice(sql.indexOf('trigger_event text NOT NULL CHECK'), sql.indexOf('actions jsonb'));
+ const sql = readFileSync(new URL('../../db/migrations/070_fluxos_de_whatsapp.sql', import.meta.url), 'utf8');
+ const bloco = sql.slice(sql.indexOf('ADD CONSTRAINT automations_trigger_event_check'));
  const noBanco = [...bloco.matchAll(/'([a-z_.]+)'/g)].map(m => m[1]);
  assert.deepEqual(noBanco.sort(), Object.keys(EVENTS).sort(), 'o catálogo do código e o CHECK do banco precisam ser a mesma lista');
 });
