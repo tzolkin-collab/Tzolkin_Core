@@ -80,6 +80,16 @@ const consultaValida = ({ where, orderBy, take = 50, skip = 0 } = {}) => {
  return { ...(where ? { where } : {}), ...(orderBy ? { orderBy } : {}), take, skip };
 };
 
+/** Quem enviou: na 2.3.7 a mensagem NOSSA vem marcada em `key.fromMe` e o registro não tem `fromMe` (ler o campo de cima dava tudo como "dela"). */
+
+/** Situação de entrega de uma mensagem nossa: a Evolution não manda `status` no registro, manda a lista `MessageUpdate`; vale a mais avançada. */
+const ORDEM_DO_STATUS = ['PENDING', 'SERVER_ACK', 'DELIVERY_ACK', 'READ', 'PLAYED'];
+const statusDe = x => {
+ const lista = Array.isArray(x.MessageUpdate) ? x.MessageUpdate.map(u => u?.status) : [];
+ const todos = [x.status, ...lista].filter(s => typeof s === 'string' && s);
+ return todos.sort((a, b) => ORDEM_DO_STATUS.indexOf(b) - ORDEM_DO_STATUS.indexOf(a))[0] ?? null;
+};
+
 /** Consulta de histórico: `where`/`orderBy` com limite de tamanho, `page` de 1 a 10000 e `offset` (tamanho da página) de 1 a 100. */
 const consultaDeMensagens = ({ where, orderBy, page = 1, offset = 50 } = {}) => {
  if (!inteiro(page, 1, 10_000) || !inteiro(offset, 1, 100)) return null;
@@ -334,7 +344,7 @@ export function createEvolutionAdapter({ env = process.env, fetchImpl = fetch, i
    const m = r.body.messages;
    if (!m || typeof m !== 'object' || !Array.isArray(m.records)) return { ok: false, reason: 'invalid' };
    return { ok: true, total: Number(m.total) || 0, pages: Number(m.pages) || 0, page: Number(m.currentPage) || 1,
-    messages: m.records.filter(x => x && typeof x === 'object').map(x => ({ id: texto(x.id), key: x.key && typeof x.key === 'object' ? x.key : null, fromMe: x.fromMe === true, messageType: texto(x.messageType), status: texto(x.status), timestamp: Number.isFinite(Number(x.messageTimestamp ?? x.timestamp)) && (x.messageTimestamp ?? x.timestamp) != null ? Number(x.messageTimestamp ?? x.timestamp) : null, message: x.message && typeof x.message === 'object' ? x.message : null })) };
+    messages: m.records.filter(x => x && typeof x === 'object').map(x => ({ id: texto(x.id), key: x.key && typeof x.key === 'object' ? x.key : null, fromMe: (x.key?.fromMe ?? x.fromMe) === true, messageType: texto(x.messageType), status: statusDe(x), timestamp: Number.isFinite(Number(x.messageTimestamp ?? x.timestamp)) && (x.messageTimestamp ?? x.timestamp) != null ? Number(x.messageTimestamp ?? x.timestamp) : null, message: x.message && typeof x.message === 'object' ? x.message : null })) };
   },
 
   /** Arquiva ou desarquiva a conversa com um número. */

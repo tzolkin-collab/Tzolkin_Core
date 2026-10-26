@@ -3,9 +3,9 @@ import { fail, isUuid } from '../platform/http.mjs';
 import { commercialPermission } from './commercial-keys.mjs';
 import { createEvolutionAdapter } from '../integrations/evolution.mjs';
 import { enfileirar, carregarLead } from '../platform/whatsapp-saida.mjs';
-import { emitEvent } from '../platform/automations.mjs';
+import { emitEvent, EVENTS } from '../platform/automations.mjs';
 import { vivo } from '../platform/env-vivo.mjs';
-import { validarFluxo, validarDados, iniciarFluxo, textoDoPasso, JANELA_FINAL_MIN, ESPERA_EM_TESTE_MIN, MENSAGEM_070 } from '../platform/fluxos.mjs';
+import { validarFluxo, validarDados, iniciarFluxo, textoDoPasso, JANELA_FINAL_MIN, ESPERA_EM_TESTE_MIN, MENSAGEM_070, GATILHOS_DE_FLUXO } from '../platform/fluxos.mjs';
 
 // O motor dos fluxos de WhatsApp e as rotas da aba "Fluxos". Desenho: docs/WHATSAPP-FLUXOS-DESENHO.md (seção 4.0).
 //
@@ -154,61 +154,101 @@ export function iniciarFluxosDeWhatsapp({ pool, env = vivo.env, log = console, c
  return () => clearInterval(t);
 }
 
-const COLUNAS = 'f.id, f.space_id, p.name AS space_name, f.name, f.status, f.stop_on_reply, f.instance, f.steps, f.version, f.updated_at';
+const COLUNAS = 'f.id, f.space_id, p.name AS space_name, f.name, f.status, f.stop_on_reply, f.instance, f.steps, f.version, f.updated_at, f.automation_id';
+const ESPACOS_SQL = "SELECT id, name FROM products WHERE lifecycle_status IN ('active','draft') AND portfolio_kind IN ('product','platform','service_line','advisory') ORDER BY name";
+
+/** Funis ativos com as etapas de cada um (para escolher o gatilho). */
+async function funisComEtapas(db) {
+ const funis = (await db.query('SELECT p.id, p.name, p.space_id, pr.name AS space_name FROM pipelines p JOIN products pr ON pr.id=p.space_id WHERE p.is_active ORDER BY pr.name, p.position, p.name')).rows;
+ if (!funis.length) return [];
+ const etapas = (await db.query('SELECT id, pipeline_id, name FROM pipeline_stages WHERE pipeline_id = ANY($1::uuid[]) ORDER BY position', [funis.map(f => f.id)])).rows;
+ return funis.map(f => ({ ...f, etapas: etapas.filter(e => e.pipeline_id === f.id).map(e => ({ id: e.id, name: e.name })) }));
+}
+
+/** Todos os fluxos, com o resultado de cada um, o gatilho (da automação por trás) e o que a tela precisa para montar o formulário. */
+export async function listarFluxos(db) {
+ const espacos = (await db.query(ESPACOS_SQL)).rows, funis = await funisComEtapas(db);
+ try {
+  const fluxos = (await db.query(
+   `SELECT ${COLUNAS}, a.trigger_event AS gatilho_evento, a.pipeline_id AS gatilho_funil, a.stage_id AS gatilho_etapa, a.is_enabled AS gatilho_ativo,
+      (SELECT count(*)::int FROM whatsapp_flow_runs r WHERE r.flow_id = f.id AND r.status = 'running') AS em_andamento,
+      (SELECT count(*)::int FROM whatsapp_flow_runs r WHERE r.flow_id = f.id AND NOT r.dry_run) AS iniciados,
+      (SELECT count(*)::int FROM whatsapp_flow_runs r WHERE r.flow_id = f.id AND NOT r.dry_run AND r.outcome = 'respondeu') AS responderam,
+      (SELECT count(*)::int FROM whatsapp_flow_runs r WHERE r.flow_id = f.id AND NOT r.dry_run AND r.outcome = 'sem_resposta') AS sem_resposta
+      FROM whatsapp_flows f JOIN products p ON p.id = f.space_id LEFT JOIN automations a ON a.id = f.automation_id ORDER BY p.name, lower(f.name)`)).rows
+   .map(({ gatilho_evento, gatilho_funil, gatilho_etapa, gatilho_ativo, ...f }) => ({ ...f, gatilho: gatilho_evento ? { event: gatilho_evento, pipeline_id: gatilho_funil, stage_id: gatilho_etapa, ativo: gatilho_ativo } : null }));
+  return { disponivel: true, fluxos, espacos, funis, eventos: Object.fromEntries(GATILHOS_DE_FLUXO.map(e => [e, EVENTS[e]])) };
+ } catch (e) { if (e?.code === '42P01') return { disponivel: false, fluxos: [], espacos, funis, eventos: {}, aviso: MENSAGEM_070 }; throw e; }
+}
+
+/** O gatilho do fluxo vira (ou atualiza) uma automação do espaço, que inicia o fluxo. Sem gatilho, a automação por trás é desligada. */
+async function manterGatilho(client, { flowId, spaceId, nome, status, gatilho, automationId }) {
+ const ligada = ['teste', 'ativo'].includes(status);
+ if (!gatilho) { if (automationId) await client.query('UPDATE automations SET is_enabled=false, version=version+1, updated_at=now() WHERE id=$1', [automationId]); return automationId; }
+ if (gatilho.pipeline_id) {
+  const f = (await client.query('SELECT space_id FROM pipelines WHERE id=$1 AND is_active', [gatilho.pipeline_id])).rows[0];
+  if (!f || f.space_id !== spaceId) throw fail(400, 'O funil do gatilho não é deste espaço (ou está arquivado).');
+ }
+ if (gatilho.stage_id && !(await client.query('SELECT 1 FROM pipeline_stages WHERE id=$1 AND pipeline_id=$2', [gatilho.stage_id, gatilho.pipeline_id])).rowCount) throw fail(400, 'A etapa do gatilho não é deste funil.');
+ const acoes = JSON.stringify([{ action: 'fluxo.iniciar', flow_id: flowId, dados: {} }]);
+ const titulo = `Fluxo: ${nome}`.slice(0, 120);
+ if (automationId) {
+  await client.query('UPDATE automations SET name=$2, trigger_event=$3, pipeline_id=$4, stage_id=$5, actions=$6::jsonb, is_enabled=$7, version=version+1, updated_at=now() WHERE id=$1',
+   [automationId, titulo, gatilho.event, gatilho.pipeline_id, gatilho.stage_id, acoes, ligada]);
+  return automationId;
+ }
+ const r = await client.query('INSERT INTO automations(space_id,pipeline_id,stage_id,name,trigger_event,actions,is_enabled) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7) RETURNING id',
+  [spaceId, gatilho.pipeline_id, gatilho.stage_id, titulo, gatilho.event, acoes, ligada]);
+ return r.rows[0].id;
+}
+
+/** Cria (sem `id`) ou edita um fluxo, com o gatilho. Dentro da transação de quem chama. Lança 400/404/409 com mensagem para a tela. */
+export async function salvarFluxo(client, { id = null, body, por = null }) {
+ const f = validarFluxo(body);
+ try {
+  if (!id) {
+   if (f.status === 'arquivado') throw fail(400, 'Um fluxo novo não nasce arquivado.');
+   if (!(await client.query(ESPACOS_SQL)).rows.some(e => e.id === body.space_id)) throw fail(400, 'Espaço inválido.');
+   const r = await client.query('INSERT INTO whatsapp_flows(space_id,name,status,stop_on_reply,instance,steps,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+    [body.space_id, f.name, f.status, f.stop_on_reply, f.instance, JSON.stringify(f.steps), por]);
+   const automationId = await manterGatilho(client, { flowId: r.rows[0].id, spaceId: body.space_id, nome: f.name, status: f.status, gatilho: f.gatilho, automationId: null });
+   if (automationId) await client.query('UPDATE whatsapp_flows SET automation_id=$2 WHERE id=$1', [r.rows[0].id, automationId]);
+   return { id: r.rows[0].id };
+  }
+  const antigo = (await client.query('SELECT id, space_id, version, automation_id FROM whatsapp_flows WHERE id=$1 FOR UPDATE', [id])).rows[0];
+  if (!antigo) throw fail(404, 'Fluxo não encontrado.');
+  if (body.version !== antigo.version) throw fail(409, 'Fluxo alterado em outra sessão. Reabra a tela.');
+  if (body.space_id && body.space_id !== antigo.space_id) throw fail(400, 'O espaço de um fluxo não muda: crie outro fluxo.');
+  // Quem já está dentro termina com os passos de quando entrou (cada execução guarda a própria cópia).
+  await client.query('UPDATE whatsapp_flows SET name=$2,status=$3,stop_on_reply=$4,instance=$5,steps=$6,version=version+1,updated_at=now() WHERE id=$1',
+   [id, f.name, f.status, f.stop_on_reply, f.instance, JSON.stringify(f.steps)]);
+  const automationId = await manterGatilho(client, { flowId: id, spaceId: antigo.space_id, nome: f.name, status: f.status, gatilho: f.gatilho, automationId: antigo.automation_id });
+  if (automationId && automationId !== antigo.automation_id) await client.query('UPDATE whatsapp_flows SET automation_id=$2 WHERE id=$1', [id, automationId]);
+  return { id, ok: true };
+ } catch (e) {
+  if (e?.code === '42P01') throw fail(409, MENSAGEM_070);
+  if (e?.code === '23505') throw fail(409, 'Já existe um fluxo com este nome neste espaço.');
+  throw e;
+ }
+}
 
 export function whatsappFluxosRoutes(router) {
- const espacos = async db => (await db.query("SELECT id, name FROM products WHERE lifecycle_status IN ('active','draft') AND portfolio_kind IN ('product','platform','service_line','advisory') ORDER BY name")).rows;
  const uuid = v => { if (!isUuid(v)) throw fail(400, 'Identificador inválido.'); return v; };
 
  router.get('/api/whatsapp/fluxos', async ({ pool, reply, operator }) => {
   await commercialPermission(pool, operator);
-  const lista = await espacos(pool);
-  try {
-   const fluxos = (await pool.query(
-    `SELECT ${COLUNAS},
-       (SELECT count(*)::int FROM whatsapp_flow_runs r WHERE r.flow_id = f.id AND r.status = 'running') AS em_andamento,
-       (SELECT count(*)::int FROM whatsapp_flow_runs r WHERE r.flow_id = f.id AND NOT r.dry_run) AS iniciados,
-       (SELECT count(*)::int FROM whatsapp_flow_runs r WHERE r.flow_id = f.id AND NOT r.dry_run AND r.outcome = 'respondeu') AS responderam,
-       (SELECT count(*)::int FROM whatsapp_flow_runs r WHERE r.flow_id = f.id AND NOT r.dry_run AND r.outcome = 'sem_resposta') AS sem_resposta
-       FROM whatsapp_flows f JOIN products p ON p.id = f.space_id ORDER BY p.name, lower(f.name)`)).rows;
-   reply(200, { disponivel: true, fluxos, espacos: lista });
-  } catch (e) { if (e?.code === '42P01') return reply(200, { disponivel: false, fluxos: [], espacos: lista, aviso: MENSAGEM_070 }); throw e; }
+  reply(200, await listarFluxos(pool));
  }, { body: false });
 
  router.post('/api/whatsapp/fluxos', async ({ client, body, operator }) => {
   await commercialPermission(client, operator, true);
-  const f = validarFluxo(body);
-  if (f.status === 'arquivado') throw fail(400, 'Um fluxo novo não nasce arquivado.');
-  if (!(await espacos(client)).some(e => e.id === body.space_id)) throw fail(400, 'Espaço inválido.');
-  try {
-   const r = await client.query('INSERT INTO whatsapp_flows(space_id,name,status,stop_on_reply,instance,steps,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id',
-    [body.space_id, f.name, f.status, f.stop_on_reply, f.instance, JSON.stringify(f.steps), ator(operator)]);
-   return { body: { id: r.rows[0].id } };
-  } catch (e) {
-   if (e?.code === '42P01') throw fail(409, MENSAGEM_070);
-   if (e?.code === '23505') throw fail(409, 'Já existe um fluxo com este nome neste espaço.');
-   throw e;
-  }
+  return { body: await salvarFluxo(client, { body, por: ator(operator) }) };
  }, { transactional: true, audit: false });
 
  router.put('/api/whatsapp/fluxos/:id', async ({ client, params, body, operator }) => {
   await commercialPermission(client, operator, true);
   uuid(params.id);
-  const f = validarFluxo(body);
-  try {
-   const antigo = (await client.query('SELECT id, space_id, version FROM whatsapp_flows WHERE id=$1 FOR UPDATE', [params.id])).rows[0];
-   if (!antigo) throw fail(404, 'Fluxo não encontrado.');
-   if (body.version !== antigo.version) throw fail(409, 'Fluxo alterado em outra sessão. Reabra a tela.');
-   if (body.space_id && body.space_id !== antigo.space_id) throw fail(400, 'O espaço de um fluxo não muda: crie outro fluxo.');
-   // Quem já está dentro termina com os passos de quando entrou (cada execução guarda a própria cópia).
-   await client.query('UPDATE whatsapp_flows SET name=$2,status=$3,stop_on_reply=$4,instance=$5,steps=$6,version=version+1,updated_at=now() WHERE id=$1',
-    [params.id, f.name, f.status, f.stop_on_reply, f.instance, JSON.stringify(f.steps)]);
-   return { body: { ok: true } };
-  } catch (e) {
-   if (e?.code === '42P01') throw fail(409, MENSAGEM_070);
-   if (e?.code === '23505') throw fail(409, 'Já existe um fluxo com este nome neste espaço.');
-   throw e;
-  }
+  return { body: await salvarFluxo(client, { id: params.id, body, por: ator(operator) }) };
  }, { transactional: true, audit: false });
 
  // As últimas execuções: quem está no fluxo, em que passo, o que já aconteceu e o resultado.
@@ -227,13 +267,16 @@ export function whatsappFluxosRoutes(router) {
  router.post('/api/whatsapp/fluxos/:id/iniciar-teste', async ({ client, params, body, operator }) => {
   await commercialPermission(client, operator, true);
   uuid(params.id);
-  const f = (await client.query('SELECT id, space_id, status FROM whatsapp_flows WHERE id=$1', [params.id]).catch(e => { if (e?.code === '42P01') throw fail(409, MENSAGEM_070); throw e; })).rows[0];
-  if (!f) throw fail(404, 'Fluxo não encontrado.');
-  if (!['teste', 'ativo'].includes(f.status)) throw fail(409, 'Coloque o fluxo em teste ou ativo para iniciar.');
-  const dados = validarDados(body?.dados);
-  let mensagem;
-  try { mensagem = await iniciarFluxo(client, { flowId: f.id, spaceId: f.space_id, numero: body?.number, nome: body?.name ?? '', dados, evento: 'manual', chave: `fluxo:manual:${randomUUID()}` }); }
-  catch (e) { throw fail(400, e.message); }
-  return { body: { ok: true, mensagem } };
+  return { body: await iniciarTeste(client, { id: params.id, numero: body?.number, nome: body?.name, dados: body?.dados }) };
  }, { transactional: true, audit: false });
+}
+
+/** Início manual de um fluxo para um número, sem lead. Em teste não envia nada; em ativo envia de verdade. */
+export async function iniciarTeste(client, { id, numero, nome, dados }) {
+ const f = (await client.query('SELECT id, space_id, status FROM whatsapp_flows WHERE id=$1', [id]).catch(e => { if (e?.code === '42P01') throw fail(409, MENSAGEM_070); throw e; })).rows[0];
+ if (!f) throw fail(404, 'Fluxo não encontrado.');
+ if (!['teste', 'ativo'].includes(f.status)) throw fail(409, 'Coloque o fluxo em teste ou ativo para iniciar.');
+ const limpos = validarDados(dados);
+ try { return { ok: true, mensagem: await iniciarFluxo(client, { flowId: f.id, spaceId: f.space_id, numero, nome: nome ?? '', dados: limpos, evento: 'manual', chave: `fluxo:manual:${randomUUID()}` }) }; }
+ catch (e) { throw fail(400, e.message); }
 }

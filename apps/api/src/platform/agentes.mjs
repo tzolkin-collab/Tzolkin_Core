@@ -30,7 +30,9 @@ export const CAPACIDADES = Object.freeze({
  retomar: { nome: 'Retomar conversa parada', descricao: 'Volta a falar com o lead que sumiu, no ritmo e nos horários permitidos.', execucao: false },
 });
 
-export const MODELOS = Object.freeze(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']);
+export const MODELOS = Object.freeze(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite']);
+/** O provedor de um modelo: os que começam com "gemini-" vão ao Google, o resto à Anthropic. */
+export const provedorDoModelo = modelo => (String(modelo ?? '').startsWith('gemini-') ? 'gemini' : 'anthropic');
 export const TIPOS_DE_MATERIAL = Object.freeze({ documento: 'Documento', imagem: 'Imagem', audio: 'Áudio', video: 'Vídeo', link: 'Link', texto: 'Texto' });
 const INSTANCIA = /^[A-Za-z0-9_.-]{1,64}$/;
 export const MAX_MATERIAIS = 20;

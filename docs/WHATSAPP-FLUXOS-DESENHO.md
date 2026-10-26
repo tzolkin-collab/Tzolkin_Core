@@ -212,3 +212,20 @@ Envio em massa, campanhas, WhatsApp Business oficial (Meta Cloud API), chamadas,
 | F3, F5, R1 a R5 | Não começaram. |
 
 A migração 070 **não está aplicada em produção**: sem ela a aba Fluxos avisa e a ação "Iniciar fluxo" falha com mensagem clara. Fluxo ativo envia pela fila de WhatsApp, então só envia de verdade com `WHATSAPP_ENVIO` ligado.
+
+## 10. Decisões tomadas olhando os concorrentes (2026-10-26)
+
+Referências: Kommo, Respond.io e Intercom Fin. O que adotamos e onde está no código:
+
+| Padrão do mercado | Decisão no Core |
+|---|---|
+| Kommo: a conversa nova vira lead na etapa de entrada do funil | **Instância conectada a um funil** (migração 071, `whatsapp_instance_funnels`). A captura consulta a Evolution (funciona sem webhook), cria o lead pelo mesmo `aceitarLead` do formulário e agenda o turno do agente. Só vale para conversa nova; histórico antigo não é importado. |
+| Kommo: gatilho na etapa do funil inicia o robô | **Gatilho dentro do fluxo** (`whatsapp_flows.automation_id`): o fluxo cria e mantém uma automação oculta "Fluxo: nome", que o inicia levando os dados do lead. Automação continua sendo a camada geral do CRM. |
+| Respond.io: etapas de espera, ramo e atribuição | Passos de mensagem e espera hoje; condição e ramo ficam para a F8. |
+| Fin: resposta humana encerra a IA; passagem com contexto | Já valia: assumir a conversa pausa o agente (`assumir`/`devolver`); fluxo para quando a pessoa responde. |
+| Todos: testar antes de ligar | Fluxo em modo **teste** roda inteiro sem enviar (cada espera vale 1 minuto). O MCP orienta a começar por ele. |
+| Todos: IA e fluxo no mesmo lugar | Abas: Visão geral, Conversas, **Automação** (Fluxos e Agentes de IA juntos), Atividade. |
+| Modelo grátis para testar | Provedor **Gemini** (chave do AI Studio em Integrações); agente com modelo `gemini-...` usa essa chave. Limites do plano grátis (429) são esperados. |
+| Tudo acessível por API | **7 ferramentas MCP**: `whatsapp_instancias`, `whatsapp_conectar_instancia_funil`, `whatsapp_listar_fluxos`, `whatsapp_salvar_fluxo`, `whatsapp_iniciar_fluxo`, `whatsapp_listar_agentes`, `whatsapp_salvar_agente`. Usam as mesmas funções da tela. |
+
+Estado: a migração 071 **não está aplicada em produção**. Sem ela, a conexão instância↔funil e o gatilho do fluxo avisam com mensagem clara em vez de falhar.

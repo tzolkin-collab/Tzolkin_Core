@@ -47,6 +47,13 @@ test('MCP: protocolo, ferramentas e instruções para bots', () => {
   'vincular_contratacao_contexto',
   'configurar_sdk_contexto',
   'gerenciar_stripe_contexto',
+  'whatsapp_instancias',
+  'whatsapp_conectar_instancia_funil',
+  'whatsapp_listar_fluxos',
+  'whatsapp_salvar_fluxo',
+  'whatsapp_iniciar_fluxo',
+  'whatsapp_listar_agentes',
+  'whatsapp_salvar_agente',
  ]);
 
  for (const f of _internals.TOOLS) {
@@ -176,7 +183,7 @@ test('MCP: rotas registradas e método POST /api/mcp responde initialize, ping e
  // 3. tools/list
  const lista = await chamarMcp({ jsonrpc: '2.0', id: 3, method: 'tools/list' });
  assert.equal(lista.codigo, 200);
- assert.equal(lista.resposta.result.tools.length, 15);
+ assert.equal(lista.resposta.result.tools.length, 22);
 
  // 4. Método desconhecido
  const desconhecido = await chamarMcp({ jsonrpc: '2.0', id: 4, method: 'inexistente' });
@@ -545,7 +552,7 @@ test('MCP: gestão de tokens de bots para Configurações (gerar, listar, revoga
  assert.equal(resStatus.st, 200);
  assert.equal(resStatus.dados.tokens_ativos, 1);
  assert.equal(resStatus.dados.protocolo, '2024-11-05');
- assert.equal(resStatus.dados.ferramentas_count, 15);
+ assert.equal(resStatus.dados.ferramentas_count, 22);
 
  // 4. Revogar chave (DELETE /api/mcp/tokens/:id)
  let resRevogar = null;

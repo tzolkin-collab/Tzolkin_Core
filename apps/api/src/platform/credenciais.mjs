@@ -7,6 +7,7 @@ import { createEasypanelAdapter } from '../integrations/easypanel.mjs';
 import { createHostingerDnsAdapter } from '../integrations/hostinger-dns.mjs';
 import { createEvolutionAdapter, normalizarNumero } from '../integrations/evolution.mjs';
 import { createAnthropicAdapter } from '../integrations/anthropic.mjs';
+import { createGeminiAdapter } from '../integrations/gemini.mjs';
 import { createECDH } from 'node:crypto';
 import { scrub } from './secrets.mjs';
 import { lerRemetente, conferirResend, PROVEDORES_DE_EMAIL } from './email.mjs';
@@ -232,6 +233,18 @@ export const PROVEDORES = Object.freeze({
    if (r.ok) return `A Anthropic aceitou a chave e ela enxerga ${r.models.length} ${r.models.length === 1 ? 'modelo' : 'modelos'}.`;
    const motivos = { unauthorized: 'A Anthropic recusou a chave.', rate_limited: 'A Anthropic pediu para ir mais devagar. Tente de novo.', unavailable: 'A Anthropic não respondeu.', invalid: 'A resposta da Anthropic veio em formato inesperado.', invalid_config: 'A chave tem formato inválido.' };
    throw new Error(motivos[r.reason] || 'A Anthropic não confirmou.');
+  },
+ },
+ gemini: {
+  nome: 'Gemini (agentes de IA, ótimo para testar)',
+  campos: [
+   { nome: 'GEMINI_API_KEY', rotulo: 'Chave da API do Gemini', secreto: true, obrigatorio: true, validar: v => (/^[\x21-\x7e]{20,300}$/.test(v) ? null : 'Chave inválida (de 20 a 300 caracteres, sem espaços).'), ajuda: 'Criada de graça em aistudio.google.com/apikey. A camada gratuita tem limite por minuto e por dia: serve para testar. Um agente usa o Gemini quando o modelo dele começa com "gemini-". Para os agentes responderem, defina também "Execução dos agentes" como ligado no cartão do Claude.' },
+  ],
+  async testar(v, fetchImpl) {
+   const r = await createGeminiAdapter({ env: { GEMINI_API_KEY: v.GEMINI_API_KEY }, fetchImpl }).listModels();
+   if (r.ok) return `O Google aceitou a chave e ela enxerga ${r.models.length} ${r.models.length === 1 ? 'modelo' : 'modelos'} (por exemplo: ${r.models.filter(m => /flash/.test(m)).slice(0, 4).join(', ') || r.models.slice(0, 4).join(', ')}).`;
+   const motivos = { unauthorized: 'O Google recusou a chave.', rate_limited: 'O Google pediu para ir mais devagar. Tente de novo.', unavailable: 'O Google não respondeu.', invalid: 'A resposta do Google veio em formato inesperado.', invalid_config: 'A chave está em formato inválido.' };
+   throw new Error(motivos[r.reason] || 'O Google não confirmou.');
   },
  },
  evolution: {

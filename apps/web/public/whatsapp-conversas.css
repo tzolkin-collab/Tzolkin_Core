@@ -139,3 +139,16 @@
   .fl-execucoes .tbl td:first-child, .fl-execucoes .tbl td:last-child { grid-column: 1 / -1; }
   .fl-execucoes .tbl td .status { justify-self: start; }
 }
+
+/* Automação: Fluxos e Agentes de IA na mesma aba, escolhidos por duas opções lado a lado (sem cartões: uma linha com filete). */
+.wa-automacao { display: grid; gap: 4px; margin-top: 16px; }
+.wa-automacao-barra { display: flex; gap: 24px; border-bottom: 1px solid var(--line); }
+.wa-automacao-opcao { display: grid; gap: 2px; padding: 10px 0; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; text-align: left; color: var(--muted); }
+.wa-automacao-opcao strong { font-size: 15px; color: inherit; }
+.wa-automacao-opcao small { font-size: 12px; }
+.wa-automacao-opcao.active { border-bottom-color: var(--text); color: var(--text); }
+
+/* Funil por instância (Visão geral) e gatilho dentro do fluxo. */
+.wa-inst-funil { display: grid; gap: 4px; min-width: 190px; }
+.wa-inst-funil select { width: 100%; }
+.wa-inst-funil small { color: var(--muted); font-size: 12px; }

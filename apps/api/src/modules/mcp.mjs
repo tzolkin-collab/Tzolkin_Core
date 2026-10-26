@@ -1,6 +1,7 @@
 // Model Context Protocol (MCP) Server para o Tzolkin Core.
 // Suporta bots e agentes externos (ex.: Google Spark, Claude, scripts) via JSON-RPC 2.0 (HTTP POST e SSE).
 // Ferramentas de Acompanhamento (atividades, calls, tasks, registros) e Diretório (clientes, empresas, pessoas).
+import { FERRAMENTAS_WHATSAPP, executarFerramentaWhatsapp } from './mcp-whatsapp.mjs';
 import { randomBytes, createHash } from 'node:crypto';
 import { json, fail, isUuid, text } from '../platform/http.mjs';
 import { digest } from '../platform/session.mjs';
@@ -42,6 +43,13 @@ Elas importam sobretudo quando a atividade não tem cliente ou é da própria Tz
 
 ## 3. HORÁRIOS E FUSO
 - O Core opera no fuso horário de Brasília (UTC-3). Sempre envie horários em formato ISO 8601 (ex.: '2026-10-08T14:00:00-03:00') ou 'YYYY-MM-DDTHH:mm:ss-03:00'.
+
+## 4. WHATSAPP: INSTÂNCIAS, FUNIS, FLUXOS E AGENTES DE IA
+Ordem para montar do zero: (1) 'whatsapp_instancias' para ver as instâncias e os funis; (2) 'whatsapp_conectar_instancia_funil' para que a conversa nova de uma instância vire lead no funil; (3) 'whatsapp_salvar_fluxo' com um gatilho (ex.: 'lead.criado' no funil) para o lead receber a sequência de mensagens; (4) 'whatsapp_salvar_agente' para a IA continuar a conversa.
+- **Teste antes de enviar:** crie o fluxo com status "teste" (roda inteiro, NÃO envia nada, cada espera vale 1 minuto) e confira o que ele enviaria; só depois mude para "ativo". Fluxo ativo e 'whatsapp_iniciar_fluxo' em fluxo ativo ENVIAM DE VERDADE: confirme o número com o usuário.
+- **Fluxo × automação:** o fluxo é a sequência de mensagens no WhatsApp; a automação por trás (que o gatilho cria) é quem o inicia e leva os dados do lead. Variáveis nos textos: {{first_name}}, {{name}}, {{email}}, {{whatsapp}}, {{company_name}}, {{product_name}}, {{dados.interesse}}, {{dados.mensagem_do_lead}}.
+- **Nada se apaga:** fluxo arquiva (status "arquivado"), agente desliga (is_active=false), instância desliga (criar_leads=false).
+- **Agente de IA:** o modelo "gemini-..." usa a chave do Gemini (Integrações); "claude-..." usa a da Anthropic. Só responde com a execução dos agentes ligada. Comece com poucas ferramentas (ler e anotar).
 `;
 
 const TOOLS = [
@@ -269,6 +277,7 @@ const TOOLS = [
   },
  },
 ];
+TOOLS.push(...FERRAMENTAS_WHATSAPP);
 
 const normalizarDataFuso = str => {
  if (!str) return null;
@@ -1223,8 +1232,11 @@ button:hover { background: #388bfd; }
     }
    }
 
-   default:
+   default: {
+    const r = await executarFerramentaWhatsapp(nome, args, { pool, auth });
+    if (r !== undefined) return r;
     throw new Error(`Ferramenta desconhecida: ${nome}`);
+   }
   }
  }
 

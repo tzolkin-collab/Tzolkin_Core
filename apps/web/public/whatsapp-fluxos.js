@@ -35,6 +35,15 @@ export function resultadoDoFluxo(f) {
  return terminaram ? `${f.iniciados} iniciados · ${Math.round(((f.responderam || 0) / terminaram) * 100)}% responderam` : `${f.iniciados} iniciados · sem resultado ainda`;
 }
 
+/** "Lead criado · Funil padrão", ou "Só manual" quando o fluxo não tem gatilho. Gatilho desligado (fluxo em rascunho) diz isso. */
+export function textoDoGatilho(f, dados) {
+ const g = f.gatilho;
+ if (!g) return 'Só manual';
+ const nome = dados?.eventos?.[g.event] || g.event;
+ const funil = g.pipeline_id ? dados?.funis?.find(x => x.id === g.pipeline_id)?.name : null;
+ return `${[nome, funil].filter(Boolean).join(' · ')}${g.ativo ? '' : ' (desligado)'}`;
+}
+
 export function painelDeFluxos({ api, instancias = [], reportError }) {
  const raiz = node('div', undefined, 'fl-raiz');
  let dados = null, editando = null, aviso = '', erro = '', execucoes = null, teste = '';
@@ -68,6 +77,7 @@ export function painelDeFluxos({ api, instancias = [], reportError }) {
    colunas: [
     { titulo: 'Fluxo', celula: f => celulaNome({ nome: f.name, apoio: f.space_name, aoAbrir: () => abrir(f) }) },
     { titulo: 'Situação', celula: f => selo(...(SITUACAO[f.status] || [f.status, 'neutral'])) },
+    { titulo: 'Começa quando', celula: f => textoDoGatilho(f, dados) },
     { titulo: 'Passos', celula: f => resumoDosPassos(f.steps) },
     { titulo: 'Em andamento', num: true, celula: f => (f.em_andamento ? String(f.em_andamento) : null) },
     { titulo: 'Resultado', celula: f => resultadoDoFluxo(f) },
@@ -94,6 +104,21 @@ export function painelDeFluxos({ api, instancias = [], reportError }) {
   const parar = Object.assign(node('input'), { type: 'checkbox', checked: f.stop_on_reply ?? true });
   const linhaParar = node('label', undefined, 'ia-opcao'); linhaParar.append(parar, node('span', 'Parar quando a pessoa responder (e observar 24 h depois da última mensagem para dar o resultado)'));
   s1.append(rotulo('Nome', nome), rotulo('Espaço', espaco, novo ? 'Quem pode iniciar o fluxo: automações deste espaço. Não muda depois.' : 'O espaço de um fluxo não muda.'), rotulo('Situação', situacao), rotulo('Número que envia', instancia), linhaParar);
+
+  const sg = secao('Quando o fluxo começa', 'Escolha o gatilho aqui mesmo: o Core cria a automação por trás e todo lead que cumprir isto entra no fluxo sozinho (quando ele está em teste ou ativo). Sem gatilho, o fluxo só começa quando você inicia para um número ou quando uma automação do CRM o inicia.');
+  const g = f.gatilho || {};
+  const opcoes = pares => pares.map(([v, t]) => { const o = node('option', t); o.value = v; return o; });
+  const gEvento = lista([['', 'Nenhum: só começa manualmente ou por outra automação'], ...Object.entries(dados.eventos || {})], g.event || '');
+  const gFunil = lista([], ''), gEtapa = lista([], '');
+  const rFunil = rotulo('Só neste funil', gFunil), rEtapa = rotulo('Só nesta etapa', gEtapa);
+  const funisDoEspaco = () => (dados.funis || []).filter(x => x.space_id === espaco.value);
+  const preencherEtapas = () => { const fu = funisDoEspaco().find(x => x.id === gFunil.value); gEtapa.replaceChildren(...opcoes([['', 'Qualquer etapa'], ...(fu ? fu.etapas.map(e => [e.id, e.name]) : [])])); };
+  const preencherFunis = () => { gFunil.replaceChildren(...opcoes([['', 'Qualquer funil do espaço'], ...funisDoEspaco().map(x => [x.id, x.name])])); preencherEtapas(); };
+  const mostrarGatilho = () => { rFunil.hidden = !gEvento.value; rEtapa.hidden = !gEvento.value || gEvento.value !== 'lead.mudou_de_etapa' || !gFunil.value; };
+  preencherFunis(); gFunil.value = g.pipeline_id || ''; if (gFunil.value !== (g.pipeline_id || '')) gFunil.value = ''; preencherEtapas(); gEtapa.value = g.stage_id || '';
+  gEvento.onchange = mostrarGatilho; gFunil.onchange = () => { preencherEtapas(); mostrarGatilho(); }; espaco.onchange = () => { preencherFunis(); mostrarGatilho(); };
+  mostrarGatilho();
+  sg.append(rotulo('Quando', gEvento), rFunil, rEtapa);
 
   const s2 = secao('Passos', `Mensagem e espera, na ordem. Dados que você pode usar no texto: ${VARIAVEIS}. O fluxo precisa terminar com uma mensagem.`);
   const area = node('div', undefined, 'fl-passos'); s2.append(area);
@@ -130,10 +155,10 @@ export function painelDeFluxos({ api, instancias = [], reportError }) {
   form.append(erroDoForm, salvar);
   form.onsubmit = async e => {
    e.preventDefault(); salvar.disabled = true; erroDoForm.hidden = true;
-   const corpo = { name: nome.value, status: situacao.value, stop_on_reply: parar.checked, instance: instancia.value || null, steps: passos, ...(novo ? { space_id: espaco.value } : { version: f.version, space_id: f.space_id }) };
+   const corpo = { name: nome.value, status: situacao.value, stop_on_reply: parar.checked, instance: instancia.value || null, steps: passos, gatilho: gEvento.value ? { event: gEvento.value, pipeline_id: gFunil.value || null, stage_id: gEtapa.value || null } : null, ...(novo ? { space_id: espaco.value } : { version: f.version, space_id: f.space_id }) };
    try {
     await api(novo ? '/api/whatsapp/fluxos' : `/api/whatsapp/fluxos/${f.id}`, novo ? 'POST' : 'PUT', corpo);
-    aviso = novo ? 'Fluxo criado. Para ele começar, uma automação precisa da ação "Iniciar fluxo de WhatsApp" (CRM → Automações).' : 'Alterações salvas. Quem já está no fluxo termina com os passos de quando entrou.';
+    aviso = novo ? (gEvento.value ? 'Fluxo criado. Ele começa sozinho quando o gatilho acontecer (em teste ou ativo).' : 'Fluxo criado, sem gatilho: ele só começa quando você iniciar para um número ou quando uma automação do CRM o iniciar.') : 'Alterações salvas. Quem já está no fluxo termina com os passos de quando entrou.';
     editando = null; await carregar();
    } catch (err) { erroDoForm.textContent = err.message; erroDoForm.hidden = false; salvar.disabled = false; }
   };

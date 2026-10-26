@@ -103,74 +103,77 @@ async function resolveParties(client,v){
  return {person,tenant,returning};
 }
 // `avisarLeadNovo` é injetável para o teste conferir QUANDO e com QUÊ o aviso sai, sem push de verdade.
-export function commercialIntakeRoutes(router,{avisarLeadNovo=notificarLeadNovo}={}) {
- router.post('/v1/commercial/intake',async({client,pool,body,productId,req})=>{
-  const key=req.headers['idempotency-key'];if(!isUuid(key))throw fail(400,'Idempotency-Key UUID obrigatória.');
-  const v=validateIntake(body,productId);v.source_ref??=key;
-  const hash=digest(canonical(v));
-  // Fixed lock order: key first, then durable source identity. Locks are shared by all replicas.
-  await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,25))',[`${productId}:${key}`]);
-  const prev=(await client.query('SELECT response,request_hash FROM commercial_intake_requests WHERE product_id=$1 AND idempotency_key=$2',[productId,key])).rows[0];
-  if(prev){if(prev.request_hash!==hash)throw fail(409,'Chave já usada com outro conteúdo.');return {body:prev.response};}
-  await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,26))',[`${productId}:${v.source_system}:${v.source_ref}`]);
-  const existing=(await client.query('SELECT id,tenant_id,stakeholder_id,request_hash FROM commercial_leads WHERE product_id=$1 AND source_system=$2 AND source_ref=$3',[productId,v.source_system,v.source_ref])).rows[0];
-  let result;
-  if(existing){if(existing.request_hash!==hash)throw fail(409,'Origem já importada com outro conteúdo.');result={lead_id:existing.id,tenant_id:existing.tenant_id,stakeholder_id:existing.stakeholder_id,engagement_id:null,contract_id:null,created:false};}
-  else {
-   // Limite por e-mail e por espaço: 5 leads novos por hora. Era do site (contava no banco institucional,
-   // que saiu com a ADR 0011); sem ele, um formulário público ficaria aberto a enxurrada. Lock por e-mail
-   // para dois envios simultâneos não passarem juntos do limite.
-   if(v.email){
-    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,27))',[`${productId}:${v.email}`]);
-    const recentes=Number((await client.query("SELECT count(*) FROM commercial_leads WHERE product_id=$1 AND lower(email)=$2 AND created_at>now()-interval '1 hour'",[productId,v.email])).rows[0].count);
-    if(recentes>=5)throw fail(429,'Muitos envios com este e-mail. Aguarde antes de tentar novamente.');
-   }
-   // Campos próprios do espaço (fase 4): chave que o espaço não define é 400; obrigatório que falta também.
-   const customData=validateSpaceData(await fieldsOf(client,productId,'lead'),v.space_data);
-   const source=`inbound:${productId}:${v.source_system}`;
-   const slug='lead-'+digest(`${source}:${v.source_ref}`).slice(0,40);
-   const found=await resolveParties(client,v);
-   const tenant=found.tenant??(await (async()=>{
-    if(v.tax_id){
-     try{
-      return (await client.query(`INSERT INTO tenants(name,slug,relationship_kind,lifecycle_status,organization_type,source_system,source_ref,tax_id) VALUES($1,$2,'prospect','lead',$3,$4,$5,$6) RETURNING id`,[v.org_name,slug,v.org_type,source,v.source_ref,v.tax_id])).rows[0].id;
-     }catch(e){if(e?.code!=='42703')throw e;}
-    }
-    return (await client.query(`INSERT INTO tenants(name,slug,relationship_kind,lifecycle_status,organization_type,source_system,source_ref) VALUES($1,$2,'prospect','lead',$3,$4,$5) RETURNING id`,[v.org_name,slug,v.org_type,source,v.source_ref])).rows[0].id;
-   })());
-   const person=found.person??(await (async()=>{
-    if(v.cpf_hash){
-     try{
-      return (await client.query('INSERT INTO stakeholders(name,email,phone,source_system,source_ref,document_hash) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',[v.name,v.email,v.phone,source,v.source_ref,v.cpf_hash])).rows[0].id;
-     }catch(e){if(e?.code!=='42703')throw e;}
-    }
-    return (await client.query('INSERT INTO stakeholders(name,email,phone,source_system,source_ref) VALUES($1,$2,$3,$4,$5) RETURNING id',[v.name,v.email,v.phone,source,v.source_ref])).rows[0].id;
-   })());
-   if(found.person&&v.phone)await client.query('UPDATE stakeholders SET phone=$2 WHERE id=$1 AND phone IS NULL',[person,v.phone]);
-   if(found.person&&v.cpf_hash){try{await client.query('UPDATE stakeholders SET document_hash=$2 WHERE id=$1 AND document_hash IS NULL',[person,v.cpf_hash]);}catch(e){if(e?.code!=='42703')throw e;}}
-   if(found.tenant&&v.tax_id){try{await client.query('UPDATE tenants SET tax_id=$2 WHERE id=$1 AND tax_id IS NULL',[tenant,v.tax_id]);}catch(e){if(e?.code!=='42703')throw e;}}
-   await client.query('INSERT INTO organization_stakeholders(tenant_id,stakeholder_id,role,title,is_primary,contact_allowed) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(tenant_id,stakeholder_id) DO NOTHING',[tenant,person,v.role,v.title,!found.tenant,v.privacy.contact_allowed]);
-   // Funil do espaço: o nicho do utm_tzolkin escolhe o funil; sem casamento, o padrão. Espaço sem funil = lead sem funil.
-   const place=await placeLead(client,productId,v.attribution?.utm_tzolkin);
-   const lead=(await client.query(`INSERT INTO commercial_leads(tenant_id,stakeholder_id,product_id,name,email,whatsapp,message,source_system,source_ref,service_model,interest,privacy,source_created_at,request_hash,pipeline_id,stage_id,custom_data) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,[tenant,person,productId,v.name,v.email,v.phone,v.message,v.source_system,v.source_ref,v.service_model,v.interest,v.privacy,v.source_created_at,hash,place?.pipelineId??null,place?.stageId??null,customData])).rows[0].id;
-   const a=v.attribution;
-   await client.query(`INSERT INTO commercial_attributions(lead_id,source_system,source_ref,channel,utm_source,utm_medium,utm_campaign,utm_content,landing_page,referrer,
-     utm_term,utm_tzolkin,meta_campaign_id,meta_adset_id,meta_ad_id,fbclid,gclid,fbc,fbp,session_key,first_touch_at,last_touch,session,geo)
-     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
-    [lead,v.source_system,v.source_ref,a.channel,a.utm_source,a.utm_medium,a.utm_campaign,a.utm_content,a.landing_page,a.referrer,
-     a.utm_term??null,a.utm_tzolkin??null,a.meta_campaign_id??null,a.meta_adset_id??null,a.meta_ad_id??null,a.fbclid??null,a.gclid??null,a.fbc??null,a.fbp??null,a.session_key??null,a.first_touch_at??null,
-     a.last_touch?JSON.stringify(a.last_touch):null,a.session?JSON.stringify(a.session):null,a.geo?JSON.stringify(a.geo):null]);
-   await recordActivity(client,lead,'received',{subject:`app:${productId}`,email:null},null,{source_system:v.source_system,source_ref:v.source_ref,matched_person:Boolean(found.person),matched_organization:Boolean(found.tenant),returning_client:found.returning});
-   result={lead_id:lead,tenant_id:tenant,stakeholder_id:person,engagement_id:null,contract_id:null,created:true,returning_client:found.returning};
-   // Automações do espaço ligadas a "lead criado" (fase 5). Falha de automação não derruba o lead: o motor se isola num savepoint.
-   await emitEvent(client,'lead.criado',{spaceId:productId,tenantId:tenant,leadId:lead,pipelineId:place?.pipelineId,stageId:place?.stageId});
+// A entrada de um lead, DENTRO da transação de quem chama. É o que o POST /v1/commercial/intake faz e o que a captura de conversas do
+// WhatsApp (modules/whatsapp-captura.mjs) usa para criar o lead de uma conversa nova: um caminho só, com as mesmas regras (dedupe, funil, automações).
+export async function aceitarLead(client,{pool,productId,key,body,avisarLeadNovo=notificarLeadNovo}) {
+ if(!isUuid(key))throw fail(400,'Idempotency-Key UUID obrigatória.');
+ const v=validateIntake(body,productId);v.source_ref??=key;
+ const hash=digest(canonical(v));
+ // Fixed lock order: key first, then durable source identity. Locks are shared by all replicas.
+ await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,25))',[`${productId}:${key}`]);
+ const prev=(await client.query('SELECT response,request_hash FROM commercial_intake_requests WHERE product_id=$1 AND idempotency_key=$2',[productId,key])).rows[0];
+ if(prev){if(prev.request_hash!==hash)throw fail(409,'Chave já usada com outro conteúdo.');return {body:prev.response};}
+ await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,26))',[`${productId}:${v.source_system}:${v.source_ref}`]);
+ const existing=(await client.query('SELECT id,tenant_id,stakeholder_id,request_hash FROM commercial_leads WHERE product_id=$1 AND source_system=$2 AND source_ref=$3',[productId,v.source_system,v.source_ref])).rows[0];
+ let result;
+ if(existing){if(existing.request_hash!==hash)throw fail(409,'Origem já importada com outro conteúdo.');result={lead_id:existing.id,tenant_id:existing.tenant_id,stakeholder_id:existing.stakeholder_id,engagement_id:null,contract_id:null,created:false};}
+ else {
+  // Limite por e-mail e por espaço: 5 leads novos por hora. Era do site (contava no banco institucional,
+  // que saiu com a ADR 0011); sem ele, um formulário público ficaria aberto a enxurrada. Lock por e-mail
+  // para dois envios simultâneos não passarem juntos do limite.
+  if(v.email){
+   await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,27))',[`${productId}:${v.email}`]);
+   const recentes=Number((await client.query("SELECT count(*) FROM commercial_leads WHERE product_id=$1 AND lower(email)=$2 AND created_at>now()-interval '1 hour'",[productId,v.email])).rows[0].count);
+   if(recentes>=5)throw fail(429,'Muitos envios com este e-mail. Aguarde antes de tentar novamente.');
   }
-  await client.query('INSERT INTO commercial_intake_requests(product_id,idempotency_key,request_hash,response) VALUES($1,$2,$3,$4)',[productId,key,hash,result]);
-  // Aviso de lead novo no aparelho da equipe. Só quando o lead foi CRIADO agora: um
-  // reenvio da mesma chave devolve a resposta guardada (retorno acima) e um lead que
-  // já existia tem created:false, então nenhum dos dois avisa de novo. Roda depois do
-  // COMMIT (afterCommit em app.mjs) e nunca altera a resposta nem o status do intake.
-  const afterCommit=result.created?()=>avisarLeadNovo(pool,{productId,leadId:result.lead_id,nome:v.name,organizacao:v.org_name}):undefined;
-  return {body:result,afterCommit};
- },{auth:'service',scope:'commercial:intake',transactional:true,audit:false});
+  // Campos próprios do espaço (fase 4): chave que o espaço não define é 400; obrigatório que falta também.
+  const customData=validateSpaceData(await fieldsOf(client,productId,'lead'),v.space_data);
+  const source=`inbound:${productId}:${v.source_system}`;
+  const slug='lead-'+digest(`${source}:${v.source_ref}`).slice(0,40);
+  const found=await resolveParties(client,v);
+  const tenant=found.tenant??(await (async()=>{
+   if(v.tax_id){
+    try{
+     return (await client.query(`INSERT INTO tenants(name,slug,relationship_kind,lifecycle_status,organization_type,source_system,source_ref,tax_id) VALUES($1,$2,'prospect','lead',$3,$4,$5,$6) RETURNING id`,[v.org_name,slug,v.org_type,source,v.source_ref,v.tax_id])).rows[0].id;
+    }catch(e){if(e?.code!=='42703')throw e;}
+   }
+   return (await client.query(`INSERT INTO tenants(name,slug,relationship_kind,lifecycle_status,organization_type,source_system,source_ref) VALUES($1,$2,'prospect','lead',$3,$4,$5) RETURNING id`,[v.org_name,slug,v.org_type,source,v.source_ref])).rows[0].id;
+  })());
+  const person=found.person??(await (async()=>{
+   if(v.cpf_hash){
+    try{
+     return (await client.query('INSERT INTO stakeholders(name,email,phone,source_system,source_ref,document_hash) VALUES($1,$2,$3,$4,$5,$6) RETURNING id',[v.name,v.email,v.phone,source,v.source_ref,v.cpf_hash])).rows[0].id;
+    }catch(e){if(e?.code!=='42703')throw e;}
+   }
+   return (await client.query('INSERT INTO stakeholders(name,email,phone,source_system,source_ref) VALUES($1,$2,$3,$4,$5) RETURNING id',[v.name,v.email,v.phone,source,v.source_ref])).rows[0].id;
+  })());
+  if(found.person&&v.phone)await client.query('UPDATE stakeholders SET phone=$2 WHERE id=$1 AND phone IS NULL',[person,v.phone]);
+  if(found.person&&v.cpf_hash){try{await client.query('UPDATE stakeholders SET document_hash=$2 WHERE id=$1 AND document_hash IS NULL',[person,v.cpf_hash]);}catch(e){if(e?.code!=='42703')throw e;}}
+  if(found.tenant&&v.tax_id){try{await client.query('UPDATE tenants SET tax_id=$2 WHERE id=$1 AND tax_id IS NULL',[tenant,v.tax_id]);}catch(e){if(e?.code!=='42703')throw e;}}
+  await client.query('INSERT INTO organization_stakeholders(tenant_id,stakeholder_id,role,title,is_primary,contact_allowed) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(tenant_id,stakeholder_id) DO NOTHING',[tenant,person,v.role,v.title,!found.tenant,v.privacy.contact_allowed]);
+  // Funil do espaço: o nicho do utm_tzolkin escolhe o funil; sem casamento, o padrão. Espaço sem funil = lead sem funil.
+  const place=await placeLead(client,productId,v.attribution?.utm_tzolkin);
+  const lead=(await client.query(`INSERT INTO commercial_leads(tenant_id,stakeholder_id,product_id,name,email,whatsapp,message,source_system,source_ref,service_model,interest,privacy,source_created_at,request_hash,pipeline_id,stage_id,custom_data) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,[tenant,person,productId,v.name,v.email,v.phone,v.message,v.source_system,v.source_ref,v.service_model,v.interest,v.privacy,v.source_created_at,hash,place?.pipelineId??null,place?.stageId??null,customData])).rows[0].id;
+  const a=v.attribution;
+  await client.query(`INSERT INTO commercial_attributions(lead_id,source_system,source_ref,channel,utm_source,utm_medium,utm_campaign,utm_content,landing_page,referrer,
+    utm_term,utm_tzolkin,meta_campaign_id,meta_adset_id,meta_ad_id,fbclid,gclid,fbc,fbp,session_key,first_touch_at,last_touch,session,geo)
+    VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
+   [lead,v.source_system,v.source_ref,a.channel,a.utm_source,a.utm_medium,a.utm_campaign,a.utm_content,a.landing_page,a.referrer,
+    a.utm_term??null,a.utm_tzolkin??null,a.meta_campaign_id??null,a.meta_adset_id??null,a.meta_ad_id??null,a.fbclid??null,a.gclid??null,a.fbc??null,a.fbp??null,a.session_key??null,a.first_touch_at??null,
+    a.last_touch?JSON.stringify(a.last_touch):null,a.session?JSON.stringify(a.session):null,a.geo?JSON.stringify(a.geo):null]);
+  await recordActivity(client,lead,'received',{subject:`app:${productId}`,email:null},null,{source_system:v.source_system,source_ref:v.source_ref,matched_person:Boolean(found.person),matched_organization:Boolean(found.tenant),returning_client:found.returning});
+  result={lead_id:lead,tenant_id:tenant,stakeholder_id:person,engagement_id:null,contract_id:null,created:true,returning_client:found.returning};
+  // Automações do espaço ligadas a "lead criado" (fase 5). Falha de automação não derruba o lead: o motor se isola num savepoint.
+  await emitEvent(client,'lead.criado',{spaceId:productId,tenantId:tenant,leadId:lead,pipelineId:place?.pipelineId,stageId:place?.stageId});
+ }
+ await client.query('INSERT INTO commercial_intake_requests(product_id,idempotency_key,request_hash,response) VALUES($1,$2,$3,$4)',[productId,key,hash,result]);
+ // Aviso de lead novo no aparelho da equipe. Só quando o lead foi CRIADO agora: um
+ // reenvio da mesma chave devolve a resposta guardada (retorno acima) e um lead que
+ // já existia tem created:false, então nenhum dos dois avisa de novo. Roda depois do
+ // COMMIT (afterCommit em app.mjs) e nunca altera a resposta nem o status do intake.
+ const afterCommit=result.created?()=>avisarLeadNovo(pool,{productId,leadId:result.lead_id,nome:v.name,organizacao:v.org_name}):undefined;
+ return {body:result,afterCommit};
+}
+export function commercialIntakeRoutes(router,{avisarLeadNovo=notificarLeadNovo}={}) {
+ router.post('/v1/commercial/intake',async({client,pool,body,productId,req})=>aceitarLead(client,{pool,productId,key:req.headers['idempotency-key'],body,avisarLeadNovo}),{auth:'service',scope:'commercial:intake',transactional:true,audit:false});
 }

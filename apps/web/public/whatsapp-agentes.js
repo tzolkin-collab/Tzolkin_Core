@@ -7,7 +7,7 @@ import { tabela, celulaNome, selo } from './data-table.js';
 // Com a execução ligada (AGENTES_EXECUCAO) e a chave da Anthropic, o agente ligado responde os leads dos funis que atende, pela instância dele, usando só
 // as ferramentas que o motor sabe executar; a resposta entra na fila de envio. As ferramentas e capacidades sem execução ainda aparecem como "em breve".
 
-const NOMES_DE_MODELO = { 'claude-opus-5-5': 'Claude Opus 5.5 (o mais capaz)', 'claude-sonnet-5-5': 'Claude Sonnet 5.5 (equilíbrio)', 'claude-haiku-5-5': 'Claude Haiku 5.5 (o mais rápido)' };
+const NOMES_DE_MODELO = { 'claude-opus-5-5': 'Claude Opus 5.5 (o mais capaz)', 'claude-sonnet-5-5': 'Claude Sonnet 5.5 (equilíbrio)', 'claude-haiku-5-5': 'Claude Haiku 5.5 (o mais rápido)', 'gemini-3.8-flash': 'Gemini 3.8 Flash (chave gratuita serve para testar)', 'gemini-3.6-flash': 'Gemini 3.6 Flash (teste gratuito)', 'gemini-3.5-flash-lite': 'Gemini 3.5 Flash-Lite (o mais leve, teste gratuito)' };
 const RISCO = { baixo: ['Só lê ou anota', 'success'], medio: ['Muda dados', 'warning'], alto: ['Risco alto', 'danger'] };
 const plural = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
 const icone = nome => { const s = node('span', undefined, 'wf-ic'); s.append(createIcon(nome)); return s; };
@@ -32,8 +32,8 @@ export function painelDeAgentes({ api, instancias, reportError }) {
   const caixa = node('section', undefined, 'whatsapp-estado');
   if (!exec) { caixa.append(node('p', 'Não consegui consultar o estado da execução agora.', 'email-help')); return caixa; }
   const linha = (rotulo, ok, sim, nao) => { const l = node('div'); l.append(node('span', rotulo), selo(ok ? sim : nao, ok ? 'success' : 'warning')); return l; };
-  caixa.append(linha('Execução dos agentes', exec.ligada, 'Ligada', 'Desligada'), linha('Chave da Anthropic', exec.com_chave, 'Configurada', 'Faltando'), linha('Envio das respostas', exec.envio_ligado, 'Ligado', 'Desligado'));
-  if (!exec.ligada || !exec.com_chave) caixa.append(node('p', 'Hoje nenhum agente responde: para ligar, preencha ANTHROPIC_API_KEY e defina AGENTES_EXECUCAO como "ligado" em Configurações → Integrações → Claude (agentes de IA).', 'email-help'));
+  caixa.append(linha('Execução dos agentes', exec.ligada, 'Ligada', 'Desligada'), linha('Chave de IA (Claude ou Gemini)', exec.com_chave, exec.provedores?.gemini && !exec.provedores?.anthropic ? 'Gemini configurado' : exec.provedores?.gemini ? 'Claude e Gemini' : 'Claude configurado', 'Faltando'), linha('Envio das respostas', exec.envio_ligado, 'Ligado', 'Desligado'));
+  if (!exec.ligada || !exec.com_chave) caixa.append(node('p', 'Hoje nenhum agente responde: para ligar, cadastre uma chave (Claude ou a chave gratuita do Gemini) em Configurações → Integrações e defina "Execução dos agentes" como ligado no cartão do Claude.', 'email-help'));
   else if (!exec.envio_ligado) caixa.append(node('p', 'Os agentes já escrevem as respostas, mas o envio do WhatsApp está desligado: elas ficam na fila (WHATSAPP_ENVIO).', 'email-help'));
   if (exec.aviso) caixa.append(node('p', exec.aviso, 'email-help'));
   return caixa;

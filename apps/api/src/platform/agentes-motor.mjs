@@ -7,7 +7,7 @@
 //  - O texto do lead é dado, não instrução (o sistema avisa e o texto vai no papel de usuário).
 //  - Ninguém responde conversa que está com uma pessoa (handoff), número bloqueado, lead fora dos funis do agente ou conversa que já foi
 //    respondida; há teto de respostas por hora e de voltas no modelo por turno.
-import { FERRAMENTAS, FERRAMENTAS_EXECUTAVEIS } from './agentes.mjs';
+import { FERRAMENTAS, FERRAMENTAS_EXECUTAVEIS, provedorDoModelo } from './agentes.mjs';
 import { enfileirar, enfileirarParaEquipe } from './whatsapp-saida.mjs';
 import { enfileirarParaLead as emailParaLead } from './email-saida.mjs';
 import { enderecoValido } from './email.mjs';
@@ -176,10 +176,13 @@ export const REPETIVEIS = ['unavailable', 'rate_limited', 'invalid'];
  * Um turno. Devolve { resultado: 'respondeu' | 'pulou' | 'falhou', motivo, resposta, uso, ferramentas, repetir }.
  * `db` precisa de .query; `modelo` é o adaptador da Anthropic.
  */
-export async function executarTurno({ db, env, modelo, job, agora = () => new Date() }) {
+export async function executarTurno({ db, env, modelo, modelos, job, agora = () => new Date() }) {
  const pula = motivo => ({ resultado: 'pulou', motivo, ferramentas: [], uso: { input: 0, output: 0 } });
  const agente = (await db.query('SELECT * FROM ai_agents WHERE id=$1', [job.agent_id])).rows[0];
  if (!agente || !agente.is_active) return pula('O agente está desligado.');
+ // `modelos` traz um adaptador por provedor (Claude e Gemini); `modelo` (um só) continua valendo para quem passa só um.
+ const motor = modelos ? modelos[provedorDoModelo(agente.model)] : modelo;
+ if (!motor?.configured) return pula(`Falta a chave de IA do provedor deste modelo (${agente.model}): cadastre em Integrações.`);
  const instancia = job.instance ?? '', numero = job.number;
  if ((await db.query('SELECT 1 FROM ai_handoffs WHERE instance=$1 AND number=$2 AND released_at IS NULL', [instancia, numero])).rows.length) return pula('A conversa está com uma pessoa.');
  if ((await db.query('SELECT 1 FROM whatsapp_suppressions WHERE number=$1 AND revoked_at IS NULL', [numero])).rows.length) return pula('O número pediu para não receber mensagens.');
@@ -209,7 +212,7 @@ export async function executarTurno({ db, env, modelo, job, agora = () => new Da
  const usadas = [], uso = { input: 0, output: 0 };
  let resposta = '';
  for (let volta = 0; volta < MAX_VOLTAS; volta++) {
-  const r = await modelo.messages({ model: agente.model, system: sistema, messages: mensagens, tools: ferramentas.tools, maxTokens: 1024 });
+  const r = await motor.messages({ model: agente.model, system: sistema, messages: mensagens, tools: ferramentas.tools, maxTokens: 1024 });
   if (!r.ok) return { resultado: 'falhou', motivo: motivoDoModelo(r.reason), repetir: REPETIVEIS.includes(r.reason), ferramentas: usadas, uso };
   uso.input += r.usage.input; uso.output += r.usage.output;
   const pedidos = r.content.filter(b => b?.type === 'tool_use');

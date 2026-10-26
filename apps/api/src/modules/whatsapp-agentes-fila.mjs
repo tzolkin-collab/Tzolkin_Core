@@ -1,6 +1,7 @@
 import { fail, onlyParams } from '../platform/http.mjs';
 import { commercialPermission } from './commercial-keys.mjs';
 import { createAnthropicAdapter } from '../integrations/anthropic.mjs';
+import { createGeminiAdapter } from '../integrations/gemini.mjs';
 import { executarTurno } from '../platform/agentes-motor.mjs';
 import { vivo } from '../platform/env-vivo.mjs';
 
@@ -47,12 +48,12 @@ export async function agendarTurno(db, { instancia, numero, inboxId, env, agora 
 }
 
 /** Um ciclo: pega os turnos que já podem rodar e roda cada um. Nunca lança: devolve o que fez. */
-export async function processarTurnos(pool, { env = vivo.env, modelo = createAnthropicAdapter({ env }), agora = Date.now, lote = 2 } = {}) {
+export async function processarTurnos(pool, { env = vivo.env, modelo = null, modelos = { anthropic: createAnthropicAdapter({ env }), gemini: createGeminiAdapter({ env }) }, agora = Date.now, lote = 2 } = {}) {
  const t = agora();
  const saida = { respondidos: 0, pulados: 0, falhas: 0, adiados: 0, reenfileirados: 0 };
  try {
   if (!execucaoLigada(env)) return { ...saida, desligado: true };
-  if (!modelo.configured) return { ...saida, desligado: true, semChave: true };
+  if (modelo ? !modelo.configured : !(modelos.anthropic.configured || modelos.gemini.configured)) return { ...saida, desligado: true, semChave: true };
   saida.reenfileirados = (await pool.query("UPDATE ai_agent_jobs SET status='queued', locked_at=NULL WHERE status='running' AND locked_at < $1 AND attempts < $2 RETURNING id", [iso(t - TURNO_PRESO_MS), MAX_TENTATIVAS])).rowCount ?? 0;
   await pool.query("UPDATE ai_agent_jobs SET status='failed', finished_at=now(), note='O turno travou e esgotou as tentativas.' WHERE status='running' AND locked_at < $1 AND attempts >= $2", [iso(t - TURNO_PRESO_MS), MAX_TENTATIVAS]);
   const pegos = (await pool.query(
@@ -61,7 +62,7 @@ export async function processarTurnos(pool, { env = vivo.env, modelo = createAnt
      RETURNING id,agent_id,instance,number,inbox_id,lead_id,attempts`, [lote, iso(t)])).rows;
   for (const job of pegos) {
    let r;
-   try { r = await executarTurno({ db: pool, env, modelo, job, agora: () => new Date(agora()) }); }
+   try { r = await executarTurno({ db: pool, env, modelo, ...(modelo ? {} : { modelos }), job, agora: () => new Date(agora()) }); }
    catch (e) { console.error('[agentes] turno falhou:', e?.message); r = { resultado: 'falhou', motivo: 'Erro interno no turno.', repetir: true, ferramentas: [], uso: { input: 0, output: 0 } }; }
    const dados = [JSON.stringify(r.ferramentas ?? []), r.uso?.input ?? 0, r.uso?.output ?? 0, r.modelo ?? null, r.resposta ?? null, String(r.motivo ?? '').slice(0, 500) || null, job.id];
    if (r.resultado === 'falhou' && r.repetir && job.attempts < MAX_TENTATIVAS) {
@@ -104,7 +105,7 @@ export function agentesExecucaoRoutes(router, { env = vivo.env } = {}) {
  // O que a tela de agentes mostra: se a execução está ligada, se há chave e os últimos turnos.
  router.get('/api/whatsapp/agents/execucao', async ({ pool, reply, operator }) => {
   await commercialPermission(pool, operator);
-  const estado = { ligada: execucaoLigada(env), com_chave: createAnthropicAdapter({ env }).configured, envio_ligado: String(env.WHATSAPP_ENVIO ?? '').trim().toLowerCase() === 'ligado' };
+  const estado = { ligada: execucaoLigada(env), com_chave: createAnthropicAdapter({ env }).configured || createGeminiAdapter({ env }).configured, provedores: { anthropic: createAnthropicAdapter({ env }).configured, gemini: createGeminiAdapter({ env }).configured }, envio_ligado: String(env.WHATSAPP_ENVIO ?? '').trim().toLowerCase() === 'ligado' };
   try {
    const turnos = (await pool.query(
     `SELECT j.id,j.status,j.instance,j.number,j.model,j.input_tokens,j.output_tokens,j.tools_used,j.reply,j.note,j.attempts,j.created_at,j.finished_at,a.name AS agent_name

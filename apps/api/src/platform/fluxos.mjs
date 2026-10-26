@@ -7,6 +7,8 @@ import { VARIAVEIS_DE_WHATSAPP, renderizarMensagem, carregarLead } from './whats
 
 export const MENSAGEM_070 = 'Os fluxos de WhatsApp ainda não estão disponíveis neste banco: falta aplicar a migração 070.';
 export const STATUS_DO_FLUXO = Object.freeze(['rascunho', 'teste', 'ativo', 'arquivado']);
+/** Eventos que um fluxo aceita como gatilho: os de lead (há um lead com WhatsApp para receber a mensagem). */
+export const GATILHOS_DE_FLUXO = Object.freeze(['lead.criado', 'lead.mudou_de_etapa', 'lead.qualificado', 'lead.descartado', 'lead.restaurado']);
 export const MAX_PASSOS = 20, MAX_ESPERA_MIN = 43200, MAX_TEXTO = 1000, MAX_DADOS = 10;
 /** Depois da última mensagem o fluxo espera isto por uma resposta antes de dar o resultado ("sem resposta"). */
 export const JANELA_FINAL_MIN = 24 * 60;
@@ -21,9 +23,21 @@ const INSTANCIA = /^[A-Za-z0-9_.-]{1,64}$/;
 export const variaveisDoFluxoInvalidas = texto =>
  [...String(texto).matchAll(/\{\{\s*([^{}]*?)\s*\}\}/g)].map(m => m[1]).filter(v => !VARIAVEIS_DE_WHATSAPP.includes(v) && !VARIAVEL_DE_DADOS.test(v));
 
+/** O gatilho escolhido no fluxo: { event, pipeline_id, stage_id } ou nada. A automação por trás é do módulo whatsapp-fluxos. */
+export function validarGatilho(g) {
+ if (g == null || g === '') return null;
+ if (typeof g !== 'object' || Array.isArray(g)) throw fail(400, 'Gatilho inválido.');
+ input(g, ['event', 'pipeline_id', 'stage_id']);
+ if (!GATILHOS_DE_FLUXO.includes(g.event)) throw fail(400, 'Escolha quando o fluxo começa.');
+ const funil = g.pipeline_id || null, etapa = g.stage_id || null;
+ if ((funil && !isUuid(funil)) || (etapa && !isUuid(etapa))) throw fail(400, 'Funil ou etapa do gatilho inválidos.');
+ if (etapa && !funil) throw fail(400, 'Escolha o funil para filtrar por etapa.');
+ return { event: g.event, pipeline_id: funil, stage_id: etapa };
+}
+
 /** Valida o corpo de criar/editar fluxo e devolve a forma normalizada. Lança 400 com a mensagem para a tela. */
 export function validarFluxo(body) {
- input(body, ['space_id', 'name', 'status', 'stop_on_reply', 'instance', 'steps', 'version']);
+ input(body, ['space_id', 'name', 'status', 'stop_on_reply', 'instance', 'steps', 'version', 'gatilho']);
  const name = text(body.name, 2, 120);
  const status = body.status ?? 'rascunho';
  if (!STATUS_DO_FLUXO.includes(status)) throw fail(400, 'Situação do fluxo inválida.');
@@ -51,7 +65,7 @@ export function validarFluxo(body) {
  });
  if (!steps.some(p => p.tipo === 'mensagem')) throw fail(400, 'O fluxo precisa de pelo menos uma mensagem.');
  if (steps.at(-1).tipo === 'espera') throw fail(400, 'O fluxo não pode terminar numa espera: acabe com uma mensagem.');
- return { name, status, stop_on_reply: body.stop_on_reply ?? true, instance, steps };
+ return { name, status, stop_on_reply: body.stop_on_reply ?? true, instance, steps, gatilho: validarGatilho(body.gatilho) };
 }
 
 /** Os dados que a ação "Iniciar fluxo" leva: chaves simples e valores curtos. Lança 400. Devolve {} se não houver. */

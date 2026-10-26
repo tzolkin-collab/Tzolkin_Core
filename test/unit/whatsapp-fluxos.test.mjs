@@ -13,7 +13,7 @@ const espera = minutos => ({ tipo: 'espera', minutos });
 // ---------- validação ----------
 test('validarFluxo: aceita o fluxo certo e normaliza', () => {
  const f = validarFluxo({ space_id: 'sites', name: '  Boas-vindas corretor ', steps: [msg('Oi, {{first_name}}!'), espera(10), msg('Interesse: {{dados.interesse}}')] });
- assert.deepEqual(f, { name: 'Boas-vindas corretor', status: 'rascunho', stop_on_reply: true, instance: null, steps: [msg('Oi, {{first_name}}!'), espera(10), msg('Interesse: {{dados.interesse}}')] });
+ assert.deepEqual(f, { name: 'Boas-vindas corretor', status: 'rascunho', stop_on_reply: true, instance: null, gatilho: null, steps: [msg('Oi, {{first_name}}!'), espera(10), msg('Interesse: {{dados.interesse}}')] });
  assert.equal(validarFluxo({ name: 'ok ok', status: 'ativo', stop_on_reply: false, instance: 'teste', steps: [msg('oi oi')] }).instance, 'teste');
 });
 

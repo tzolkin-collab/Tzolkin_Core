@@ -239,3 +239,15 @@ test('a chave da Evolution e o segredo do webhook não aparecem em nenhum result
  const r = await a.connect();
  assert.equal(r.message, 'chave *** inválida', 'a mensagem do servidor ajuda o operador, já sem a chave');
 });
+
+test('findMessages no formato REAL da 2.3.7: quem enviou vem de key.fromMe (o registro não tem fromMe) e o status vem de MessageUpdate', async () => {
+ const registro = (id, fromMe, extra = {}) => ({ id, key: { id, fromMe, remoteJid: '5531997599216@s.whatsapp.net' }, pushName: 'x', messageType: 'conversation', message: { conversation: 'oi' }, messageTimestamp: 1793000000, instanceId: 'i', source: 'android', ...extra });
+ const { a } = com(200, { messages: { total: 3, pages: 1, currentPage: 1, records: [
+  registro('n1', true, { MessageUpdate: [{ status: 'SERVER_ACK' }, { status: 'READ' }, { status: 'DELIVERY_ACK' }] }),
+  registro('d1', false),
+  registro('n2', true, { MessageUpdate: [] }),
+ ] } });
+ const r = await a.findMessages();
+ assert.deepEqual(r.messages.map(m => [m.id, m.fromMe, m.status]), [['n1', true, 'READ'], ['d1', false, null], ['n2', true, null]], 'a mais avançada vence, na ordem em que a Evolution mandar');
+ assert.equal(r.messages[0].timestamp, 1793000000);
+});

@@ -7,6 +7,7 @@ import {iniciarFilaDeEmail} from './modules/email-fila.mjs';
 import {iniciarFilaDeWhatsapp} from './modules/whatsapp-fila.mjs';
 import {iniciarAgentes} from './modules/whatsapp-agentes-fila.mjs';
 import {iniciarFluxosDeWhatsapp} from './modules/whatsapp-fluxos.mjs';
+import {iniciarCaptura} from './modules/whatsapp-captura.mjs';
 import {serveAsset} from '../../web/assets.mjs';
 
 if(process.env.NODE_ENV!=='production')throw Error('Production entrypoint requires NODE_ENV=production.');
@@ -49,8 +50,9 @@ const pararEmail=iniciarFilaDeEmail({pool});
 const pararWhatsapp=iniciarFilaDeWhatsapp({pool});
 const pararAgentes=iniciarAgentes({pool});
 const pararFluxos=iniciarFluxosDeWhatsapp({pool});
+const pararCaptura=iniciarCaptura({pool});
 // A porta vai para o log: é a única forma de o operador ver, no painel, que a
 // app subiu num lugar diferente do que o healthcheck e o proxy procuram.
 const porta=Number(process.env.PORT||3000);
 server.listen(porta,'0.0.0.0',()=>console.log(`TZOLKIN Core production ready on 0.0.0.0:${porta}`));
-const stop=()=>{pararAgenda();pararEmail();pararWhatsapp();pararAgentes();pararFluxos();server.closeAllConnections();server.close(()=>pool.end().finally(()=>process.exit(0)));};process.on('SIGTERM',stop);process.on('SIGINT',stop);
+const stop=()=>{pararAgenda();pararEmail();pararWhatsapp();pararAgentes();pararFluxos();pararCaptura();server.closeAllConnections();server.close(()=>pool.end().finally(()=>process.exit(0)));};process.on('SIGTERM',stop);process.on('SIGINT',stop);

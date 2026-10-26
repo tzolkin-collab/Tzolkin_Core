@@ -53,7 +53,7 @@ function seloCurto(w) {
  * O que precisa de atenção, só da instância do Core (as outras são de outros sistemas): uma frase por problema, do mais grave ao menos.
  * Função pura, para testar sem tela. `dados` é a resposta de /api/whatsapp/saude.
  */
-export function pontosDeAtencao(dados, padrao) {
+export function pontosDeAtencao(dados, padrao, conexoes = null) {
  const lista = [];
  const nosso = (dados?.instancias || []).find(i => i.nome === padrao);
  if (!nosso) return lista;
@@ -68,17 +68,19 @@ export function pontosDeAtencao(dados, padrao) {
  if (fila?.falhas > 0) lista.push(['warning', `${plural(fila.falhas, 'mensagem falhou', 'mensagens falharam')} ao sair por ${nome}: abra Atividade para reenviar.`]);
  if (fila?.na_fila > 0 && !dados.envio_ligado) lista.push(['info', `${plural(fila.na_fila, 'mensagem espera', 'mensagens esperam')} na fila e o envio automático está desligado.`]);
  else if (fila?.na_fila > 0 && fila.mais_antiga_min >= 30) lista.push(['warning', `A fila de ${nome} está parada: a mensagem mais antiga espera há ${duracao(fila.mais_antiga_min)}.`]);
+ // Instância do Core sem funil: a conversa nova não vira lead nem aciona fluxo e agente (só vale quando a migração das conexões está no banco).
+ if (conexoes?.disponivel && !conexoes.conexoes.some(c => c.instance === nome && c.create_leads)) lista.push(['info', `${nome} não está conectada a nenhum funil: as conversas novas não viram lead, então fluxos e agentes não começam sozinhos. Escolha o funil na coluna Funil.`]);
  return lista;
 }
 
 export function painelDeVisao({ api, reportError, padrao = () => '', aoAbrirConversas = () => {} }) {
  const raiz = el('div', undefined, 'wa-visao');
- let dias = 7, dados = null, erro = '', carregando = false, geracao = 0;
+ let dias = 7, dados = null, conexoes = null, erro = '', carregando = false, geracao = 0, avisoDoFunil = '';
 
  async function recarregar() {
   const ticket = ++geracao;
   carregando = true; desenhar();
-  try { const r = await api(`/api/whatsapp/saude?dias=${dias}`); if (ticket !== geracao) return; dados = r; erro = ''; }
+  try { const [r, c] = await Promise.all([api(`/api/whatsapp/saude?dias=${dias}`), api('/api/whatsapp/conexoes').catch(() => null)]); if (ticket !== geracao) return; dados = r; conexoes = c; erro = ''; }
   catch (e) { if (ticket !== geracao) return; erro = e.message || 'Não consegui carregar.'; reportError?.(e); }
   carregando = false; desenhar();
  }
@@ -97,7 +99,7 @@ export function painelDeVisao({ api, reportError, padrao = () => '', aoAbrirConv
  }
 
  function atencao() {
-  const itens = pontosDeAtencao(dados, padrao());
+  const itens = pontosDeAtencao(dados, padrao(), conexoes);
   const bloco = el('section', undefined, 'wa-atencao'); bloco.setAttribute('aria-label', 'O que precisa de atenção');
   if (!itens.length) { bloco.append(el('p', `Nada pede atenção em ${padrao() || 'a instância do Core'}.`, 'email-help')); return bloco; }
   bloco.append(el('h3', 'O que precisa de atenção'));
@@ -121,11 +123,33 @@ export function painelDeVisao({ api, reportError, padrao = () => '', aoAbrirConv
   return c;
  }
 
+ // Conectar a instância a um funil: a conversa nova que chegar nela vira lead nesse funil (e as automações do funil andam sozinhas).
+ function seletorDeFunil(i) {
+  if (!conexoes?.disponivel) return null;
+  const atual = conexoes.conexoes.find(c => c.instance === i.nome);
+  const s = el('select'); s.setAttribute('aria-label', `Funil que recebe as conversas novas de ${i.nome}`);
+  for (const [v, t] of [['', 'Não criar leads'], ...conexoes.funis.map(f => [f.id, `${f.space_name} · ${f.name}`])]) { const o = el('option', t); o.value = v; s.append(o); }
+  s.value = atual?.create_leads ? atual.pipeline_id : '';
+  s.onchange = async () => {
+   s.disabled = true; avisoDoFunil = '';
+   try {
+    if (s.value) await api(`/api/whatsapp/conexoes/${encodeURIComponent(i.nome)}`, 'PUT', { pipeline_id: s.value, create_leads: true });
+    else if (atual) await api(`/api/whatsapp/conexoes/${encodeURIComponent(i.nome)}`, 'PUT', { pipeline_id: atual.pipeline_id, create_leads: false });
+    avisoDoFunil = s.value ? `${i.nome} conectada: a conversa nova que chegar nela vira lead nesse funil.` : `${i.nome} não cria mais leads.`;
+   } catch (e) { avisoDoFunil = e.message; }
+   await recarregar();
+  };
+  const c = el('div', undefined, 'wa-inst-funil'); c.append(s);
+  if (atual?.create_leads) c.append(el('small', 'Conversa nova vira lead aqui'));
+  return c;
+ }
+
  function tabelaDeInstancias() {
   const colunas = [
    { titulo: 'Instância', celula: celulaInstancia },
    { titulo: 'Estado', celula: i => selo(...(ESTADOS[i.estado] || [i.estado, 'neutral'])) },
    { titulo: 'Webhook', celula: i => seloDoWebhook(i.webhook) },
+   { titulo: 'Funil', celula: seletorDeFunil },
    { titulo: 'Última mensagem', celula: i => { const t = haQuanto(i.ultima_mensagem_recebida); if (!t) return null; const s = el('span', t); s.title = new Date(i.ultima_mensagem_recebida).toLocaleString('pt-BR'); return s; } },
    { titulo: 'Pessoas', num: true, celula: i => (dados.banco_disponivel ? String(i.resultado.pessoas_que_escreveram) : null) },
    { titulo: 'Respondidas', num: true, celula: i => (i.resultado.esperas ? `${i.resultado.respondidas} de ${i.resultado.esperas} · ${i.resultado.taxa_resposta}%` : null) },
@@ -146,6 +170,7 @@ export function painelDeVisao({ api, reportError, padrao = () => '', aoAbrirConv
   raiz.append(barra(), atencao());
   if (dados.aviso) raiz.append(el('p', dados.aviso, 'email-help'));
   if (dados.todas === false) raiz.append(el('p', 'A chave da Evolution é de uma instância só, então o Core vê apenas a instância padrão. Para listar todas, use a chave global (AUTHENTICATION_API_KEY da Evolution).', 'email-help'));
+  if (avisoDoFunil) { const a = el('p', avisoDoFunil, 'email-note'); a.setAttribute('role', 'status'); raiz.append(a); }
   raiz.append(tabelaDeInstancias());
   const nota = el('p', 'Responde em: mediana entre a mensagem de uma pessoa e a nossa primeira resposta depois dela. Várias mensagens seguidas da mesma pessoa contam como uma espera só. Mensagens enviadas pelo celular, fora do Core, ainda não entram na conta.', 'email-help wa-visao-nota');
   raiz.append(nota);

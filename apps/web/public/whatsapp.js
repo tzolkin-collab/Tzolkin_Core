@@ -239,7 +239,7 @@ export function setupWhatsapp({ api, reportError }) {
   caixa.append(el('p', `Últimos 30 dias: ${plural(c.sent || 0, 'enviada', 'enviadas')}, ${c.queued || 0} na fila, ${plural(c.failed || 0, 'com falha', 'com falha')}${fila.suprimidos ? ` · ${plural(fila.suprimidos, 'número bloqueado', 'números bloqueados')}` : ''}.`, 'email-note'));
   const nota = el('p', aviso, 'email-note'); nota.setAttribute('role', 'status'); aviso = '';
   const itens = el('div', undefined, 'email-outbox');
-  if (!fila.itens.length) itens.append(el('p', 'Nenhuma mensagem na fila ainda. As automações de lead com a ação "Enviar WhatsApp ao lead" ou "Avisar a equipe no WhatsApp" aparecem aqui.', 'email-empty'));
+  if (!fila.itens.length) itens.append(el('p', 'Nenhuma mensagem na fila ainda. Aqui aparece tudo que o Core envia: fluxos ativos, agentes de IA e automações de lead. Fluxo em modo teste não envia nada, só registra o que enviaria (veja em Automação → Fluxos → Execuções).', 'email-empty'));
   for (const m of fila.itens) {
    const linha = el('article', undefined, 'email-outbox-item'); linha.dataset.id = m.id; linha.dataset.status = m.status;
    const topo = el('div', undefined, 'email-outbox-top'); const [rotulo, tom] = SITUACAO[m.status] || [m.status, 'neutral'];
@@ -286,6 +286,23 @@ export function setupWhatsapp({ api, reportError }) {
   return fluxos;
  }
 
+ // Automação: o que o Core faz sozinho no WhatsApp. Fluxos (sequências de mensagens) e Agentes de IA (quem conversa) numa aba só, porque
+ // andam juntos: o fluxo abre a conversa e o agente continua. A escolha fica guardada.
+ function painelAutomacao() {
+  const bloco = el('div', undefined, 'wa-automacao');
+  const chave = 'core.wa-automacao';
+  let parte = 'fluxos'; try { parte = localStorage.getItem(chave) || 'fluxos'; } catch { /* sem armazenamento */ }
+  const barra = el('div', undefined, 'wa-automacao-barra'); barra.setAttribute('role', 'group'); barra.setAttribute('aria-label', 'Parte da automação');
+  for (const [k, rotulo, dica] of [['fluxos', 'Fluxos', 'sequências de mensagens com espera'], ['agentes', 'Agentes de IA', 'quem conversa com o lead']]) {
+   const b = el('button', undefined, 'wa-automacao-opcao' + (k === parte ? ' active' : '')); b.type = 'button'; b.setAttribute('aria-pressed', String(k === parte)); b.dataset.parte = k;
+   b.append(el('strong', rotulo), el('small', dica));
+   b.onclick = () => { try { localStorage.setItem(chave, k); } catch { /* vale só nesta visita */ } desenhar(); };
+   barra.append(b);
+  }
+  bloco.append(barra, parte === 'agentes' ? painelAgentes() : painelFluxos());
+  return bloco;
+ }
+
  function painelVisao() {
   visao ??= painelDeVisao({
    api, reportError, padrao: () => lista?.padrao || '',
@@ -305,10 +322,10 @@ export function setupWhatsapp({ api, reportError }) {
   const naoLidas = conversas?.nao_lidas;
   mountTabs({
    host: abas, active: aba, label: 'Seções do WhatsApp', prefix: 'whatsapp',
-   tabs: [{ key: 'visao', label: 'Visão geral' }, { key: 'conversas', label: 'Conversas', count: Number.isFinite(naoLidas) && naoLidas > 0 ? naoLidas : undefined }, { key: 'fluxos', label: 'Fluxos' }, { key: 'atividade', label: 'Atividade' }, { key: 'agentes', label: 'Agentes de IA' }],
-   onChange: key => { aba = key; if (key === 'atividade') { fila = null; carregarDaInstancia(); } if (key === 'visao') visao?.recarregar(); if (key === 'fluxos') fluxos?.recarregar(); desenhar(); },
+   tabs: [{ key: 'visao', label: 'Visão geral' }, { key: 'conversas', label: 'Conversas', count: Number.isFinite(naoLidas) && naoLidas > 0 ? naoLidas : undefined }, { key: 'automacao', label: 'Automação' }, { key: 'atividade', label: 'Atividade' }],
+   onChange: key => { aba = key; if (key === 'atividade') { fila = null; carregarDaInstancia(); } if (key === 'visao') visao?.recarregar(); if (key === 'automacao') fluxos?.recarregar(); desenhar(); },
   });
-  const painel = aba === 'visao' ? painelVisao() : aba === 'conversas' ? painelConversas() : aba === 'fluxos' ? painelFluxos() : aba === 'atividade' ? painelAtividade() : painelAgentes();
+  const painel = aba === 'visao' ? painelVisao() : aba === 'conversas' ? painelConversas() : aba === 'automacao' ? painelAutomacao() : painelAtividade();
   painel.id = `whatsapp-panel-${aba}`; painel.setAttribute('role', 'tabpanel'); painel.setAttribute('aria-labelledby', `whatsapp-tab-${aba}`);
   root.append(painel);
  }

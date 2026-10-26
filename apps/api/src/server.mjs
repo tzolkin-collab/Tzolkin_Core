@@ -7,6 +7,7 @@ import { iniciarFilaDeEmail } from './modules/email-fila.mjs';
 import { iniciarFilaDeWhatsapp } from './modules/whatsapp-fila.mjs';
 import { iniciarAgentes } from './modules/whatsapp-agentes-fila.mjs';
 import { iniciarFluxosDeWhatsapp } from './modules/whatsapp-fluxos.mjs';
+import { iniciarCaptura } from './modules/whatsapp-captura.mjs';
 import { openDatabase, transportWarning, manterPoolQuente } from './platform/database.mjs';
 
 export { createCore };
@@ -40,6 +41,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
  const pararWhatsapp = process.env.AGENDA_JOBS === '1' ? iniciarFilaDeWhatsapp({ pool }) : () => {};
  const pararAgentes = process.env.AGENDA_JOBS === '1' ? iniciarAgentes({ pool }) : () => {};
  const pararFluxos = process.env.AGENDA_JOBS === '1' ? iniciarFluxosDeWhatsapp({ pool }) : () => {};
- const stop = () => { pararAgenda(); pararEmail(); pararWhatsapp(); pararAgentes(); pararFluxos(); server.closeAllConnections(); server.close(() => pool.end().finally(() => process.exit(0))); };
+ const pararCaptura = process.env.AGENDA_JOBS === '1' ? iniciarCaptura({ pool }) : () => {};
+ const stop = () => { pararAgenda(); pararEmail(); pararWhatsapp(); pararAgentes(); pararFluxos(); pararCaptura(); server.closeAllConnections(); server.close(() => pool.end().finally(() => process.exit(0))); };
  process.on('SIGTERM',stop); process.on('SIGINT',stop);
 }
