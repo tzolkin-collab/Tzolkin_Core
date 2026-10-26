@@ -119,7 +119,52 @@ A Evolution não é a API oficial: rajada e repetição derrubam o número.
 | F8 | Condições e gatilhos de WhatsApp | Condição, ramo, `mensagem_recebida`, `palavra_chave`, `sem_resposta`, `entregue`, `lida` | Exemplo da seção 6 roda no modo de teste |
 | F9 | Editor de fluxo | Canvas reaproveitando `fluxo.js`, painel lateral, validação, versões, modo de teste e publicação com confirmação | Criar, testar e publicar sem tocar em JSON |
 
-Ordem: F1 → F2 → F3 → F5 → F6 → F7 → F8 → F9, com F4 em paralelo depois da F3. F2 e F5 são pré-requisito de ligar qualquer fluxo em produção. Fluxo por **formulário primeiro** (F7/F8) e editor visual só na F9 (decisão do dono).
+Ordem de canal e fluxo: F1 → F2 → F3 → F5 → F6 → F7 → F8 → F9, com F4 em paralelo depois da F3. **Os épicos de resultado (5A) entram nessa ordem**: R1 depois da F3, R2 antes da F7. F2 e F5 são pré-requisito de ligar qualquer fluxo em produção. Fluxo por **formulário primeiro** (F7/F8) e editor visual só na F9 (decisão do dono).
+
+## 5A. Orientação a resultado
+
+**Falha do desenho original:** os épicos F1 a F9 entregam canal, fluxo e contexto, e nenhum mede resultado. Hoje a tela de WhatsApp conta só mensagens não lidas, status da fila e números bloqueados. Regra daqui para frente: **toda peça de WhatsApp declara que resultado de negócio ela move e como o Core sabe se moveu.**
+
+### Cadeia de resultado de um lead
+
+`lead criado → primeira resposta nossa (tempo) → lead respondeu → conversa qualificada → oportunidade criada → ganha (valor) | perdida (motivo)`
+
+O Core já tem os elos fora do WhatsApp: etapas `WON`/`LOST` e `estimated_value_minor` no funil, motivos de perda (`lost_reasons`), atribuição de anúncio (`commercial_attributions`: UTM, campanha, `fbc`, `fbp`) e o módulo de marketing da Meta. Falta ligar a **conversa** a essa cadeia e medir cada passo.
+
+### O que medir (cada número fatiado por espaço, funil, instância, fluxo, passo, agente de IA, campanha e responsável)
+
+| Pergunta | Métrica |
+|---|---|
+| Respondemos rápido? | Tempo até a primeira resposta; leads sem resposta além do SLA do espaço |
+| O lead engaja? | Taxa de entrega, de leitura e de resposta; conversas abertas sem resposta há X horas |
+| O fluxo funciona? | Conversão por passo e por fluxo; fluxos que atingiram o objetivo, expiraram ou falharam |
+| O agente de IA ajuda? | Conversas resolvidas sem pessoa, transferidas, tokens e custo por conversa |
+| A campanha dá retorno? | Campanha → conversa → oportunidade → ganho; custo por conversa e por ganho; receita atribuída |
+| O que perdemos? | Perdas por motivo e por etapa em que a conversa esfriou |
+
+### Objetivo por fluxo e por agente
+
+Todo fluxo e todo agente tem um **objetivo** com evento de sucesso e prazo (por exemplo `respondeu`, `reuniao_marcada`, `oportunidade_criada`, `ganha`). Cada execução termina como **atingiu**, **não atingiu** ou **expirou**, e isso vira evento para as automações (`fluxo.objetivo_atingido`, `fluxo.objetivo_expirou`).
+
+### Fechar o ciclo com os anúncios
+
+O Core guarda `fbc`, `fbp` e `event_id` de cada lead. Quando o lead avança (qualificado, ganho, com valor), o Core pode enviar a **conversão à Meta** (API de conversões), para a campanha otimizar por quem de fato compra e não só por quem preenche o formulário. Respeita o consentimento registrado na sessão do lead.
+
+### Alertas
+
+Lead sem resposta além do SLA, instância desconectada, conversa esfriando em etapa avançada e fluxo com conversão abaixo do esperado criam tarefa e avisam a equipe (pela automação, não por regra fixa).
+
+### Épicos de resultado
+
+| Id | Épico | Entrega | Pronto quando |
+|---|---|---|---|
+| R1 | Marcos e vínculo | Registrar os marcos da conversa (primeira resposta nossa, primeira do lead, entregue, lida) e ligar conversa, lead, oportunidade e campanha | Dá para responder "quanto tempo levamos para responder este lead" e "de qual campanha veio esta conversa" |
+| R2 | Painel de resultados | Tela por espaço, instância, fluxo, agente e campanha com as métricas da tabela acima e a cadeia lead → ganho | O dono vê, sem abrir o banco, o que o WhatsApp rendeu na semana |
+| R3 | Objetivo e desfecho | Objetivo com prazo em fluxo e agente, desfecho por execução e eventos para as automações | Cada fluxo mostra quantos atingiram o objetivo |
+| R4 | Retorno à Meta e custo por resultado | Conversões enviadas à Meta e custo por conversa e por ganho, usando o gasto que o módulo de marketing já lê | Uma campanha mostra custo por ganho e a conversão chega à Meta com `event_id` |
+| R5 | Alertas de SLA | Gatilhos de SLA vencido, instância caída e conversa esfriando, como eventos de automação | Lead parado gera tarefa sozinho |
+
+**Posição na ordem:** R1 entra logo depois da F3 (precisa dos eventos de entrega e leitura). A F2 já deve mostrar um **resultado básico** ao lado da saúde (respostas recebidas e tempo médio até a primeira resposta). R2 vem antes da F7: não se constrói fluxo sem poder medir se ele funciona. R3 e R5 acompanham a F7 e a F8. R4 depende de R1 e do consentimento.
 
 ## 6. Exemplo de aceite (funil `corretor`, espaço `sites`)
 
