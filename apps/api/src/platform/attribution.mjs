@@ -22,7 +22,7 @@ const padrao = (v, re, msg) => {
 
 const ID_META = /^[0-9]{5,25}$/;                    // campaign.id / adset.id / ad.id da Meta
 const FBP = /^fb\.[0-9]\.[0-9]{10,13}\.[0-9]{5,20}$/;
-const FBC = /^fb\.[0-9]\.[0-9]{10,13}\.[A-Za-z0-9_-]{10,500}$/;
+const FBC = /^fb\.[0-9]\.[0-9]{10,13}\.[A-Za-z0-9_-]{10,255}$/;   // 255: teto de repeticao do regex do PostgreSQL (restricao do banco, migracao 069)
 const CLIQUE = /^[A-Za-z0-9_-]{5,500}$/;            // fbclid / gclid
 const SESSAO = /^[A-Za-z0-9_-]{8,64}$/;
 const TZOLKIN = /^[a-z0-9][a-z0-9._-]{0,79}$/;      // utm_tzolkin: "<produto>.<nicho>", ex.: sites.corretor

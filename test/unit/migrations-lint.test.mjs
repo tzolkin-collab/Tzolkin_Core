@@ -110,3 +110,18 @@ test('applyMigrations: falha injetada executa ROLLBACK e não grava na tabela de
   assert.equal(appliedMigrations.size, 0, 'Nenhuma migração deve ser registrada como aplicada em caso de erro');
   assert.ok(errors.some(e => e.includes('falhou em') && e.includes('Falha injetada')));
 });
+
+test('regex nas migrações: nenhuma repetição acima de 255 (o PostgreSQL recusa, mas só ao avaliar um valor não nulo)', () => {
+  // Exceção histórica: a 038 criou {10,500} no fbc e a 069 a substituiu. Outra migração com repetição > 255 reproduz o mesmo 500 em produção.
+  const files = readdirSync(MIGRATIONS_DIR).filter(f => f.endsWith('.sql') && f !== '038_atribuicao_estendida.sql');
+  for (const file of files) {
+    const content = readFileSync(new URL(file, MIGRATIONS_DIR), 'utf8').replace(/--.*$/gm, '');
+    for (const m of content.matchAll(/\{(\d+)(?:,(\d*))?\}/g)) {
+      const maior = Math.max(Number(m[1]), m[2] ? Number(m[2]) : 0);
+      assert.ok(maior <= 255, `Migração ${file} tem repetição ${m[0]} (> 255): o PostgreSQL recusa ao avaliar o regex.`);
+    }
+  }
+  const nova = readFileSync(new URL('069_fbc_regex_limite_postgres.sql', MIGRATIONS_DIR), 'utf8');
+  assert.match(nova, /\{10,255\}/);
+  assert.doesNotMatch(nova.replace(/--.*$/gm, ''), /\{10,500\}/);
+});

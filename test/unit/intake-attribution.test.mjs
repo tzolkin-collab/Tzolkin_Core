@@ -208,3 +208,9 @@ test('a migração 038 só acrescenta colunas e índices, sem apagar nem alterar
   assert.match(intakeFonte, new RegExp(`\\b${col}\\b`), `${col} no intake`);
  }
 });
+
+test('fbc: o teto é 255 (o regex do PostgreSQL não compila mais que isso); acima disso o app responde 400, nunca 500 no banco', () => {
+ const comSufixo = n => `fb.1.1727700000000.${'A'.repeat(n)}`;
+ assert.equal(intake(comAtribuicao({ fbc: comSufixo(255), session: { consent: 'granted' } })).attribution.fbc.length, 19 + 255);
+ assert.throws(() => intake(comAtribuicao({ fbc: comSufixo(256), session: { consent: 'granted' } })), { status: 400, message: /fbc/ });
+});
