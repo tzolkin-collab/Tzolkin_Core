@@ -161,11 +161,16 @@ export function setupWhatsapp({ api, reportError }) {
   const form = el('form', undefined, 'wa-resposta');
   const podeResponder = Boolean(conversa.number) && !conversa.bloqueado;
   const texto = el('textarea'); texto.rows = 3; texto.maxLength = 4096; texto.disabled = !podeResponder; texto.setAttribute('aria-label', 'Resposta'); texto.value = rascunho;
-  texto.placeholder = conversa.bloqueado ? 'Este número pediu para não receber mensagens.' : !conversa.number ? 'Este contato não mostra o telefone, então não dá para responder por aqui.' : 'Escreva a resposta';
+  texto.placeholder = conversa.bloqueado ? 'Este número está bloqueado (pediu para sair, ou o envio foi recusado). Se foi engano, libere abaixo.' : !conversa.number ? 'Este contato não mostra o telefone, então não dá para responder por aqui.' : 'Escreva a resposta';
   texto.oninput = () => { rascunho = texto.value; };
   const enviar = el('button', 'Enviar', 'primary'); enviar.type = 'submit'; enviar.disabled = !podeResponder;
   const ajuda = el('p', aviso || 'A resposta entra na fila e sai no ritmo do envio automático, se ele estiver ligado.', 'email-help'); aviso = '';
   form.append(texto, enviar, ajuda);
+  if (conversa.bloqueado && conversa.number) {
+   const liberar = el('button', 'Liberar este número', 'secondary'); liberar.type = 'button';
+   liberar.onclick = async () => { liberar.disabled = true; try { await api('/api/whatsapp/suppress/liberar', 'POST', { number: conversa.number }); aviso = 'Número liberado.'; await carregarConversa(aberta); } catch (err) { ajuda.textContent = err.message; ajuda.classList.add('email-outbox-erro'); liberar.disabled = false; } };
+   form.append(liberar);
+  }
   form.onsubmit = async e => {
    e.preventDefault();
    if (!texto.value.trim()) return;

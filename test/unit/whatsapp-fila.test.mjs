@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateActions, emitEvent, ACTIONS } from '../../apps/api/src/platform/automations.mjs';
 import { renderizarMensagem, variaveisInvalidas, enfileirarParaLead, enfileirarParaEquipe, MENSAGEM_062 } from '../../apps/api/src/platform/whatsapp-saida.mjs';
-import { processarFila, envioLigado, MAX_TENTATIVAS, ESPERAS_MS } from '../../apps/api/src/modules/whatsapp-fila.mjs';
+import { processarFila, whatsappFilaRoutes, envioLigado, MAX_TENTATIVAS, ESPERAS_MS } from '../../apps/api/src/modules/whatsapp-fila.mjs';
 
 const LIGADO = { WHATSAPP_ENVIO: 'ligado' };
 const LEAD = { email: 'maria@exemplo.com', whatsapp: '(31) 99759-9216', lead_name: 'Maria Souza', phone: null, company: 'Alfa', product: 'Tzolkin Sites' };
@@ -123,6 +123,13 @@ test('fila: falha temporária volta com espera crescente; recusa definitiva falh
  assert.ok(!c.sql.some(q => q.texto.startsWith('INSERT INTO whatsapp_suppressions')), 'texto inválido não culpa o número');
 });
 
+test('fila: resposta digitada por uma pessoa recusada pela Evolution NÃO bloqueia o número (contato @lid existe e já conversou)', async () => {
+ const c = banco({ pegos: [{ ...mensagem(1), event: 'resposta.manual' }] });
+ const r = await processarFila(c, { env: LIGADO, adaptador: adaptadorFake({ resposta: { ok: false, reason: 'rejected' } }), agora: () => 1_000_000, ...SEM_PAUSA });
+ assert.equal(r.falhas, 1, 'a mensagem falha e aparece como falha');
+ assert.ok(!c.sql.some(q => q.texto.startsWith('INSERT INTO whatsapp_suppressions')), 'mas a caixa de resposta não trava');
+});
+
 test('fila: sem a migração 062 o ciclo diz indisponível em vez de lançar', async () => {
  const pool = { async query() { throw Object.assign(new Error('relation'), { code: '42P01' }); } };
  assert.equal((await processarFila(pool, { env: LIGADO, adaptador: adaptadorFake(), ...SEM_PAUSA })).indisponivel, true);
@@ -165,4 +172,14 @@ test('migração 064: só adiciona colunas opcionais e índices', async () => {
  assert.doesNotMatch(sql, /\b(DROP|DELETE|TRUNCATE|UPDATE|RENAME)\b/i);
  assert.equal((sql.match(/ADD COLUMN IF NOT EXISTS instance text CHECK \(instance IS NULL OR/g) || []).length, 2);
  assert.doesNotMatch(sql, /NOT NULL/, 'a coluna é opcional: o que já foi gravado continua válido');
+});
+
+test('rota liberar: revoga a supressão ativa do número (sem apagar) e recusa número inválido', async () => {
+ const rotas = {}; whatsappFilaRoutes({ get: (c, h) => { rotas['GET ' + c] = h; }, post: (c, h) => { rotas['POST ' + c] = h; } });
+ const consultas = [];
+ const client = { async query(t, p) { consultas.push({ t, p }); return { rows: [{ id: 1 }], rowCount: 1 }; } };
+ const r = await rotas['POST /api/whatsapp/suppress/liberar']({ client, body: { number: '(31) 99759-9216' }, operator: { email: 'eu@tzolkin.com' } });
+ assert.deepEqual([r.response.ok, r.response.number, r.response.liberado], [true, '5531997599216', true]);
+ assert.ok(consultas[0].t.startsWith("UPDATE whatsapp_suppressions SET revoked_at=now() WHERE number=$1 AND revoked_at IS NULL"));
+ await assert.rejects(rotas['POST /api/whatsapp/suppress/liberar']({ client, body: { number: 'abc' }, operator: {} }), e => e.status === 400);
 });

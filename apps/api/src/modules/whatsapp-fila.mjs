@@ -57,7 +57,7 @@ export async function processarFila(pool, { env = vivo.env, adaptador = createEv
   const pegos = (await pool.query(
    `UPDATE whatsapp_outbox SET status='sending', locked_at=$2, attempts=attempts+1
      WHERE id IN (SELECT id FROM whatsapp_outbox WHERE status='queued' AND next_attempt_at <= $2 AND coalesce(instance,'') = ANY($3::text[]) ORDER BY next_attempt_at, created_at LIMIT $1 FOR UPDATE SKIP LOCKED)
-     RETURNING id,to_number,body_text,attempts,instance`, [lote, iso(t), liberadas])).rows;
+     RETURNING id,to_number,body_text,attempts,instance,event`, [lote, iso(t), liberadas])).rows;
   let primeira = true;
   for (const m of pegos) {
    if (!primeira) await pausar(PAUSA_ENTRE_MENSAGENS_MS);
@@ -75,8 +75,9 @@ export async function processarFila(pool, { env = vivo.env, adaptador = createEv
     const msg = (MOTIVOS[r.reason] || 'Falha desconhecida.').slice(0, 300);
     if (!repete || m.attempts >= MAX_TENTATIVAS) {
      await pool.query("UPDATE whatsapp_outbox SET status='failed', locked_at=NULL, last_error=$2 WHERE id=$1", [m.id, msg]);
-     // Número sem WhatsApp: nunca mais tenta (fica na lista de supressão, e dá para revogar).
-     if (r.reason === 'rejected' && r.detail !== 'invalid_text') await pool.query("INSERT INTO whatsapp_suppressions(number,reason,created_by) VALUES($1,'sem_whatsapp','fila') ON CONFLICT DO NOTHING", [m.to_number]);
+     // Número sem WhatsApp: nunca mais tenta (fica na lista de supressão, e dá para revogar). Resposta digitada por uma PESSOA numa conversa
+     // não bloqueia: a Evolution também recusa contatos @lid que existem e já conversaram, e travar a caixa de resposta seria pior que a falha.
+     if (r.reason === 'rejected' && r.detail !== 'invalid_text' && m.event !== 'resposta.manual') await pool.query("INSERT INTO whatsapp_suppressions(number,reason,created_by) VALUES($1,'sem_whatsapp','fila') ON CONFLICT DO NOTHING", [m.to_number]);
      saida.falhas++;
     } else {
      const espera = ESPERAS_MS[Math.min(m.attempts - 1, ESPERAS_MS.length - 1)];
@@ -149,6 +150,17 @@ export function whatsappFilaRoutes(router, { env = vivo.env, clock = Date.now, c
    await client.query('INSERT INTO whatsapp_suppressions(number,reason,created_by) VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [number, reason, ator(operator)]);
    const tirados = (await client.query("UPDATE whatsapp_outbox SET status='suppressed', locked_at=NULL, last_error='Número na lista de supressão.' WHERE to_number=$1 AND status='queued' RETURNING id", [number])).rowCount ?? 0;
    return { response: { ok: true, number, tirados_da_fila: tirados } };
+  } catch (e) { if (e?.code === '42P01') throw fail(409, MENSAGEM_062); throw e; }
+ }, { transactional: true, audit: false });
+
+ // Libera um número da lista de supressão (revoga; a role do Core não apaga). Vale para o bloqueio automático por "sem WhatsApp" e para o manual.
+ router.post('/api/whatsapp/suppress/liberar', async ({ client, body, operator }) => {
+  input(body, ['number']);
+  const number = normalizarNumero(String(body.number ?? ''));
+  if (!number) throw fail(400, 'Número inválido.');
+  try {
+   const r = await client.query('UPDATE whatsapp_suppressions SET revoked_at=now() WHERE number=$1 AND revoked_at IS NULL RETURNING id', [number]);
+   return { response: { ok: true, number, liberado: (r.rowCount ?? 0) > 0, por: ator(operator) } };
   } catch (e) { if (e?.code === '42P01') throw fail(409, MENSAGEM_062); throw e; }
  }, { transactional: true, audit: false });
 
