@@ -62,3 +62,18 @@ A aba **WhatsApp → Agentes de IA** configura quem atende (migração `065`); o
 **Limites do motor:** no máximo 8 respostas por hora por conversa, 6 voltas com o modelo por turno, 3 tarefas e 1 e-mail por resposta, 3 tentativas por turno (a Anthropic fora do ar ou pedindo calma repete com espera crescente; chave recusada não repete).
 
 **Passar para uma pessoa:** enquanto a conversa está com uma pessoa, nenhum agente responde. Ela passa sozinha quando alguém responde pela aba Conversas ou quando o agente usa a ferramenta de transferir (que avisa a equipe no WhatsApp). Na conversa, **Assumir conversa** e **Devolver ao agente** fazem isso à mão.
+
+## Ativação em produção (E7), passo a passo
+
+Ordem que evita mensagem perdida e envio por acidente. Os itens com (você) dependem de acesso que só o dono tem.
+
+1. **Girar a chave da Evolution** (você). A chave de teste já apareceu em conversa; gere outra no servidor da Evolution e use só a nova.
+2. **Migrações** (você, ou autorize): conferir quais estão no banco de produção e aplicar as que faltarem, 062 a 066 (`npm run db:migrate`). Todas só adicionam.
+3. **Variáveis no EasyPanel** (ou em Configurações → Integrações → WhatsApp): `EVOLUTION_URL`, `EVOLUTION_INSTANCE`, `EVOLUTION_API_KEY` (a nova), `EVOLUTION_WEBHOOK_SECRET` (gere com `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"`) e `WHATSAPP_TEAM_NUMBERS`. **Não** defina `WHATSAPP_ENVIO` ainda. Reiniciar o serviço se usar o EasyPanel.
+4. **Apontar o webhook**: `node --env-file=.env scripts/whatsapp-webhook.mjs` mostra o estado (não altera nada); com `--aplicar` grava o webhook da instância. Use as mesmas variáveis do passo 3.
+5. **Testar a entrada**: mandar uma mensagem de um celular para o número da instância; ela deve aparecer em WhatsApp → Conversas. Sem lead conhecido, a conversa aparece do mesmo jeito.
+6. **Testar a saída com o envio desligado**: criar a automação "Avisar a equipe no WhatsApp" num funil de teste, entrar um lead de teste e conferir que a mensagem fica "Na fila" e a Evolution "Conectada".
+7. **Ligar o envio**: definir `WHATSAPP_ENVIO=ligado` e conferir que a mensagem da equipe chegou no número da equipe.
+8. **Agentes (depois, e só num funil de teste)**: `ANTHROPIC_API_KEY` e `AGENTES_EXECUCAO=ligado`, criar o agente, ligar e acompanhar em Últimas execuções.
+
+Para desligar tudo de novo: apague `WHATSAPP_ENVIO` (ou troque o valor). A fila volta a só acumular.
