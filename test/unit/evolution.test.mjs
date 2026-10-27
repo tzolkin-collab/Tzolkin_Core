@@ -15,8 +15,10 @@ test('normalizarNumero aceita os formatos comuns e assume o Brasil sem DDI', () 
  assert.equal(normalizarNumero('+44 20 7946 0958'), '442079460958');  // outro país, com DDI (12 dígitos; 10 ou 11 seriam lidos como DDD brasileiro)
 });
 
-test('normalizarNumero recusa o que não é telefone, inclusive o número com um dígito a menos', () => {
- for (const ruim of ['', 'abc', '123', '553197599216', '55319975992160', null, undefined, 31997599216, '3199-ABCD']) assert.equal(normalizarNumero(ruim), null, String(ruim));
+test('normalizarNumero aceita o celular antigo de 8 dígitos (é o endereço real da conversa) e recusa o que não é telefone', () => {
+ assert.equal(normalizarNumero('553197599216'), '553197599216', 'celular antigo: os dígitos não mudam');
+ assert.equal(normalizarNumero('553182354127'), '553182354127');
+ for (const ruim of ['', 'abc', '123', '55319975992160', '5531197599216', null, undefined, 31997599216, '3199-ABCD']) assert.equal(normalizarNumero(ruim), null, String(ruim));
 });
 
 test('sem variáveis, o adaptador diz que não está configurado e não chama a rede', async () => {
@@ -97,7 +99,7 @@ test('credenciais: a Evolution está no catálogo, valida os campos e testa a co
  assert.equal(campo('EVOLUTION_URL').validar('http://x.com') !== null, true);
  assert.equal(campo('EVOLUTION_URL').validar('https://evo.exemplo.com'), null);
  assert.equal(campo('WHATSAPP_TEAM_NUMBERS').validar('(31) 99759-9216, 11988887777'), null);
- assert.notEqual(campo('WHATSAPP_TEAM_NUMBERS').validar('553197599216'), null);
+ assert.equal(campo('WHATSAPP_TEAM_NUMBERS').validar('553197599216'), null, 'celular antigo de 8 dígitos é válido');
  assert.deepEqual(numerosDaEquipeNormalizados('(31) 99759-9216, 31997599216, lixo'), ['5531997599216']);
  const msg = await prov.testar({ ...env }, async () => resposta(200, { instance: { state: 'open' } }));
  assert.match(msg, /conectada/);

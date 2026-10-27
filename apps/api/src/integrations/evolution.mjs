@@ -26,11 +26,12 @@ export function normalizarNumero(valor) {
  // 10 ou 11 dígitos = DDD + número do Brasil, sem DDI.
  if (digitos.length === 10 || digitos.length === 11) digitos = `55${digitos}`;
  if (digitos.length < 10 || digitos.length > 15) return null;
- // Brasil com DDI: 55 + DDD (2) + número. Celular tem 9 dígitos e começa em 9; fixo tem 8 e começa em 2 a 5. Um celular com
- // um dígito a menos (8 dígitos começando em 9) não existe mais e a Evolution só responderia que o número não tem WhatsApp.
+ // Brasil com DDI: 55 + DDD (2) + número. Celular tem 9 dígitos e começa em 9; fixo tem 8 e começa em 2 a 5. Celular de 8 dígitos (6 a 9)
+ // é o formato ANTIGO, e o WhatsApp ainda guarda muitas contas assim (o endereço da conversa vem com 12 dígitos). A Evolution resolve as duas
+ // formas; recusar aqui travava a resposta a quem já conversava (o envio falhava sem nem chegar na Evolution).
  if (digitos.startsWith('55')) {
   const numero = digitos.slice(4);
-  const ok = (numero.length === 9 && numero[0] === '9') || (numero.length === 8 && /^[2-5]/.test(numero));
+  const ok = (numero.length === 9 && numero[0] === '9') || (numero.length === 8 && /^[2-9]/.test(numero));
   if (!ok) return null;
  }
  return digitos;
