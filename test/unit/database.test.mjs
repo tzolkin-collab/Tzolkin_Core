@@ -144,3 +144,22 @@ test('certificado fixado que cobre um nome só: valida contra esse nome mesmo se
  assert.equal(nomeDoCertificadoFixado(undefined, 'qualquer'), null);
  assert.equal(nomeDoCertificadoFixado('nao-e-pem', 'qualquer'), null);
 });
+
+test('o pg regrava servername=host: por isso a conferência do nome vai em checkServerIdentity, que ele não toca', async () => {
+ const { conferirContraNome } = await import('../../apps/api/src/platform/database.mjs');
+ const { X509Certificate } = await import('node:crypto');
+ const { readFileSync } = await import('node:fs');
+ const x = new X509Certificate(readFileSync(new URL('../../certs/postgres-server.crt', import.meta.url)));
+ const cert = { subject: { CN: 'easypanel.landcriativa.com' }, subjectaltname: x.subjectAltName };
+ // O host da conexão (interno, com ponto final) é ignorado; vale o nome configurado.
+ assert.equal(conferirContraNome('easypanel.landcriativa.com')('systembots_evolution-api-db.', cert), undefined);
+ // Nome que o certificado não cobre continua recusado.
+ assert.equal(conferirContraNome('outro.exemplo.com')('systembots_evolution-api-db.', cert)?.code, 'ERR_TLS_CERT_ALTNAME_INVALID');
+
+ const stub = driver();
+ const { pool } = await openDatabase({ connectionString, mode: 'require', tlsServername: 'easypanel.landcriativa.com' }, stub);
+ assert.equal(typeof pool.options.ssl.checkServerIdentity, 'function');
+ assert.equal(pool.options.ssl.rejectUnauthorized, true);
+ const { pool: semNome } = await openDatabase({ connectionString, mode: 'require' }, driver());
+ assert.equal(semNome.options.ssl.checkServerIdentity, undefined);
+});

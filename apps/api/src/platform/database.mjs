@@ -6,6 +6,7 @@
 // Ver docs/SECURITY.md#o-banco-do-core-trafega-sem-tls-pela-internet-pública
 import pg from 'pg';
 import { X509Certificate } from 'node:crypto';
+import tls from 'node:tls';
 
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 export const SSL_MODES = ['require', 'allow', 'disable'];
@@ -35,6 +36,8 @@ export function nomeDoCertificadoFixado(ca, host) {
  }
  return nomes.size === 1 ? [...nomes][0] : null;
 }
+
+export const conferirContraNome = nome => (_hostDaConexao, cert) => tls.checkServerIdentity(nome, cert);
 
 // Uma conexão só é considerada criptografada se o socket for TLS de fato.
 const encrypted = client => Boolean(client.connection?.stream?.encrypted);
@@ -121,6 +124,10 @@ export async function openDatabase({ connectionString, mode = 'require', tlsServ
   const fixado = nomeDoCertificadoFixado(certificates.ca, target.host);
   if (fixado) certificates.servername = fixado;
  }
+ // O pg regrava `servername = host` DEPOIS de aplicar `ssl` (connection.js, upgradeToSSL), então `servername` sozinho nunca vale:
+ // o certificado era sempre conferido contra o host interno. `checkServerIdentity` o pg não toca. A cadeia continua validada pelo
+ // Node (rejectUnauthorized + ca); aqui só muda contra QUE nome o certificado já aceito é conferido.
+ if (certificates.servername) certificates.checkServerIdentity = conferirContraNome(certificates.servername);
  for (const key of ['ssl', 'sslmode', 'sslcert', 'sslkey', 'sslrootcert', 'uselibpqcompat']) url.searchParams.delete(key);
  const normalized = url.href;
  const requireVerified = mode === 'require' || ['require', 'verify-ca', 'verify-full'].includes(urlMode) || ['1', 'true'].includes(urlSsl);
