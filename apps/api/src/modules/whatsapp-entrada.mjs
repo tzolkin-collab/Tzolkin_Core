@@ -30,12 +30,23 @@ export function whatsappEntradaRoutes(router, { env = vivo.env, clock = Date.now
  const instanciaDe = valor => { const v = valor == null || valor === '' ? padrao() : String(valor); if (!INSTANCIA.test(v)) throw fail(400, 'Instância inválida.'); return v; };
 
  router.post('/api/webhooks/evolution', async ({ req, pool, reply }) => {
-  const prova = verificarSegredo({ cabecalho: req.headers['x-webhook-secret'], autorizacao: req.headers.authorization, segredo: String(env.EVOLUTION_WEBHOOK_SECRET ?? '').trim() });
-  // Falha de autenticidade NÃO recebe 2xx, e o motivo fica interno: dizer "sem segredo" x "segredo errado" ajudaria quem sonda.
-  if (!prova.ok) throw fail(prova.reason === 'sem_segredo' ? 503 : 401, 'Webhook não autenticado.');
+  // Modo aberto (EVOLUTION_WEBHOOK_ABERTO=1): decisão do dono de não usar segredo. Qualquer um que conheça o endereço pode postar aqui, então o
+  // que se aceita é só o que dá menos estrago: mensagens das instâncias do próprio Core (a padrão e as ligadas a funil). Desligado por padrão.
+  const aberto = String(env.EVOLUTION_WEBHOOK_ABERTO ?? '').trim() === '1';
+  if (!aberto) {
+   const prova = verificarSegredo({ cabecalho: req.headers['x-webhook-secret'], autorizacao: req.headers.authorization, segredo: String(env.EVOLUTION_WEBHOOK_SECRET ?? '').trim() });
+   // Falha de autenticidade NÃO recebe 2xx, e o motivo fica interno: dizer "sem segredo" x "segredo errado" ajudaria quem sonda.
+   if (!prova.ok) throw fail(prova.reason === 'sem_segredo' ? 503 : 401, 'Webhook não autenticado.');
+  }
   let corpo;
   try { corpo = JSON.parse(await corpoCru(req)); } catch (e) { if (e?.status) throw e; throw fail(400, 'JSON inválido.'); }
-  const { mensagens } = extrairMensagens(corpo);
+  let { mensagens } = extrairMensagens(corpo);
+  if (aberto) {
+   const doCore = new Set([padrao()]);
+   try { for (const r of (await pool.query('SELECT instance FROM whatsapp_instance_funnels')).rows) doCore.add(r.instance); }
+   catch (e) { if (e?.code !== '42P01') throw e; }
+   mensagens = mensagens.filter(m => doCore.has(m.instancia));
+  }
   let registradas = 0;
   try {
    for (const m of mensagens) {

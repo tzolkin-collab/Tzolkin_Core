@@ -141,3 +141,14 @@ test('migração 063: só adiciona, id da mensagem único e número só com díg
  assert.match(sql, /provider_message_id text NOT NULL UNIQUE/);
  assert.match(sql, /from_number ~ '\^\[0-9\]\{10,15\}\$'/);
 });
+
+test('webhook aberto (EVOLUTION_WEBHOOK_ABERTO=1): sem segredo, só aceita instância do Core; desligado, continua exigindo segredo', async () => {
+ const corpo = JSON.stringify(evento(msg('Oi')));
+ const ABERTO = { EVOLUTION_WEBHOOK_ABERTO: '1', EVOLUTION_INSTANCE: 'teste' };
+ const c = bancoDeEntrada();
+ assert.deepEqual((await montar(ABERTO, c)('POST /api/webhooks/evolution', { corpo })).dados, { received: true, registradas: 1 });
+ const forasteira = bancoDeEntrada();
+ assert.deepEqual((await montar({ ...ABERTO, EVOLUTION_INSTANCE: 'outra-coisa' }, forasteira)('POST /api/webhooks/evolution', { corpo })).dados, { received: true, registradas: 0 });
+ assert.ok(!forasteira.sql.some(q => q.texto.startsWith('INSERT INTO whatsapp_inbox')), 'instância que não é do Core não grava nada');
+ await assert.rejects(montar({ EVOLUTION_INSTANCE: 'teste', EVOLUTION_WEBHOOK_SECRET: 's3gredo' }, bancoDeEntrada())('POST /api/webhooks/evolution', { corpo }), e => e.status === 401);
+});
