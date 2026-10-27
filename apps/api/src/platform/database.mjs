@@ -5,6 +5,7 @@
 // O estado do transporte é medido e bloqueia operações sensíveis.
 // Ver docs/SECURITY.md#o-banco-do-core-trafega-sem-tls-pela-internet-pública
 import pg from 'pg';
+import { X509Certificate } from 'node:crypto';
 
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '::1', '[::1]']);
 export const SSL_MODES = ['require', 'allow', 'disable'];
@@ -17,6 +18,22 @@ export function describeTarget(connectionString) {
   loopback: LOOPBACK.has(url.searchParams.get('host') || url.hostname),
   urlSslMode: url.searchParams.get('sslmode'),
  };
+}
+
+// Quando o certificado fixado (sslrootcert) não cobre o host da URL mas cobre UM nome só, esse é o nome contra o qual validar.
+// É o caso do host interno do EasyPanel com certificado emitido para o domínio público. Não depende de DATABASE_TLS_SERVERNAME
+// chegar ao processo: ela já ficou de fora de uma réplica e derrubou o boot. A cadeia continua validada contra o mesmo certificado;
+// só muda o nome conferido, e só para um nome que o próprio certificado fixado declara.
+export function nomeDoCertificadoFixado(ca, host) {
+ const hostSemPonto = String(host ?? '').replace(/\.$/, '');
+ const nomes = new Set();
+ for (const pem of [ca].flat().filter(Boolean)) {
+  let cert;
+  try { cert = new X509Certificate(pem); } catch { continue; }
+  if (cert.checkHost(hostSemPonto)) return null;
+  for (const m of String(cert.subjectAltName ?? '').matchAll(/DNS:([^,\s]+)/g)) nomes.add(m[1]);
+ }
+ return nomes.size === 1 ? [...nomes][0] : null;
 }
 
 // Uma conexão só é considerada criptografada se o socket for TLS de fato.
@@ -100,6 +117,10 @@ export async function openDatabase({ connectionString, mode = 'require', tlsServ
  const parsedSsl = new pg.Client({ connectionString }).connectionParameters.ssl;
  const certificates = servername ? { servername } : {};
  for (const key of ['ca', 'cert', 'key']) if (parsedSsl?.[key]) certificates[key] = parsedSsl[key];
+ if (!servername && certificates.ca) {
+  const fixado = nomeDoCertificadoFixado(certificates.ca, target.host);
+  if (fixado) certificates.servername = fixado;
+ }
  for (const key of ['ssl', 'sslmode', 'sslcert', 'sslkey', 'sslrootcert', 'uselibpqcompat']) url.searchParams.delete(key);
  const normalized = url.href;
  const requireVerified = mode === 'require' || ['require', 'verify-ca', 'verify-full'].includes(urlMode) || ['1', 'true'].includes(urlSsl);

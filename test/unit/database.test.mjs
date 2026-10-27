@@ -131,3 +131,16 @@ test('tlsServername não é um atalho: certificado inválido continua recusado e
   assert.equal(stub.calls.length, 0);
  }
 });
+
+test('certificado fixado que cobre um nome só: valida contra esse nome mesmo sem DATABASE_TLS_SERVERNAME', async () => {
+ const { nomeDoCertificadoFixado } = await import('../../apps/api/src/platform/database.mjs');
+ const { readFileSync } = await import('node:fs');
+ const pem = readFileSync(new URL('../../certs/postgres-server.crt', import.meta.url));
+ // Host interno do EasyPanel (com o ponto final do log de produção): o certificado não o cobre, mas declara um nome só.
+ assert.equal(nomeDoCertificadoFixado(pem, 'systembots_evolution-api-db.'), 'easypanel.landcriativa.com');
+ // Host que o certificado já cobre: nada a sobrescrever.
+ assert.equal(nomeDoCertificadoFixado(pem, 'easypanel.landcriativa.com'), null);
+ // Sem certificado fixado, ou lixo no lugar dele: nenhum nome inventado.
+ assert.equal(nomeDoCertificadoFixado(undefined, 'qualquer'), null);
+ assert.equal(nomeDoCertificadoFixado('nao-e-pem', 'qualquer'), null);
+});
